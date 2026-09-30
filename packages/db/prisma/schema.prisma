@@ -39,8 +39,9 @@ enum FeatureStatus {
 }
 
 enum IntegrationProvider {
-  ANTHROPIC
-  OPENAI_COMPATIBLE // e.g. 9Router
+  ANTHROPIC // Claude API
+  OPENAI // OpenAI API (GPT and Codex models)
+  OPENAI_COMPATIBLE // any OpenAI-compatible URL + token, e.g. 9Router
   ATLASSIAN
 }
 
@@ -208,6 +209,7 @@ model OrgIntegration {
   provider        IntegrationProvider
   baseUrl         String?
   accountEmail    String? // Atlassian API tokens are paired with an email
+  model           String? // LLM providers: the model name, e.g. claude-opus-5-5
   secretEncrypted String
   isDefaultLlm    Boolean             @default(false)
   createdAt       DateTime            @default(now())

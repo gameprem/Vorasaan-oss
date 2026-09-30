@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: []
 slice: install-and-onboarding
 ---
@@ -18,6 +18,6 @@ An Admin chooses the LLM provider in the app, not in env vars: **Claude API**, *
 - `GET/PUT /settings/ai` (Admin only; never returns the secret, only its last 4 chars).
 
 ## Acceptance criteria
-- [ ] Encryption round-trips; ciphertext never contains the plaintext; wrong key fails.
-- [ ] Each provider maps to the right Mastra model config (unit tests).
-- [ ] Saving a new provider takes effect on the next request without restart.
+- [x] Encryption round-trips; ciphertext never contains the plaintext; wrong key fails.
+- [x] Each provider maps to the right Mastra model config (unit tests).
+- [x] Saving a new provider takes effect on the next request without restart.

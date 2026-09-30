@@ -39,7 +39,7 @@ if (config.generateChoicesModel.startsWith('anthropic/') && !process.env.ANTHROP
   console.error('ANTHROPIC_API_KEY is not set. Add it to .env or export it, then re-run.');
   process.exit(1);
 }
-const ai = new MastraAiPort(config);
+const ai = new MastraAiPort(async () => config.generateChoicesModel);
 console.log(`Model: ${config.generateChoicesModel}\n`);
 
 for (const request of samples) {
