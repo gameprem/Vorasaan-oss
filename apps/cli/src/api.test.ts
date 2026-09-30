@@ -40,7 +40,8 @@ describe('VorasaanApi', () => {
 
   afterAll(() => server.stop());
 
-  const api = () => new VorasaanApi({ baseUrl: server.url.toString(), userId: 'beam' });
+  const api = () =>
+    new VorasaanApi({ baseUrl: server.url.toString(), credentials: { devUserId: 'beam' } });
 
   test('sends the dev identity header and parses JSON', async () => {
     expect(await api().listFeatures()).toEqual([{ id: 'f-1', title: 'Async' }] as never);
@@ -75,7 +76,10 @@ describe('VorasaanApi', () => {
   });
 
   test('reports an unreachable server clearly', async () => {
-    const offline = new VorasaanApi({ baseUrl: 'http://127.0.0.1:1', userId: 'beam' });
+    const offline = new VorasaanApi({
+      baseUrl: 'http://127.0.0.1:1',
+      credentials: { devUserId: 'beam' },
+    });
     const error = await offline.listFeatures().catch((e: unknown) => e);
     expect((error as ApiError).message).toContain('Cannot reach the Vorasaan server');
   });
