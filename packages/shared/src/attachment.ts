@@ -25,7 +25,7 @@ export const ATTACHMENT_FILE_TYPES = {
 const Ref = z.string().trim().min(1).max(2048);
 
 /**
- * `POST /features/:id/attachments` with a JSON body attaches a public web page
+ * `POST /features/:id/attachments` (or `/projects/:id/attachments`) with a JSON body attaches a public web page
  * (`source` "URL", the default), a Confluence page or a Jira issue. Confluence
  * and Jira are read from the Organization's Atlassian site (`/settings/atlassian`);
  * their URLs must be on that site.
@@ -67,9 +67,11 @@ export const UploadAttachmentFields = z.object({
 });
 export type UploadAttachmentFields = z.infer<typeof UploadAttachmentFields>;
 
+/** An Attachment belongs to one Feature or one Project: exactly one of the two ids is set. */
 export const AttachmentView = z.object({
   id: Id,
-  featureId: Id,
+  featureId: Id.nullable(),
+  projectId: Id.nullable(),
   source: AttachmentSource,
   title: z.string(),
   /** The page an Attachment was captured from (URL, Confluence, Jira), else null. */

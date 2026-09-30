@@ -47,10 +47,10 @@ export type AttachmentForAi = {
 
 /** Where a block of AI context comes from, so outputs can cite it by `id`. */
 export type ContextSource = {
-  kind: 'SPEC_VERSION' | 'DECISION_REQUEST' | 'DECISION' | 'ATTACHMENT';
+  kind: 'SPEC_VERSION' | 'DECISION_REQUEST' | 'DECISION' | 'ATTACHMENT' | 'BRIEF_VERSION';
   id: string;
   title: string;
-  /** The Spec Version number, for Spec blocks. */
+  /** The Spec or Brief Version number, for Spec and Project Brief blocks. */
   version?: number;
 };
 

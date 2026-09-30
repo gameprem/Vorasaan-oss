@@ -13,6 +13,7 @@ export function toAttachmentView(a: AttachmentWithRelations): AttachmentView {
   return {
     id: a.id,
     featureId: a.featureId,
+    projectId: a.projectId,
     source: a.source,
     title: a.title,
     url: a.url,

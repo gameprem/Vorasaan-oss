@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: []
 slice: project-foundation
 ---
@@ -21,6 +21,11 @@ Each Project has a versioned, human-approved Project Brief, and documents can be
 - A new Project starts with an empty Brief template (section headings only).
 
 ## Acceptance criteria (test first, real Postgres)
-- [ ] A PO of one of the Project's Teams edits the Brief to v1 and then v2. A Member gets 403. A stale edit gets 409.
-- [ ] Revert creates the next version. The diff lists added and removed lines.
-- [ ] A Project Attachment snapshots like a Feature Attachment, and its permissions follow the Brief's.
+- [x] A PO of one of the Project's Teams edits the Brief to v1 and then v2. A Member gets 403. A stale edit gets 409.
+- [x] Revert creates the next version. The diff lists added and removed lines.
+- [x] A Project Attachment snapshots like a Feature Attachment, and its permissions follow the Brief's.
+
+## Notes
+- No Brief Version exists until someone saves: `GET /projects/:id/brief` returns the template as version 0, and the first edit uses `baseVersion: 0`.
+- Brief Proposals are reviewed by their named approver, who must still be an editor (Admin or PO of one of the Project's Teams). Nothing creates them yet (Grilling is 0032); they are not Inbox Items yet (left for 0035).
+- Project Attachments' chunks have no Feature, so every Feature of the Project retrieves them; only the latest Brief Version is indexed (`BRIEF_VERSION`).

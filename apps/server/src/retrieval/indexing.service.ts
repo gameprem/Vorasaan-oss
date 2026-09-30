@@ -29,7 +29,8 @@ type FeatureScope = {
 
 /**
  * Keeps ContentChunk in step with the content it is cut from (ADR 0007):
- * Attachment Snapshots, the latest Spec Version of each Feature, and Decisions.
+ * Attachment Snapshots (of Features and of Projects), the latest Spec Version of
+ * each Feature, the latest Brief Version of each Project, and Decisions.
  *
  * Callers `schedule()` a source once their transaction has committed. Jobs run one
  * at a time in the background, read the source as it is when they run, and replace
@@ -84,15 +85,24 @@ export class IndexingService implements BeforeApplicationShutdown {
    */
   async reindex(organizationId: string, scope: 'all' | 'stale'): Promise<ReindexResult> {
     const inOrg = { team: { project: { organizationId } } };
-    const [attachments, specVersions, decisions] = await Promise.all([
+    const [attachments, specVersions, briefVersions, decisions] = await Promise.all([
       this.db.attachment.findMany({
-        where: { feature: inOrg, snapshotText: { not: null } },
+        where: {
+          OR: [{ feature: inOrg }, { project: { organizationId } }],
+          snapshotText: { not: null },
+        },
         select: { id: true },
       }),
       this.db.specVersion.findMany({
         where: { feature: inOrg },
         distinct: ['featureId'],
         orderBy: [{ featureId: 'asc' }, { version: 'desc' }],
+        select: { id: true },
+      }),
+      this.db.briefVersion.findMany({
+        where: { project: { organizationId } },
+        distinct: ['projectId'],
+        orderBy: [{ projectId: 'asc' }, { version: 'desc' }],
         select: { id: true },
       }),
       this.db.decision.findMany({
@@ -103,6 +113,7 @@ export class IndexingService implements BeforeApplicationShutdown {
     let targets: IndexTarget[] = [
       ...attachments.map((a) => ({ source: 'ATTACHMENT' as const, id: a.id })),
       ...specVersions.map((v) => ({ source: 'SPEC_VERSION' as const, id: v.id })),
+      ...briefVersions.map((v) => ({ source: 'BRIEF_VERSION' as const, id: v.id })),
       ...decisions.map((d) => ({ source: 'DECISION' as const, id: d.id })),
     ];
     if (scope === 'stale') {
@@ -136,6 +147,9 @@ export class IndexingService implements BeforeApplicationShutdown {
     if (target.source === 'SPEC_VERSION' && loaded.scope.featureId) {
       await this.chunks.deleteOtherSpecVersions(loaded.scope.featureId, target.id);
     }
+    if (target.source === 'BRIEF_VERSION') {
+      await this.chunks.deleteOtherBriefVersions(loaded.scope.projectId, target.id);
+    }
   }
 
   /** Vectors from the Organization's provider; null when none is set or the call fails. */
@@ -167,16 +181,56 @@ export class IndexingService implements BeforeApplicationShutdown {
         return this.loadSpecVersion(target.id);
       case 'DECISION':
         return this.loadDecision(target.id);
+      case 'BRIEF_VERSION':
+        return this.loadBriefVersion(target.id);
     }
   }
 
+  /** A Project Attachment's chunks have no Feature, so every Feature of the Project can find them. */
   private async loadAttachment(id: string): Promise<Loaded> {
     const attachment = await this.db.attachment.findUnique({
       where: { id },
-      select: { snapshotText: true, feature: { select: scopeSelect } },
+      select: {
+        snapshotText: true,
+        feature: { select: scopeSelect },
+        project: { select: { id: true, organizationId: true } },
+      },
     });
     if (!attachment) return null;
-    return { scope: scopeOf(attachment.feature), text: attachment.snapshotText ?? '' };
+    const text = attachment.snapshotText ?? '';
+    if (attachment.feature) return { scope: scopeOf(attachment.feature), text };
+    if (attachment.project) {
+      const { id: projectId, organizationId } = attachment.project;
+      return { scope: { organizationId, projectId, featureId: null }, text };
+    }
+    return null;
+  }
+
+  /** Only the Project's latest Brief Version is indexed; an older one has no chunks. */
+  private async loadBriefVersion(id: string): Promise<Loaded> {
+    const version = await this.db.briefVersion.findUnique({
+      where: { id },
+      select: {
+        markdown: true,
+        projectId: true,
+        project: { select: { organizationId: true } },
+      },
+    });
+    if (!version) return null;
+    const latest = await this.db.briefVersion.findFirst({
+      where: { projectId: version.projectId },
+      orderBy: { version: 'desc' },
+      select: { id: true },
+    });
+    if (latest?.id !== id) return null;
+    return {
+      scope: {
+        organizationId: version.project.organizationId,
+        projectId: version.projectId,
+        featureId: null,
+      },
+      text: version.markdown,
+    };
   }
 
   /** Only the Feature's latest Spec Version is indexed; an older one has no chunks. */

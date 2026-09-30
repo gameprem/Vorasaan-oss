@@ -7,6 +7,7 @@ import type { PrismaClient } from '@vorasaan/db';
 import { SEED, seed } from '@vorasaan/db/seed';
 import type {
   AttachmentView,
+  BriefVersionView,
   DecideResult,
   DecisionRequestView,
   EmbeddingSettingsView,
@@ -19,6 +20,7 @@ import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 import { as } from '../test/http.ts';
 import { ContentChunkRepository } from './content-chunk.repository.ts';
+import { ContextRetriever } from './context-retriever.ts';
 import { EmbeddingError } from './embedding.port.ts';
 import { type FakeEmbeddings, fakeEmbedding } from './fake-embedding.port.ts';
 
@@ -68,11 +70,15 @@ describe('Indexing and search (pgvector)', () => {
   let asPim: ReturnType<typeof as>;
   let asBeam: ReturnType<typeof as>;
 
-  async function upload(featureId: string, filename: string, content: string) {
+  /** Attaches a file to a Feature, or to a Project with `{ projectId }`. */
+  async function upload(owner: string | { projectId: string }, filename: string, content: string) {
     const body = multipart(filename, content);
     const res = await app.inject({
       method: 'POST',
-      url: `/features/${featureId}/attachments`,
+      url:
+        typeof owner === 'string'
+          ? `/features/${owner}/attachments`
+          : `/projects/${owner.projectId}/attachments`,
       headers: { ...body.headers, [DEV_USER_HEADER]: pim.id },
       payload: body.payload,
     });
@@ -450,5 +456,66 @@ describe('Indexing and search (pgvector)', () => {
     expect(stored[0]?.text).toContain('Choice B');
     expect(stored[0]?.text).toContain('Polling every ten seconds is cheap enough');
     expect(stored[0]?.embeddingModel).toBe('embed-a');
+  });
+
+  test('Project Attachments and the latest Brief Version are indexed without a Feature, and retrieved as Project context', async () => {
+    await configure();
+    const other = await otherProjectFeature();
+    const handbook = await upload({ projectId: SEED.projectId }, 'handbook.md', HANDBOOK);
+    const decoy = await upload({ projectId: other.projectId }, 'decoy.md', HANDBOOK);
+    const brief = `/projects/${SEED.projectId}/brief-versions`;
+    const v1 = await asPim<BriefVersionView>('POST', brief, {
+      markdown: '# Project Brief\n\n## Business goals\nSettle refunds by webhook.',
+      baseVersion: 0,
+    });
+    const v2 = await asPim<BriefVersionView>('POST', brief, {
+      markdown: '# Project Brief\n\n## Business goals\nSettle refunds by polling.',
+      baseVersion: 1,
+    });
+    expect(v2.status).toBe(201);
+    await drain();
+
+    const stored = await chunks.chunksOf({ source: 'ATTACHMENT', sourceId: handbook.id });
+    expect(stored.length).toBeGreaterThan(1);
+    expect(stored.every((c) => c.featureId === null && c.projectId === SEED.projectId)).toBe(true);
+    const briefChunks = await db.contentChunk.findMany({ where: { source: 'BRIEF_VERSION' } });
+    expect(briefChunks.map((c) => c.sourceId)).toEqual([v2.body.id]);
+    expect(briefChunks[0]).toMatchObject({ featureId: null, projectId: SEED.projectId });
+    expect(v1.body.id).not.toBe(v2.body.id);
+
+    const retriever = app.get(ContextRetriever);
+    const blocks = await retriever.forFeature(
+      SEED.featureId,
+      'How are refunds settled, and what receipt does the customer get?',
+      6_000,
+    );
+    const ids = blocks.map((b) => b.source.id);
+    expect(blocks.find((b) => b.source.id === handbook.id)).toMatchObject({
+      scope: 'PROJECT',
+      source: { kind: 'ATTACHMENT', title: 'handbook.md' },
+    });
+    expect(blocks.find((b) => b.source.kind === 'BRIEF_VERSION')).toMatchObject({
+      scope: 'PROJECT',
+      source: { id: v2.body.id, title: 'Project Brief', version: 2 },
+    });
+    expect(ids).not.toContain(decoy.id);
+
+    // The other Project's Feature sees its own Project Attachment, never this Project's Brief.
+    const otherBlocks = await retriever.forFeature(other.featureId, 'refunds receipt', 6_000);
+    expect(otherBlocks.map((b) => b.source.id)).toContain(decoy.id);
+    expect(otherBlocks.map((b) => b.source.id)).not.toContain(handbook.id);
+    expect(otherBlocks.some((b) => b.source.kind === 'BRIEF_VERSION')).toBe(false);
+
+    // A full re-index covers Project Attachments and each Project's latest Brief Version.
+    const res = await asPim<ReindexResult>('POST', '/settings/embeddings/reindex', {
+      scope: 'all',
+    });
+    expect(res.body.queued).toBe(4); // seeded Spec v1, two Project Attachments, Brief v2
+    await drain();
+
+    // Removing a Project Attachment removes its chunks.
+    expect((await asPim('DELETE', `/attachments/${handbook.id}`)).status).toBe(204);
+    await drain();
+    expect(await chunks.chunksOf({ source: 'ATTACHMENT', sourceId: handbook.id })).toEqual([]);
   });
 });

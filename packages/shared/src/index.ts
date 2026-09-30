@@ -2,6 +2,7 @@ export * from './ai-settings.ts';
 export * from './atlassian.ts';
 export * from './attachment.ts';
 export * from './auth.ts';
+export * from './brief.ts';
 export * from './decision-request.ts';
 export * from './delegation.ts';
 export * from './embeddings.ts';

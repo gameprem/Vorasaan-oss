@@ -126,6 +126,13 @@ export class ContentChunkRepository {
       WHERE "source" = 'SPEC_VERSION' AND "featureId" = ${featureId} AND "sourceId" <> ${keepId}`;
   }
 
+  /** Only a Project's latest Brief Version stays in the index. */
+  async deleteOtherBriefVersions(projectId: string, keepId: string): Promise<void> {
+    await this.db.$executeRaw`
+      DELETE FROM "ContentChunk"
+      WHERE "source" = 'BRIEF_VERSION' AND "projectId" = ${projectId} AND "sourceId" <> ${keepId}`;
+  }
+
   /**
    * The `k` chunks nearest to `embedding`, among those embedded by the same model,
    * in one Project of one Organization (and one Feature, when given).

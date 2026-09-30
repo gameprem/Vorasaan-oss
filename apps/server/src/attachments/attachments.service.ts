@@ -17,6 +17,7 @@ import {
   type AttachmentView,
 } from '@vorasaan/shared';
 import { AI_PORT, type AiPort } from '../ai/ai.port.ts';
+import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import {
@@ -44,6 +45,9 @@ import {
 
 export type UploadedFile = { originalname: string; stream: Readable };
 
+/** What an Attachment is attached to: one Feature, or one Project as a whole. */
+export type AttachmentOwner = { featureId: string } | { projectId: string };
+
 export type AttachmentDownload = { bytes: Uint8Array; mimeType: string; fileName: string };
 
 const TITLE_MAX = 200;
@@ -63,10 +67,10 @@ export class AttachmentsService {
     this.snapshotters = new Map(snapshotters.map((s) => [s.source, s]));
   }
 
-  async list(user: User, featureId: string): Promise<AttachmentView[]> {
-    await this.assertCanRead(user, featureId);
+  async list(user: User, owner: AttachmentOwner): Promise<AttachmentView[]> {
+    await this.assertCanRead(user, owner);
     const attachments = await this.db.attachment.findMany({
-      where: { featureId },
+      where: owner,
       orderBy: { createdAt: 'asc' },
       include: attachmentInclude,
     });
@@ -76,11 +80,11 @@ export class AttachmentsService {
   /** Stores an uploaded md/txt/pdf/image file and snapshots its text. */
   async addFile(
     user: User,
-    featureId: string,
+    owner: AttachmentOwner,
     file: UploadedFile,
     title: string | undefined,
   ): Promise<AttachmentView> {
-    await this.assertCanEdit(user, featureId);
+    await this.assertCanEdit(user, owner);
     const mimeType = mimeTypeForFileName(file.originalname);
     if (!mimeType) {
       throw new UnsupportedMediaTypeException(
@@ -100,13 +104,16 @@ export class AttachmentsService {
     const summary = await this.summarize(attachmentTitle, 'FILE', text);
 
     const id = randomUUID();
-    const storageKey = `attachments/${featureId}/${id}`;
+    const storageKey =
+      'featureId' in owner
+        ? `attachments/${owner.featureId}/${id}`
+        : `attachments/projects/${owner.projectId}/${id}`;
     await this.storage.put(storageKey, bytes, mimeType);
     try {
       const created = await this.db.attachment.create({
         data: {
           id,
-          featureId,
+          ...owner,
           source: 'FILE',
           title: attachmentTitle,
           storageKey,
@@ -132,10 +139,10 @@ export class AttachmentsService {
    */
   async addUrl(
     user: User,
-    featureId: string,
+    owner: AttachmentOwner,
     input: AddUrlAttachmentInput,
   ): Promise<AttachmentView> {
-    await this.assertCanEdit(user, featureId);
+    await this.assertCanEdit(user, owner);
     const ref =
       input.source === 'URL' ? input.url : input.source === 'CONFLUENCE' ? input.page : input.issue;
     const snapshot = await this.capture(input.source, {
@@ -148,7 +155,7 @@ export class AttachmentsService {
     const summary = await this.summarize(attachmentTitle, input.source, snapshot.text);
     const created = await this.db.attachment.create({
       data: {
-        featureId,
+        ...owner,
         source: input.source,
         title: attachmentTitle,
         url,
@@ -167,7 +174,7 @@ export class AttachmentsService {
   /** Re-fetches a URL, Confluence page or Jira issue (or re-reads a file) and replaces the Snapshot. */
   async refresh(user: User, id: string): Promise<AttachmentView> {
     const attachment = await this.findOrThrow(id);
-    await this.assertCanEdit(user, attachment.featureId);
+    await this.assertCanEdit(user, ownerOf(attachment));
     const snapshot = await this.capture(attachment.source, attachment);
     // A summary of the old Snapshot would be stale: replace it, or clear it on failure.
     const summary = await this.summarize(attachment.title, attachment.source, snapshot.text);
@@ -187,7 +194,7 @@ export class AttachmentsService {
 
   async download(user: User, id: string): Promise<AttachmentDownload> {
     const attachment = await this.findOrThrow(id);
-    await this.assertCanRead(user, attachment.featureId);
+    await this.assertCanRead(user, ownerOf(attachment));
     if (!attachment.storageKey || !attachment.mimeType) {
       throw new NotFoundException('This Attachment has no file');
     }
@@ -208,7 +215,7 @@ export class AttachmentsService {
 
   async remove(user: User, id: string): Promise<void> {
     const attachment = await this.findOrThrow(id);
-    await this.assertCanEdit(user, attachment.featureId);
+    await this.assertCanEdit(user, ownerOf(attachment));
     await this.db.attachment.delete({ where: { id } });
     this.indexing.schedule({ source: 'ATTACHMENT', id }); // gone: its chunks are removed
     if (attachment.storageKey) await this.storage.delete(attachment.storageKey);
@@ -251,8 +258,16 @@ export class AttachmentsService {
     return attachment;
   }
 
-  /** Everyone in the Feature's Organization can read its Attachments. */
-  private async assertCanRead(user: User, featureId: string) {
+  /**
+   * Everyone in the Organization can read a Feature's or a Project's Attachments.
+   * Project Attachments follow the Project Brief's permissions.
+   */
+  private async assertCanRead(user: User, owner: AttachmentOwner) {
+    if ('projectId' in owner) {
+      await projectAccess(this.db, user, owner.projectId);
+      return;
+    }
+    const { featureId } = owner;
     const feature = await this.db.feature.findUnique({
       where: { id: featureId },
       select: { team: { select: { project: { select: { organizationId: true } } } } },
@@ -264,8 +279,17 @@ export class AttachmentsService {
     if (!member) throw new ForbiddenException('You are not in this Organization');
   }
 
-  /** Any Role Owner of the Feature, or an Admin, can add, refresh or remove. */
-  private async assertCanEdit(user: User, featureId: string) {
+  /**
+   * Any Role Owner of the Feature, or an Admin, can add, refresh or remove a
+   * Feature's Attachments; a Project's are edited by those who edit its Brief
+   * (Admins and the POs of the Project's Teams).
+   */
+  private async assertCanEdit(user: User, owner: AttachmentOwner) {
+    if ('projectId' in owner) {
+      await assertCanEditProject(this.db, user, owner.projectId);
+      return;
+    }
+    const { featureId } = owner;
     const feature = await this.db.feature.findUnique({
       where: { id: featureId },
       select: {
@@ -286,6 +310,16 @@ export class AttachmentsService {
       throw new ForbiddenException('Only a Role Owner of this Feature or an Admin can do this');
     }
   }
+}
+
+function ownerOf(attachment: {
+  featureId: string | null;
+  projectId: string | null;
+}): AttachmentOwner {
+  if (attachment.featureId) return { featureId: attachment.featureId };
+  if (attachment.projectId) return { projectId: attachment.projectId };
+  // The database's CHECK constraint makes this unreachable.
+  throw new Error('An Attachment must belong to a Feature or a Project');
 }
 
 /** Maps content and fetch failures to 422, keeping their message. */

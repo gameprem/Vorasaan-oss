@@ -68,7 +68,8 @@ type Scope = { organizationId: string; projectId: string };
  *    Attachments not indexed yet (the background job hasn't run), whole and
  *    shortened to fit (0023's truncation, the last resort);
  * 3. the top-k chunks from the rest of the Project: other Features' Specs and
- *    Decisions, and Project-level Attachments;
+ *    Decisions, the Project Brief (its latest Brief Version) and Project-level
+ *    Attachments;
  * 4. when fewer than k of the Feature's chunks matched the query, and there is
  *    room left, its other chunks in reading order (a Spec drafted from the
  *    Attachments needs all of them, not only those that share words with it).
@@ -279,9 +280,15 @@ export class ContextRetriever {
     const inProject = {
       team: { project: { id: scope.projectId, organizationId: scope.organizationId } },
     };
-    const [attachments, specs, decisions] = await Promise.all([
+    const [attachments, specs, decisions, briefs] = await Promise.all([
       this.db.attachment.findMany({
-        where: { id: { in: idsOf('ATTACHMENT') }, feature: inProject },
+        where: {
+          id: { in: idsOf('ATTACHMENT') },
+          OR: [
+            { feature: inProject },
+            { project: { id: scope.projectId, organizationId: scope.organizationId } },
+          ],
+        },
         select: { id: true, title: true },
       }),
       this.db.specVersion.findMany({
@@ -291,6 +298,13 @@ export class ContextRetriever {
       this.db.decision.findMany({
         where: { id: { in: idsOf('DECISION') }, request: { feature: inProject } },
         select: { id: true, request: { select: { title: true } } },
+      }),
+      this.db.briefVersion.findMany({
+        where: {
+          id: { in: idsOf('BRIEF_VERSION') },
+          project: { id: scope.projectId, organizationId: scope.organizationId },
+        },
+        select: { id: true, version: true },
       }),
     ]);
     const sources = new Map<string, ContextSource>();
@@ -303,6 +317,14 @@ export class ContextRetriever {
         id: s.id,
         title: `Spec: ${s.feature.title}`,
         version: s.version,
+      });
+    }
+    for (const b of briefs) {
+      sources.set(`BRIEF_VERSION:${b.id}`, {
+        kind: 'BRIEF_VERSION',
+        id: b.id,
+        title: 'Project Brief',
+        version: b.version,
       });
     }
     for (const d of decisions) {

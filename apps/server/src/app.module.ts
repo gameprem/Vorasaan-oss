@@ -7,6 +7,8 @@ import { AuthController } from './auth/auth.controller.ts';
 import { AuthService } from './auth/auth.service.ts';
 import { DevUsersController } from './auth/dev-users.controller.ts';
 import { IdentityGuard } from './auth/identity.guard.ts';
+import { BriefController } from './brief/brief.controller.ts';
+import { BriefService } from './brief/brief.service.ts';
 import { DecisionRequestsController } from './decision-requests/decision-requests.controller.ts';
 import { DecisionRequestsService } from './decision-requests/decision-requests.service.ts';
 import { DelegationsController } from './delegations/delegations.controller.ts';
@@ -41,6 +43,7 @@ import { SpecService } from './spec/spec.service.ts';
     DecisionRequestsController,
     DelegationsController,
     SpecController,
+    BriefController,
     AiSettingsController,
     SetupController,
     OrgController,
@@ -55,6 +58,7 @@ import { SpecService } from './spec/spec.service.ts';
     DecisionRequestsService,
     DelegationsService,
     SpecService,
+    BriefService,
     OrgService,
   ],
 })

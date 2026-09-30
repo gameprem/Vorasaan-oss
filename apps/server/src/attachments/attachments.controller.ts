@@ -25,7 +25,7 @@ import {
 import { z } from 'zod';
 import { CurrentUser } from '../auth/identity.guard.ts';
 import { attachmentLimits } from './attachment.config.ts';
-import { AttachmentsService } from './attachments.service.ts';
+import { type AttachmentOwner, AttachmentsService } from './attachments.service.ts';
 
 const uploadStream = FileStreamInterceptor('file', {
   // Per request, so ATTACHMENT_MAX_BYTES applies without a restart.
@@ -43,7 +43,7 @@ export class AttachmentsController {
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) featureId: string,
   ): Promise<AttachmentView[]> {
-    return this.attachments.list(user, featureId);
+    return this.attachments.list(user, { featureId });
   }
 
   /**
@@ -56,14 +56,38 @@ export class AttachmentsController {
   add(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) featureId: string,
-    @Req() req: { file?: MultipartFileStream; body?: unknown; isMultipart(): boolean },
+    @Req() req: AttachRequest,
   ): Promise<AttachmentView> {
+    return this.addTo(user, { featureId }, req);
+  }
+
+  /** Project-level Attachments: read by the Organization, edited by the Project Brief's editors. */
+  @Get('projects/:id/attachments')
+  listForProject(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) projectId: string,
+  ): Promise<AttachmentView[]> {
+    return this.attachments.list(user, { projectId });
+  }
+
+  /** The same bodies as `POST /features/:id/attachments`. */
+  @Post('projects/:id/attachments')
+  @UseInterceptors(uploadStream)
+  addToProject(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) projectId: string,
+    @Req() req: AttachRequest,
+  ): Promise<AttachmentView> {
+    return this.addTo(user, { projectId }, req);
+  }
+
+  private addTo(user: User, owner: AttachmentOwner, req: AttachRequest): Promise<AttachmentView> {
     if (req.isMultipart()) {
       if (!req.file) throw new BadRequestException('Add the file in a "file" part');
       const fields = parse(UploadAttachmentFields, req.body ?? {});
-      return this.attachments.addFile(user, featureId, req.file, fields.title);
+      return this.attachments.addFile(user, owner, req.file, fields.title);
     }
-    return this.attachments.addUrl(user, featureId, parse(AddUrlAttachmentInput, req.body));
+    return this.attachments.addUrl(user, owner, parse(AddUrlAttachmentInput, req.body));
   }
 
   @Get('attachments/:id/file')
@@ -97,6 +121,8 @@ export class AttachmentsController {
     await this.attachments.remove(user, id);
   }
 }
+
+type AttachRequest = { file?: MultipartFileStream; body?: unknown; isMultipart(): boolean };
 
 /** The body shape depends on the content type, so it is validated here, not by the pipe. */
 function parse<T extends z.ZodType>(schema: T, value: unknown): z.infer<T> {
