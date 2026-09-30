@@ -178,6 +178,7 @@ export class BriefService {
             version: (latest?.version ?? 0) + 1,
             markdown: proposal.proposedMarkdown,
             source: proposal.source,
+            summary: proposal.summary,
             approvedById: user.id,
             proposalId: proposal.id,
           },

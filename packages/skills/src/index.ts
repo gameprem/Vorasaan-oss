@@ -6,6 +6,8 @@ export const SKILLS = [
   'draft-spec-proposal',
   'summarize-attachment',
   'draft-spec-from-attachments',
+  'grilling-questions',
+  'draft-brief-from-grilling',
 ] as const;
 export type SkillName = (typeof SKILLS)[number];
 

@@ -1,24 +1,33 @@
 import { Agent } from '@mastra/core/agent';
+import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
 import { z } from 'zod';
 import {
   type AiPort,
   type AttachmentForAi,
   AttachmentSummary,
+  BriefDraft,
   type ContextBlock,
   type DecisionForAi,
   type FeatureForAi,
   GeneratedChoices,
+  type GrillingAnswerForAi,
+  GrillingQuestionDrafts,
+  type GuidelineForAi,
+  type ProjectForAi,
   type RequestForAi,
   SpecProposalDraft,
 } from './ai.port.ts';
 import type { MastraModel } from './model-config.ts';
 import {
+  draftBriefFromGrillingPrompt,
   draftSpecFromAttachmentsPrompt,
   draftSpecProposalPrompt,
   generateChoicesPrompt,
+  grillingQuestionsPrompt,
   summarizeAttachmentPrompt,
 } from './prompts.ts';
 import { generateStructured, type StructuredGenerate } from './structured.ts';
+import type { WorkflowMemory } from './workflow-memory.ts';
 
 const INSTRUCTIONS =
   'You are Vorasaan, an assistant that helps software teams align on what to build. ' +
@@ -28,7 +37,9 @@ export type AiTask =
   | 'generateChoices'
   | 'draftSpecProposal'
   | 'summarizeAttachment'
-  | 'draftSpecFromAttachments';
+  | 'draftSpecFromAttachments'
+  | 'grillingQuestions'
+  | 'draftBriefFromGrilling';
 
 /** Called on every request, so a provider saved in Settings applies immediately. */
 export type ModelResolver = (task: AiTask) => Promise<MastraModel>;
@@ -108,6 +119,38 @@ export class MastraAiPort implements AiPort {
       await this.resolveModel('draftSpecFromAttachments'),
     );
     return generateStructured(generate, 'draft-spec-from-attachments', prompt, SpecProposalDraft);
+  }
+
+  async grillingQuestions(input: {
+    project: ProjectForAi;
+    round: GrillingRoundKind;
+    role: TeamRole;
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+    memory: WorkflowMemory;
+  }) {
+    const prompt = await grillingQuestionsPrompt(input);
+    const generate = agentGenerate(
+      'grilling-questions',
+      await this.resolveModel('grillingQuestions'),
+    );
+    return generateStructured(generate, 'grilling-questions', prompt, GrillingQuestionDrafts);
+  }
+
+  async draftBriefFromGrilling(input: {
+    project: ProjectForAi;
+    briefMarkdown: string;
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+    memory: WorkflowMemory;
+    answers: GrillingAnswerForAi[];
+  }) {
+    const prompt = await draftBriefFromGrillingPrompt(input);
+    const generate = agentGenerate(
+      'draft-brief-from-grilling',
+      await this.resolveModel('draftBriefFromGrilling'),
+    );
+    return generateStructured(generate, 'draft-brief-from-grilling', prompt, BriefDraft);
   }
 }
 

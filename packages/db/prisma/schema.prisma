@@ -106,6 +106,30 @@ enum RequestMessageKind {
 }
 
 // What a ContentChunk was cut from.
+enum GrillingStatus {
+  RUNNING // asking a round; at most one per Project
+  DRAFTED // every round done; its Brief Proposal awaits the starter
+  CANCELLED // stopped by the starter or an Admin; no Brief Version comes of it
+}
+
+enum GrillingRoundKind {
+  BUSINESS // asked to the Project's POs
+  UX // asked to its Designers
+  TECHNICAL // asked to its Tech Leads
+}
+
+enum GrillingRoundStatus {
+  ASKING // questions wait for answers; at most one per Grilling
+  ANSWERED
+  SKIPPED
+}
+
+enum GrillingSkipReason {
+  NO_ONE_WITH_ROLE // nobody in the Project's Teams holds the round's Team Role
+  NOTHING_TO_ASK // what is already known answers the round
+  BY_STARTER // skipped by the starter or an Admin
+}
+
 enum ChunkSource {
   ATTACHMENT // its current Snapshot
   SPEC_VERSION // the Feature's latest Spec Version only
@@ -154,6 +178,9 @@ model User {
 
   briefProposalsToApprove BriefProposal[] @relation("BriefProposalApprover")
   briefVersions           BriefVersion[]  @relation("BriefVersionApprovedBy")
+
+  grillingsStarted Grilling[]         @relation("GrillingStartedBy")
+  grillingAnswers  GrillingQuestion[] @relation("GrillingAnsweredBy")
 
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
@@ -263,6 +290,7 @@ model Project {
   briefVersions  BriefVersion[]
   briefProposals BriefProposal[]
   guidelines     GuidelineCriterion[]
+  grillings      Grilling[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -456,6 +484,7 @@ model BriefProposal {
   baseVersionId    String? // null when drafting the first version
   source           BriefVersionSource
   proposedMarkdown String
+  summary          String? // one-line "what changed", copied to the Brief Version on approval
   status           ProposalStatus     @default(PENDING)
   approverId       String
   reviewedAt       DateTime?
@@ -464,6 +493,7 @@ model BriefProposal {
   baseVersion      BriefVersion?      @relation("BriefProposalBase", fields: [baseVersionId], references: [id])
   approver         User               @relation("BriefProposalApprover", fields: [approverId], references: [id])
   resultVersion    BriefVersion?      @relation("BriefProposalResult")
+  grilling         Grilling?
 
   @@index([approverId, status])
   @@index([projectId, status])
@@ -662,4 +692,68 @@ model GuidelineCriterion {
 
   @@unique([projectId, overridesId])
   @@index([organizationId, projectId, position])
+}
+
+// Grilling (ADR 0006, ticket 0032): rounds of AI-asked questions (business, UX,
+// technical) to the people holding each round's Team Role in the Project's
+// Teams, drafted into a Brief Proposal for the starter to approve. It spans days
+// and many people, so its whole state lives here rather than in a Mastra
+// workflow snapshot. `memory` is a WorkflowMemory (short summaries of the
+// rounds done), sent back to the AI instead of the whole transcript.
+// At most one RUNNING Grilling per Project (partial unique index in the migration).
+model Grilling {
+  id           String             @id @default(uuid())
+  projectId    String
+  startedById  String
+  status       GrillingStatus     @default(RUNNING)
+  currentRound GrillingRoundKind? // the round being asked while RUNNING
+  memory       Json
+  revision     Int                @default(0) // bumped by every change; guards concurrent writes
+  proposalId   String?            @unique
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  startedBy    User               @relation("GrillingStartedBy", fields: [startedById], references: [id])
+  proposal     BriefProposal?     @relation(fields: [proposalId], references: [id])
+  rounds       GrillingRound[]
+  questions    GrillingQuestion[]
+
+  @@index([projectId, createdAt])
+}
+
+// One round of a Grilling, created when it is reached. At most one ASKING per
+// Grilling (partial unique index in the migration).
+model GrillingRound {
+  id          String              @id @default(uuid())
+  grillingId  String
+  kind        GrillingRoundKind
+  role        TeamRole // who answers: PO, DESIGNER or TECH_LEAD
+  status      GrillingRoundStatus
+  skipReason  GrillingSkipReason?
+  createdAt   DateTime            @default(now())
+  completedAt DateTime?
+  grilling    Grilling            @relation(fields: [grillingId], references: [id], onDelete: Cascade)
+  questions   GrillingQuestion[]
+
+  @@unique([grillingId, kind])
+  @@index([status, role])
+}
+
+model GrillingQuestion {
+  id           String        @id @default(uuid())
+  grillingId   String
+  roundId      String
+  position     Int
+  text         String
+  answer       String?
+  answeredById String?
+  answeredAt   DateTime?
+  skipped      Boolean       @default(false) // left unanswered when its round was skipped
+  createdAt    DateTime      @default(now())
+  grilling     Grilling      @relation(fields: [grillingId], references: [id], onDelete: Cascade)
+  round        GrillingRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  answeredBy   User?         @relation("GrillingAnsweredBy", fields: [answeredById], references: [id])
+
+  @@unique([roundId, position])
+  @@index([grillingId])
 }

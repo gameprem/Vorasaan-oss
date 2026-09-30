@@ -9,6 +9,7 @@ export * from './embeddings.ts';
 export * from './enums.ts';
 export * from './feature.ts';
 export * from './feature-guidelines.ts';
+export * from './grilling.ts';
 export * from './inbox.ts';
 export * from './org.ts';
 export * from './setup.ts';

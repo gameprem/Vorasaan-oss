@@ -10,7 +10,8 @@
     "test": "bun test",
     "eval:choices": "bun scripts/eval-choices.ts",
     "eval:spec-from-attachments": "bun scripts/eval-spec-from-attachments.ts",
-    "eval:retrieval": "bun scripts/eval-retrieval.ts"
+    "eval:retrieval": "bun scripts/eval-retrieval.ts",
+    "eval:grilling": "bun scripts/eval-grilling.ts"
   },
   "dependencies": {
     "@fastify/multipart": "^10.1.0",

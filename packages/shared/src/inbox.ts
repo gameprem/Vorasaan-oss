@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { PersonRef } from './decision-request.ts';
 import {
+  BriefVersionSource,
   DecisionRequestKind,
   DecisionRequestStatus,
+  GrillingRoundKind,
   NotificationType,
   SpecVersionSource,
   TeamRole,
@@ -12,7 +14,7 @@ const Id = z.uuid();
 const Timestamp = z.iso.datetime();
 
 // ─── Inbox Items ────────────────────────────────────────────────────────────
-// Derived from Decision Request and Spec Proposal state on every read; never stored.
+// Derived from Decision Request, Proposal and Grilling state on every read; never stored.
 
 export const FeatureRef = z.object({ id: Id, title: z.string() });
 export type FeatureRef = z.infer<typeof FeatureRef>;
@@ -25,11 +27,15 @@ export const DecisionRequestRef = z.object({
 });
 export type DecisionRequestRef = z.infer<typeof DecisionRequestRef>;
 
-const itemBase = {
-  feature: FeatureRef,
-  /** When the underlying state last changed; the Inbox lists the newest first. */
-  since: Timestamp,
-};
+export const ProjectRef = z.object({ id: Id, name: z.string() });
+export type ProjectRef = z.infer<typeof ProjectRef>;
+
+/** When the underlying state last changed; the Inbox lists the newest first. */
+const since = Timestamp;
+
+/** Most Inbox Items are about a Feature; Project-level ones (Grilling, Brief) carry `project` instead. */
+const itemBase = { feature: FeatureRef, since };
+const projectItemBase = { project: ProjectRef, since };
 
 const RequestToDecide = DecisionRequestRef.extend({
   raiser: PersonRef,
@@ -61,6 +67,24 @@ export const InboxItem = z.discriminatedUnion('kind', [
       /** The Decision Request whose Decision produced it, if any. */
       decisionRequest: DecisionRequestRef.nullable(),
     }),
+  }),
+  /** Answer the questions of a Grilling round asked to a Team Role I hold in the Project. */
+  z.object({
+    kind: z.literal('ANSWER_GRILLING'),
+    ...projectItemBase,
+    grilling: z.object({
+      id: Id,
+      round: GrillingRoundKind,
+      role: TeamRole,
+      /** Questions of the round nobody has answered yet. */
+      unanswered: z.int().positive(),
+    }),
+  }),
+  /** Approve (or reject) a PENDING Brief Proposal where I'm the approver. */
+  z.object({
+    kind: z.literal('APPROVE_BRIEF_PROPOSAL'),
+    ...projectItemBase,
+    briefProposal: z.object({ id: Id, source: BriefVersionSource }),
   }),
 ]);
 export type InboxItem = z.infer<typeof InboxItem>;

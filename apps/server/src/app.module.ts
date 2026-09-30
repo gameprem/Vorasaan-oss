@@ -15,6 +15,7 @@ import { DelegationsController } from './delegations/delegations.controller.ts';
 import { DelegationsService } from './delegations/delegations.service.ts';
 import { FeatureGuidelinesModule } from './feature-guidelines/feature-guidelines.module.ts';
 import { FeaturesController } from './features/features.controller.ts';
+import { GrillingModule } from './grilling/grilling.module.ts';
 import { HealthController } from './health/health.controller.ts';
 import { InboxModule } from './inbox/inbox.module.ts';
 import { OrgController } from './org/org.controller.ts';
@@ -36,6 +37,7 @@ import { SpecService } from './spec/spec.service.ts';
     AttachmentsModule,
     InboxModule,
     FeatureGuidelinesModule,
+    GrillingModule,
   ],
   controllers: [
     HealthController,

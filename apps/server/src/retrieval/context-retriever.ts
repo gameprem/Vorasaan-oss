@@ -20,6 +20,8 @@ export const CONTEXT_BUDGET = {
   decisionRequest: 6_000,
   /** Drafting a Spec from Attachments: they are the main input. */
   specFromAttachments: 15_000,
+  /** Grilling questions and the Brief drafted from them: the whole Project is the input. */
+  grilling: 12_000,
 } as const;
 
 /** What a block's tag and attributes (kind, id, title...) cost in the prompt, roughly. */
@@ -28,6 +30,10 @@ const BLOCK_OVERHEAD_TOKENS = 30;
 const MIN_FRAGMENT_TOKENS = 50;
 const OPEN_REQUESTS = 10;
 const RECENT_DECISIONS = 5;
+/** Project-level retrieval lists this many Features, most recently changed first... */
+const FEATURE_OVERVIEW = 25;
+/** ...each with the start of its latest Spec, this many characters long. */
+const FEATURE_SPEC_EXCERPT_CHARS = 800;
 
 /** What one block costs against the budget: its text, its title and its tag. */
 export function blockTokens(block: ContextBlock): number {
@@ -44,6 +50,16 @@ export function splitFeatureSpec(blocks: ContextBlock[]): {
     return { spec: first, context: rest };
   }
   return { spec: null, context: blocks };
+}
+
+/** Splits the Project Brief (the first block of `forProject`, when there is one) from the rest. */
+export function splitProjectBrief(blocks: ContextBlock[]): {
+  brief: ContextBlock | null;
+  context: ContextBlock[];
+} {
+  const [first, ...rest] = blocks;
+  if (first?.source.kind === 'BRIEF_VERSION') return { brief: first, context: rest };
+  return { brief: null, context: blocks };
 }
 
 export type RetrieveOptions = {
@@ -111,15 +127,12 @@ export class ContextRetriever {
       organizationId: feature.team.project.organizationId,
       projectId: feature.team.project.id,
     };
-    const k = Math.min(
-      MAX_SEARCH_K,
-      Math.max(1, options.k ?? Math.max(4, Math.ceil(budget / CHUNKING.targetTokens))),
-    );
+    const k = searchK(budget, options.k);
 
     const [own, ranked, unindexed] = await Promise.all([
       this.featureMaterial(feature, options.excludeRequestId),
       this.rank(scope, feature.id, query, k),
-      this.unindexedAttachments(scope, feature.id),
+      this.unindexedAttachments(scope, { featureId: feature.id }, 'FEATURE'),
     ]);
     const [featureChunks, projectChunks, fillerChunks] = await Promise.all([
       this.describe(scope, ranked.feature, 'FEATURE'),
@@ -133,7 +146,121 @@ export class ContextRetriever {
       ...projectChunks,
       ...fillerChunks,
     ]);
-    return fit(candidates, budget);
+    return fit(candidates, budget, splitFeatureSpec(candidates.slice(0, 1)).spec !== null);
+  }
+
+  /**
+   * The context of a Project-level workflow (Grilling), within `budget` tokens,
+   * by the same rules as `forFeature`, in this order:
+   *
+   * 1. the Project Brief's latest Brief Version (always first, shortened to fit);
+   * 2. an overview of the Project's Features, most recently changed first: each
+   *    with its status, description and the start of its latest Spec;
+   * 3. the top-k chunks of the Project Attachments (documents, and the Repo Scan
+   *    summary when there is one) for the query; then those not indexed yet,
+   *    whole and shortened to fit;
+   * 4. the top-k chunks of the Features' Specs and Decisions for the query;
+   * 5. when fewer than k Project Attachment chunks matched, and there is room
+   *    left, their other chunks in reading order.
+   *
+   * Feature Attachments belong to their Feature and are left out. Every search is
+   * scoped to the Project and its Organization.
+   */
+  async forProject(
+    projectId: string,
+    query: string,
+    budget: number,
+    options: Pick<RetrieveOptions, 'k'> = {},
+  ): Promise<ContextBlock[]> {
+    const project = await this.db.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, organizationId: true },
+    });
+    if (!project) return [];
+    const scope: Scope = { organizationId: project.organizationId, projectId: project.id };
+    const k = searchK(budget, options.k);
+    const attachmentScope: SearchScope = { ...scope, projectLevel: true, sources: ['ATTACHMENT'] };
+
+    const vector = await this.embedQuery(scope.organizationId, query);
+    const [brief, features, attachmentHits, restHits, unindexed] = await Promise.all([
+      this.latestBrief(project.id),
+      this.featureOverview(project.id),
+      this.search(attachmentScope, vector, query, k),
+      this.search({ ...scope, sources: ['SPEC_VERSION', 'DECISION'] }, vector, query, k),
+      this.unindexedAttachments(scope, { projectId: project.id }, 'PROJECT'),
+    ]);
+    const fillerHits =
+      attachmentHits.length < k
+        ? await this.chunks.inOrder(
+            attachmentScope,
+            k - attachmentHits.length,
+            attachmentHits.map((h) => h.id),
+          )
+        : [];
+    const [attachmentChunks, restChunks, fillerChunks] = await Promise.all([
+      this.describe(scope, attachmentHits, 'PROJECT'),
+      this.describe(scope, restHits, 'PROJECT'),
+      this.describe(scope, fillerHits, 'PROJECT'),
+    ]);
+    const candidates = dedupe([
+      ...(brief ? [brief] : []),
+      ...features,
+      ...attachmentChunks,
+      ...unindexed,
+      ...restChunks,
+      ...fillerChunks,
+    ]);
+    return fit(candidates, budget, brief !== null && candidates[0] === brief);
+  }
+
+  private async latestBrief(projectId: string): Promise<Candidate | null> {
+    const latest = await this.db.briefVersion.findFirst({
+      where: { projectId },
+      orderBy: { version: 'desc' },
+      select: { id: true, version: true, markdown: true },
+    });
+    if (!latest) return null;
+    return whole(
+      { kind: 'BRIEF_VERSION', id: latest.id, title: 'Project Brief', version: latest.version },
+      latest.markdown,
+      'PROJECT',
+    );
+  }
+
+  /** The Project's Features, each with its status, description and the start of its latest Spec. */
+  private async featureOverview(projectId: string): Promise<Candidate[]> {
+    const features = await this.db.feature.findMany({
+      where: { team: { projectId } },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      take: FEATURE_OVERVIEW,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        specVersions: {
+          orderBy: { version: 'desc' },
+          take: 1,
+          select: { id: true, version: true, markdown: true },
+        },
+      },
+    });
+    return features.map((f) => {
+      const header = [`Status: ${f.status}`, f.description?.trim()].filter(Boolean).join('\n\n');
+      const spec = f.specVersions[0];
+      if (!spec) {
+        return whole(
+          { kind: 'FEATURE', id: f.id, title: `Feature: ${f.title}` },
+          header,
+          'PROJECT',
+        );
+      }
+      return whole(
+        { kind: 'SPEC_VERSION', id: spec.id, title: `Spec: ${f.title}`, version: spec.version },
+        `${header}\n\n${clipForAi(spec.markdown.trim(), FEATURE_SPEC_EXCERPT_CHARS)}`,
+        'PROJECT',
+      );
+    });
   }
 
   /** The Feature's latest Spec, open Decision Requests and recent Decisions. */
@@ -212,27 +339,10 @@ export class ContextRetriever {
     k: number,
   ): Promise<{ feature: KeywordMatch[]; project: KeywordMatch[]; filler: KeywordMatch[] }> {
     const vector = await this.embedQuery(scope.organizationId, query);
-    const search = async (where: SearchScope) => {
-      const hits: KeywordMatch[] = [];
-      if (vector) {
-        try {
-          const nearest = await this.chunks.search(where, vector, k);
-          hits.push(...nearest.map(({ distance, ...chunk }) => ({ ...chunk, rank: 1 - distance })));
-        } catch (error) {
-          this.logger.warn(`Vector search failed, using keywords: ${message(error)}`);
-        }
-      }
-      if (hits.length < k) {
-        const seen = new Set(hits.map((h) => h.id));
-        const keyword = await this.chunks.keywordSearch(where, query, k);
-        hits.push(...keyword.filter((h) => !seen.has(h.id)).slice(0, k - hits.length));
-      }
-      return hits;
-    };
     const featureScope: SearchScope = { ...scope, featureId, sources: ['ATTACHMENT'] };
     const [feature, project] = await Promise.all([
-      search(featureScope),
-      search({ ...scope, outsideFeatureId: featureId }),
+      this.search(featureScope, vector, query, k),
+      this.search({ ...scope, outsideFeatureId: featureId }, vector, query, k),
     ]);
     const filler =
       feature.length < k
@@ -243,6 +353,30 @@ export class ContextRetriever {
           )
         : [];
     return { feature, project, filler };
+  }
+
+  /** The `k` best chunks in `where`: nearest by vector when there is one, topped up by keyword rank. */
+  private async search(
+    where: SearchScope,
+    vector: { model: string; embedding: number[] } | null,
+    query: string,
+    k: number,
+  ): Promise<KeywordMatch[]> {
+    const hits: KeywordMatch[] = [];
+    if (vector) {
+      try {
+        const nearest = await this.chunks.search(where, vector, k);
+        hits.push(...nearest.map(({ distance, ...chunk }) => ({ ...chunk, rank: 1 - distance })));
+      } catch (error) {
+        this.logger.warn(`Vector search failed, using keywords: ${message(error)}`);
+      }
+    }
+    if (hits.length < k) {
+      const seen = new Set(hits.map((h) => h.id));
+      const keyword = await this.chunks.keywordSearch(where, query, k);
+      hits.push(...keyword.filter((h) => !seen.has(h.id)).slice(0, k - hits.length));
+    }
+    return hits;
   }
 
   /** The query's embedding, or null when no provider is set or the call fails. */
@@ -344,12 +478,17 @@ export class ContextRetriever {
   }
 
   /**
-   * The Feature's Attachments with Snapshot text but no chunks yet, most recent
-   * Snapshot first: sent whole and shortened to fit, as before retrieval (0023).
+   * The Feature's (or the Project's own) Attachments with Snapshot text but no
+   * chunks yet, most recent Snapshot first: sent whole and shortened to fit, as
+   * before retrieval (0023).
    */
-  private async unindexedAttachments(scope: Scope, featureId: string): Promise<Candidate[]> {
+  private async unindexedAttachments(
+    scope: Scope,
+    owner: { featureId: string } | { projectId: string },
+    blockScope: ContextBlock['scope'],
+  ): Promise<Candidate[]> {
     const rows = await this.db.attachment.findMany({
-      where: { featureId, snapshotText: { not: null } },
+      where: { ...owner, snapshotText: { not: null } },
       orderBy: [{ snapshotAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
       select: { id: true },
     });
@@ -366,13 +505,25 @@ export class ContextRetriever {
       const row = byId.get(id);
       const text = row?.snapshotText?.trim();
       if (!row || !text) return [];
-      return [whole({ kind: 'ATTACHMENT', id, title: row.title }, text)];
+      return [whole({ kind: 'ATTACHMENT', id, title: row.title }, text, blockScope)];
     });
   }
 }
 
-function whole(source: ContextSource, text: string): Candidate {
-  return { source, scope: 'FEATURE', text, key: `${source.kind}:${source.id}`, clippable: true };
+function whole(
+  source: ContextSource,
+  text: string,
+  scope: ContextBlock['scope'] = 'FEATURE',
+): Candidate {
+  return { source, scope, text, key: `${source.kind}:${source.id}`, clippable: true };
+}
+
+/** How many chunks each search returns: `k` if given, else enough to fill the budget. */
+function searchK(budget: number, k: number | undefined): number {
+  return Math.min(
+    MAX_SEARCH_K,
+    Math.max(1, k ?? Math.max(4, Math.ceil(budget / CHUNKING.targetTokens))),
+  );
 }
 
 /** Drops repeated blocks: the same chunk or source twice, or the same text twice. */
@@ -391,11 +542,11 @@ function dedupe(candidates: Candidate[]): Candidate[] {
 /**
  * Keeps blocks in order while they fit in `budget` tokens. A whole block that
  * doesn't fit is shortened to the room left; a chunk is skipped. When the first
- * block is the Feature's Spec and not even a fragment of it fits, nothing is
- * returned, so no other block can ever come before the Spec.
+ * block is anchored (the Feature's Spec, or the Project Brief) and not even a
+ * fragment of it fits, nothing is returned, so no other block can ever come
+ * before it.
  */
-function fit(candidates: Candidate[], budget: number): ContextBlock[] {
-  const specFirst = splitFeatureSpec(candidates.slice(0, 1)).spec !== null;
+function fit(candidates: Candidate[], budget: number, anchoredFirst: boolean): ContextBlock[] {
   let remaining = Math.max(0, Math.floor(budget));
   const blocks: ContextBlock[] = [];
   for (const [i, candidate] of candidates.entries()) {
@@ -411,7 +562,7 @@ function fit(candidates: Candidate[], budget: number): ContextBlock[] {
       }
     }
     if (!taken) {
-      if (i === 0 && specFirst) return [];
+      if (i === 0 && anchoredFirst) return [];
       continue;
     }
     blocks.push(taken);

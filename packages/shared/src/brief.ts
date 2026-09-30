@@ -85,6 +85,8 @@ export const BriefProposalView = z.object({
   baseVersion: z.int().positive().nullable(),
   baseMarkdown: z.string(),
   proposedMarkdown: z.string(),
+  /** One line on what the proposal changes; it becomes the Brief Version's summary. */
+  summary: z.string().nullable(),
   /** The Brief Version it became, once APPROVED. */
   resultVersion: z.int().positive().nullable(),
   createdAt: Timestamp,
