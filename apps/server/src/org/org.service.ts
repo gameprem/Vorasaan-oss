@@ -29,6 +29,7 @@ import type {
 } from '@vorasaan/shared';
 import { AuthService, hashPassword } from '../auth/auth.service.ts';
 import { hashToken, newToken } from '../auth/tokens.ts';
+import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specVersionInclude, toSpecVersionView } from '../spec/spec.view.ts';
@@ -47,6 +48,7 @@ export class OrgService {
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
     private readonly auth: AuthService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ─── Permissions ──────────────────────────────────────────────────────────
@@ -337,6 +339,7 @@ export class OrgService {
   async writeSpec(user: User, featureId: string, input: WriteSpecInput): Promise<SpecVersionView> {
     await this.teamOfFeature(featureId);
     await assertCanEditSpec(this.db, user, featureId);
+    const outbox = this.notifications.outbox();
 
     try {
       const version = await this.db.$transaction(async (tx) => {
@@ -351,7 +354,7 @@ export class OrgService {
             `The Spec is now at v${current}. Reload to see the latest before saving.`,
           );
         }
-        return tx.specVersion.create({
+        const created = await tx.specVersion.create({
           data: {
             featureId,
             version: current + 1,
@@ -362,7 +365,10 @@ export class OrgService {
           },
           include: specVersionInclude,
         });
+        await this.notifications.specVersionCreated(tx, outbox, created);
+        return created;
       });
+      await this.notifications.publish(outbox);
       return toSpecVersionView(version);
     } catch (error) {
       throw uniqueConflict(error, 'Someone saved the Spec at the same time. Reload and try again.');

@@ -13,6 +13,7 @@ import { DelegationsController } from './delegations/delegations.controller.ts';
 import { DelegationsService } from './delegations/delegations.service.ts';
 import { FeaturesController } from './features/features.controller.ts';
 import { HealthController } from './health/health.controller.ts';
+import { InboxModule } from './inbox/inbox.module.ts';
 import { OrgController } from './org/org.controller.ts';
 import { OrgService } from './org/org.service.ts';
 import { PrismaModule } from './prisma/prisma.module.ts';
@@ -23,7 +24,7 @@ import { SpecController } from './spec/spec.controller.ts';
 import { SpecService } from './spec/spec.service.ts';
 
 @Module({
-  imports: [PrismaModule, MastraModule, AtlassianModule, AttachmentsModule],
+  imports: [PrismaModule, MastraModule, AtlassianModule, AttachmentsModule, InboxModule],
   controllers: [
     HealthController,
     AuthController,

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma, PrismaClient, User } from '@vorasaan/db';
 import type { CreateDelegationInput, DelegationView } from '@vorasaan/shared';
+import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 
 const person = { select: { id: true, name: true } } as const;
@@ -25,7 +26,10 @@ type DelegationWithPeople = Prisma.DelegationGetPayload<{ include: typeof delega
  */
 @Injectable()
 export class DelegationsService {
-  constructor(@InjectPrisma() private readonly db: PrismaClient) {}
+  constructor(
+    @InjectPrisma() private readonly db: PrismaClient,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   /** Current and upcoming Delegations; ended ones are left out. */
   async list(user: User, teamId: string): Promise<DelegationView[]> {
@@ -90,18 +94,32 @@ export class DelegationsService {
       );
     }
 
-    const created = await this.db.delegation.create({
-      data: {
-        teamId,
-        role: input.role,
-        delegatorId,
-        delegateId: input.delegateId,
-        startsAt,
-        endsAt,
-        createdById: user.id,
-      },
-      include: delegationInclude,
+    const outbox = this.notifications.outbox();
+    const created = await this.db.$transaction(async (tx) => {
+      const created = await tx.delegation.create({
+        data: {
+          teamId,
+          role: input.role,
+          delegatorId,
+          delegateId: input.delegateId,
+          startsAt,
+          endsAt,
+          createdById: user.id,
+        },
+        include: delegationInclude,
+      });
+      // One that starts later is announced once it has started (NotificationsService.startDelegations).
+      if (startsAt <= now) {
+        await this.notifications.notify(tx, outbox, {
+          type: 'DELEGATION_STARTED',
+          to: [created.delegateId],
+          actorId: user.id,
+          delegationId: created.id,
+        });
+      }
+      return created;
     });
+    await this.notifications.publish(outbox);
     return toView(created, user, admin, now);
   }
 

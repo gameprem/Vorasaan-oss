@@ -6,6 +6,7 @@ export * from './decision-request.ts';
 export * from './delegation.ts';
 export * from './enums.ts';
 export * from './feature.ts';
+export * from './inbox.ts';
 export * from './org.ts';
 export * from './setup.ts';
 export * from './spec.ts';
