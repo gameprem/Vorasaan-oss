@@ -39,12 +39,15 @@ export async function authHeaders(): Promise<Record<string, string>> {
 }
 
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  // Read cookies outside the try: during prerendering, cookies() throws Next's
+  // "dynamic usage" signal, which must propagate rather than become a network error.
+  const auth = await authHeaders();
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
       method: options.method ?? 'GET',
       headers: {
-        ...(await authHeaders()),
+        ...auth,
         ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
