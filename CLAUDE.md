@@ -41,6 +41,7 @@ bun run db:migrate          # create/apply migrations (dev)
 bun run lint                # Biome (bun run format to fix)
 bun run typecheck
 bun run test
+bun run check               # all three; run before committing
 ```
 
-There is no CI yet: run lint, typecheck and test locally before opening a PR. All three must pass.
+There is no CI yet: run `bun run check` (lint → typecheck → test, stops at the first failure) before every commit. `bun test` alone does **not** type-check.

@@ -15,9 +15,9 @@ const ROLE_LABEL: Record<TeamRole, string> = {
 
 class Cancelled extends Error {}
 
-function answered<T>(value: T | symbol): T {
+function answered<T>(value: T): Exclude<T, symbol> {
   if (p.isCancel(value)) throw new Cancelled();
-  return value;
+  return value as Exclude<T, symbol>;
 }
 
 const required = (label: string) => (value: string | undefined) =>

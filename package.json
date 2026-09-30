@@ -13,6 +13,7 @@
     "dev": "turbo run dev",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "check": "bun run lint && bun run typecheck && bun run test",
     "lint": "biome check .",
     "format": "biome check --write .",
     "db:generate": "turbo run db:generate",
