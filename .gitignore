@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.next/
+.turbo/
+coverage/
+**/generated/
+
+.env
+.env.*
+!.env.example
+
+# Local file storage for Attachments (FILE_STORAGE_DRIVER=local)
+data/
+
+.DS_Store
+*.log

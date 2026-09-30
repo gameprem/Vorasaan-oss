@@ -1,0 +1,27 @@
+{
+  "name": "vorasaan",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@12.8.1",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "db:generate": "turbo run db:generate",
+    "db:migrate": "pnpm --filter @vorasaan/db db:migrate"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@types/node": "^22.20.4",
+    "turbo": "^2.11.5",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3"
+  }
+}

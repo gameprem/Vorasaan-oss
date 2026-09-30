@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: vorasaan
+          POSTGRES_PASSWORD: vorasaan
+          POSTGRES_DB: vorasaan_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vorasaan"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://vorasaan:vorasaan@localhost:5432/vorasaan_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test

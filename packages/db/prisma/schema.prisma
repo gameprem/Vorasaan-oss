@@ -2,13 +2,16 @@
 // Hierarchy: Organization -> Project -> Team -> Feature.
 // Mastra keeps its workflow snapshots in a separate Postgres schema; nothing here depends on it.
 
+// Connection URL lives in prisma.config.ts (Prisma 7).
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
 }
 
 // ─── Enums ──────────────────────────────────────────────────────────────────

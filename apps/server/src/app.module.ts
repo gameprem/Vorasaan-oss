@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { FeatureModule } from './modules/feature/feature.module';
-import { MastraModule } from './modules/mastra/mastra.module';
 import { JiraModule } from './modules/jira/jira.module';
+import { MastraModule } from './modules/mastra/mastra.module';
 
 @Module({
   imports: [

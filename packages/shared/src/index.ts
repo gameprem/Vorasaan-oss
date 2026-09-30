@@ -1,6 +1,6 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-export const RoleEnum = z.enum(["PO", "DESIGNER", "BACKEND", "FRONTEND", "MOBILE", "QA"]);
+export const RoleEnum = z.enum(['PO', 'DESIGNER', 'BACKEND', 'FRONTEND', 'MOBILE', 'QA']);
 
 export const BlockerChoiceSchema = z.object({
   id: z.string(),
