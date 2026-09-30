@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { JiraIssueKey } from './atlassian.ts';
 import { Password } from './auth.ts';
 import { OrgRole, TeamRole } from './enums.ts';
 
@@ -92,13 +93,7 @@ export type AcceptInvitationInput = z.infer<typeof AcceptInvitationInput>;
 export const CreateFeatureInput = z.object({
   title: z.string().trim().min(1, 'Give the Feature a title').max(200),
   description: z.string().trim().max(2000).optional(),
-  jiraIssueKey: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z][A-Z0-9]+-\d+$/, 'Jira issue keys look like MB-42')
-    .optional()
-    .or(z.literal('').transform(() => undefined)),
+  jiraIssueKey: JiraIssueKey.optional().or(z.literal('').transform(() => undefined)),
 });
 export type CreateFeatureInput = z.input<typeof CreateFeatureInput>;
 

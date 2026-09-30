@@ -1,12 +1,16 @@
 import { Controller, Get, NotFoundException, Param, ParseUUIDPipe } from '@nestjs/common';
 import type { PrismaClient, User } from '@vorasaan/db';
-import type { FeatureSummaryView } from '@vorasaan/shared';
+import type { FeatureSummaryView, FeatureView } from '@vorasaan/shared';
 import { CurrentUser } from '../auth/identity.guard.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { AtlassianSettingsService } from '../settings/atlassian-settings.service.ts';
 
 @Controller('features')
 export class FeaturesController {
-  constructor(@InjectPrisma() private readonly db: PrismaClient) {}
+  constructor(
+    @InjectPrisma() private readonly db: PrismaClient,
+    private readonly atlassian: AtlassianSettingsService,
+  ) {}
 
   /** Features where the current user is a Role Owner (the CLI's Feature picker). */
   @Get()
@@ -33,7 +37,7 @@ export class FeaturesController {
   async one(
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<FeatureSummaryView> {
+  ): Promise<FeatureView> {
     const f = await this.db.feature.findUnique({
       where: { id },
       include: {
@@ -49,6 +53,8 @@ export class FeaturesController {
       teamName: f.team.name,
       projectName: f.team.project.name,
       myRoles: f.roleOwners.map((o) => o.role),
+      jiraIssueKey: f.jiraIssueKey,
+      jiraIssueUrl: await this.atlassian.jiraIssueUrl(f.jiraIssueKey),
     };
   }
 }

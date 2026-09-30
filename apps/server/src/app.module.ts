@@ -17,12 +17,13 @@ import { OrgController } from './org/org.controller.ts';
 import { OrgService } from './org/org.service.ts';
 import { PrismaModule } from './prisma/prisma.module.ts';
 import { AiSettingsController } from './settings/ai-settings.controller.ts';
+import { AtlassianModule } from './settings/atlassian.module.ts';
 import { SetupController } from './setup/setup.controller.ts';
 import { SpecController } from './spec/spec.controller.ts';
 import { SpecService } from './spec/spec.service.ts';
 
 @Module({
-  imports: [PrismaModule, MastraModule, AttachmentsModule],
+  imports: [PrismaModule, MastraModule, AtlassianModule, AttachmentsModule],
   controllers: [
     HealthController,
     AuthController,

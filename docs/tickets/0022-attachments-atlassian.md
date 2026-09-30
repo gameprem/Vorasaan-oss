@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0021]
 slice: mvp-backend
 ---
@@ -16,6 +16,6 @@ Confluence pages and Jira issues can be attached and snapshotted, read-only.
 - A Feature's optional `jiraIssueKey` (Epic) can be set and is shown as a link.
 
 ## Acceptance criteria (test first against a fake Atlassian HTTP server)
-- [ ] Confluence page and Jira issue Attachments snapshot the expected text.
-- [ ] Without the integration, attaching Atlassian sources returns a clear 422.
-- [ ] The API token is never returned by any endpoint.
+- [x] Confluence page and Jira issue Attachments snapshot the expected text.
+- [x] Without the integration, attaching Atlassian sources returns a clear 422.
+- [x] The API token is never returned by any endpoint.

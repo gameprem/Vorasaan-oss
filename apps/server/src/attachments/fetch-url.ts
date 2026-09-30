@@ -84,7 +84,7 @@ async function assertFetchable(url: URL, allowPrivate: boolean) {
   }
 }
 
-async function readCapped(response: Response, maxBytes: number): Promise<Uint8Array> {
+export async function readCapped(response: Response, maxBytes: number): Promise<Uint8Array> {
   const tooLarge = () => new UrlFetchError(`The page is larger than ${maxBytes} bytes`);
   const declared = Number(response.headers.get('content-length'));
   if (declared > maxBytes) {

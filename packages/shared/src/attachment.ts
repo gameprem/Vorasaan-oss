@@ -22,16 +22,43 @@ export const ATTACHMENT_FILE_TYPES = {
   webp: 'image/webp',
 } as const;
 
+const Ref = z.string().trim().min(1).max(2048);
+
 /**
- * `POST /features/:id/attachments` with a JSON body attaches a public web page.
+ * `POST /features/:id/attachments` with a JSON body attaches a public web page
+ * (`source` "URL", the default), a Confluence page or a Jira issue. Confluence
+ * and Jira are read from the Organization's Atlassian site (`/settings/atlassian`);
+ * their URLs must be on that site.
  * (The same route takes a multipart upload: an optional `title` field, then a `file`.)
  */
-export const AddUrlAttachmentInput = z.object({
-  url: z.url({ protocol: /^https?$/ }).max(2048),
-  /** Defaults to the page's <title>, or the URL. */
-  title: Title.optional(),
-});
-export type AddUrlAttachmentInput = z.infer<typeof AddUrlAttachmentInput>;
+export const AddUrlAttachmentInput = z.preprocess(
+  (body) =>
+    body && typeof body === 'object' && !('source' in body) ? { ...body, source: 'URL' } : body,
+  z.discriminatedUnion('source', [
+    z.object({
+      source: z.literal('URL'),
+      url: z.url({ protocol: /^https?$/ }).max(2048),
+      /** Defaults to the page's <title>, or the URL. */
+      title: Title.optional(),
+    }),
+    z.object({
+      source: z.literal('CONFLUENCE'),
+      /** A page URL on the Atlassian site, or the numeric page id. */
+      page: Ref,
+      /** Defaults to the page title. */
+      title: Title.optional(),
+    }),
+    z.object({
+      source: z.literal('JIRA'),
+      /** An issue key (MB-42) or its URL on the Atlassian site. */
+      issue: Ref,
+      /** Defaults to "KEY: summary". */
+      title: Title.optional(),
+    }),
+  ]),
+);
+/** The parsed body: `source` is always set (a body without one is a URL). */
+export type AddUrlAttachmentInput = z.output<typeof AddUrlAttachmentInput>;
 
 /** Text fields of a multipart upload (they must precede the file part). */
 export const UploadAttachmentFields = z.object({
