@@ -3,7 +3,10 @@ import type { SpecProposalView, SpecVersionView } from '@vorasaan/shared';
 
 const person = { select: { id: true, name: true } } as const;
 
-export const specVersionInclude = { approvedBy: person } satisfies Prisma.SpecVersionInclude;
+export const specVersionInclude = {
+  approvedBy: person,
+  revertedFrom: { select: { version: true } },
+} satisfies Prisma.SpecVersionInclude;
 
 export function toSpecVersionView(
   v: Prisma.SpecVersionGetPayload<{ include: typeof specVersionInclude }>,
@@ -16,6 +19,7 @@ export function toSpecVersionView(
     source: v.source,
     summary: v.summary,
     approvedBy: v.approvedBy,
+    revertedFrom: v.revertedFrom?.version ?? null,
     createdAt: v.createdAt.toISOString(),
   };
 }
