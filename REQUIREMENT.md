@@ -167,7 +167,7 @@ Bun, Commander.js (subcommands), **Ink** (persistent TUI), SSE client, OS notifi
 
 ### Phase 1: Foundation
 - [x] Root `package.json` (Bun workspaces), `turbo.json` (`tasks`), Biome, base tsconfig.
-- [ ] CI (GitHub Actions: lint, typecheck, test with Postgres), added once the tracer bullet has tests.
+- [x] CI (GitHub Actions: lint, typecheck, test with Postgres), added once the tracer bullet has tests.
 - [x] `schema.prisma` for the MVP domain model (Prisma 7) + initial migration.
 - [x] `CONTEXT.md` glossary, ADRs 0001–0005, `CLAUDE.md`, `README.md`.
 - [ ] Scaffold `apps/web`, `apps/server`, `apps/cli` and `packages/skills` as workspace packages.
