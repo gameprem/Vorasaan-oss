@@ -9,6 +9,9 @@ export type AiConfig = {
   draftSpecFromAttachmentsModel: string;
   grillingQuestionsModel: string;
   draftBriefFromGrillingModel: string;
+  suggestFeaturesModel: string;
+  draftSpecFromSuggestionModel: string;
+  checkFeatureFitModel: string;
 };
 
 export function loadAiConfig(env: Record<string, string | undefined> = process.env): AiConfig {
@@ -20,5 +23,8 @@ export function loadAiConfig(env: Record<string, string | undefined> = process.e
     draftSpecFromAttachmentsModel: env.VORASAAN_MODEL_DRAFT_SPEC_FROM_ATTACHMENTS ?? fallback,
     grillingQuestionsModel: env.VORASAAN_MODEL_GRILLING_QUESTIONS ?? fallback,
     draftBriefFromGrillingModel: env.VORASAAN_MODEL_DRAFT_BRIEF_FROM_GRILLING ?? fallback,
+    suggestFeaturesModel: env.VORASAAN_MODEL_SUGGEST_FEATURES ?? fallback,
+    draftSpecFromSuggestionModel: env.VORASAAN_MODEL_DRAFT_SPEC_FROM_SUGGESTION ?? fallback,
+    checkFeatureFitModel: env.VORASAAN_MODEL_CHECK_FEATURE_FIT ?? fallback,
   };
 }

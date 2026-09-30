@@ -8,22 +8,30 @@ import {
   BriefDraft,
   type ContextBlock,
   type DecisionForAi,
+  type DismissedSuggestionForAi,
+  FeatureFitDraft,
   type FeatureForAi,
+  FeatureSuggestionDrafts,
   GeneratedChoices,
   type GrillingAnswerForAi,
   GrillingQuestionDrafts,
   type GuidelineForAi,
   type ProjectForAi,
+  type ProjectFoundationForAi,
   type RequestForAi,
   SpecProposalDraft,
+  type SuggestionForAi,
 } from './ai.port.ts';
 import type { MastraModel } from './model-config.ts';
 import {
+  checkFeatureFitPrompt,
   draftBriefFromGrillingPrompt,
   draftSpecFromAttachmentsPrompt,
+  draftSpecFromSuggestionPrompt,
   draftSpecProposalPrompt,
   generateChoicesPrompt,
   grillingQuestionsPrompt,
+  suggestFeaturesPrompt,
   summarizeAttachmentPrompt,
 } from './prompts.ts';
 import { generateStructured, type StructuredGenerate } from './structured.ts';
@@ -39,7 +47,10 @@ export type AiTask =
   | 'summarizeAttachment'
   | 'draftSpecFromAttachments'
   | 'grillingQuestions'
-  | 'draftBriefFromGrilling';
+  | 'draftBriefFromGrilling'
+  | 'suggestFeatures'
+  | 'draftSpecFromSuggestion'
+  | 'checkFeatureFit';
 
 /** Called on every request, so a provider saved in Settings applies immediately. */
 export type ModelResolver = (task: AiTask) => Promise<MastraModel>;
@@ -70,8 +81,14 @@ export class MastraAiPort implements AiPort {
     specMarkdown: string;
     request: RequestForAi;
     context: ContextBlock[];
+    foundation?: ProjectFoundationForAi;
   }) {
-    const prompt = await generateChoicesPrompt(input.specMarkdown, input.request, input.context);
+    const prompt = await generateChoicesPrompt(
+      input.specMarkdown,
+      input.request,
+      input.context,
+      input.foundation,
+    );
     const generate = agentGenerate('generate-choices', await this.resolveModel('generateChoices'));
     return generateStructured(generate, 'generate-choices', prompt, GeneratedChoices);
   }
@@ -81,12 +98,14 @@ export class MastraAiPort implements AiPort {
     request: RequestForAi;
     decision: DecisionForAi;
     context: ContextBlock[];
+    foundation?: ProjectFoundationForAi;
   }) {
     const prompt = await draftSpecProposalPrompt(
       input.specMarkdown,
       input.request,
       input.decision,
       input.context,
+      input.foundation,
     );
     const generate = agentGenerate(
       'draft-spec-proposal',
@@ -151,6 +170,45 @@ export class MastraAiPort implements AiPort {
       await this.resolveModel('draftBriefFromGrilling'),
     );
     return generateStructured(generate, 'draft-brief-from-grilling', prompt, BriefDraft);
+  }
+
+  async suggestFeatures(input: {
+    project: ProjectForAi;
+    count: number;
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+    decisions: ContextBlock[];
+    dismissed: DismissedSuggestionForAi[];
+    pending: string[];
+  }) {
+    const prompt = await suggestFeaturesPrompt(input);
+    const generate = agentGenerate('suggest-features', await this.resolveModel('suggestFeatures'));
+    return generateStructured(generate, 'suggest-features', prompt, FeatureSuggestionDrafts);
+  }
+
+  async draftSpecFromSuggestion(input: {
+    project: ProjectForAi;
+    suggestion: SuggestionForAi;
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+  }) {
+    const prompt = await draftSpecFromSuggestionPrompt(input);
+    const generate = agentGenerate(
+      'draft-spec-from-suggestion',
+      await this.resolveModel('draftSpecFromSuggestion'),
+    );
+    return generateStructured(generate, 'draft-spec-from-suggestion', prompt, SpecProposalDraft);
+  }
+
+  async checkFeatureFit(input: {
+    project: ProjectForAi;
+    feature: FeatureForAi;
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+  }) {
+    const prompt = await checkFeatureFitPrompt(input);
+    const generate = agentGenerate('check-feature-fit', await this.resolveModel('checkFeatureFit'));
+    return generateStructured(generate, 'check-feature-fit', prompt, FeatureFitDraft);
   }
 }
 

@@ -182,6 +182,9 @@ model User {
   grillingsStarted Grilling[]         @relation("GrillingStartedBy")
   grillingAnswers  GrillingQuestion[] @relation("GrillingAnsweredBy")
 
+  featureSuggestionsGenerated FeatureSuggestion[] @relation("FeatureSuggestionGeneratedBy")
+  featureSuggestionsDecided   FeatureSuggestion[] @relation("FeatureSuggestionDecidedBy")
+
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
   delegationsCreated  Delegation[] @relation("DelegationCreatedBy")
@@ -291,6 +294,7 @@ model Project {
   briefProposals BriefProposal[]
   guidelines     GuidelineCriterion[]
   grillings      Grilling[]
+  suggestions    FeatureSuggestion[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -362,6 +366,7 @@ model Feature {
   decisionRequests DecisionRequest[]
   notifications    Notification[]
   chunks           ContentChunk[]
+  suggestion       FeatureSuggestion? // the Feature Suggestion it was accepted from, if any
 
   @@index([teamId])
   @@index([jiraIssueKey])
@@ -756,4 +761,48 @@ model GrillingQuestion {
 
   @@unique([roundId, position])
   @@index([grillingId])
+}
+
+// ─── Feature Suggestions (ADR 0006, ticket 0034) ──────────────────────────────
+
+enum FeatureSuggestionStatus {
+  PENDING
+  ACCEPTED // a Feature was created from it (featureId)
+  DISMISSED // with a reason, sent back to the AI on the next generation
+}
+
+// A rough level, for a Feature Suggestion's effort and risk.
+enum SuggestionLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// A Feature the AI proposes from the Project Brief, the Feature Guidelines, the
+// Project's existing Features and the Decision Log. Suggestions generated together
+// share a batchId. `servesGuidelineIds` are the effective Guidelines criteria it
+// serves, as they were when it was generated (a criterion may be gone since).
+model FeatureSuggestion {
+  id                 String                  @id @default(uuid())
+  projectId          String
+  batchId            String
+  title              String
+  rationale          String
+  businessValue      String
+  effort             SuggestionLevel
+  risk               SuggestionLevel
+  servesGuidelineIds String[]
+  status             FeatureSuggestionStatus @default(PENDING)
+  dismissReason      String?
+  decidedById        String?
+  decidedAt          DateTime?
+  featureId          String?                 @unique
+  generatedById      String
+  createdAt          DateTime                @default(now())
+  project            Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  feature            Feature?                @relation(fields: [featureId], references: [id], onDelete: SetNull)
+  generatedBy        User                    @relation("FeatureSuggestionGeneratedBy", fields: [generatedById], references: [id])
+  decidedBy          User?                   @relation("FeatureSuggestionDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([projectId, status, createdAt])
 }

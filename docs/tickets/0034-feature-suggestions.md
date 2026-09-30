@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0032]
 slice: project-foundation
 ---
@@ -25,5 +25,5 @@ The AI proposes Features that serve the business, and checks any Feature idea ag
 - Migration for `FeatureSuggestion`. `AiPort` methods, prompts, `FakeAiPort` and eval cases.
 
 ## Acceptance criteria (test first, real Postgres + `FakeAiPort`)
-- [ ] Generate → accept one → a DRAFT Feature exists with a PENDING Spec Proposal. Dismiss another with a reason, and the next generation's AI input includes that reason.
-- [ ] The fit check reports one line per effective Guideline.
+- [x] Generate → accept one → a DRAFT Feature exists with a PENDING Spec Proposal. Dismiss another with a reason, and the next generation's AI input includes that reason.
+- [x] The fit check reports one line per effective Guideline.

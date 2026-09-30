@@ -4,11 +4,16 @@ import type {
   AttachmentForAi,
   ContextBlock,
   DecisionForAi,
+  DismissedSuggestionForAi,
+  FeatureFitDraft,
   FeatureForAi,
+  FeatureSuggestionDrafts,
   GrillingAnswerForAi,
   GuidelineForAi,
   ProjectForAi,
+  ProjectFoundationForAi,
   RequestForAi,
+  SuggestionForAi,
 } from './ai.port.ts';
 import { describeDecision } from './prompts.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
@@ -48,6 +53,7 @@ export class FakeAiPort implements AiPort {
     specMarkdown: string;
     request: RequestForAi;
     context: ContextBlock[];
+    foundation?: ProjectFoundationForAi;
   }) {
     this.calls.push({ method: 'generateChoices', input });
     return {
@@ -68,6 +74,7 @@ export class FakeAiPort implements AiPort {
     request: RequestForAi;
     decision: DecisionForAi;
     context: ContextBlock[];
+    foundation?: ProjectFoundationForAi;
   }) {
     this.calls.push({ method: 'draftSpecProposal', input });
     return {
@@ -128,6 +135,76 @@ export class FakeAiPort implements AiPort {
     return {
       proposedMarkdown: `# Project Brief\n\n${input.project.name}\n\n## From Grilling\n${answers}\n`,
       summary: `Drafted from ${input.answers.length} answers.`,
+    };
+  }
+
+  /**
+   * `count` suggestions titled "Suggested Feature N", skipping any title already
+   * pending or dismissed, each serving every Guideline, plus one unknown ref the
+   * server must drop.
+   */
+  async suggestFeatures(input: {
+    project: ProjectForAi;
+    count: number;
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+    decisions: ContextBlock[];
+    dismissed: DismissedSuggestionForAi[];
+    pending: string[];
+  }): Promise<FeatureSuggestionDrafts> {
+    this.calls.push({ method: 'suggestFeatures', input });
+    const taken = new Set([...input.pending, ...input.dismissed.map((d) => d.title)]);
+    const suggestions: FeatureSuggestionDrafts['suggestions'] = [];
+    for (let n = 1; suggestions.length < input.count; n++) {
+      const title = `Suggested Feature ${n}`;
+      if (taken.has(title)) continue;
+      suggestions.push({
+        title,
+        rationale: `Fills gap ${n} of ${input.project.name}.`,
+        businessValue: `Moves goal ${n}.`,
+        effort: 'MEDIUM',
+        risk: 'LOW',
+        servesGuidelines: [...input.guidelines.flatMap((g) => (g.ref ? [g.ref] : [])), 'G999'],
+      });
+    }
+    return { suggestions };
+  }
+
+  async draftSpecFromSuggestion(input: {
+    project: ProjectForAi;
+    suggestion: SuggestionForAi;
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+  }) {
+    this.calls.push({ method: 'draftSpecFromSuggestion', input });
+    return {
+      proposedMarkdown: `# ${input.suggestion.title}\n\n${input.suggestion.rationale}\n\n## Business value\n${input.suggestion.businessValue}\n`,
+      summary: `First Spec of "${input.suggestion.title}".`,
+    };
+  }
+
+  /**
+   * MET when the description mentions the Guideline's title, else UNCLEAR with a
+   * question; the last Guideline is left out (the server must fill it in).
+   */
+  async checkFeatureFit(input: {
+    project: ProjectForAi;
+    feature: FeatureForAi;
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+  }): Promise<FeatureFitDraft> {
+    this.calls.push({ method: 'checkFeatureFit', input });
+    const text = `${input.feature.title}\n${input.feature.description}`.toLowerCase();
+    return {
+      results: input.guidelines.slice(0, -1).map((g) => {
+        const met = text.includes(g.title.toLowerCase());
+        return {
+          guideline: g.ref ?? '',
+          verdict: met ? ('MET' as const) : ('UNCLEAR' as const),
+          reason: met ? `Mentions "${g.title}".` : `Doesn't say how it meets "${g.title}".`,
+          question: met ? null : `How does it meet "${g.title}"?`,
+        };
+      }),
     };
   }
 }

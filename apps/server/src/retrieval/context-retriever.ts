@@ -22,6 +22,10 @@ export const CONTEXT_BUDGET = {
   specFromAttachments: 15_000,
   /** Grilling questions and the Brief drafted from them: the whole Project is the input. */
   grilling: 12_000,
+  /** Feature Suggestions and the first Spec of an accepted one: the whole Project is the input. */
+  featureSuggestions: 12_000,
+  /** The Feature Guidelines fit check of a Feature about to be created. */
+  featureFit: 6_000,
 } as const;
 
 /** What a block's tag and attributes (kind, id, title...) cost in the prompt, roughly. */
