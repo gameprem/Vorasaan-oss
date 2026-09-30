@@ -46,4 +46,4 @@ bun run test
 bun run check               # all three; run before committing
 ```
 
-There is no CI yet: run `bun run check` (lint → typecheck → test, stops at the first failure) before every commit. `bun test` alone does **not** type-check.
+CI (`.github/workflows/ci.yml`) runs the same `bun run check` on every PR, but still run it (lint → typecheck → test, stops at the first failure) before every commit. `bun test` alone does **not** type-check.

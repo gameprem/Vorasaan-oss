@@ -41,3 +41,9 @@ Goal: install from scratch, choose an AI provider, sign in, and set up your own 
 | 0012 | [Projects, Teams, members and Features in the web app](./0012-onboarding.md) | 0011 |
 | 0013 | [One-command install with Docker](./0013-docker-install.md) | 0011 |
 | 0014 | [CLI sign-in with a Personal Access Token](./0014-cli-login.md) | 0010 |
+
+## Foundation
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0015 | [CI on GitHub Actions](./0015-ci.md) | none |
