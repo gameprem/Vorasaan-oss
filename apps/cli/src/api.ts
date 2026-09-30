@@ -1,5 +1,7 @@
 import type {
+  AttachmentView,
   ChoiceDraft,
+  CreateRepoScanInput,
   DecisionRequestView,
   FeatureSummaryView,
   MeView,
@@ -59,6 +61,14 @@ export class VorasaanApi {
 
   withdraw(id: string) {
     return this.request<DecisionRequestView>('POST', `/decision-requests/${id}/withdraw`);
+  }
+
+  postRepoScan(projectId: string, input: CreateRepoScanInput) {
+    return this.request<AttachmentView>(
+      'POST',
+      `/projects/${encodeURIComponent(projectId)}/repo-scans`,
+      input,
+    );
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {

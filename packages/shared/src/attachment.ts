@@ -88,3 +88,24 @@ export const AttachmentView = z.object({
   createdAt: Timestamp,
 });
 export type AttachmentView = z.infer<typeof AttachmentView>;
+
+/** The largest Repo Scan summary the CLI sends and the server accepts, in characters. */
+export const REPO_SCAN_MAX_CHARS = 200_000;
+
+/**
+ * `POST /projects/:id/repo-scans`: a Repo Scan summary made by `vorasaan scan`.
+ * It is stored as a Project Attachment (`source` "REPO_SCAN") whose Snapshot is
+ * the Markdown, and replaces the Project's previous Repo Scan. It never
+ * contains whole source files.
+ */
+export const CreateRepoScanInput = z.object({
+  markdown: z.string().trim().min(1).max(REPO_SCAN_MAX_CHARS),
+  /** The repository's name, e.g. its directory or "acme/mobile-bank". */
+  repoName: z.string().trim().min(1).max(200),
+  /** The commit the scan was made at, when the directory is a git repository. */
+  commitSha: z
+    .string()
+    .regex(/^[0-9a-f]{7,64}$/i)
+    .optional(),
+});
+export type CreateRepoScanInput = z.infer<typeof CreateRepoScanInput>;

@@ -15,6 +15,7 @@ import {
   type AddUrlAttachmentInput,
   ATTACHMENT_FILE_TYPES,
   type AttachmentView,
+  type CreateRepoScanInput,
 } from '@vorasaan/shared';
 import { AI_PORT, type AiPort } from '../ai/ai.port.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
@@ -31,6 +32,7 @@ import { attachmentInclude, toAttachmentView } from './attachment.view.ts';
 import { ATTACHMENT_CONTEXT_BUDGET, clipForAi } from './attachment-context.ts';
 import { UrlFetchError } from './fetch-url.ts';
 import {
+  capSnapshot,
   matchesMimeType,
   mimeTypeForFileName,
   snapshotText,
@@ -171,10 +173,59 @@ export class AttachmentsService {
     return toAttachmentView(created);
   }
 
+  /**
+   * Stores a Repo Scan summary from `vorasaan scan` as a Project Attachment with
+   * no file: the Snapshot is the Markdown. It replaces the Project's previous
+   * Repo Scan, so only the newest one is used as context and none go stale in
+   * retrieval. Admins, POs of the Project's Teams and Role Owners of any
+   * Feature in the Project may post one (they are the ones working in its code).
+   */
+  async addRepoScan(
+    user: User,
+    projectId: string,
+    input: CreateRepoScanInput,
+  ): Promise<AttachmentView> {
+    await this.assertCanPostRepoScan(user, projectId);
+    const text = capSnapshot(input.markdown, attachmentLimits().maxSnapshotChars);
+    const title = clip(
+      `Repo Scan: ${input.repoName}${input.commitSha ? ` @ ${input.commitSha.slice(0, 7)}` : ''}`,
+    );
+    const summary = await this.summarize(title, 'REPO_SCAN', text);
+    const { created, replaced } = await this.db.$transaction(async (tx) => {
+      const previous = await tx.attachment.findMany({
+        where: { projectId, source: 'REPO_SCAN' },
+        select: { id: true },
+      });
+      await tx.attachment.deleteMany({ where: { id: { in: previous.map((a) => a.id) } } });
+      const created = await tx.attachment.create({
+        data: {
+          projectId,
+          source: 'REPO_SCAN',
+          title,
+          mimeType: 'text/markdown',
+          snapshotText: text,
+          snapshotAt: new Date(),
+          summary,
+          addedById: user.id,
+        },
+        include: attachmentInclude,
+      });
+      return { created, replaced: previous };
+    });
+    for (const { id } of replaced) this.indexing.schedule({ source: 'ATTACHMENT', id });
+    this.indexing.schedule({ source: 'ATTACHMENT', id: created.id });
+    return toAttachmentView(created);
+  }
+
   /** Re-fetches a URL, Confluence page or Jira issue (or re-reads a file) and replaces the Snapshot. */
   async refresh(user: User, id: string): Promise<AttachmentView> {
     const attachment = await this.findOrThrow(id);
     await this.assertCanEdit(user, ownerOf(attachment));
+    if (attachment.source === 'REPO_SCAN') {
+      throw new UnprocessableEntityException(
+        'A Repo Scan can’t be refreshed from here: run `vorasaan scan` in the repository again',
+      );
+    }
     const snapshot = await this.capture(attachment.source, attachment);
     // A summary of the old Snapshot would be stale: replace it, or clear it on failure.
     const summary = await this.summarize(attachment.title, attachment.source, snapshot.text);
@@ -277,6 +328,20 @@ export class AttachmentsService {
       where: { userId: user.id, organizationId: feature.team.project.organizationId },
     });
     if (!member) throw new ForbiddenException('You are not in this Organization');
+  }
+
+  /** The Project's editors (see `projectAccess`), or a Role Owner of any Feature in the Project. */
+  private async assertCanPostRepoScan(user: User, projectId: string) {
+    const access = await projectAccess(this.db, user, projectId);
+    if (access.canEdit) return;
+    const roleOwner = await this.db.roleOwner.count({
+      where: { userId: user.id, feature: { team: { projectId } } },
+    });
+    if (!roleOwner) {
+      throw new ForbiddenException(
+        "Only an Admin, a PO of one of this Project's Teams or a Role Owner of one of its Features can send a Repo Scan",
+      );
+    }
   }
 
   /**

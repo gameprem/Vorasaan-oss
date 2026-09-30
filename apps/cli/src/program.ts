@@ -1,7 +1,13 @@
 import { Command } from 'commander';
 import { VorasaanApi } from './api.ts';
 import type { LoginOptions } from './commands/login.ts';
-import { parseRaiseFlags, type RaiseFlags, type RaiseOptions } from './commands/raise-options.ts';
+import {
+  parseRaiseFlags,
+  type RaiseFlags,
+  type RaiseOptions,
+  UsageError,
+} from './commands/raise-options.ts';
+import type { ScanOptions } from './commands/scan.ts';
 import { loadConfig } from './config.ts';
 
 export type Actions = {
@@ -9,7 +15,10 @@ export type Actions = {
   login: (options: LoginOptions) => Promise<unknown>;
   logout: () => Promise<void>;
   whoami: () => Promise<unknown>;
+  scan: (options: ScanOptions, api: () => Promise<VorasaanApi>) => Promise<unknown>;
 };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Builds the CLI; actions are injected so tests can parse arguments without prompts or network. */
 export function buildProgram(actions: Actions, env = process.env): Command {
@@ -56,6 +65,33 @@ export function buildProgram(actions: Actions, env = process.env): Command {
     .description('Show who the CLI is signed in as')
     .action(async () => {
       await actions.whoami();
+    });
+
+  program
+    .command('scan')
+    .description(
+      'Send a Repo Scan (READMEs, dependencies, module names, routes; never whole source files) to a Project',
+    )
+    .requiredOption('-p, --project <id>', 'Project id')
+    .option('--dir <path>', 'repository directory to scan', process.cwd())
+    .option('--dry-run', 'print the summary and send nothing')
+    .option('-y, --yes', 'send without asking for confirmation')
+    .action(async (flags: { project: string; dir: string; dryRun?: boolean; yes?: boolean }) => {
+      if (!UUID.test(flags.project)) {
+        throw new UsageError(`--project must be a Project id, got "${flags.project}"`);
+      }
+      await actions.scan(
+        {
+          projectId: flags.project,
+          dir: flags.dir,
+          dryRun: flags.dryRun === true,
+          yes: flags.yes === true,
+        },
+        async () => {
+          const config = await loadConfig(env);
+          return new VorasaanApi({ baseUrl: config.apiUrl, credentials: config.credentials });
+        },
+      );
     });
 
   return program;

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Delete,
   Get,
@@ -20,6 +21,7 @@ import type { User } from '@vorasaan/db';
 import {
   AddUrlAttachmentInput,
   type AttachmentView,
+  CreateRepoScanInput,
   UploadAttachmentFields,
 } from '@vorasaan/shared';
 import { z } from 'zod';
@@ -79,6 +81,19 @@ export class AttachmentsController {
     @Req() req: AttachRequest,
   ): Promise<AttachmentView> {
     return this.addTo(user, { projectId }, req);
+  }
+
+  /**
+   * A Repo Scan summary from `vorasaan scan`, stored as a Project Attachment
+   * (`source` "REPO_SCAN") that replaces the Project's previous one.
+   */
+  @Post('projects/:id/repo-scans')
+  addRepoScan(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) projectId: string,
+    @Body({ schema: CreateRepoScanInput }) body: CreateRepoScanInput,
+  ): Promise<AttachmentView> {
+    return this.attachments.addRepoScan(user, projectId, body);
   }
 
   private addTo(user: User, owner: AttachmentOwner, req: AttachRequest): Promise<AttachmentView> {
