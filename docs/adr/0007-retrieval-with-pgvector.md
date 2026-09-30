@@ -1,0 +1,7 @@
+# Retrieval with pgvector, behind an EmbeddingPort
+
+Products with many large documents don't fit in a prompt, and long prompts cost more and get less accurate even when the model's context window allows them. So AI workflows get their context by **retrieval**, not by sending everything: a Feature's own context (its Spec, Decisions and Attachments) comes first, then the most relevant chunks from the rest of the Project, within a fixed token budget.
+
+We store chunks and their embeddings in the same Postgres with the **pgvector** extension instead of adding a vector database, so self-hosting stays one `docker compose up` (the db image becomes `pgvector/pgvector`). Prisma has no vector type, so the column is `Unsupported("vector")` and search is raw SQL in one repository class. Claude has no embeddings API, so embeddings go through an **`EmbeddingPort`** like `AiPort`: the default adapter is any OpenAI-compatible endpoint (URL, key, model) set by an Admin, and tests use a deterministic fake. Each chunk records the model that embedded it; changing the model means re-indexing, not mixing vectors.
+
+Mastra workflow state (ADR 0003) remembers where a long workflow is, but the LLM itself is stateless: a resumed step still needs its context sent again. Workflows therefore carry short summaries of earlier rounds in their state and retrieve the rest, rather than replaying whole conversations.
