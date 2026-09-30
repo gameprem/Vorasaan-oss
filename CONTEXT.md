@@ -45,7 +45,7 @@ An immutable, numbered snapshot of a Spec, approved by a named person.
 _Avoid_: Draft, history entry
 
 **Attachment**:
-An external document linked to a Feature (a file, URL, or Confluence or Jira page) whose content is captured as a Snapshot.
+An external document linked to a Feature or to a Project as a whole (a file, URL, or Confluence or Jira page) whose content is captured as a Snapshot.
 _Avoid_: Reference, doc link
 
 **Snapshot**:
@@ -65,6 +65,10 @@ _Avoid_: Project description, charter, PRD
 **Brief Version**:
 An immutable, numbered snapshot of a Project Brief, approved by a named person.
 _Avoid_: Draft, history entry
+
+**Brief Proposal**:
+A drafted change to a Project Brief (for example from Grilling), awaiting approval. Once approved, it becomes a new Brief Version.
+_Avoid_: Revision, change request, draft
 
 **Grilling**:
 Rounds of AI-asked questions to the people in a Project (business, then UX, then technical) whose answers the AI turns into a Project Brief proposal.

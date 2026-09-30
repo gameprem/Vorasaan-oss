@@ -60,6 +60,12 @@ enum SpecVersionSource {
   REVERT // rolled back to an earlier version
 }
 
+enum BriefVersionSource {
+  MANUAL // edited by hand
+  GRILLING // AI draft from Grilling answers, approved by a human
+  REVERT // rolled back to an earlier version
+}
+
 enum ProposalStatus {
   PENDING
   APPROVED
@@ -92,11 +98,12 @@ enum RequestMessageKind {
   NOTE
 }
 
-// What a ContentChunk was cut from (BRIEF_VERSION comes with the Project Brief).
+// What a ContentChunk was cut from.
 enum ChunkSource {
   ATTACHMENT // its current Snapshot
   SPEC_VERSION // the Feature's latest Spec Version only
   DECISION // with its Decision Request and rationale
+  BRIEF_VERSION // the Project's latest Brief Version only
 }
 
 // Informational only. Inbox Items are derived from DecisionRequest/SpecProposal state.
@@ -137,6 +144,9 @@ model User {
 
   proposalsToApprove SpecProposal[] @relation("ProposalApprover")
   specVersions       SpecVersion[]  @relation("SpecVersionApprovedBy")
+
+  briefProposalsToApprove BriefProposal[] @relation("BriefProposalApprover")
+  briefVersions           BriefVersion[]  @relation("BriefVersionApprovedBy")
 
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
@@ -233,14 +243,17 @@ model OrgIntegration {
 
 // A product (e.g. "Mobile Banking"). Maps to a Jira project.
 model Project {
-  id             String         @id @default(uuid())
+  id             String          @id @default(uuid())
   organizationId String
   name           String
   jiraKey        String?
-  createdAt      DateTime       @default(now())
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime        @default(now())
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   teams          Team[]
   chunks         ContentChunk[]
+  attachments    Attachment[] // Project-level Attachments (not on a Feature)
+  briefVersions  BriefVersion[]
+  briefProposals BriefProposal[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -330,11 +343,13 @@ model RoleOwner {
   @@index([userId])
 }
 
-// External docs aggregated on the Feature page. Content is snapshotted so the AI
-// can use it as context; "Refresh" re-fetches.
+// External docs on a Feature or on a Project (exactly one of featureId/projectId
+// is set; a CHECK constraint in the migration enforces it). Content is
+// snapshotted so the AI can use it as context; "Refresh" re-fetches.
 model Attachment {
   id           String           @id @default(uuid())
-  featureId    String
+  featureId    String?
+  projectId    String?
   source       AttachmentSource
   title        String
   url          String?
@@ -345,10 +360,12 @@ model Attachment {
   summary      String? // AI summary of the Snapshot; null when none or the AI call failed
   addedById    String
   createdAt    DateTime         @default(now())
-  feature      Feature          @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  feature      Feature?         @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  project      Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   addedBy      User             @relation(fields: [addedById], references: [id])
 
   @@index([featureId])
+  @@index([projectId])
 }
 
 // ─── Spec ───────────────────────────────────────────────────────────────────
@@ -396,6 +413,51 @@ model SpecProposal {
 
   @@index([approverId, status])
   @@index([featureId, status])
+}
+
+// ─── Project Brief (ADR 0006) ─────────────────────────────────────────────────
+
+// Immutable. The highest version is the current Project Brief; a Project with no
+// Brief Version shows the empty template as "v0".
+model BriefVersion {
+  id             String             @id @default(uuid())
+  projectId      String
+  version        Int
+  markdown       String
+  source         BriefVersionSource
+  summary        String? // one-line "what changed"
+  approvedById   String
+  proposalId     String?            @unique
+  revertedFromId String?
+  createdAt      DateTime           @default(now())
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  approvedBy     User               @relation("BriefVersionApprovedBy", fields: [approvedById], references: [id])
+  proposal       BriefProposal?     @relation("BriefProposalResult", fields: [proposalId], references: [id])
+  revertedFrom   BriefVersion?      @relation("BriefRevert", fields: [revertedFromId], references: [id])
+  reverts        BriefVersion[]     @relation("BriefRevert")
+  basedProposals BriefProposal[]    @relation("BriefProposalBase")
+
+  @@unique([projectId, version])
+}
+
+// A drafted change to the Project Brief (e.g. from Grilling), awaiting approval.
+model BriefProposal {
+  id               String             @id @default(uuid())
+  projectId        String
+  baseVersionId    String? // null when drafting the first version
+  source           BriefVersionSource
+  proposedMarkdown String
+  status           ProposalStatus     @default(PENDING)
+  approverId       String
+  reviewedAt       DateTime?
+  createdAt        DateTime           @default(now())
+  project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  baseVersion      BriefVersion?      @relation("BriefProposalBase", fields: [baseVersionId], references: [id])
+  approver         User               @relation("BriefProposalApprover", fields: [approverId], references: [id])
+  resultVersion    BriefVersion?      @relation("BriefProposalResult")
+
+  @@index([approverId, status])
+  @@index([projectId, status])
 }
 
 // ─── Decision Requests ──────────────────────────────────────────────────────
