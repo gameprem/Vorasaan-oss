@@ -4,6 +4,7 @@ import {
   DecideInput,
   ListDecisionRequestsQuery,
   RaiseDecisionRequestInput,
+  ReassignInput,
   SubmitDecisionRequestInput,
 } from '@vorasaan/shared';
 import { CurrentUser } from '../auth/identity.guard.ts';
@@ -30,8 +31,8 @@ export class DecisionRequestsController {
   }
 
   @Get(':id')
-  get(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.get(id);
+  get(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.get(user, id);
   }
 
   @Post(':id/submit')
@@ -41,6 +42,20 @@ export class DecisionRequestsController {
     @Body({ schema: SubmitDecisionRequestInput }) body: SubmitDecisionRequestInput,
   ) {
     return this.service.submit(user, id, body);
+  }
+
+  @Post(':id/claim')
+  claim(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.claim(user, id);
+  }
+
+  @Post(':id/reassign')
+  reassign(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: ReassignInput }) body: ReassignInput,
+  ) {
+    return this.service.reassign(user, id, body);
   }
 
   @Post(':id/decision')

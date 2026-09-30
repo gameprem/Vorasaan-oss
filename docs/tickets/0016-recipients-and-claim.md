@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: []
 slice: mvp-backend
 ---
@@ -22,8 +22,8 @@ The Raiser sends a Decision Request to one Role Owner or to all of them, and the
 - Zod contracts in `packages/shared`; views expose recipients and whether I can claim.
 
 ## Acceptance criteria (test first, real Postgres)
-- [ ] Single Role Owner → Decider set at submit. `ALL` with two Role Owners → no Decider until one Claims.
-- [ ] No Role Owner for the role → recipients are the Team members with that role.
-- [ ] Claim by a non-holder of the role is 403; claim outside `OPEN` is 409.
-- [ ] A recipient deciding without claiming becomes the Decider.
-- [ ] Reassign to the Raiser or to someone without the role is rejected.
+- [x] Single Role Owner → Decider set at submit. `ALL` with two Role Owners → no Decider until one Claims.
+- [x] No Role Owner for the role → recipients are the Team members with that role.
+- [x] Claim by a non-holder of the role is 403; claim outside `OPEN` is 409.
+- [x] A recipient deciding without claiming becomes the Decider.
+- [x] Reassign to the Raiser or to someone without the role is rejected.

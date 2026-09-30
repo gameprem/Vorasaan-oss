@@ -2,9 +2,12 @@ import type { DecisionRequestStatus } from '@vorasaan/shared';
 
 // The single source of truth for Decision Request lifecycle rules.
 //   DRAFT → OPEN ⇄ NEEDS_INFO → DECIDED → SPEC_UPDATED, and WITHDRAWN before a Decision.
+// Claim and reassign change who the Decider is, not the status, and only while OPEN.
 
 export type DecisionRequestEvent =
   | 'submit'
+  | 'claim'
+  | 'reassign'
   | 'withdraw'
   | 'askForInfo'
   | 'provideInfo'
@@ -16,7 +19,13 @@ const TRANSITIONS: Record<
   Partial<Record<DecisionRequestEvent, DecisionRequestStatus>>
 > = {
   DRAFT: { submit: 'OPEN', withdraw: 'WITHDRAWN' },
-  OPEN: { decide: 'DECIDED', askForInfo: 'NEEDS_INFO', withdraw: 'WITHDRAWN' },
+  OPEN: {
+    claim: 'OPEN',
+    reassign: 'OPEN',
+    decide: 'DECIDED',
+    askForInfo: 'NEEDS_INFO',
+    withdraw: 'WITHDRAWN',
+  },
   NEEDS_INFO: { provideInfo: 'OPEN', withdraw: 'WITHDRAWN' },
   DECIDED: { approveSpecProposal: 'SPEC_UPDATED' },
   SPEC_UPDATED: {},

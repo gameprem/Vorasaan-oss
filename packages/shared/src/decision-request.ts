@@ -38,11 +38,24 @@ export const RaiseDecisionRequestInput = z.object({
 });
 export type RaiseDecisionRequestInput = z.input<typeof RaiseDecisionRequestInput>;
 
+/**
+ * Who the Raiser sends the request to: every eligible holder of the decider role,
+ * or one of them. Eligible means the Feature's Role Owners for that role or, when it
+ * has none, the Team members holding it. The Raiser is never a recipient.
+ */
+export const Recipients = z.union([z.literal('ALL'), z.strictObject({ userId: Id })]);
+export type Recipients = z.infer<typeof Recipients>;
+
 export const SubmitDecisionRequestInput = z.object({
   deciderRole: TeamRole,
+  recipients: Recipients.default('ALL'),
   choices: ChoiceDrafts.optional(),
 });
-export type SubmitDecisionRequestInput = z.infer<typeof SubmitDecisionRequestInput>;
+export type SubmitDecisionRequestInput = z.input<typeof SubmitDecisionRequestInput>;
+
+/** Hand the request to someone else holding the decider role in the Team. */
+export const ReassignInput = z.strictObject({ userId: Id });
+export type ReassignInput = z.infer<typeof ReassignInput>;
 
 const Rationale = z.string().trim().min(1).optional();
 
@@ -56,6 +69,8 @@ export type DecideInput = z.infer<typeof DecideInput>;
 export const ListDecisionRequestsQuery = z.object({
   decider: z.literal('me').optional(),
   raiser: z.literal('me').optional(),
+  /** Requests sent to me that I can still Claim or decide: no Decider yet, or I am it. */
+  recipient: z.literal('me').optional(),
   status: DecisionRequestStatus.optional(),
 });
 export type ListDecisionRequestsQuery = z.infer<typeof ListDecisionRequestsQuery>;
@@ -89,6 +104,13 @@ export const DecisionRequestView = z.object({
   suggestedRole: TeamRole.nullable(),
   deciderRole: TeamRole,
   decider: PersonRef.nullable(),
+  /** Who the request was sent to. Empty while DRAFT. */
+  recipients: z.array(PersonRef),
+  /**
+   * Whether the viewer may Claim it now: it is OPEN, they hold the decider role in the
+   * Team or are a recipient, and they are neither the Raiser nor already the Decider.
+   */
+  canClaim: z.boolean(),
   choices: z.array(ChoiceView),
   decision: DecisionView.nullable(),
   /** The Spec Proposal drafted from the Decision, if any. */

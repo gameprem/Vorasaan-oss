@@ -164,19 +164,26 @@ describe('Decision Requests API: raise and submit', () => {
     ]);
   });
 
-  test('the Decider cannot be the Raiser, and must be unambiguous (422)', async () => {
+  test('the Raiser is never the Decider; a role nobody else holds is 422', async () => {
     const { body: draft } = await raise();
     const url = `/decision-requests/${draft.id}/submit`;
     expect((await asBeam('POST', url, { deciderRole: 'BACKEND' })).status).toBe(422);
     expect((await asBeam('POST', url, { deciderRole: 'TECH_LEAD' })).status).toBe(422);
 
+    // Several Role Owners no longer fail: the request waits for a Claim.
     const secondPo = await db.user.create({
       data: { email: 'po2@acme.test', name: 'Second PO', passwordHash: 'x' },
+    });
+    await db.teamMembership.create({
+      data: { teamId: SEED.teamId, userId: secondPo.id, role: 'PO' },
     });
     await db.roleOwner.create({
       data: { featureId: SEED.featureId, userId: secondPo.id, role: 'PO' },
     });
-    expect((await asBeam('POST', url, { deciderRole: 'PO' })).status).toBe(422);
+    const res = await asBeam<DecisionRequestView>('POST', url, { deciderRole: 'PO' });
+    expect(res.status).toBe(201);
+    expect(res.body.decider).toBeNull();
+    expect(res.body.recipients).toHaveLength(2);
   });
 
   test('withdraw works from DRAFT and OPEN, not afterwards', async () => {
