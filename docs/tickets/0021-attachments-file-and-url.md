@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: []
 slice: mvp-backend
 ---
@@ -23,6 +23,6 @@ A Feature collects its documents, and their content is captured as a Snapshot th
 - Update `.env.example` and the Docker volume.
 
 ## Acceptance criteria (test first, real Postgres; the S3 driver is tested against a fake)
-- [ ] Upload a Markdown file → Snapshot equals its text; download returns the same bytes.
-- [ ] A URL Attachment snapshots readable text from a local test HTTP server; refresh picks up a change.
-- [ ] Oversized files and disallowed types are rejected.
+- [x] Upload a Markdown file → Snapshot equals its text; download returns the same bytes.
+- [x] A URL Attachment snapshots readable text from a local test HTTP server; refresh picks up a change.
+- [x] Oversized files and disallowed types are rejected.

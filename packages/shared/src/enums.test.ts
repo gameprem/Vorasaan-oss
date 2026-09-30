@@ -10,6 +10,7 @@ const pairs = [
   ['RequestMessageKind', shared.RequestMessageKind, db.RequestMessageKind],
   ['ProposalStatus', shared.ProposalStatus, db.ProposalStatus],
   ['SpecVersionSource', shared.SpecVersionSource, db.SpecVersionSource],
+  ['AttachmentSource', shared.AttachmentSource, db.AttachmentSource],
 ] as const;
 
 describe('shared enums mirror Prisma', () => {

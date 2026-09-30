@@ -38,3 +38,6 @@ export type ProposalStatus = z.infer<typeof ProposalStatus>;
 
 export const SpecVersionSource = z.enum(['MANUAL', 'AI_SUMMARY', 'DECISION', 'REVERT']);
 export type SpecVersionSource = z.infer<typeof SpecVersionSource>;
+
+export const AttachmentSource = z.enum(['FILE', 'URL', 'CONFLUENCE', 'JIRA']);
+export type AttachmentSource = z.infer<typeof AttachmentSource>;
