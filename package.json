@@ -16,7 +16,8 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "db:generate": "turbo run db:generate",
-    "db:migrate": "bun run --filter @vorasaan/db db:migrate"
+    "db:migrate": "bun run --filter @vorasaan/db db:migrate",
+    "db:seed": "bun run --filter @vorasaan/db db:seed"
   },
   "trustedDependencies": [
     "prisma",

@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0001]
 slice: tracer-bullet
 ---
@@ -21,9 +21,9 @@ One command that gives a developer a usable world: an Organization with a Featur
 - At the end, print the user ids and the Feature id so they can be used as `x-vorasaan-user` and in the CLI.
 
 ## Acceptance criteria
-- [ ] `bun run db:seed` on an empty database creates exactly the data above.
-- [ ] Running it a second time changes nothing and doesn't fail.
-- [ ] The seed is reusable from tests: export a function that seeds into a given client.
+- [x] `bun run db:seed` on an empty database creates exactly the data above.
+- [x] Running it a second time changes nothing and doesn't fail.
+- [x] The seed is reusable from tests: export a function that seeds into a given client.
 
 ## Notes
 - Use stable, readable ids or unique emails (`pim@acme.test`) as upsert keys.
