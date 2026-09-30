@@ -19,6 +19,8 @@
 | Language | UI and prompt templates are in English. The agent replies in the user's language, and the Spec follows the conversation's language. |
 | LLM | Defaults to Anthropic directly via `ANTHROPIC_API_KEY`, entered in `/setup`. 9Router (or any OpenAI-compatible endpoint) is optional. |
 | Spec format | **Markdown is canonical** ([ADR 0002](./docs/adr/0002-markdown-is-the-canonical-spec-format.md)). BlockNote converts to and from Markdown when editing. |
+| File storage | Attachment files go through a `FileStorage` interface. The default is local disk (a Docker volume); any S3-compatible bucket (S3, MinIO, R2) is enabled by setting `FILE_STORAGE_DRIVER=s3` and `S3_*` env vars. |
+| Default model | `claude-opus-5-5` for every workflow. Each workflow can name its own model so they can be split later. Admins can change it. |
 
 ---
 
@@ -41,7 +43,7 @@ The MVP is built around the differentiating feature: **Decision Request → Choi
 3. Members get Team Roles. Each Feature gets Role Owners; a Team Role can have several Role Owners on one Feature.
 
 ### 3.2. Feature Page (single overview)
-* **Attachments:** file upload (md/pdf/images), public URL, Confluence and Jira (via an org-level Atlassian API token). Content is captured as a **Snapshot** so the AI can use it as context. A **Refresh** button re-fetches.
+* **Attachments:** file upload (md/pdf/images, stored via `FileStorage`), public URL, Confluence and Jira (via an org-level Atlassian API token). Content is captured as a **Snapshot** so the AI can use it as context. A **Refresh** button re-fetches.
 * **Spec editor:** BlockNote, stored as Markdown.
 * **Initial Spec:** the PO writes or pastes it, **or** the AI drafts one from Attachments as a Spec Proposal that the PO approves.
 * **Version History:** like Confluence. Each Spec Version records who approved it, its source (manual / AI summary / decision / revert) and the linked Decision, and shows a diff against the previous version. The PO can revert.
@@ -137,13 +139,13 @@ The source of truth is `packages/db/prisma/schema.prisma`.
 
 ## 5. Technical Architecture
 
-**Turborepo + pnpm monorepo.**
+**Turborepo + pnpm monorepo, ESM everywhere, Node 22** (move to Node 24 before Node 22 EOL on 2027-04-30). Lint/format: Biome. Tests: Vitest.
 
 ### `apps/web`
-Next.js 15 (App Router), TailwindCSS, Shadcn UI, BlockNote (Markdown in and out).
+Next.js 16 (App Router), TailwindCSS, Shadcn UI, BlockNote (Markdown in and out).
 
 ### `apps/server`
-* NestJS + Fastify adapter, class-validator. Strict Module / Controller / Service / DTO.
+* NestJS 12 + Fastify adapter. Strict Module / Controller / Service. Request/response validation uses the Zod schemas from `packages/shared` via Standard Schema; there are no class-validator DTOs ([ADR 0004](./docs/adr/0004-zod-is-the-only-api-contract.md)).
 * `MastraModule`: Mastra used as a **library** (singleton provider). Workflow snapshots (`suspend`/`resume`) live in the same Postgres but a **separate schema** from Prisma ([ADR 0003](./docs/adr/0003-mastra-as-a-library-inside-nestjs.md)).
 * `FeatureModule`, `DecisionRequestModule`, `DelegationModule`, `SpecModule`, `AttachmentModule`, `AuthModule`, `InboxModule` (Inbox Items + Notifications over SSE).
 * Atlassian connector: read-only fetch in the MVP.
@@ -152,23 +154,27 @@ Next.js 15 (App Router), TailwindCSS, Shadcn UI, BlockNote (Markdown in and out)
 Node.js, Commander.js (subcommands), **Ink** (persistent TUI), SSE client, OS notifications.
 
 ### `packages/`
-* `db`: Prisma schema and `PrismaClient`.
-* `shared`: Zod schemas and types shared across web, server and CLI.
+* `db`: Prisma 7 schema (`prisma-client` generator, `@prisma/adapter-pg`, URL in `prisma.config.ts`) and `createPrismaClient()`.
+* `shared`: Zod 4 schemas and inferred types, the single API contract for server, web and CLI.
 * `skills`: Markdown prompt templates per team/role (Choice generation, decider-role suggestion, Spec Proposal drafting, Attachment summary).
 
 ### Infrastructure
-`docker-compose.yml`: PostgreSQL, server, web; 9Router optional.
+`docker-compose.yml`: PostgreSQL by default. `--profile router` adds 9Router (`decolua/9router`, port 20128). `--profile app` adds server and web.
 
 ---
 
 ## 6. Roadmap
 
 ### Phase 1: Foundation
-- [ ] Root `package.json`, fix `turbo.json` (`pipeline` → `tasks` for Turbo v2), scaffold `apps/web` and `packages/skills`.
-- [x] `schema.prisma` for the MVP domain model.
-- [x] `CONTEXT.md` glossary and first ADRs.
+- [x] Root `package.json`, `turbo.json` (`tasks`), Biome, base tsconfig, `.nvmrc`, CI.
+- [x] `schema.prisma` for the MVP domain model (Prisma 7) + initial migration.
+- [x] `CONTEXT.md` glossary, ADRs 0001–0004, `CLAUDE.md`.
+- [ ] Scaffold `apps/web`, `apps/server`, `apps/cli` and `packages/skills` as workspace packages.
 - [ ] Zod schemas in `packages/shared` (align with Prisma enums: add `TECH_LEAD`, `DecisionRequest` replaces `BlockerPayload`).
-- [ ] Dockerfiles and optional 9Router config referenced by `docker-compose.yml`.
+- [ ] `docker/Dockerfile.server` and `docker/Dockerfile.web` for the `app` compose profile.
+
+### Tracer bullet (first)
+Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → web page to decide → Spec Proposal approved → Spec v2 in the Decision Log. No auth, onboarding, TUI, recipients/Claim/Delegation, NEEDS_INFO, Attachments or SSE yet. Broken into tickets in `docs/tickets/`.
 
 ### Phase 2: MVP Backend
 - [ ] Auth (email/password, invitations, PAT) and Org/Team Role Guards.

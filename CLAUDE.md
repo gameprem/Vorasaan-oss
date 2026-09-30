@@ -1,0 +1,46 @@
+# Vorasaan
+
+Open-source "AI proposes, human approves" alignment engine. Product scope: `REQUIREMENT.md`.
+
+## Before you write code
+
+- Read `CONTEXT.md`. Use its terms exactly (Feature, Spec, Decision Request, Decider, Role Owner...) in code, UI copy, commits and tickets. Never use a word from an _Avoid_ list: no `Blocker` model (it's a `DecisionRequest` with `kind = BLOCKER`), no `assignee`, no `ticket` for product concepts.
+- Check `docs/adr/` before revisiting a settled decision. If you make a decision that is hard to reverse, surprising, and a real trade-off, propose a new ADR.
+- If a new domain term appears, add it to `CONTEXT.md` (glossary only, no implementation details).
+
+## Workflow
+
+- Work one ticket at a time from `docs/tickets/`: one ticket = one branch = one PR.
+- Branch names: `feat/NNNN-slug`, `fix/...`, `chore/...`. Never commit to `main` directly.
+- Keep the ticket's `status` frontmatter up to date.
+
+## Stack & conventions
+
+- Node 22 (`.nvmrc`), pnpm via corepack, Turborepo. **ESM everywhere** (`"type": "module"`, `NodeNext`, `.js` in relative imports).
+- `apps/server`: NestJS 12 + Fastify. Mastra is a library inside `MastraModule` (ADR 0003).
+- `apps/web`: Next.js 16. `apps/cli`: Commander + Ink.
+- `packages/db`: Prisma 7 (`prisma-client` generator, `@prisma/adapter-pg`). Use `createPrismaClient()`; never `new PrismaClient()` elsewhere.
+- `packages/shared`: **Zod schemas are the only API contract** (ADR 0004). NestJS validates them via Standard Schema. Don't write class-validator DTOs.
+- Specs are Markdown (ADR 0002).
+- Store Attachment files through the `FileStorage` interface, never `fs` directly.
+- Secrets in `OrgIntegration` are encrypted with `VORASAAN_SECRET_KEY`.
+
+## Testing
+
+- Vitest. Service-layer tests run against a real Postgres (`docker compose up db`), never a mocked Prisma.
+- Test-drive the Decision Request state machine (states, Claim, Delegation, NEEDS_INFO) before implementing it.
+- LLM calls go through an interface. Tests use a deterministic fake. Prompt quality is measured by the eval set, run manually, not in CI.
+
+## Commands
+
+```bash
+docker compose up -d db     # Postgres for dev/tests
+pnpm install
+pnpm db:generate            # Prisma client
+pnpm db:migrate             # create/apply migrations (dev)
+pnpm lint                   # Biome (pnpm format to fix)
+pnpm typecheck
+pnpm test
+```
+
+CI (GitHub Actions) runs lint, typecheck and test on every PR. All three must pass before merge.

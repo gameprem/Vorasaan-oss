@@ -1,46 +1,63 @@
-version: '3.8'
+# Local development:   docker compose up            -> Postgres only
+# With 9Router:        docker compose --profile router up
+# Full stack:          docker compose --profile app up   (needs docker/Dockerfile.* — not written yet)
+
 services:
   db:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     environment:
-      POSTGRES_USER: vorasaan_admin
-      POSTGRES_PASSWORD: vorasaan_password
-      POSTGRES_DB: vorasaan_db
+      POSTGRES_USER: vorasaan
+      POSTGRES_PASSWORD: vorasaan
+      POSTGRES_DB: vorasaan
     ports:
       - "5432:5432"
     volumes:
       - vorasaan_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vorasaan"]
+      interval: 5s
+      retries: 10
 
+  # Optional OpenAI-compatible LLM router (https://github.com/decolua/9router).
+  # Point an OPENAI_COMPATIBLE integration at http://ninerouter:20128/v1 in /setup.
   ninerouter:
-    image: 9router/9router:latest
+    image: decolua/9router:latest
+    profiles: ["router"]
     ports:
-      - "8080:8080"
+      - "20128:20128"
     volumes:
-      - ./config/9router.yaml:/etc/9router/config.yaml
+      - vorasaan_9router:/app/data
 
   server:
-    build: 
+    profiles: ["app"]
+    build:
       context: .
       dockerfile: docker/Dockerfile.server
     ports:
       - "4000:4000"
+    env_file: .env
     environment:
-      - DATABASE_URL=postgres://vorasaan_admin:vorasaan_password@db:5432/vorasaan_db
-      - NINEROUTER_URL=http://ninerouter:8080/v1
+      DATABASE_URL: postgresql://vorasaan:vorasaan@db:5432/vorasaan
+      FILE_STORAGE_LOCAL_DIR: /data/files
+    volumes:
+      - vorasaan_files:/data/files
     depends_on:
-      - db
-      - ninerouter
+      db:
+        condition: service_healthy
 
   web:
+    profiles: ["app"]
     build:
       context: .
       dockerfile: docker/Dockerfile.web
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://server:4000
+      NEXT_PUBLIC_API_URL: http://localhost:4000
     depends_on:
       - server
 
 volumes:
   vorasaan_pgdata:
+  vorasaan_files:
+  vorasaan_9router:
