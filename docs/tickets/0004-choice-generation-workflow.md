@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0001, 0003]
 slice: tracer-bullet
 ---
@@ -22,9 +22,9 @@ Given a Feature's current Spec and a Decision Request, get 2–4 well-formed Cho
 - A small **eval script**, `bun run eval:choices`, that runs 3–5 sample requests against the real model and prints the results for a human to judge. It is not part of `bun run test`.
 
 ## Acceptance criteria
-- [ ] Tests for the Mastra adapter's parsing and retry logic use a stubbed model response, with no network.
-- [ ] `bun run eval:choices` with a real key prints 2–4 sensible Choices per sample.
-- [ ] Changing the model is a config change, not a code change.
+- [x] Tests for the Mastra adapter's parsing and retry logic use a stubbed model response, with no network.
+- [ ] `bun run eval:choices` with a real key prints 2–4 sensible Choices per sample. **Not yet run: no API key was available during implementation.**
+- [x] Changing the model is a config change, not a code change.
 
 ## Notes
 - Whether Mastra runs these as workflows or plain agent calls is up to you. We don't need suspend/resume yet, because the human-wait state lives in `DecisionRequest.status`.

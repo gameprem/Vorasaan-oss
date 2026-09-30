@@ -10,7 +10,7 @@ describe('DevUserGuard', () => {
   let db: PrismaClient;
 
   beforeAll(async () => {
-    app = await createTestApp();
+    ({ app } = await createTestApp());
     db = createTestPrisma();
   });
 

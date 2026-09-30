@@ -1,0 +1,16 @@
+// Model per AI task, in Mastra's "provider/model" form. Changing a model is a
+// config change: set the env var. Anthropic models read ANTHROPIC_API_KEY.
+export const DEFAULT_MODEL = 'anthropic/claude-opus-5-5';
+
+export type AiConfig = {
+  generateChoicesModel: string;
+  draftSpecProposalModel: string;
+};
+
+export function loadAiConfig(env: Record<string, string | undefined> = process.env): AiConfig {
+  const fallback = env.VORASAAN_MODEL ?? DEFAULT_MODEL;
+  return {
+    generateChoicesModel: env.VORASAAN_MODEL_GENERATE_CHOICES ?? fallback,
+    draftSpecProposalModel: env.VORASAAN_MODEL_DRAFT_SPEC_PROPOSAL ?? fallback,
+  };
+}
