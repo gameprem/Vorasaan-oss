@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PersonRef } from './decision-request.ts';
+import { DecisionRequestView, PersonRef } from './decision-request.ts';
 import { DecisionRequestKind, ProposalStatus, SpecVersionSource } from './enums.ts';
 
 const Id = z.uuid();
@@ -48,3 +48,9 @@ export const DecisionLogEntry = z.object({
   createdAt: Timestamp,
 });
 export type DecisionLogEntry = z.infer<typeof DecisionLogEntry>;
+
+export const DecideResult = z.object({
+  request: DecisionRequestView,
+  proposal: SpecProposalView,
+});
+export type DecideResult = z.infer<typeof DecideResult>;
