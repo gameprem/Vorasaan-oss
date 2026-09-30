@@ -48,6 +48,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 <Link href="/inbox" className="text-ink-soft hover:text-ink">
                   Inbox
                 </Link>
+                <Link href="/settings/ai" className="text-ink-soft hover:text-ink">
+                  AI provider
+                </Link>
                 <Link href="/settings/tokens" className="text-ink-soft hover:text-ink">
                   Access tokens
                 </Link>

@@ -1,0 +1,171 @@
+'use client';
+
+import {
+  type AiProvider,
+  type AiSettingsInput,
+  type AiTestResult,
+  DEFAULT_MODELS,
+} from '@vorasaan/shared';
+import { useState, useTransition } from 'react';
+import { inputClass } from './login-form';
+
+const PROVIDERS: { value: AiProvider; label: string; hint: string; keyLabel: string }[] = [
+  {
+    value: 'ANTHROPIC',
+    label: 'Claude API',
+    hint: 'An Anthropic API key from console.anthropic.com.',
+    keyLabel: 'Anthropic API key',
+  },
+  {
+    value: 'OPENAI',
+    label: 'OpenAI API',
+    hint: 'An OpenAI API key. Works with GPT and Codex models.',
+    keyLabel: 'OpenAI API key',
+  },
+  {
+    value: 'OPENAI_COMPATIBLE',
+    label: 'Custom URL',
+    hint: 'Any OpenAI-compatible endpoint with a token, such as 9Router.',
+    keyLabel: 'Token',
+  },
+];
+
+export type ProviderDraft = {
+  provider: AiProvider;
+  model: string;
+  baseUrl: string;
+  apiKey: string;
+};
+
+export function toSettingsInput(d: ProviderDraft): AiSettingsInput {
+  const apiKey = d.apiKey.trim() || undefined;
+  return d.provider === 'OPENAI_COMPATIBLE'
+    ? { provider: d.provider, model: d.model.trim(), baseUrl: d.baseUrl.trim(), apiKey }
+    : { provider: d.provider, model: d.model.trim(), apiKey };
+}
+
+/**
+ * Pick a provider, fill in model / URL / key, and test the connection.
+ * `keyOptional` is for editing saved settings, where a blank key keeps the stored one.
+ */
+export function ProviderFields({
+  value,
+  onChange,
+  test,
+  keyOptional = false,
+  keyHint,
+}: {
+  value: ProviderDraft;
+  onChange: (next: ProviderDraft) => void;
+  test: (input: AiSettingsInput) => Promise<AiTestResult>;
+  keyOptional?: boolean;
+  keyHint?: string | null;
+}) {
+  const [result, setResult] = useState<AiTestResult | null>(null);
+  const [testing, startTest] = useTransition();
+  const current = PROVIDERS.find((p) => p.value === value.provider) ?? PROVIDERS[0];
+
+  const set = (patch: Partial<ProviderDraft>) => {
+    setResult(null);
+    onChange({ ...value, ...patch });
+  };
+
+  return (
+    <div>
+      <fieldset>
+        <legend className="text-sm">Provider</legend>
+        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+          {PROVIDERS.map((p) => {
+            const active = p.value === value.provider;
+            return (
+              <label
+                key={p.value}
+                className={`cursor-pointer rounded-lg border px-3 py-2.5 ${
+                  active ? 'border-ink bg-sheet' : 'border-rule hover:border-ink-soft'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="provider"
+                  value={p.value}
+                  checked={active}
+                  onChange={() =>
+                    set({
+                      provider: p.value,
+                      model: DEFAULT_MODELS[p.value],
+                      apiKey: '',
+                    })
+                  }
+                  className="sr-only"
+                />
+                <span className="block font-medium">{p.label}</span>
+              </label>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-sm text-ink-soft">{current?.hint}</p>
+      </fieldset>
+
+      {value.provider === 'OPENAI_COMPATIBLE' && (
+        <label className="mt-5 block">
+          <span className="text-sm">Base URL</span>
+          <input
+            value={value.baseUrl}
+            onChange={(e) => set({ baseUrl: e.target.value })}
+            placeholder="http://localhost:20128/v1"
+            className={inputClass}
+          />
+        </label>
+      )}
+
+      <label className="mt-5 block">
+        <span className="text-sm">Model</span>
+        <input
+          value={value.model}
+          onChange={(e) => set({ model: e.target.value })}
+          placeholder={
+            value.provider === 'OPENAI_COMPATIBLE' ? 'The model name your endpoint expects' : ''
+          }
+          className={inputClass}
+        />
+      </label>
+
+      <label className="mt-5 block">
+        <span className="text-sm">
+          {current?.keyLabel}
+          {keyOptional && keyHint ? (
+            <span className="text-ink-soft">
+              {' '}
+              (saved key ends in {keyHint.replace('…', '')}; leave blank to keep it)
+            </span>
+          ) : null}
+        </span>
+        <input
+          type="password"
+          autoComplete="off"
+          value={value.apiKey}
+          onChange={(e) => set({ apiKey: e.target.value })}
+          className={inputClass}
+        />
+      </label>
+
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          disabled={testing}
+          onClick={() => startTest(async () => setResult(await test(toSettingsInput(value))))}
+          className="rounded-lg border border-rule bg-sheet px-4 py-2 font-medium text-ink disabled:opacity-40"
+        >
+          {testing ? 'Testing…' : 'Test connection'}
+        </button>
+        {result && (
+          <p role="status" className={result.ok ? 'text-jade' : 'text-seal'}>
+            {result.ok
+              ? `${result.message} (${((result.latencyMs ?? 0) / 1000).toFixed(1)}s)`
+              : result.message}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
