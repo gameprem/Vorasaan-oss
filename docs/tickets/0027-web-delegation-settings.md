@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0018]
 slice: mvp-web
 ---
@@ -15,4 +15,4 @@ People set their own Delegations, and Admins set them for others.
 - A banner on the Inbox when someone is currently delegating to me.
 
 ## Acceptance criteria
-- [ ] Browser-verified: create a Delegation, raise a request to the delegator, and it appears in the Delegate's Inbox.
+- [x] Browser-verified: create a Delegation, raise a request to the delegator, and it appears in the Delegate's Inbox.

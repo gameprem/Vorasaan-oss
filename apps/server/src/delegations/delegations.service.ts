@@ -6,7 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { Prisma, PrismaClient, User } from '@vorasaan/db';
-import type { CreateDelegationInput, DelegationView } from '@vorasaan/shared';
+import type { CreateDelegationInput, DelegationView, MyDelegationsQuery } from '@vorasaan/shared';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 
@@ -37,6 +37,22 @@ export class DelegationsService {
     const now = new Date();
     const rows = await this.db.delegation.findMany({
       where: { teamId, endsAt: { gt: now } },
+      orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
+      include: delegationInclude,
+    });
+    const admin = await this.isAdmin(user.id);
+    return rows.map((d) => toView(d, user, admin, now));
+  }
+
+  /** The caller's own current and upcoming Delegations, across every Team. */
+  async mine(user: User, query: MyDelegationsQuery): Promise<DelegationView[]> {
+    const now = new Date();
+    const rows = await this.db.delegation.findMany({
+      where: {
+        ...(query.as === 'delegate' ? { delegateId: user.id } : { delegatorId: user.id }),
+        endsAt: { gt: now },
+        ...(query.active === 'true' ? { startsAt: { lte: now } } : {}),
+      },
       orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
       include: delegationInclude,
     });

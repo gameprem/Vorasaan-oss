@@ -11,7 +11,10 @@ import { BriefController } from './brief/brief.controller.ts';
 import { BriefService } from './brief/brief.service.ts';
 import { DecisionRequestsController } from './decision-requests/decision-requests.controller.ts';
 import { DecisionRequestsService } from './decision-requests/decision-requests.service.ts';
-import { DelegationsController } from './delegations/delegations.controller.ts';
+import {
+  DelegationsController,
+  MyDelegationsController,
+} from './delegations/delegations.controller.ts';
 import { DelegationsService } from './delegations/delegations.service.ts';
 import { FeatureGuidelinesModule } from './feature-guidelines/feature-guidelines.module.ts';
 import { FeatureSuggestionsModule } from './feature-suggestions/feature-suggestions.module.ts';
@@ -48,6 +51,7 @@ import { SpecService } from './spec/spec.service.ts';
     FeaturesController,
     DecisionRequestsController,
     DelegationsController,
+    MyDelegationsController,
     SpecController,
     BriefController,
     AiSettingsController,
