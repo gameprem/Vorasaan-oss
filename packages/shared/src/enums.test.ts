@@ -7,6 +7,7 @@ const pairs = [
   ['TeamRole', shared.TeamRole, db.TeamRole],
   ['DecisionRequestKind', shared.DecisionRequestKind, db.DecisionRequestKind],
   ['DecisionRequestStatus', shared.DecisionRequestStatus, db.DecisionRequestStatus],
+  ['RequestMessageKind', shared.RequestMessageKind, db.RequestMessageKind],
   ['ProposalStatus', shared.ProposalStatus, db.ProposalStatus],
   ['SpecVersionSource', shared.SpecVersionSource, db.SpecVersionSource],
 ] as const;

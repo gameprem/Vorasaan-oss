@@ -13,6 +13,7 @@ import type {
   DecideResult,
   DecisionRequestView,
   ListDecisionRequestsQuery,
+  PostRequestMessageInput,
   RaiseDecisionRequestInput,
   ReassignInput,
   SubmitDecisionRequestInput,
@@ -192,6 +193,61 @@ export class DecisionRequestsService {
     return toDecisionRequestView(await this.findOrThrow(id), await this.viewer(user));
   }
 
+  /**
+   * Adds to the thread between Decider and Raiser. The Decider's QUESTION moves the request
+   * to NEEDS_INFO, the Raiser's ANSWER moves it back to OPEN with the same Decider, and a
+   * NOTE from either changes nothing.
+   */
+  async postMessage(
+    user: User,
+    id: string,
+    input: PostRequestMessageInput,
+  ): Promise<DecisionRequestView> {
+    const request = await this.findOrThrow(id);
+    const isRaiser = request.raiserId === user.id;
+    // While nobody has Claimed it, every recipient counts as the Decider here; asking a
+    // QUESTION Claims it implicitly, as deciding would.
+    const impliedClaim = this.isImpliedClaim(user, request);
+    const isDecider = request.deciderId === user.id || impliedClaim;
+
+    let event: DecisionRequestEvent;
+    switch (input.kind) {
+      case 'QUESTION':
+        if (!isDecider) throw new ForbiddenException('Only the Decider can ask for more info');
+        event = 'askForInfo';
+        break;
+      case 'ANSWER':
+        if (!isRaiser) throw new ForbiddenException('Only the Raiser can answer');
+        event = 'provideInfo';
+        break;
+      case 'NOTE':
+        if (!isRaiser && !isDecider) {
+          throw new ForbiddenException('Only the Raiser or the Decider can add a note');
+        }
+        event = 'addNote';
+        break;
+    }
+    const status = this.transition(request, event);
+    // A note alone never makes anyone the Decider.
+    const deciderId = impliedClaim && input.kind === 'QUESTION' ? user.id : request.deciderId;
+
+    const updated = await this.db.$transaction(async (tx) => {
+      const moved = await tx.decisionRequest.updateMany({
+        where: { id, status: request.status, deciderId: request.deciderId },
+        data: { status, deciderId },
+      });
+      if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
+      await tx.requestMessage.create({
+        data: { requestId: id, authorId: user.id, kind: input.kind, body: input.body },
+      });
+      return tx.decisionRequest.findUniqueOrThrow({
+        where: { id },
+        include: decisionRequestInclude,
+      });
+    });
+    return toDecisionRequestView(updated, await this.viewer(user));
+  }
+
   async withdraw(user: User, id: string): Promise<DecisionRequestView> {
     const request = await this.findOrThrow(id);
     this.assertRaiser(user, request);
@@ -211,8 +267,7 @@ export class DecisionRequestsService {
   async decide(user: User, id: string, input: DecideInput): Promise<DecideResult> {
     const request = await this.findOrThrow(id);
     // A recipient deciding a request nobody has Claimed yet Claims it implicitly.
-    const impliedClaim =
-      request.deciderId === null && request.recipients.some((r) => r.user.id === user.id);
+    const impliedClaim = this.isImpliedClaim(user, request);
     if (request.deciderId !== user.id && !impliedClaim) {
       throw new ForbiddenException('Only the Decider can decide this Decision Request');
     }
@@ -387,6 +442,11 @@ export class DecisionRequestsService {
     });
     if (!request) throw new NotFoundException('Decision Request not found');
     return request;
+  }
+
+  /** A recipient acting on a request that has no Decider yet becomes its Decider. */
+  private isImpliedClaim(user: User, request: DecisionRequestWithRelations): boolean {
+    return request.deciderId === null && request.recipients.some((r) => r.user.id === user.id);
   }
 
   private assertRaiser(user: User, request: DecisionRequestWithRelations) {

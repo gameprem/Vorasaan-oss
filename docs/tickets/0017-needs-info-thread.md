@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0016]
 slice: mvp-backend
 ---
@@ -19,6 +19,6 @@ The Decider can send a question back to the Raiser instead of deciding, and the 
 - Reuse the state machine in `decision-request.state.ts`; extend its tests first.
 
 ## Acceptance criteria (test first, real Postgres)
-- [ ] Decider asks → `NEEDS_INFO`; Raiser answers → `OPEN`; the Decider can then decide.
-- [ ] Nobody else can post a QUESTION or ANSWER (403); wrong state is 409.
-- [ ] Deciding while `NEEDS_INFO` is rejected.
+- [x] Decider asks → `NEEDS_INFO`; Raiser answers → `OPEN`; the Decider can then decide.
+- [x] Nobody else can post a QUESTION or ANSWER (403); wrong state is 409.
+- [x] Deciding while `NEEDS_INFO` is rejected.

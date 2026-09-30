@@ -3,6 +3,7 @@ import {
   ChoiceDraft,
   DecideInput,
   ListDecisionRequestsQuery,
+  PostRequestMessageInput,
   RaiseDecisionRequestInput,
   ReassignInput,
   SubmitDecisionRequestInput,
@@ -96,6 +97,34 @@ describe('ReassignInput and ListDecisionRequestsQuery', () => {
   test('recipient=me is a valid filter', () => {
     expect(ListDecisionRequestsQuery.parse({ recipient: 'me' })).toEqual({ recipient: 'me' });
     expect(ListDecisionRequestsQuery.safeParse({ recipient: 'you' }).success).toBe(false);
+  });
+});
+
+describe('PostRequestMessageInput', () => {
+  test('needs a known kind and a non-blank body', () => {
+    for (const kind of ['QUESTION', 'ANSWER', 'NOTE']) {
+      expect(PostRequestMessageInput.safeParse({ kind, body: 'Which provider?' }).success).toBe(
+        true,
+      );
+    }
+    expect(PostRequestMessageInput.parse({ kind: 'NOTE', body: '  trimmed  ' }).body).toBe(
+      'trimmed',
+    );
+    expect(PostRequestMessageInput.safeParse({ kind: 'NOTE', body: '   ' }).success).toBe(false);
+    expect(PostRequestMessageInput.safeParse({ kind: 'REPLY', body: 'Hi' }).success).toBe(false);
+    expect(PostRequestMessageInput.safeParse({ body: 'Hi' }).success).toBe(false);
+  });
+
+  test('caps the body at 10,000 characters and rejects unknown keys', () => {
+    expect(
+      PostRequestMessageInput.safeParse({ kind: 'NOTE', body: 'x'.repeat(10_000) }).success,
+    ).toBe(true);
+    expect(
+      PostRequestMessageInput.safeParse({ kind: 'NOTE', body: 'x'.repeat(10_001) }).success,
+    ).toBe(false);
+    expect(
+      PostRequestMessageInput.safeParse({ kind: 'NOTE', body: 'Hi', authorId: 'x' }).success,
+    ).toBe(false);
   });
 });
 
