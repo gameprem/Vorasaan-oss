@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: []
 slice: tracer-bullet
 ---
@@ -20,6 +20,6 @@ Replace the outdated `RoleEnum` / `BlockerPayload` in `packages/shared/src/index
 - Export inferred TypeScript types for each.
 
 ## Acceptance criteria
-- [ ] Unit tests (`bun test`): valid samples parse, and invalid ones fail. Cover 1 or 5 choices, `DecideInput` with both or neither of choice/answer, and an unknown enum value.
-- [ ] A test asserts the enum values match the Prisma-generated enums, so they can't drift.
-- [ ] No `Blocker*`, `assignee` or other _Avoid_ terms from `CONTEXT.md` remain.
+- [x] Unit tests (`bun test`): valid samples parse, and invalid ones fail. Cover 1 or 5 choices, `DecideInput` with both or neither of choice/answer, and an unknown enum value.
+- [x] A test asserts the enum values match the Prisma-generated enums, so they can't drift.
+- [x] No `Blocker*`, `assignee` or other _Avoid_ terms from `CONTEXT.md` remain.
