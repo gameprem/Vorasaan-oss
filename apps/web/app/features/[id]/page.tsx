@@ -17,6 +17,7 @@ import { VersionDiff } from '@/components/spec-diff';
 import { SpecPanel } from '@/components/spec-panel';
 import { ROLE_LABEL, secondaryButton } from '@/components/ui';
 import { ApiError, api, currentUser } from '@/lib/api';
+import { revertSpec } from '@/lib/feature-actions';
 import { isId } from '@/lib/ids';
 
 export const metadata = { title: 'Feature' };
@@ -184,10 +185,11 @@ export default async function FeaturePage({
           attachments &&
           (attachments.data ? (
             <AttachmentsPanel
-              featureId={id}
+              owner={{ kind: 'features', id }}
               attachments={attachments.data}
               canEdit={canEditAttachments}
               canDraft={canEditSpec}
+              emptyHint="Role Owners of this Feature add them."
             />
           ) : (
             <Notice tone="error">{attachments.error}</Notice>
@@ -255,7 +257,7 @@ export default async function FeaturePage({
                         </Link>
                         {canEditSpec && latest && v.version !== latest.version && (
                           <RevertButton
-                            featureId={id}
+                            action={revertSpec.bind(null, id, v.version, latest.version)}
                             version={v.version}
                             baseVersion={latest.version}
                           />

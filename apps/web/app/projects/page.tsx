@@ -30,11 +30,21 @@ export default async function ProjectsPage() {
         {projects.map((p) => (
           <article key={p.id}>
             <h2 className="text-lg font-semibold">
-              {p.name}
+              <Link href={`/projects/${p.id}`} className="underline-offset-2 hover:underline">
+                {p.name}
+              </Link>
               {p.jiraKey && (
                 <span className="ml-2 text-sm font-normal text-ink-soft">Jira {p.jiraKey}</span>
               )}
             </h2>
+            <p className="mt-1 text-sm">
+              <Link
+                href={`/projects/${p.id}`}
+                className="text-ink-soft underline underline-offset-2 hover:text-ink"
+              >
+                Project Brief, Grilling, Guidelines and Feature Suggestions
+              </Link>
+            </p>
             {p.teams.length === 0 ? (
               <p className="mt-2 text-ink-soft">No Teams yet.</p>
             ) : (

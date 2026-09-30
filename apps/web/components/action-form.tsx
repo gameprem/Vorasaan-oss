@@ -2,7 +2,7 @@
 
 import { type ReactNode, useActionState, useEffect, useRef } from 'react';
 import type { FormState } from '@/lib/org-actions';
-import { primaryButton } from './ui';
+import { primaryButton, secondaryButton } from './ui';
 
 /** A small form bound to a server action: shows its error and resets on success. */
 export function ActionForm({
@@ -33,6 +33,41 @@ export function ActionForm({
       </div>
       {state.error && (
         <p role="alert" className="mt-2 text-seal">
+          {state.error}
+        </p>
+      )}
+    </form>
+  );
+}
+
+/** One button bound to a server action (no fields), with an optional confirmation and its error. */
+export function ActionButton({
+  action,
+  label,
+  pendingLabel,
+  confirmText,
+  className = secondaryButton,
+}: {
+  action: (prev: FormState) => Promise<FormState>;
+  label: string;
+  pendingLabel: string;
+  /** Asked with window.confirm before running. */
+  confirmText?: string;
+  className?: string;
+}) {
+  const [state, run, pending] = useActionState<FormState>(action, {});
+  return (
+    <form
+      action={run}
+      onSubmit={(e) => {
+        if (confirmText && !window.confirm(confirmText)) e.preventDefault();
+      }}
+    >
+      <button type="submit" disabled={pending} className={className}>
+        {pending ? pendingLabel : label}
+      </button>
+      {state.error && (
+        <p role="alert" className="mt-2 text-sm text-seal">
           {state.error}
         </p>
       )}

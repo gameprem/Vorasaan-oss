@@ -1,23 +1,24 @@
 'use client';
 
 import { useActionState } from 'react';
-import { type FeatureActionState, revertSpec } from '@/lib/feature-actions';
 import { secondaryButton } from './ui';
 
-/** Restores an earlier Spec Version as a new one, on top of the latest (`baseVersion`). */
+type RevertState = { error?: string; stale?: boolean };
+
+/**
+ * Restores an earlier version (of a Spec or a Project Brief) as a new one, on top of the latest
+ * (`baseVersion`). `action` is the server action bound to the version to restore.
+ */
 export function RevertButton({
-  featureId,
+  action,
   version,
   baseVersion,
 }: {
-  featureId: string;
+  action: (prev: RevertState) => Promise<RevertState>;
   version: number;
   baseVersion: number;
 }) {
-  const [state, run, pending] = useActionState<FeatureActionState>(
-    revertSpec.bind(null, featureId, version, baseVersion),
-    {},
-  );
+  const [state, run, pending] = useActionState<RevertState>(action, {});
   return (
     <form
       action={run}

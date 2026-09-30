@@ -2,7 +2,6 @@
 
 import dynamic from 'next/dynamic';
 import { useRef, useState, useTransition } from 'react';
-import { saveSpec } from '@/lib/feature-actions';
 import { field, primaryButton, secondaryButton } from './ui';
 
 // BlockNote needs the browser, so it is loaded on the client only, in its own chunk.
@@ -15,7 +14,7 @@ const BlockEditor = dynamic(() => import('./block-editor'), {
   ),
 });
 
-const TEMPLATE = `# Feature title
+const SPEC_TEMPLATE = `# Feature title
 
 ## Goal
 
@@ -60,17 +59,29 @@ function canonical(markdown: string) {
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
-/** BlockNote Spec editor. Saving stores Markdown as the next Spec Version. */
+export type SaveMarkdownInput = { markdown: string; summary?: string; baseVersion: number };
+type SaveResult = { error?: string; stale?: boolean };
+
+/**
+ * BlockNote editor for a versioned Markdown document: a Feature's Spec (the default) or a
+ * Project Brief. `save` stores the Markdown as the next version on top of `baseVersion`; a
+ * `stale` result (409) means someone saved first.
+ */
 export function SpecEditor({
-  featureId,
+  save: saveVersion,
   current,
   baseVersion,
   onClose,
+  noun = 'Spec',
+  template = SPEC_TEMPLATE,
 }: {
-  featureId: string;
+  save: (input: SaveMarkdownInput) => Promise<SaveResult>;
   current: string | null;
   baseVersion: number;
   onClose?: () => void;
+  noun?: string;
+  /** What the editor starts from when there is no `current` version. */
+  template?: string;
 }) {
   const getMarkdown = useRef<(() => string) | null>(null);
   const [summary, setSummary] = useState('');
@@ -83,11 +94,11 @@ export function SpecEditor({
       const read = getMarkdown.current;
       if (!read) return setError({ message: 'The editor is still loading.' });
       const markdown = canonical(read());
-      if (!markdown.trim()) return setError({ message: 'The Spec is empty.' });
+      if (!markdown.trim()) return setError({ message: `The ${noun} is empty.` });
       if (current !== null && markdown === canonical(current)) {
         return setError({ message: `Nothing has changed since v${baseVersion}.` });
       }
-      const result = await saveSpec(featureId, {
+      const result = await saveVersion({
         markdown,
         summary: summary.trim() || undefined,
         baseVersion,
@@ -100,17 +111,17 @@ export function SpecEditor({
   return (
     <div>
       <section
-        aria-label="Spec editor"
+        aria-label={`${noun} editor`}
         className="min-h-60 rounded-xl border border-rule bg-sheet py-4"
       >
         <BlockEditor
-          markdown={current ?? TEMPLATE}
+          markdown={current ?? template}
           getMarkdown={getMarkdown}
           onChange={() => setError(undefined)}
         />
       </section>
       <p className="mt-2 text-sm text-ink-soft">
-        Type <kbd>/</kbd> for headings, lists, tables and code. The Spec is saved as Markdown, so
+        Type <kbd>/</kbd> for headings, lists, tables and code. The {noun} is saved as Markdown, so
         colors, underline and text alignment are not kept.
       </p>
       <label className="mt-4 block max-w-xl">
@@ -131,7 +142,7 @@ export function SpecEditor({
               onClick={() => window.location.reload()}
               className="font-medium underline underline-offset-2"
             >
-              Reload the latest Spec
+              Reload the latest {noun}
             </button>
           )}
           {error.stale && (
