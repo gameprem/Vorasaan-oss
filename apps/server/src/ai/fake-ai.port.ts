@@ -1,6 +1,7 @@
 import type {
   AiPort,
   AttachmentForAi,
+  ContextBlock,
   DecisionForAi,
   FeatureForAi,
   RequestForAi,
@@ -14,7 +15,7 @@ export class FakeAiPort implements AiPort {
   async generateChoices(input: {
     specMarkdown: string;
     request: RequestForAi;
-    attachments: AttachmentForAi[];
+    context: ContextBlock[];
   }) {
     this.calls.push({ method: 'generateChoices', input });
     return {
@@ -34,7 +35,7 @@ export class FakeAiPort implements AiPort {
     specMarkdown: string;
     request: RequestForAi;
     decision: DecisionForAi;
-    attachments: AttachmentForAi[];
+    context: ContextBlock[];
   }) {
     this.calls.push({ method: 'draftSpecProposal', input });
     return {
@@ -52,13 +53,16 @@ export class FakeAiPort implements AiPort {
   async draftSpecFromAttachments(input: {
     feature: FeatureForAi;
     specMarkdown: string;
-    attachments: AttachmentForAi[];
+    context: ContextBlock[];
   }) {
     this.calls.push({ method: 'draftSpecFromAttachments', input });
-    const sources = input.attachments.map((a) => `- ${a.title}`).join('\n');
+    const titles = new Set(
+      input.context.filter((b) => b.source.kind === 'ATTACHMENT').map((b) => b.source.title),
+    );
+    const sources = [...titles].map((title) => `- ${title}`).join('\n');
     return {
       proposedMarkdown: `# ${input.feature.title}\n\n## Sources\n${sources}\n`,
-      summary: `Drafted from ${input.attachments.length} Attachments.`,
+      summary: `Drafted from ${titles.size} Attachments.`,
     };
   }
 }

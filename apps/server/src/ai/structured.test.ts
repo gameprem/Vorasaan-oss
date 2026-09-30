@@ -94,7 +94,7 @@ describe('FakeAiPort', () => {
     const result = await ai.generateChoices({
       specMarkdown: '# Spec',
       request: { kind: 'BLOCKER', title: 'Slow API', description: 'd', raiserRole: 'BACKEND' },
-      attachments: [],
+      context: [],
     });
     expect(GeneratedChoices.safeParse(result).success).toBe(true);
 
@@ -104,7 +104,13 @@ describe('FakeAiPort', () => {
     const draft = await ai.draftSpecFromAttachments({
       feature: { title: 'Checkout', description: '' },
       specMarkdown: '',
-      attachments: [attachment],
+      context: [
+        {
+          source: { kind: 'ATTACHMENT', id: 'a1', title: attachment.title },
+          scope: 'FEATURE',
+          text: attachment.text,
+        },
+      ],
     });
     expect(SpecProposalDraft.safeParse(draft).success).toBe(true);
   });

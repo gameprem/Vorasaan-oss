@@ -44,7 +44,7 @@ console.log(`Model: ${config.generateChoicesModel}\n`);
 
 for (const request of samples) {
   const started = performance.now();
-  const result = await ai.generateChoices({ specMarkdown: SEED_SPEC_V1, request, attachments: [] });
+  const result = await ai.generateChoices({ specMarkdown: SEED_SPEC_V1, request, context: [] });
   const seconds = ((performance.now() - started) / 1000).toFixed(1);
   console.log(`━━ [${request.kind}] ${request.title}  (${seconds}s)`);
   console.log(`   suggested decider: ${result.suggestedRole}`);

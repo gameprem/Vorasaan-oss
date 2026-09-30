@@ -18,7 +18,7 @@ export type ChunkingOptions = { targetTokens: number; overlapTokens: number };
 
 export type TextChunk = { position: number; text: string; tokenCount: number };
 
-const CHARS_PER_TOKEN = 4;
+export const CHARS_PER_TOKEN = 4;
 
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);

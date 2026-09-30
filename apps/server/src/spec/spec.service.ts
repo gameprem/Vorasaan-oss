@@ -16,10 +16,14 @@ import type {
   SpecVersionView,
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort } from '../ai/ai.port.ts';
-import { ATTACHMENT_CONTEXT_BUDGET, attachmentsForAi } from '../attachments/attachment-context.ts';
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import {
+  CONTEXT_BUDGET,
+  ContextRetriever,
+  splitFeatureSpec,
+} from '../retrieval/context-retriever.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import { diffLines } from './diff.ts';
 import { normalizeMarkdown } from './markdown.ts';
@@ -45,12 +49,14 @@ export class SpecService {
     private readonly notifications: NotificationsService,
     @Inject(AI_PORT) private readonly ai: AiPort,
     private readonly indexing: IndexingService,
+    private readonly retriever: ContextRetriever,
   ) {}
 
   /**
    * Asks the AI to draft the Spec from the Feature's Attachments, as a PENDING
    * Spec Proposal the requesting PO approves. The AI runs first, so a failed
-   * draft writes nothing.
+   * draft writes nothing. Its context is retrieved (ADR 0007): the Feature's own
+   * material and Attachments first, then related parts of the Project.
    */
   async proposeFromAttachments(user: User, featureId: string): Promise<SpecProposalView> {
     const feature = await this.db.feature.findUnique({
@@ -60,11 +66,10 @@ export class SpecService {
     if (!feature) throw new NotFoundException('Feature not found');
     await assertCanEditSpec(this.db, user, featureId);
 
-    const attachments = await attachmentsForAi(this.db, featureId, {
-      budgetChars: ATTACHMENT_CONTEXT_BUDGET.specFromAttachments,
-      preferSummary: false,
+    const withText = await this.db.attachment.count({
+      where: { featureId, AND: [{ snapshotText: { not: null } }, { snapshotText: { not: '' } }] },
     });
-    if (attachments.length === 0) {
+    if (withText === 0) {
       throw new UnprocessableEntityException(
         'This Feature has no Attachments with text to draft a Spec from',
       );
@@ -74,13 +79,21 @@ export class SpecService {
       orderBy: { version: 'desc' },
       select: { id: true, markdown: true },
     });
+    const { context } = splitFeatureSpec(
+      await this.retriever.forFeature(
+        featureId,
+        `${feature.title}\n\n${feature.description ?? ''}`,
+        CONTEXT_BUDGET.specFromAttachments,
+      ),
+    );
 
     let draft: Awaited<ReturnType<AiPort['draftSpecFromAttachments']>>;
     try {
       draft = await this.ai.draftSpecFromAttachments({
         feature: { title: feature.title, description: feature.description ?? '' },
+        // The whole current Spec: it is the base the draft edits, never shortened.
         specMarkdown: base?.markdown ?? '',
-        attachments,
+        context,
       });
     } catch (error) {
       if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
