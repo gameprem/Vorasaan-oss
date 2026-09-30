@@ -28,7 +28,17 @@ export default async function InboxPage({
     <section className="max-w-3xl">
       {welcome && (
         <div className="mb-8">
-          <Notice>Vorasaan is ready. Next, create a Project and invite your team.</Notice>
+          <Notice>
+            Vorasaan is ready. Next,{' '}
+            <Link href="/projects" className="text-ink underline underline-offset-2">
+              create a Project
+            </Link>{' '}
+            and{' '}
+            <Link href="/members" className="text-ink underline underline-offset-2">
+              invite your team
+            </Link>
+            .
+          </Notice>
         </div>
       )}
       <h1 className="text-2xl font-semibold tracking-tight">Waiting for your decision</h1>

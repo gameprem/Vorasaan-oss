@@ -3,6 +3,7 @@ import * as db from '@vorasaan/db';
 import * as shared from './enums.ts';
 
 const pairs = [
+  ['OrgRole', shared.OrgRole, db.OrgRole],
   ['TeamRole', shared.TeamRole, db.TeamRole],
   ['DecisionRequestKind', shared.DecisionRequestKind, db.DecisionRequestKind],
   ['DecisionRequestStatus', shared.DecisionRequestStatus, db.DecisionRequestStatus],

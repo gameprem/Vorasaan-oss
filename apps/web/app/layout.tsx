@@ -48,6 +48,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 <Link href="/inbox" className="text-ink-soft hover:text-ink">
                   Inbox
                 </Link>
+                <Link href="/projects" className="text-ink-soft hover:text-ink">
+                  Projects
+                </Link>
+                <Link href="/members" className="text-ink-soft hover:text-ink">
+                  Members
+                </Link>
                 <Link href="/settings/ai" className="text-ink-soft hover:text-ink">
                   AI provider
                 </Link>

@@ -1,15 +1,23 @@
-import type { DecisionLogEntry, FeatureSummaryView, SpecVersionView } from '@vorasaan/shared';
+import type {
+  DecisionLogEntry,
+  FeatureSummaryView,
+  RoleOwnerView,
+  SpecVersionView,
+  TeamView,
+} from '@vorasaan/shared';
 import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { KindBadge, Notice, relativeTime } from '@/components/bits';
-import { ApiError, api } from '@/lib/api';
+import { RoleOwnersEditor } from '@/components/role-owners-editor';
+import { SpecPanel } from '@/components/spec-panel';
+import { ROLE_LABEL } from '@/components/ui';
+import { ApiError, api, currentUser } from '@/lib/api';
 
 export const metadata = { title: 'Feature' };
 
 const TABS = [
   { id: 'spec', label: 'Spec' },
+  { id: 'team', label: 'Role Owners' },
   { id: 'history', label: 'Version history' },
   { id: 'decisions', label: 'Decision Log' },
 ] as const;
@@ -36,11 +44,13 @@ export default async function FeaturePage({
   let feature: FeatureSummaryView;
   let versions: SpecVersionView[];
   let log: DecisionLogEntry[];
+  let owners: RoleOwnerView[];
   try {
-    [feature, versions, log] = await Promise.all([
+    [feature, versions, log, owners] = await Promise.all([
       api<FeatureSummaryView>(`/features/${id}`),
       api<SpecVersionView[]>(`/features/${id}/spec-versions`),
       api<DecisionLogEntry[]>(`/features/${id}/decision-log`),
+      api<RoleOwnerView[]>(`/features/${id}/role-owners`),
     ]);
   } catch (error) {
     unstable_rethrow(error); // let Next's redirect()/notFound() through
@@ -52,6 +62,9 @@ export default async function FeaturePage({
     );
   }
   const latest = versions[0];
+  const me = await currentUser();
+  const canEditSpec = Boolean(me?.isAdmin || feature.myRoles.includes('PO'));
+  const team = tab === 'team' ? await api<TeamView>(`/teams/${feature.teamId}`) : null;
 
   return (
     <article>
@@ -62,7 +75,10 @@ export default async function FeaturePage({
       )}
 
       <p className="text-sm text-ink-soft">
-        {feature.projectName}, {feature.teamName} team
+        {feature.projectName},{' '}
+        <Link href={`/teams/${feature.teamId}`} className="hover:underline">
+          {feature.teamName} team
+        </Link>
       </p>
       <h1 className="mt-1 mb-6 text-3xl font-semibold tracking-tight">{feature.title}</h1>
 
@@ -85,19 +101,42 @@ export default async function FeaturePage({
       </nav>
 
       <div className="mt-8">
-        {tab === 'spec' &&
-          (latest ? (
-            <>
-              <p className="mb-6 text-sm text-ink-soft">
-                Spec v{latest.version}, approved by {latest.approvedBy.name}{' '}
-                {relativeTime(latest.createdAt)}
+        {tab === 'spec' && (
+          <SpecPanel
+            featureId={id}
+            markdown={latest?.markdown ?? null}
+            version={latest?.version ?? 0}
+            meta={
+              latest
+                ? `Spec v${latest.version}, approved by ${latest.approvedBy.name} ${relativeTime(latest.createdAt)}`
+                : null
+            }
+            canEdit={canEditSpec}
+          />
+        )}
+
+        {tab === 'team' &&
+          team &&
+          (team.canManage ? (
+            <div className="max-w-3xl">
+              <p className="mb-6 text-ink-soft">
+                Decision Requests on this Feature go to its Role Owners. Choose who owns each role.
               </p>
-              <div className="spec rounded-xl border border-rule bg-sheet p-6 sm:p-10">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{latest.markdown}</ReactMarkdown>
-              </div>
-            </>
+              <RoleOwnersEditor featureId={id} team={team} owners={owners} />
+            </div>
+          ) : owners.length === 0 ? (
+            <p className="text-ink-soft">
+              No Role Owners yet. The Team's PO or an Admin sets them.
+            </p>
           ) : (
-            <p className="text-ink-soft">This Feature has no Spec yet.</p>
+            <ul className="max-w-3xl divide-y divide-rule border-y border-rule">
+              {owners.map((o) => (
+                <li key={`${o.userId}:${o.role}`} className="flex justify-between py-3">
+                  <span className="font-medium">{o.name}</span>
+                  <span className="text-ink-soft">{ROLE_LABEL[o.role]}</span>
+                </li>
+              ))}
+            </ul>
           ))}
 
         {tab === 'history' && (

@@ -10,6 +10,8 @@ import { DecisionRequestsController } from './decision-requests/decision-request
 import { DecisionRequestsService } from './decision-requests/decision-requests.service.ts';
 import { FeaturesController } from './features/features.controller.ts';
 import { HealthController } from './health/health.controller.ts';
+import { OrgController } from './org/org.controller.ts';
+import { OrgService } from './org/org.service.ts';
 import { PrismaModule } from './prisma/prisma.module.ts';
 import { AiSettingsController } from './settings/ai-settings.controller.ts';
 import { SetupController } from './setup/setup.controller.ts';
@@ -27,6 +29,7 @@ import { SpecService } from './spec/spec.service.ts';
     SpecController,
     AiSettingsController,
     SetupController,
+    OrgController,
   ],
   providers: [
     // Order matters: identity first, then role checks.
@@ -37,6 +40,7 @@ import { SpecService } from './spec/spec.service.ts';
     AuthService,
     DecisionRequestsService,
     SpecService,
+    OrgService,
   ],
 })
 export class AppModule {}
