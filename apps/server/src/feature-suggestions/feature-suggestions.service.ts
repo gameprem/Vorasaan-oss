@@ -189,9 +189,11 @@ export class FeatureSuggestionsService {
 
   /**
    * A PO of the chosen Team (one of the suggestion's Project's Teams) or an Admin
-   * accepts: a DRAFT Feature in that Team, with the accepter as its PO Role
-   * Owner, and the first Spec drafted by the AI as a PENDING Spec Proposal for
-   * the accepter to approve.
+   * accepts: a DRAFT Feature in that Team and the first Spec drafted by the AI
+   * as a PENDING Spec Proposal for the accepter to approve. The accepter becomes
+   * the Feature's PO Role Owner only if they hold the PO Team Role in that Team
+   * (Role Owners are always Team members, 0012); an Admin outside the Team
+   * leaves the Feature with no Role Owner, to be set later.
    */
   async accept(
     user: User,
@@ -207,11 +209,12 @@ export class FeatureSuggestionsService {
     if (!team || team.projectId !== suggestion.projectId) {
       throw new UnprocessableEntityException("The Team must be one of this Project's Teams");
     }
-    if (!access.isAdmin) {
-      const po = await this.db.teamMembership.count({
+    const isTeamPo =
+      (await this.db.teamMembership.count({
         where: { teamId: team.id, userId: user.id, role: 'PO' },
-      });
-      if (!po) throw new ForbiddenException("Only an Admin or this Team's PO can accept it");
+      })) > 0;
+    if (!isTeamPo && !access.isAdmin) {
+      throw new ForbiddenException("Only an Admin or this Team's PO can accept it");
     }
     if (suggestion.status !== 'PENDING') throw alreadyDecided(suggestion.status);
 
@@ -255,7 +258,7 @@ export class FeatureSuggestionsService {
           title: suggestion.title,
           description: suggestion.rationale,
           status: 'DRAFT',
-          roleOwners: { create: { userId: user.id, role: 'PO' } },
+          ...(isTeamPo ? { roleOwners: { create: { userId: user.id, role: 'PO' } } } : {}),
         },
         select: { id: true, teamId: true, title: true, status: true },
       });

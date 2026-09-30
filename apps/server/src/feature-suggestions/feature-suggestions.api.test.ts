@@ -336,6 +336,29 @@ describe('Feature Suggestions', () => {
     expect(await db.feature.count({ where: { title: { startsWith: 'Suggested' } } })).toBe(1);
   });
 
+  test('only a PO of the Team becomes Role Owner: an Admin outside it gets a Feature with none, and still approves', async () => {
+    const [byAdmin, byPo] = (await generate(pim.id, { count: 2 })).body;
+    if (!byAdmin || !byPo) throw new Error('expected suggestions');
+
+    // Pim is an Admin but not in Growth: no Role Owner, yet he is the approver.
+    const admin = await accept(pim.id, byAdmin.id, growthTeamId);
+    expect(admin.status).toBe(201);
+    expect(admin.body.proposal.approver).toEqual({ id: pim.id, name: 'Pim' });
+    expect(await db.roleOwner.count({ where: { featureId: admin.body.feature.id } })).toBe(0);
+    const approved = await asUser(pim.id)<SpecVersionView>(
+      'POST',
+      `/spec-proposals/${admin.body.proposal.id}/approve`,
+    );
+    expect(approved.status).toBe(201);
+    expect(approved.body).toMatchObject({ featureId: admin.body.feature.id, version: 1 });
+
+    // Olga holds the PO Team Role in Growth: she becomes its PO Role Owner.
+    const po = await accept(olga, byPo.id, growthTeamId);
+    expect(po.status).toBe(201);
+    const owners = await db.roleOwner.findMany({ where: { featureId: po.body.feature.id } });
+    expect(owners.map((o) => [o.userId, o.role])).toEqual([[olga, 'PO']]);
+  });
+
   test('two accepts at once: one Feature, one 409', async () => {
     const [s] = (await generate(pim.id, { count: 1 })).body;
     if (!s) throw new Error('expected a suggestion');
