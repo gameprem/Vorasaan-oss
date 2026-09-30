@@ -8,14 +8,18 @@ import {
   ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
-import type { User } from '@vorasaan/db';
+import type { PrismaClient, User } from '@vorasaan/db';
 import { CreateAccessTokenInput, LoginInput, type MeView } from '@vorasaan/shared';
+import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { AuthService } from './auth.service.ts';
 import { CurrentToken, CurrentUser, Public } from './identity.guard.ts';
 
 @Controller()
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    @InjectPrisma() private readonly db: PrismaClient,
+  ) {}
 
   @Public()
   @Post('auth/login')
@@ -31,8 +35,9 @@ export class AuthController {
   }
 
   @Get('me')
-  me(@CurrentUser() user: User): MeView {
-    return { id: user.id, email: user.email, name: user.name };
+  async me(@CurrentUser() user: User): Promise<MeView> {
+    const admin = await this.db.orgMembership.count({ where: { userId: user.id, role: 'ADMIN' } });
+    return { id: user.id, email: user.email, name: user.name, isAdmin: admin > 0 };
   }
 
   @Get('me/tokens')

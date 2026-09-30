@@ -6,13 +6,16 @@ export const LoginInput = z.object({
 });
 export type LoginInput = z.infer<typeof LoginInput>;
 
-export const MeView = z.object({ id: z.uuid(), name: z.string(), email: z.string() });
+export const UserRef = z.object({ id: z.uuid(), name: z.string(), email: z.string() });
+export type UserRef = z.infer<typeof UserRef>;
+
+export const MeView = UserRef.extend({ isAdmin: z.boolean() });
 export type MeView = z.infer<typeof MeView>;
 
 export const LoginResult = z.object({
   token: z.string(),
   expiresAt: z.iso.datetime(),
-  user: MeView,
+  user: UserRef,
 });
 export type LoginResult = z.infer<typeof LoginResult>;
 

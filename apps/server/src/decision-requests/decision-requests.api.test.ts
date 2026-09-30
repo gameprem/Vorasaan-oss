@@ -51,6 +51,7 @@ describe('Decision Requests API: raise and submit', () => {
       {
         id: SEED.featureId,
         title: 'Async checkout',
+        teamId: SEED.teamId,
         teamName: 'Checkout',
         projectName: 'Mobile Banking',
         myRoles: ['BACKEND'],

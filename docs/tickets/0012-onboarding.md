@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0011]
 slice: install-and-onboarding
 ---
@@ -17,5 +17,5 @@ Everything the seed script did can be done in the UI.
 - Navigation: Projects → Teams → Features; Inbox stays the home page.
 
 ## Acceptance criteria
-- [ ] From an empty install: setup → invite a Backend dev → create a Feature with Spec v1 → the dev raises from the CLI → the PO decides in the web app.
-- [ ] Non-admins can't create Projects/Teams or invite (403).
+- [x] From an empty install: setup → invite a Backend dev → create a Feature with Spec v1 → the dev raises (via the API; CLI sign-in is 0014) → the PO decides in the web app.
+- [x] Non-admins can't create Projects/Teams or invite (403).

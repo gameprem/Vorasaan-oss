@@ -3,6 +3,9 @@ import { z } from 'zod';
 // Mirrors of the Prisma enums (packages/db/prisma/schema.prisma).
 // enums.test.ts fails if the two drift apart.
 
+export const OrgRole = z.enum(['ADMIN', 'MEMBER']);
+export type OrgRole = z.infer<typeof OrgRole>;
+
 export const TeamRole = z.enum([
   'PO',
   'DESIGNER',

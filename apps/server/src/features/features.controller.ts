@@ -22,6 +22,7 @@ export class FeaturesController {
     return features.map((f) => ({
       id: f.id,
       title: f.title,
+      teamId: f.teamId,
       teamName: f.team.name,
       projectName: f.team.project.name,
       myRoles: f.roleOwners.map((o) => o.role),
@@ -44,6 +45,7 @@ export class FeaturesController {
     return {
       id: f.id,
       title: f.title,
+      teamId: f.teamId,
       teamName: f.team.name,
       projectName: f.team.project.name,
       myRoles: f.roleOwners.map((o) => o.role),
