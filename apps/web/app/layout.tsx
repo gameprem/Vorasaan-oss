@@ -1,8 +1,10 @@
+import type { NotificationList } from '@vorasaan/shared';
 import type { Metadata } from 'next';
 import { IBM_Plex_Mono, IBM_Plex_Sans_Thai } from 'next/font/google';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { LiveUpdates } from '@/components/live-updates';
 import { UserSwitcher } from '@/components/user-switcher';
 import { api, currentUser, DEV_USER_COOKIE, type DevUser, devAuth } from '@/lib/api';
 import { logout } from '@/lib/auth-actions';
@@ -31,6 +33,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     ? await api<DevUser[]>('/dev/users', { redirectOnUnauthorized: false }).catch(() => [])
     : [];
   const devUserId = dev ? (await cookies()).get(DEV_USER_COOKIE)?.value : undefined;
+  // One tiny query per page: only the count of unread Notifications, no rows.
+  const unread = me
+    ? await api<NotificationList>('/notifications?unread=true&limit=1', {
+        redirectOnUnauthorized: false,
+      })
+        .then((l) => l.unreadCount)
+        .catch(() => 0)
+    : 0;
 
   return (
     <html lang="en" className={`${plexThai.variable} ${plexMono.variable}`}>
@@ -48,6 +58,24 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 <Link href="/inbox" className="text-ink-soft hover:text-ink">
                   Inbox
                 </Link>
+                <Link
+                  href="/inbox#notifications"
+                  className="text-ink-soft hover:text-ink"
+                  aria-label={`Notifications, ${unread} unread`}
+                >
+                  Notifications
+                  {unread > 0 && (
+                    <span
+                      aria-hidden
+                      className="ml-1.5 rounded-full bg-seal px-1.5 py-0.5 text-xs font-medium text-sheet"
+                    >
+                      {unread > 99 ? '99+' : unread}
+                    </span>
+                  )}
+                </Link>
+                <Link href="/requests" className="text-ink-soft hover:text-ink">
+                  My Requests
+                </Link>
                 <Link href="/projects" className="text-ink-soft hover:text-ink">
                   Projects
                 </Link>
@@ -63,6 +91,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               </nav>
             )}
             <div className="ml-auto flex items-center gap-4 text-sm">
+              {me && <LiveUpdates />}
               {dev && <UserSwitcher users={devUsers} currentId={devUserId} />}
               {me && !devUserId && (
                 <>

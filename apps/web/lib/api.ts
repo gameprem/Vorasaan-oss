@@ -9,7 +9,7 @@ import { cache } from 'react';
 
 export const SESSION_COOKIE = 'vorasaan_session';
 export const DEV_USER_COOKIE = 'vorasaan-user';
-const API_URL = process.env.VORASAAN_API_URL ?? 'http://localhost:4000';
+export const API_URL = process.env.VORASAAN_API_URL ?? 'http://localhost:4000';
 
 export const devAuth = () => process.env.VORASAAN_DEV_AUTH === 'true';
 
@@ -29,18 +29,22 @@ type ApiOptions = {
   redirectOnUnauthorized?: boolean;
 };
 
-export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+/** The headers that identify the visitor to the API; empty when nobody is signed in. Server-only. */
+export async function authHeaders(): Promise<Record<string, string>> {
   const jar = await cookies();
   const session = jar.get(SESSION_COOKIE)?.value;
+  if (session) return { authorization: `Bearer ${session}` };
   const devUser = devAuth() ? jar.get(DEV_USER_COOKIE)?.value : undefined;
+  return devUser ? { 'x-vorasaan-user': devUser } : {};
+}
 
+export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
       method: options.method ?? 'GET',
       headers: {
-        ...(session ? { authorization: `Bearer ${session}` } : {}),
-        ...(!session && devUser ? { 'x-vorasaan-user': devUser } : {}),
+        ...(await authHeaders()),
         ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
