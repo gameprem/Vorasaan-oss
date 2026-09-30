@@ -3,10 +3,11 @@
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
-  "packageManager": "pnpm@12.8.1",
-  "engines": {
-    "node": ">=22.12"
-  },
+  "packageManager": "bun@1.4.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -15,13 +16,16 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "db:generate": "turbo run db:generate",
-    "db:migrate": "pnpm --filter @vorasaan/db db:migrate"
+    "db:migrate": "bun run --filter @vorasaan/db db:migrate"
   },
+  "trustedDependencies": [
+    "prisma",
+    "@prisma/engines"
+  ],
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
-    "@types/node": "^22.20.4",
+    "@types/bun": "^1.4.2",
     "turbo": "^2.11.5",
-    "typescript": "^6.0.3",
-    "vitest": "^5.0.3"
+    "typescript": "^6.0.3"
   }
 }

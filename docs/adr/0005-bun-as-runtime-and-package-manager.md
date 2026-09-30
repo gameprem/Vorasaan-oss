@@ -1,0 +1,3 @@
+# Bun is the runtime, package manager and test runner
+
+NestJS and Next.js officially target Node, and we first set the repo up on Node 22 + pnpm + Vitest. We switched to Bun for everything instead: `bun install` with workspaces, `bun test`, and Bun as the runtime for the server, CLI and tooling. Workspace packages export their `.ts` source directly, so there is no per-package build step. We accept being off the frameworks' primary path: if a NestJS or Next.js feature misbehaves on Bun, check Bun compatibility first. For the CLI, `bun build --compile` lets us ship a single binary that doesn't need Node installed.
