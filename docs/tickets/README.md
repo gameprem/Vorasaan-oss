@@ -28,3 +28,16 @@ Deliberately out of scope: auth (a dev header stands in for the user), onboardin
 ```
 
 0003 can run in parallel with 0001, and 0007 in parallel with 0006.
+
+## Install & onboarding
+
+Goal: install from scratch, choose an AI provider, sign in, and set up your own Organization without the seed script.
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0009 | [AI providers from the database](./0009-ai-providers.md) | none |
+| 0010 | [Email + password sign-in and access tokens](./0010-auth.md) | none |
+| 0011 | [First-boot setup wizard](./0011-setup-wizard.md) | 0009, 0010 |
+| 0012 | [Projects, Teams, members and Features in the web app](./0012-onboarding.md) | 0011 |
+| 0013 | [One-command install with Docker](./0013-docker-install.md) | 0011 |
+| 0014 | [CLI sign-in with a Personal Access Token](./0014-cli-login.md) | 0010 |
