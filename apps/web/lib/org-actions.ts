@@ -5,7 +5,6 @@ import type {
   LoginResult,
   SetRoleOwnersInput,
   TeamRole,
-  WriteSpecInput,
 } from '@vorasaan/shared';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -113,13 +112,6 @@ export async function acceptInvitation(token: string, _prev: FormState, formData
 export async function setRoleOwners(featureId: string, input: SetRoleOwnersInput) {
   return attempt(
     () => api(`/features/${featureId}/role-owners`, { method: 'PUT', body: input }),
-    `/features/${featureId}`,
-  );
-}
-
-export async function writeSpec(featureId: string, input: WriteSpecInput) {
-  return attempt(
-    () => api(`/features/${featureId}/spec-versions`, { method: 'POST', body: input }),
     `/features/${featureId}`,
   );
 }

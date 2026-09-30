@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -26,7 +27,15 @@ export function SpecPanel({
     return canEdit ? (
       <div>
         <p className="mb-4 text-ink-soft">
-          This Feature has no Spec yet. Write the first version; the team and AI build from it.
+          This Feature has no Spec yet. Write the first version; the team and AI build from it. Or
+          add Attachments and{' '}
+          <Link
+            href={`/features/${featureId}?tab=attachments`}
+            className="text-ink underline underline-offset-2"
+          >
+            draft a Spec from them
+          </Link>
+          .
         </p>
         <SpecEditor featureId={featureId} current={null} baseVersion={0} />
       </div>

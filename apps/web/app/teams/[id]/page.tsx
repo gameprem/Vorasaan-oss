@@ -2,6 +2,7 @@ import type { OrgMemberView, TeamView } from '@vorasaan/shared';
 import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { ActionForm } from '@/components/action-form';
+import { BlockedBadge } from '@/components/bits';
 import { TeamRolesEditor } from '@/components/team-roles-editor';
 import { field, ROLE_LABEL } from '@/components/ui';
 import { ApiError, api } from '@/lib/api';
@@ -39,10 +40,14 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
       ) : (
         <ul className="mt-3 divide-y divide-rule border-y border-rule">
           {team.features.map((f) => (
-            <li key={f.id}>
-              <Link href={`/features/${f.id}`} className="block py-3 font-medium hover:underline">
+            <li key={f.id} className="flex items-center justify-between gap-3">
+              <Link
+                href={`/features/${f.id}`}
+                className="block flex-1 py-3 font-medium hover:underline"
+              >
                 {f.title}
               </Link>
+              <BlockedBadge openBlockers={f.openBlockers} />
             </li>
           ))}
         </ul>

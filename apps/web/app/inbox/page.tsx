@@ -74,10 +74,10 @@ function describe(item: InboxItem): {
       const p = item.specProposal;
       return {
         key: p.id,
-        // The review lives with the Decision Request that produced the Proposal.
+        // A Decision's Proposal is reviewed with its Decision Request; others on their own page.
         href: p.decisionRequest
           ? `/requests/${p.decisionRequest.id}`
-          : `/features/${item.feature.id}`,
+          : `/features/${item.feature.id}/proposals/${p.id}`,
         badge: <Tag>Spec Proposal</Tag>,
         title: p.decisionRequest
           ? `Spec change from “${p.decisionRequest.title}”`

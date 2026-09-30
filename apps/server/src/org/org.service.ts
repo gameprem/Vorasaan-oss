@@ -29,6 +29,7 @@ import type {
 } from '@vorasaan/shared';
 import { AuthService, hashPassword } from '../auth/auth.service.ts';
 import { hashToken, newToken } from '../auth/tokens.ts';
+import { OPEN_BLOCKERS } from '../features/open-blockers.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
@@ -138,7 +139,12 @@ export class OrgService {
         },
         features: {
           orderBy: { createdAt: 'desc' },
-          select: { id: true, title: true, status: true },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            _count: { select: { decisionRequests: OPEN_BLOCKERS } },
+          },
         },
       },
     });
@@ -160,7 +166,10 @@ export class OrgService {
       name: team.name,
       project: team.project,
       members: [...byUser.values()],
-      features: team.features,
+      features: team.features.map(({ _count, ...f }) => ({
+        ...f,
+        openBlockers: _count.decisionRequests,
+      })),
       canManage: await this.canManageTeam(user.id, teamId),
     };
   }

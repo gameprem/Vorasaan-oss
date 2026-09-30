@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { ApiError, api, DEV_USER_COOKIE } from './api';
+import { isId } from './ids';
 
 export type ActionState = { error?: string };
 
@@ -41,11 +42,15 @@ export async function decide(
   return {};
 }
 
+/** `requestId` is the Decision Request the Proposal came from, or null (e.g. drafted from Attachments). */
 export async function approveProposal(
   proposalId: string,
-  requestId: string,
+  requestId: string | null,
   _prev: ActionState,
 ): Promise<ActionState> {
+  if (!isId(proposalId) || (requestId !== null && !isId(requestId))) {
+    return { error: 'That link is not valid. Reload the page.' };
+  }
   let version: SpecVersionView;
   try {
     version = await api<SpecVersionView>(`/spec-proposals/${proposalId}/approve`, {
@@ -55,21 +60,31 @@ export async function approveProposal(
     if (error instanceof ApiError) return { error: error.message };
     throw error;
   }
-  revalidatePath(`/requests/${requestId}`);
+  if (requestId) revalidatePath(`/requests/${requestId}`);
   redirect(`/features/${version.featureId}?approved=${version.version}`);
 }
 
 export async function rejectProposal(
   proposalId: string,
-  requestId: string,
+  requestId: string | null,
   _prev: ActionState,
 ): Promise<ActionState> {
+  if (!isId(proposalId) || (requestId !== null && !isId(requestId))) {
+    return { error: 'That link is not valid. Reload the page.' };
+  }
+  let proposal: SpecProposalView;
   try {
-    await api<SpecProposalView>(`/spec-proposals/${proposalId}/reject`, { method: 'POST' });
+    proposal = await api<SpecProposalView>(`/spec-proposals/${proposalId}/reject`, {
+      method: 'POST',
+    });
   } catch (error) {
     if (error instanceof ApiError) return { error: error.message };
     throw error;
   }
-  revalidatePath(`/requests/${requestId}`);
+  revalidatePath(
+    requestId
+      ? `/requests/${requestId}`
+      : `/features/${proposal.featureId}/proposals/${proposalId}`,
+  );
   return {};
 }

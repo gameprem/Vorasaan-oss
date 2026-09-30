@@ -10,6 +10,9 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@blocknote/ariakit": "^0.55.0",
+    "@blocknote/core": "^0.55.0",
+    "@blocknote/react": "^0.55.0",
     "@vorasaan/shared": "workspace:*",
     "diff": "^9.0.0",
     "next": "16.3.7",

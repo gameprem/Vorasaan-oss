@@ -19,6 +19,8 @@ export const FeatureView = FeatureSummaryView.extend({
   jiraIssueKey: z.string().nullable(),
   /** The Epic on the Atlassian site; null when unlinked or Atlassian isn't connected. */
   jiraIssueUrl: z.string().nullable(),
+  /** Blockers on this Feature that are OPEN or NEEDS_INFO; the Feature is Blocked while > 0. */
+  openBlockers: z.int().nonnegative(),
 });
 export type FeatureView = z.infer<typeof FeatureView>;
 

@@ -27,6 +27,20 @@ export function statusText(status: DecisionRequestStatus) {
   return STATUS_TEXT[status];
 }
 
+/** Shown while any Blocker on a Feature is open (OPEN or NEEDS_INFO). Open Questions don't count. */
+export function BlockedBadge({ openBlockers }: { openBlockers: number }) {
+  if (openBlockers <= 0) return null;
+  const count = `${openBlockers} open Blocker${openBlockers === 1 ? '' : 's'}`;
+  return (
+    <span
+      title={count}
+      className="inline-flex items-center rounded-full bg-seal px-2.5 py-0.5 text-sm font-medium text-sheet"
+    >
+      Blocked<span className="sr-only"> by {count}</span>
+    </span>
+  );
+}
+
 export function relativeTime(iso: string) {
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (minutes < 1) return 'just now';
