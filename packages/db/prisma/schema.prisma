@@ -279,6 +279,7 @@ model Delegation {
   delegator   User     @relation("DelegationDelegator", fields: [delegatorId], references: [id], onDelete: Cascade)
   delegate    User     @relation("DelegationDelegate", fields: [delegateId], references: [id], onDelete: Cascade)
   createdBy   User     @relation("DelegationCreatedBy", fields: [createdById], references: [id])
+  started     Notification? // DELEGATION_STARTED, to the Delegate
 
   @@index([delegatorId, teamId, role, startsAt, endsAt])
 }
@@ -509,12 +510,14 @@ model Notification {
   featureId     String?
   requestId     String?
   specVersionId String?
+  delegationId  String?          @unique // DELEGATION_STARTED only: one per Delegation, written lazily
   readAt        DateTime?
   createdAt     DateTime         @default(now())
   user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   feature       Feature?         @relation(fields: [featureId], references: [id], onDelete: Cascade)
   request       DecisionRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
   specVersion   SpecVersion?     @relation(fields: [specVersionId], references: [id], onDelete: Cascade)
+  delegation    Delegation?      @relation(fields: [delegationId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
 }
