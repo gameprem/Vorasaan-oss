@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { loadAiConfig } from './ai.config.ts';
-import { AiOutputError, GeneratedChoices } from './ai.port.ts';
+import {
+  AiOutputError,
+  AttachmentSummary,
+  GeneratedChoices,
+  SpecProposalDraft,
+} from './ai.port.ts';
 import { FakeAiPort } from './fake-ai.port.ts';
 import { generateStructured, type StructuredGenerate } from './structured.ts';
 
@@ -62,6 +67,8 @@ describe('loadAiConfig', () => {
     expect(loadAiConfig({})).toEqual({
       generateChoicesModel: 'anthropic/claude-opus-5-5',
       draftSpecProposalModel: 'anthropic/claude-opus-5-5',
+      summarizeAttachmentModel: 'anthropic/claude-opus-5-5',
+      draftSpecFromAttachmentsModel: 'anthropic/claude-opus-5-5',
     });
   });
 
@@ -70,10 +77,13 @@ describe('loadAiConfig', () => {
       loadAiConfig({
         VORASAAN_MODEL: 'openai/some-model',
         VORASAAN_MODEL_GENERATE_CHOICES: 'anthropic/claude-haiku-4-5',
+        VORASAAN_MODEL_SUMMARIZE_ATTACHMENT: 'anthropic/claude-haiku-4-5',
       }),
     ).toEqual({
       generateChoicesModel: 'anthropic/claude-haiku-4-5',
       draftSpecProposalModel: 'openai/some-model',
+      summarizeAttachmentModel: 'anthropic/claude-haiku-4-5',
+      draftSpecFromAttachmentsModel: 'openai/some-model',
     });
   });
 });
@@ -84,7 +94,18 @@ describe('FakeAiPort', () => {
     const result = await ai.generateChoices({
       specMarkdown: '# Spec',
       request: { kind: 'BLOCKER', title: 'Slow API', description: 'd', raiserRole: 'BACKEND' },
+      attachments: [],
     });
     expect(GeneratedChoices.safeParse(result).success).toBe(true);
+
+    const attachment = { title: 'API docs', source: 'URL' as const, text: 'Polling only.' };
+    const summary = await ai.summarizeAttachment({ attachment });
+    expect(AttachmentSummary.safeParse(summary).success).toBe(true);
+    const draft = await ai.draftSpecFromAttachments({
+      feature: { title: 'Checkout', description: '' },
+      specMarkdown: '',
+      attachments: [attachment],
+    });
+    expect(SpecProposalDraft.safeParse(draft).success).toBe(true);
   });
 });

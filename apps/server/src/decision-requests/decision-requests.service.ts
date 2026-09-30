@@ -19,6 +19,7 @@ import type {
   SubmitDecisionRequestInput,
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort, type DecisionForAi } from '../ai/ai.port.ts';
+import { ATTACHMENT_CONTEXT_BUDGET, attachmentsForAi } from '../attachments/attachment-context.ts';
 import { activeDelegates } from '../delegations/active-delegations.ts';
 import { NotificationsService, type Outbox, type Tx } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
@@ -63,9 +64,11 @@ export class DecisionRequestsService {
     let generated: Awaited<ReturnType<AiPort['generateChoices']>> | undefined;
     if (withChoices) {
       const spec = await this.latestSpecMarkdown(input.featureId);
+      const attachments = await this.attachmentContext(input.featureId);
       try {
         generated = await this.ai.generateChoices({
           specMarkdown: spec,
+          attachments,
           request: {
             kind: input.kind,
             title: input.title,
@@ -332,11 +335,13 @@ export class DecisionRequestsService {
       orderBy: { role: 'asc' },
       select: { role: true },
     });
+    const attachments = await this.attachmentContext(request.featureId);
 
     let draft: Awaited<ReturnType<AiPort['draftSpecProposal']>>;
     try {
       draft = await this.ai.draftSpecProposal({
         specMarkdown: base?.markdown ?? '',
+        attachments,
         request: {
           kind: request.kind,
           title: request.title,
@@ -497,6 +502,14 @@ export class DecisionRequestsService {
       userId: user.id,
       teamRoles: new Set(memberships.map((m) => teamRoleKey(m.teamId, m.role))),
     };
+  }
+
+  /** Attachment context for Choices and Spec Proposals: summaries where present, within budget. */
+  private attachmentContext(featureId: string) {
+    return attachmentsForAi(this.db, featureId, {
+      budgetChars: ATTACHMENT_CONTEXT_BUDGET.decisionRequest,
+      preferSummary: true,
+    });
   }
 
   private async latestSpecMarkdown(featureId: string): Promise<string> {

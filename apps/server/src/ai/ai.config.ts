@@ -5,6 +5,8 @@ export const DEFAULT_MODEL = 'anthropic/claude-opus-5-5';
 export type AiConfig = {
   generateChoicesModel: string;
   draftSpecProposalModel: string;
+  summarizeAttachmentModel: string;
+  draftSpecFromAttachmentsModel: string;
 };
 
 export function loadAiConfig(env: Record<string, string | undefined> = process.env): AiConfig {
@@ -12,5 +14,7 @@ export function loadAiConfig(env: Record<string, string | undefined> = process.e
   return {
     generateChoicesModel: env.VORASAAN_MODEL_GENERATE_CHOICES ?? fallback,
     draftSpecProposalModel: env.VORASAAN_MODEL_DRAFT_SPEC_PROPOSAL ?? fallback,
+    summarizeAttachmentModel: env.VORASAAN_MODEL_SUMMARIZE_ATTACHMENT ?? fallback,
+    draftSpecFromAttachmentsModel: env.VORASAAN_MODEL_DRAFT_SPEC_FROM_ATTACHMENTS ?? fallback,
   };
 }

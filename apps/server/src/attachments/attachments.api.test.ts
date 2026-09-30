@@ -6,6 +6,8 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@vorasaan/db';
 import { SEED, seed } from '@vorasaan/db/seed';
 import type { AttachmentView } from '@vorasaan/shared';
+import { AiOutputError } from '../ai/ai.port.ts';
+import type { FakeAiPort } from '../ai/fake-ai.port.ts';
 import { DEV_USER_HEADER } from '../auth/identity.guard.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
@@ -48,6 +50,7 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0
 
 describe('Attachments API', () => {
   let app: NestFastifyApplication;
+  let ai: FakeAiPort;
   let db: PrismaClient;
   let storageDir: string;
   let page: { html: string; status: number };
@@ -108,7 +111,7 @@ describe('Attachments API', () => {
             })
           : new Response('gone', { status: 404 }),
     });
-    ({ app } = await createTestApp());
+    ({ app, ai } = await createTestApp());
     db = createTestPrisma();
     asPim = as(app, pim.id);
     asBeam = as(app, beam.id);
@@ -127,6 +130,7 @@ describe('Attachments API', () => {
   beforeEach(async () => {
     await truncateAll(db);
     await seed(db);
+    ai.calls.length = 0;
     await rm(join(storageDir, 'attachments'), { recursive: true, force: true });
     delete process.env.ATTACHMENT_MAX_BYTES;
     delete process.env.ATTACHMENT_SNAPSHOT_MAX_CHARS;
@@ -300,6 +304,45 @@ describe('Attachments API', () => {
 
     const noFile = await download(pim.id, created.body.id);
     expect(noFile.statusCode).toBe(404);
+  });
+
+  test('the AI summarizes each Snapshot; a failed summary leaves it null but keeps the Attachment', async () => {
+    const created = await asBeam<AttachmentView>('POST', featureUrl, {
+      url: `${pages.url.origin}/spec`,
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.summary).toBe('Summary of "Provider API": # Webhooks');
+
+    const image = await upload(pim.id, [{ name: 'file', filename: 'flow.png', data: PNG }]);
+    expect(image.body.summary).toBeNull();
+    expect(ai.calls.filter((c) => c.method === 'summarizeAttachment')).toHaveLength(1);
+
+    const original = ai.summarizeAttachment.bind(ai);
+    ai.summarizeAttachment = async () => {
+      throw new AiOutputError('summarize-attachment', new Error('bad output'));
+    };
+    try {
+      const failed = await upload(beam.id, [
+        { name: 'file', filename: 'notes.md', data: bytes('Retry must be one tap.') },
+      ]);
+      expect(failed.status).toBe(201);
+      expect(failed.body.snapshotText).toBe('Retry must be one tap.');
+      expect(failed.body.summary).toBeNull();
+
+      // A refresh whose summary fails clears the old one rather than keep a stale summary.
+      page.html = '<html><body><main><p>Webhooks are now supported.</p></main></body></html>';
+      const refreshed = await asBeam<AttachmentView>(
+        'POST',
+        `/attachments/${created.body.id}/refresh`,
+      );
+      expect(refreshed.status).toBe(201);
+      expect(refreshed.body.summary).toBeNull();
+    } finally {
+      ai.summarizeAttachment = original;
+    }
+
+    const again = await asBeam<AttachmentView>('POST', `/attachments/${created.body.id}/refresh`);
+    expect(again.body.summary).toBe('Summary of "Provider API": Webhooks are now supported.');
   });
 
   test('URL Attachments: a given title wins; bad or unreachable URLs are refused', async () => {

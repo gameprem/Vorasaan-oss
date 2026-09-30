@@ -51,8 +51,12 @@ describe('MastraAiPort', () => {
       throw new Error('stop before any network call');
     });
     const request = { kind: 'QUESTION', title: 't', description: 'd', raiserRole: 'PO' } as const;
-    await expect(port.generateChoices({ specMarkdown: '#', request })).rejects.toThrow('stop');
-    await expect(port.generateChoices({ specMarkdown: '#', request })).rejects.toThrow('stop');
+    await expect(
+      port.generateChoices({ specMarkdown: '#', request, attachments: [] }),
+    ).rejects.toThrow('stop');
+    await expect(
+      port.generateChoices({ specMarkdown: '#', request, attachments: [] }),
+    ).rejects.toThrow('stop');
     expect(calls).toBe(2);
   });
 });

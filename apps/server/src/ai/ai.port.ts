@@ -1,4 +1,10 @@
-import { ChoiceDraft, ChoiceDrafts, DecisionRequestKind, TeamRole } from '@vorasaan/shared';
+import {
+  AttachmentSource,
+  ChoiceDraft,
+  ChoiceDrafts,
+  DecisionRequestKind,
+  TeamRole,
+} from '@vorasaan/shared';
 import { z } from 'zod';
 
 // The only way server code talks to an LLM. Production uses MastraAiPort;
@@ -29,16 +35,44 @@ export const SpecProposalDraft = z.object({
 });
 export type SpecProposalDraft = z.infer<typeof SpecProposalDraft>;
 
+/**
+ * An Attachment's Snapshot (or its summary) as AI context. `text` is untrusted:
+ * it comes from outside documents, so prompts fence it off as data.
+ */
+export type AttachmentForAi = {
+  title: string;
+  source: AttachmentSource;
+  text: string;
+};
+
+export type FeatureForAi = { title: string; description: string };
+
+export const AttachmentSummary = z.object({
+  summary: z.string().trim().min(1),
+});
+export type AttachmentSummary = z.infer<typeof AttachmentSummary>;
+
 export interface AiPort {
   generateChoices(input: {
     specMarkdown: string;
     request: RequestForAi;
+    attachments: AttachmentForAi[];
   }): Promise<GeneratedChoices>;
 
   draftSpecProposal(input: {
     specMarkdown: string;
     request: RequestForAi;
     decision: DecisionForAi;
+    attachments: AttachmentForAi[];
+  }): Promise<SpecProposalDraft>;
+
+  summarizeAttachment(input: { attachment: AttachmentForAi }): Promise<AttachmentSummary>;
+
+  /** A complete Spec drafted from the Feature's Attachments (and the current Spec, if any). */
+  draftSpecFromAttachments(input: {
+    feature: FeatureForAi;
+    specMarkdown: string;
+    attachments: AttachmentForAi[];
   }): Promise<SpecProposalDraft>;
 }
 
