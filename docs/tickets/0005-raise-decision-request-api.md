@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0002, 0003, 0004]
 slice: tracer-bullet
 ---
@@ -25,10 +25,10 @@ A Role Owner can raise a Decision Request on a Feature, get AI-drafted Choices b
 - `POST /decision-requests/:id/withdraw`: Raiser only, from `DRAFT` or `OPEN`, to `WITHDRAWN`.
 
 ## Acceptance criteria (test first, against real Postgres + `FakeAiPort`)
-- [ ] Raise → `DRAFT` with 2–4 Choices and a `suggestedRole`.
-- [ ] A non-Role Owner can't raise (403).
-- [ ] Submit → `OPEN` with Pim as Decider. Submitting twice, or by someone other than the Raiser, fails.
-- [ ] Choices edited at submit are saved and flagged.
-- [ ] A Decider who would be the Raiser, or an ambiguous Decider, → 422.
-- [ ] Withdraw works from `DRAFT`/`OPEN` and is rejected afterwards.
-- [ ] State transitions live in one place (a small state machine module) with its own unit tests.
+- [x] Raise → `DRAFT` with 2–4 Choices and a `suggestedRole`.
+- [x] A non-Role Owner can't raise (403).
+- [x] Submit → `OPEN` with Pim as Decider. Submitting twice, or by someone other than the Raiser, fails.
+- [x] Choices edited at submit are saved and flagged.
+- [x] A Decider who would be the Raiser, or an ambiguous Decider, → 422.
+- [x] Withdraw works from `DRAFT`/`OPEN` and is rejected afterwards.
+- [x] State transitions live in one place (a small state machine module) with its own unit tests.

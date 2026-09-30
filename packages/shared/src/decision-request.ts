@@ -53,6 +53,13 @@ export const DecideInput = z.union([
 ]);
 export type DecideInput = z.infer<typeof DecideInput>;
 
+export const ListDecisionRequestsQuery = z.object({
+  decider: z.literal('me').optional(),
+  raiser: z.literal('me').optional(),
+  status: DecisionRequestStatus.optional(),
+});
+export type ListDecisionRequestsQuery = z.infer<typeof ListDecisionRequestsQuery>;
+
 // ─── Views ──────────────────────────────────────────────────────────────────
 
 export const PersonRef = z.object({ id: Id, name: z.string() });
