@@ -25,6 +25,9 @@ import {
 } from './spec.view.ts';
 import { assertCanEditSpec } from './spec-access.ts';
 
+/** SpecVersion.version is a Postgres int4. */
+const MAX_VERSION = 2_147_483_647;
+
 /** Thrown inside the approve transaction to roll everything back. */
 class StaleStateError extends Error {}
 
@@ -245,6 +248,8 @@ export class SpecService {
   }
 
   private async findVersionOrThrow(featureId: string, version: number) {
+    // Outside the Int column's range no version can exist; Postgres would reject the query.
+    if (version > MAX_VERSION) throw new NotFoundException(`Spec Version v${version} not found`);
     const found = await this.db.specVersion.findUnique({
       where: { featureId_version: { featureId, version } },
       include: specVersionInclude,

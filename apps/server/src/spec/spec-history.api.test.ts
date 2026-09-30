@@ -98,6 +98,8 @@ describe('Spec editing, diff and revert', () => {
 
     expect((await asBeam('GET', `${versions}/9`)).status).toBe(404);
     expect((await asBeam('GET', `${versions}/abc`)).status).toBe(400);
+    // Beyond Postgres int range: still a plain 404, not a database error.
+    expect((await asBeam('GET', `${versions}/3000000000`)).status).toBe(404);
     const otherFeature = '00000000-0000-4000-8000-0000000000ff';
     expect((await asBeam('GET', `/features/${otherFeature}/spec-versions/1`)).status).toBe(404);
   });
@@ -188,6 +190,7 @@ describe('Spec editing, diff and revert', () => {
     expect(same.body).toMatchObject({ added: 0, removed: 0 });
 
     expect((await asBeam('GET', `${url}?from=1&to=5`)).status).toBe(404);
+    expect((await asBeam('GET', `${url}?from=1&to=3000000000`)).status).toBe(404);
     expect((await asBeam('GET', `${url}?from=1`)).status).toBe(400);
     expect((await asBeam('GET', `${url}?from=x&to=1`)).status).toBe(400);
     expect((await asBeam('GET', `${url}?from=0&to=0`)).status).toBe(400);
