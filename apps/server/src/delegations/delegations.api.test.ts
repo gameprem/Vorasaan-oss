@@ -269,6 +269,9 @@ describe('Delegations API', () => {
     expect(res.status).toBe(201);
     expect(res.body.recipients.map((r) => r.name)).toEqual(['Nok', 'Tee']);
     expect(res.body.decider).toBeNull();
+    // Nok was a recipient in their own right, so not on Pim's behalf.
+    const rows = await db.requestRecipient.findMany({ where: { requestId: res.body.id } });
+    expect(rows.map((r) => r.onBehalfOfId)).toEqual([null, null]);
   });
 
   // ─── Deciding on behalf of ────────────────────────────────────────────────
@@ -304,6 +307,34 @@ describe('Delegations API', () => {
       { customAnswer: 'Poll every 30s.' },
     );
     expect(res.body.request.decision?.onBehalfOf).toEqual({ id: pim.id, name: 'Pim' });
+  });
+
+  test('deleting the Delegation after the request was sent keeps the on-behalf-of record', async () => {
+    const nok = await person('Nok', ['PO']);
+    await delegation(pim.id, nok.id, -1, 7);
+    const req = await submit();
+    await db.delegation.deleteMany();
+    const res = await nok.call<{ request: DecisionRequestView }>(
+      'POST',
+      `/decision-requests/${req.body.id}/decision`,
+      { customAnswer: 'Poll every 30s.' },
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.request.decision?.onBehalfOf).toEqual({ id: pim.id, name: 'Pim' });
+  });
+
+  test('the Raiser sending to the Delegate by name records no one else', async () => {
+    const nok = await person('Nok', ['PO'], ['PO']);
+    await delegation(pim.id, nok.id, -1, 7);
+    const req = await submit({ userId: nok.id });
+    expect(req.body.decider).toEqual({ id: nok.id, name: 'Nok' });
+    const res = await nok.call<{ request: DecisionRequestView }>(
+      'POST',
+      `/decision-requests/${req.body.id}/decision`,
+      { customAnswer: 'Poll every 30s.' },
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.request.decision?.onBehalfOf).toBeNull();
   });
 
   test('Claiming a request that reached the delegator is not acting as Delegate', async () => {

@@ -119,12 +119,13 @@ model User {
   invitationsSent Invitation[]
   attachments     Attachment[]
 
-  requestsRaised     DecisionRequest[]  @relation("RequestRaiser")
-  requestsDeciding   DecisionRequest[]  @relation("RequestDecider")
-  requestsReceived   RequestRecipient[]
-  requestMessages    RequestMessage[]
-  decisionsMade      Decision[]         @relation("DecisionDecidedBy")
-  decisionsDelegated Decision[]         @relation("DecisionOnBehalfOf")
+  requestsRaised           DecisionRequest[]  @relation("RequestRaiser")
+  requestsDeciding         DecisionRequest[]  @relation("RequestDecider")
+  requestsReceived         RequestRecipient[] @relation("RecipientUser")
+  requestsReceivedOnBehalf RequestRecipient[] @relation("RecipientOnBehalfOf")
+  requestMessages          RequestMessage[]
+  decisionsMade            Decision[]         @relation("DecisionDecidedBy")
+  decisionsDelegated       Decision[]         @relation("DecisionOnBehalfOf")
 
   proposalsToApprove SpecProposal[] @relation("ProposalApprover")
   specVersions       SpecVersion[]  @relation("SpecVersionApprovedBy")
@@ -425,14 +426,17 @@ model DecisionRequest {
 // Who the Raiser sent the request to (one Role Owner, or all of them for the role).
 // Resolved through active Delegations at send time.
 model RequestRecipient {
-  id        String          @id @default(uuid())
-  requestId String
-  userId    String
-  request   DecisionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String          @id @default(uuid())
+  requestId    String
+  userId       String
+  onBehalfOfId String? // the delegator, when this recipient replaced them as their Delegate
+  request      DecisionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user         User            @relation("RecipientUser", fields: [userId], references: [id], onDelete: Cascade)
+  onBehalfOf   User?           @relation("RecipientOnBehalfOf", fields: [onBehalfOfId], references: [id], onDelete: SetNull)
 
   @@unique([requestId, userId])
   @@index([userId])
+  @@index([onBehalfOfId])
 }
 
 // Local context sent from the CLI (--file, --diff) or pasted text.
