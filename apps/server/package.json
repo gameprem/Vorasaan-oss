@@ -11,6 +11,7 @@
     "eval:choices": "bun scripts/eval-choices.ts"
   },
   "dependencies": {
+    "@fastify/multipart": "^10.1.0",
     "@mastra/core": "1.72.0",
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",
@@ -20,6 +21,7 @@
     "@vorasaan/skills": "workspace:*",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "unpdf": "^1.8.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {

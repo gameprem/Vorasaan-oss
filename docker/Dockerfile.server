@@ -20,5 +20,9 @@ COPY apps/server ./apps/server
 RUN cd packages/db && bun --bun prisma generate
 
 ENV NODE_ENV=production PORT=4000
+# Attachment files (FILE_STORAGE_DRIVER=local); docker-compose mounts the vorasaan_files volume here.
+ENV FILE_STORAGE_LOCAL_DIR=/data/files
+RUN mkdir -p /data/files
+VOLUME /data/files
 EXPOSE 4000
 CMD ["sh", "-c", "cd /app/packages/db && bun --bun prisma migrate deploy && cd /app/apps/server && exec bun src/main.ts"]
