@@ -13,7 +13,7 @@ A PO edits the Spec directly, compares any two Spec Versions, and reverts to an 
 - Manual edit (`POST /features/:id/spec-versions`, exists): restrict to the Feature's PO Role Owners (and Admins); require `baseVersion` and return 409 if the Spec moved on; store a `summary`.
 - `GET /features/:id/spec-versions/:version`: one version's Markdown.
 - `GET /features/:id/spec-diff?from=&to=`: a line diff of two versions, computed on the server so web and CLI render the same thing.
-- `POST /features/:id/spec-versions/:version/revert`: PO Role Owners only. Creates version n+1 with `source: REVERT` and `revertedFromId`. It never deletes versions.
+- `POST /features/:id/spec-versions/:version/revert`: PO Role Owners (and Admins, as for manual edits), with `baseVersion` (409 if stale). Creates version n+1 with `source: REVERT` and `revertedFromId`. It never deletes versions.
 - Spec Versions stay immutable.
 
 ## Acceptance criteria (test first, real Postgres)
