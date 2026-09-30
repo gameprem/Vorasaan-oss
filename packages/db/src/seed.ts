@@ -66,7 +66,12 @@ export async function seed(db: PrismaClient) {
     await db.orgMembership.upsert({
       where: { organizationId_userId: { organizationId: SEED.organizationId, userId: user.id } },
       update: {},
-      create: { organizationId: SEED.organizationId, userId: user.id, role: 'MEMBER' },
+      // Pim administers the demo Organization.
+      create: {
+        organizationId: SEED.organizationId,
+        userId: user.id,
+        role: user.id === pim.id ? 'ADMIN' : 'MEMBER',
+      },
     });
   }
 

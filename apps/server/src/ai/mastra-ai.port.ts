@@ -1,5 +1,5 @@
 import { Agent } from '@mastra/core/agent';
-import type { AiConfig } from './ai.config.ts';
+import { z } from 'zod';
 import {
   type AiPort,
   type DecisionForAi,
@@ -7,6 +7,7 @@ import {
   type RequestForAi,
   SpecProposalDraft,
 } from './ai.port.ts';
+import type { MastraModel } from './model-config.ts';
 import { draftSpecProposalPrompt, generateChoicesPrompt } from './prompts.ts';
 import { generateStructured, type StructuredGenerate } from './structured.ts';
 
@@ -14,7 +15,20 @@ const INSTRUCTIONS =
   'You are Vorasaan, an assistant that helps software teams align on what to build. ' +
   'Follow the task instructions exactly and return only the requested structure.';
 
-function agentGenerate(agent: Agent): StructuredGenerate {
+export type AiTask = 'generateChoices' | 'draftSpecProposal';
+
+/** Called on every request, so a provider saved in Settings applies immediately. */
+export type ModelResolver = (task: AiTask) => Promise<MastraModel>;
+
+type AgentModel = ConstructorParameters<typeof Agent>[0]['model'];
+
+export function agentGenerate(task: string, model: MastraModel): StructuredGenerate {
+  const agent = new Agent({
+    id: task,
+    name: task,
+    instructions: INSTRUCTIONS,
+    model: model as AgentModel,
+  });
   return async (prompt, schema) => {
     const result = await agent.generate(prompt, { structuredOutput: { schema } });
     return result.object;
@@ -23,31 +37,12 @@ function agentGenerate(agent: Agent): StructuredGenerate {
 
 // Mastra used as a library (ADR 0003): no Mastra server, no storage needed yet.
 export class MastraAiPort implements AiPort {
-  private readonly choices: StructuredGenerate;
-  private readonly specProposal: StructuredGenerate;
-
-  constructor(config: AiConfig) {
-    this.choices = agentGenerate(
-      new Agent({
-        id: 'generate-choices',
-        name: 'Choice generator',
-        instructions: INSTRUCTIONS,
-        model: config.generateChoicesModel,
-      }),
-    );
-    this.specProposal = agentGenerate(
-      new Agent({
-        id: 'draft-spec-proposal',
-        name: 'Spec Proposal drafter',
-        instructions: INSTRUCTIONS,
-        model: config.draftSpecProposalModel,
-      }),
-    );
-  }
+  constructor(private readonly resolveModel: ModelResolver) {}
 
   async generateChoices(input: { specMarkdown: string; request: RequestForAi }) {
     const prompt = await generateChoicesPrompt(input.specMarkdown, input.request);
-    return generateStructured(this.choices, 'generate-choices', prompt, GeneratedChoices);
+    const generate = agentGenerate('generate-choices', await this.resolveModel('generateChoices'));
+    return generateStructured(generate, 'generate-choices', prompt, GeneratedChoices);
   }
 
   async draftSpecProposal(input: {
@@ -56,6 +51,19 @@ export class MastraAiPort implements AiPort {
     decision: DecisionForAi;
   }) {
     const prompt = await draftSpecProposalPrompt(input.specMarkdown, input.request, input.decision);
-    return generateStructured(this.specProposal, 'draft-spec-proposal', prompt, SpecProposalDraft);
+    const generate = agentGenerate(
+      'draft-spec-proposal',
+      await this.resolveModel('draftSpecProposal'),
+    );
+    return generateStructured(generate, 'draft-spec-proposal', prompt, SpecProposalDraft);
   }
+}
+
+const PingResult = z.object({ reply: z.string() });
+
+/** A tiny structured call to check that a provider config works. */
+export async function pingModel(model: MastraModel): Promise<void> {
+  const generate = agentGenerate('connection-test', model);
+  const raw = await generate('Reply with the single word "ok" in the `reply` field.', PingResult);
+  PingResult.parse(raw);
 }

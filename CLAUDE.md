@@ -11,7 +11,9 @@ Open-source "AI proposes, human approves" alignment engine. Product scope: `REQU
 ## Workflow
 
 - Work one ticket at a time from `docs/tickets/`: one ticket = one branch = one PR.
-- Branch names: `feat/NNNN-slug`, `fix/...`, `chore/...`. Never commit to `main` directly.
+- Branch from and open PRs against **`development`** (the default branch). Branch names: `feat/NNNN-slug`, `fix/...`, `chore/...`.
+- `main` only moves on an explicit release (merge `development` → `main`). Never commit to either directly.
+- This repo stays **private**. The public open-source repo will be a separate repository that receives only `main` on release, so unreleased work never leaks.
 - Keep the ticket's `status` frontmatter up to date.
 
 ## Stack & conventions
