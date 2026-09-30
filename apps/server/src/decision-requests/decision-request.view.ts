@@ -9,7 +9,13 @@ export const decisionRequestInclude = {
   raiser: person,
   decider: person,
   choices: { orderBy: { position: 'asc' } },
-  decision: { include: { decidedBy: person, onBehalfOf: person } },
+  decision: {
+    include: {
+      decidedBy: person,
+      onBehalfOf: person,
+      specProposal: { select: { id: true, status: true } },
+    },
+  },
 } satisfies Prisma.DecisionRequestInclude;
 
 export type DecisionRequestWithRelations = Prisma.DecisionRequestGetPayload<{
@@ -50,6 +56,7 @@ export function toDecisionRequestView(r: DecisionRequestWithRelations): Decision
       rationale: r.decision.rationale,
       createdAt: r.decision.createdAt.toISOString(),
     },
+    specProposal: r.decision?.specProposal ?? null,
     submittedAt: r.submittedAt?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(),
   };

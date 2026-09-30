@@ -4,6 +4,7 @@ import { MastraModule } from './ai/mastra.module.ts';
 import { DecisionRequestsController } from './decision-requests/decision-requests.controller.ts';
 import { DecisionRequestsService } from './decision-requests/decision-requests.service.ts';
 import { DevUserGuard } from './dev-identity/dev-user.guard.ts';
+import { DevUsersController } from './dev-identity/dev-users.controller.ts';
 import { FeaturesController } from './features/features.controller.ts';
 import { HealthController } from './health/health.controller.ts';
 import { MeController } from './me/me.controller.ts';
@@ -16,6 +17,7 @@ import { SpecService } from './spec/spec.service.ts';
   controllers: [
     HealthController,
     MeController,
+    DevUsersController,
     FeaturesController,
     DecisionRequestsController,
     SpecController,

@@ -27,6 +27,13 @@ describe('DevUserGuard', () => {
     expect(res.json<{ ok: boolean }>()).toEqual({ ok: true });
   });
 
+  test('dev user list is public', async () => {
+    await db.user.create({ data: { email: 'pim@acme.test', name: 'Pim', passwordHash: 'x' } });
+    const res = await app.inject({ method: 'GET', url: '/dev/users' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ name: string }[]>().map((u) => u.name)).toEqual(['Pim']);
+  });
+
   test('rejects a request without the header', async () => {
     const res = await app.inject({ method: 'GET', url: '/me' });
     expect(res.statusCode).toBe(401);
