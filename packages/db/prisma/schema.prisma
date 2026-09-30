@@ -331,6 +331,7 @@ model Attachment {
   mimeType     String?
   snapshotText String?
   snapshotAt   DateTime?
+  summary      String? // AI summary of the Snapshot; null when none or the AI call failed
   addedById    String
   createdAt    DateTime         @default(now())
   feature      Feature          @relation(fields: [featureId], references: [id], onDelete: Cascade)

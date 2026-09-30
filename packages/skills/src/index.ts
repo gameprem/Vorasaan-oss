@@ -1,7 +1,12 @@
 // Prompt templates live as Markdown in ../prompts so non-developers can edit them.
 // Placeholders are written {{name}}; every placeholder must be supplied.
 
-export const SKILLS = ['generate-choices', 'draft-spec-proposal'] as const;
+export const SKILLS = [
+  'generate-choices',
+  'draft-spec-proposal',
+  'summarize-attachment',
+  'draft-spec-from-attachments',
+] as const;
 export type SkillName = (typeof SKILLS)[number];
 
 const promptsDir = new URL('../prompts/', import.meta.url);

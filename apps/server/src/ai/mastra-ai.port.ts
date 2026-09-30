@@ -2,20 +2,32 @@ import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import {
   type AiPort,
+  type AttachmentForAi,
+  AttachmentSummary,
   type DecisionForAi,
+  type FeatureForAi,
   GeneratedChoices,
   type RequestForAi,
   SpecProposalDraft,
 } from './ai.port.ts';
 import type { MastraModel } from './model-config.ts';
-import { draftSpecProposalPrompt, generateChoicesPrompt } from './prompts.ts';
+import {
+  draftSpecFromAttachmentsPrompt,
+  draftSpecProposalPrompt,
+  generateChoicesPrompt,
+  summarizeAttachmentPrompt,
+} from './prompts.ts';
 import { generateStructured, type StructuredGenerate } from './structured.ts';
 
 const INSTRUCTIONS =
   'You are Vorasaan, an assistant that helps software teams align on what to build. ' +
   'Follow the task instructions exactly and return only the requested structure.';
 
-export type AiTask = 'generateChoices' | 'draftSpecProposal';
+export type AiTask =
+  | 'generateChoices'
+  | 'draftSpecProposal'
+  | 'summarizeAttachment'
+  | 'draftSpecFromAttachments';
 
 /** Called on every request, so a provider saved in Settings applies immediately. */
 export type ModelResolver = (task: AiTask) => Promise<MastraModel>;
@@ -42,8 +54,16 @@ export function agentGenerate(task: string, model: MastraModel): StructuredGener
 export class MastraAiPort implements AiPort {
   constructor(private readonly resolveModel: ModelResolver) {}
 
-  async generateChoices(input: { specMarkdown: string; request: RequestForAi }) {
-    const prompt = await generateChoicesPrompt(input.specMarkdown, input.request);
+  async generateChoices(input: {
+    specMarkdown: string;
+    request: RequestForAi;
+    attachments: AttachmentForAi[];
+  }) {
+    const prompt = await generateChoicesPrompt(
+      input.specMarkdown,
+      input.request,
+      input.attachments,
+    );
     const generate = agentGenerate('generate-choices', await this.resolveModel('generateChoices'));
     return generateStructured(generate, 'generate-choices', prompt, GeneratedChoices);
   }
@@ -52,13 +72,45 @@ export class MastraAiPort implements AiPort {
     specMarkdown: string;
     request: RequestForAi;
     decision: DecisionForAi;
+    attachments: AttachmentForAi[];
   }) {
-    const prompt = await draftSpecProposalPrompt(input.specMarkdown, input.request, input.decision);
+    const prompt = await draftSpecProposalPrompt(
+      input.specMarkdown,
+      input.request,
+      input.decision,
+      input.attachments,
+    );
     const generate = agentGenerate(
       'draft-spec-proposal',
       await this.resolveModel('draftSpecProposal'),
     );
     return generateStructured(generate, 'draft-spec-proposal', prompt, SpecProposalDraft);
+  }
+
+  async summarizeAttachment(input: { attachment: AttachmentForAi }) {
+    const prompt = await summarizeAttachmentPrompt(input.attachment);
+    const generate = agentGenerate(
+      'summarize-attachment',
+      await this.resolveModel('summarizeAttachment'),
+    );
+    return generateStructured(generate, 'summarize-attachment', prompt, AttachmentSummary);
+  }
+
+  async draftSpecFromAttachments(input: {
+    feature: FeatureForAi;
+    specMarkdown: string;
+    attachments: AttachmentForAi[];
+  }) {
+    const prompt = await draftSpecFromAttachmentsPrompt(
+      input.feature,
+      input.specMarkdown,
+      input.attachments,
+    );
+    const generate = agentGenerate(
+      'draft-spec-from-attachments',
+      await this.resolveModel('draftSpecFromAttachments'),
+    );
+    return generateStructured(generate, 'draft-spec-from-attachments', prompt, SpecProposalDraft);
   }
 }
 

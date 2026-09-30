@@ -32,6 +32,11 @@ export class SpecController {
     return this.spec.reject(user, id);
   }
 
+  @Post('features/:id/spec-proposals/from-attachments')
+  proposeFromAttachments(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.spec.proposeFromAttachments(user, id);
+  }
+
   @Get('features/:id/spec-versions')
   versions(@Param('id', ParseUUIDPipe) id: string) {
     return this.spec.listVersions(id);

@@ -1,6 +1,8 @@
 import {
+  BadGatewayException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -13,10 +15,13 @@ import type {
   SpecProposalView,
   SpecVersionView,
 } from '@vorasaan/shared';
+import { AI_PORT, AiOutputError, type AiPort } from '../ai/ai.port.ts';
+import { ATTACHMENT_CONTEXT_BUDGET, attachmentsForAi } from '../attachments/attachment-context.ts';
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { diffLines } from './diff.ts';
+import { normalizeMarkdown } from './markdown.ts';
 import {
   type SpecProposalWithRelations,
   specProposalInclude,
@@ -37,7 +42,62 @@ export class SpecService {
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
     private readonly notifications: NotificationsService,
+    @Inject(AI_PORT) private readonly ai: AiPort,
   ) {}
+
+  /**
+   * Asks the AI to draft the Spec from the Feature's Attachments, as a PENDING
+   * Spec Proposal the requesting PO approves. The AI runs first, so a failed
+   * draft writes nothing.
+   */
+  async proposeFromAttachments(user: User, featureId: string): Promise<SpecProposalView> {
+    const feature = await this.db.feature.findUnique({
+      where: { id: featureId },
+      select: { title: true, description: true },
+    });
+    if (!feature) throw new NotFoundException('Feature not found');
+    await assertCanEditSpec(this.db, user, featureId);
+
+    const attachments = await attachmentsForAi(this.db, featureId, {
+      budgetChars: ATTACHMENT_CONTEXT_BUDGET.specFromAttachments,
+      preferSummary: false,
+    });
+    if (attachments.length === 0) {
+      throw new UnprocessableEntityException(
+        'This Feature has no Attachments with text to draft a Spec from',
+      );
+    }
+    const base = await this.db.specVersion.findFirst({
+      where: { featureId },
+      orderBy: { version: 'desc' },
+      select: { id: true, markdown: true },
+    });
+
+    let draft: Awaited<ReturnType<AiPort['draftSpecFromAttachments']>>;
+    try {
+      draft = await this.ai.draftSpecFromAttachments({
+        feature: { title: feature.title, description: feature.description ?? '' },
+        specMarkdown: base?.markdown ?? '',
+        attachments,
+      });
+    } catch (error) {
+      if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
+      throw error;
+    }
+
+    const proposal = await this.db.specProposal.create({
+      data: {
+        featureId,
+        baseVersionId: base?.id ?? null,
+        source: 'AI_SUMMARY',
+        proposedMarkdown: normalizeMarkdown(draft.proposedMarkdown),
+        approverId: user.id,
+      },
+      include: specProposalInclude,
+    });
+    await this.notifications.publish(this.notifications.outbox().inboxChanged(user.id));
+    return toSpecProposalView(proposal);
+  }
 
   async getProposal(id: string): Promise<SpecProposalView> {
     return toSpecProposalView(await this.findProposalOrThrow(id));

@@ -34,7 +34,7 @@ import { toMastraModel } from './model-config.ts';
           const configured = await settings.resolved();
           if (configured) return toMastraModel(configured);
           const env = loadAiConfig();
-          return task === 'generateChoices' ? env.generateChoicesModel : env.draftSpecProposalModel;
+          return env[`${task}Model`];
         });
       },
     },

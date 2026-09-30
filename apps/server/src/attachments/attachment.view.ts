@@ -20,6 +20,7 @@ export function toAttachmentView(a: AttachmentWithRelations): AttachmentView {
     hasFile: a.storageKey !== null,
     snapshotText: a.snapshotText,
     snapshotAt: a.snapshotAt?.toISOString() ?? null,
+    summary: a.summary,
     addedBy: a.addedBy,
     createdAt: a.createdAt.toISOString(),
   };

@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   PayloadTooLargeException,
   UnprocessableEntityException,
@@ -15,6 +16,7 @@ import {
   ATTACHMENT_FILE_TYPES,
   type AttachmentView,
 } from '@vorasaan/shared';
+import { AI_PORT, type AiPort } from '../ai/ai.port.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import {
   type FileStorage,
@@ -24,6 +26,7 @@ import {
 import { AtlassianError } from './atlassian.ts';
 import { attachmentLimits } from './attachment.config.ts';
 import { attachmentInclude, toAttachmentView } from './attachment.view.ts';
+import { ATTACHMENT_CONTEXT_BUDGET, clipForAi } from './attachment-context.ts';
 import { UrlFetchError } from './fetch-url.ts';
 import {
   matchesMimeType,
@@ -47,11 +50,13 @@ const TITLE_MAX = 200;
 @Injectable()
 export class AttachmentsService {
   private readonly snapshotters: Map<AttachmentSource, AttachmentSnapshotter>;
+  private readonly logger = new Logger(AttachmentsService.name);
 
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
     @InjectFileStorage() private readonly storage: FileStorage,
     @Inject(ATTACHMENT_SNAPSHOTTERS) snapshotters: AttachmentSnapshotter[],
+    @Inject(AI_PORT) private readonly ai: AiPort,
   ) {
     this.snapshotters = new Map(snapshotters.map((s) => [s.source, s]));
   }
@@ -89,6 +94,9 @@ export class AttachmentsService {
       snapshotText(bytes, mimeType, attachmentLimits().maxSnapshotChars),
     );
 
+    const attachmentTitle = clip(title ?? file.originalname);
+    const summary = await this.summarize(attachmentTitle, 'FILE', text);
+
     const id = randomUUID();
     const storageKey = `attachments/${featureId}/${id}`;
     await this.storage.put(storageKey, bytes, mimeType);
@@ -98,11 +106,12 @@ export class AttachmentsService {
           id,
           featureId,
           source: 'FILE',
-          title: clip(title ?? file.originalname),
+          title: attachmentTitle,
           storageKey,
           mimeType,
           snapshotText: text,
           snapshotAt: new Date(),
+          summary,
           addedById: user.id,
         },
         include: attachmentInclude,
@@ -132,15 +141,18 @@ export class AttachmentsService {
       mimeType: null,
     });
     const url = snapshot.url ?? ref;
+    const attachmentTitle = clip(input.title ?? snapshot.title ?? url);
+    const summary = await this.summarize(attachmentTitle, input.source, snapshot.text);
     const created = await this.db.attachment.create({
       data: {
         featureId,
         source: input.source,
-        title: clip(input.title ?? snapshot.title ?? url),
+        title: attachmentTitle,
         url,
         mimeType: snapshot.mimeType ?? null,
         snapshotText: snapshot.text,
         snapshotAt: new Date(),
+        summary,
         addedById: user.id,
       },
       include: attachmentInclude,
@@ -153,11 +165,14 @@ export class AttachmentsService {
     const attachment = await this.findOrThrow(id);
     await this.assertCanEdit(user, attachment.featureId);
     const snapshot = await this.capture(attachment.source, attachment);
+    // A summary of the old Snapshot would be stale: replace it, or clear it on failure.
+    const summary = await this.summarize(attachment.title, attachment.source, snapshot.text);
     const updated = await this.db.attachment.update({
       where: { id },
       data: {
         snapshotText: snapshot.text,
         snapshotAt: new Date(),
+        summary,
         ...(snapshot.mimeType ? { mimeType: snapshot.mimeType } : {}),
       },
       include: attachmentInclude,
@@ -194,6 +209,27 @@ export class AttachmentsService {
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────
+
+  /**
+   * The AI summary of a Snapshot, or null when there is no text or the AI call
+   * fails: a missing summary never stops an Attachment from being saved.
+   */
+  private async summarize(
+    title: string,
+    source: AttachmentSource,
+    text: string | null,
+  ): Promise<string | null> {
+    if (!text?.trim()) return null;
+    try {
+      const { summary } = await this.ai.summarizeAttachment({
+        attachment: { title, source, text: clipForAi(text, ATTACHMENT_CONTEXT_BUDGET.summary) },
+      });
+      return summary;
+    } catch (error) {
+      this.logger.warn(`Could not summarize Attachment "${title}": ${(error as Error).message}`);
+      return null;
+    }
+  }
 
   private async capture(source: AttachmentSource, target: SnapshotTarget): Promise<Snapshot> {
     const snapshotter = this.snapshotters.get(source);

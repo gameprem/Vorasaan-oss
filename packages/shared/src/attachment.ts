@@ -80,6 +80,8 @@ export const AttachmentView = z.object({
   /** The Snapshot: text the AI uses as context. Null when there is none (e.g. images). */
   snapshotText: z.string().nullable(),
   snapshotAt: Timestamp.nullable(),
+  /** The AI's short summary of the Snapshot. Null when there is none or the AI call failed. */
+  summary: z.string().nullable(),
   addedBy: PersonRef,
   createdAt: Timestamp,
 });
