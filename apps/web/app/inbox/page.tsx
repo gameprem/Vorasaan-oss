@@ -6,7 +6,12 @@ import { ApiError, api } from '@/lib/api';
 
 export const metadata = { title: 'Inbox' };
 
-export default async function InboxPage() {
+export default async function InboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ welcome?: string }>;
+}) {
+  const { welcome } = await searchParams;
   let requests: DecisionRequestView[];
   try {
     requests = await api<DecisionRequestView[]>('/decision-requests?decider=me&status=OPEN');
@@ -21,6 +26,11 @@ export default async function InboxPage() {
 
   return (
     <section className="max-w-3xl">
+      {welcome && (
+        <div className="mb-8">
+          <Notice>Vorasaan is ready. Next, create a Project and invite your team.</Notice>
+        </div>
+      )}
       <h1 className="text-2xl font-semibold tracking-tight">Waiting for your decision</h1>
       {requests.length === 0 ? (
         <p className="mt-6 text-ink-soft">

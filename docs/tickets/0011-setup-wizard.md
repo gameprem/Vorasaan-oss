@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0009, 0010]
 slice: install-and-onboarding
 ---
@@ -15,5 +15,5 @@ A fresh install opens `/setup`: create the Organization and the first Admin, pic
 - Web `/setup`: step 1 Organization & you, step 2 AI provider (Claude API / OpenAI API / Custom URL + token, model, **Test connection**), step 3 done. Every page redirects to `/setup` while setup is needed.
 
 ## Acceptance criteria
-- [ ] Setup can run exactly once (second call 409).
-- [ ] A failed provider test blocks nothing but shows the provider's error.
+- [x] Setup can run exactly once (second call 409).
+- [x] A failed provider test blocks nothing but shows the provider's error.

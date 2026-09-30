@@ -12,6 +12,7 @@ import { FeaturesController } from './features/features.controller.ts';
 import { HealthController } from './health/health.controller.ts';
 import { PrismaModule } from './prisma/prisma.module.ts';
 import { AiSettingsController } from './settings/ai-settings.controller.ts';
+import { SetupController } from './setup/setup.controller.ts';
 import { SpecController } from './spec/spec.controller.ts';
 import { SpecService } from './spec/spec.service.ts';
 
@@ -25,6 +26,7 @@ import { SpecService } from './spec/spec.service.ts';
     DecisionRequestsController,
     SpecController,
     AiSettingsController,
+    SetupController,
   ],
   providers: [
     // Order matters: identity first, then role checks.

@@ -1,10 +1,15 @@
+import type { SetupStatus } from '@vorasaan/shared';
 import { redirect } from 'next/navigation';
 import { LoginForm } from '@/components/login-form';
-import { currentUser } from '@/lib/api';
+import { api, currentUser } from '@/lib/api';
 
 export const metadata = { title: 'Sign in' };
 
 export default async function LoginPage() {
+  const { needsSetup } = await api<SetupStatus>('/setup/status', {
+    redirectOnUnauthorized: false,
+  });
+  if (needsSetup) redirect('/setup');
   if (await currentUser()) redirect('/inbox');
   return (
     <div className="mx-auto max-w-sm pt-8">
