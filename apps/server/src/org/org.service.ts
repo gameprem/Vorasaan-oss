@@ -31,6 +31,7 @@ import { AuthService, hashPassword } from '../auth/auth.service.ts';
 import { hashToken, newToken } from '../auth/tokens.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { IndexingService } from '../retrieval/indexing.service.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specVersionInclude, toSpecVersionView } from '../spec/spec.view.ts';
 import { assertCanEditSpec } from '../spec/spec-access.ts';
@@ -49,6 +50,7 @@ export class OrgService {
     @InjectPrisma() private readonly db: PrismaClient,
     private readonly auth: AuthService,
     private readonly notifications: NotificationsService,
+    private readonly indexing: IndexingService,
   ) {}
 
   // ─── Permissions ──────────────────────────────────────────────────────────
@@ -369,6 +371,7 @@ export class OrgService {
         return created;
       });
       await this.notifications.publish(outbox);
+      this.indexing.schedule({ source: 'SPEC_VERSION', id: version.id });
       return toSpecVersionView(version);
     } catch (error) {
       throw uniqueConflict(error, 'Someone saved the Spec at the same time. Reload and try again.');

@@ -5,7 +5,8 @@
 
 services:
   db:
-    image: postgres:17-alpine
+    # PostgreSQL 17 with the pgvector extension, for retrieval (ADR 0007).
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: vorasaan
       POSTGRES_PASSWORD: vorasaan

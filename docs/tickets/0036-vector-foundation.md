@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0023]
 slice: retrieval
 ---
@@ -34,7 +34,12 @@ All long content is chunked and embedded as it changes, so AI workflows can retr
 - **Search:** a single repository class with `search(scope, queryEmbedding, k)` in raw SQL, always filtered by organization and project. No cross-Project leaks.
 
 ## Acceptance criteria (test first, real Postgres with pgvector + `FakeEmbeddingPort`)
-- [ ] Attaching a Markdown file creates chunks with embeddings; refreshing it replaces them.
-- [ ] Search returns the relevant chunk first, and never returns chunks from another Project.
-- [ ] With no provider configured, actions still succeed and chunks have null embeddings.
-- [ ] CI runs against the pgvector image.
+- [x] Attaching a Markdown file creates chunks with embeddings; refreshing it replaces them.
+- [x] Search returns the relevant chunk first, and never returns chunks from another Project.
+- [x] With no provider configured, actions still succeed and chunks have null embeddings.
+- [x] CI runs against the pgvector image.
+
+## Notes (as built)
+- **Dimension and index:** `embedding` is an unconstrained `vector`, with `embeddingModel` and `embeddingDims` on each chunk. `ContentChunkRepository` creates one partial HNSW index per dimension the first time it stores vectors of that size: `USING hnsw ((embedding::vector(N)) vector_cosine_ops) WHERE "embeddingDims" = N`. Search casts and filters the same way (plus the model), so the planner uses it. Above 2,000 dimensions (HNSW's limit for `vector`) search is an exact scan. Prisma ignores these expression indexes, so `migrate dev` sees no drift.
+- **Chunker:** `retrieval/chunker.ts`, about 400 tokens per chunk (4 characters per token), 50 tokens of overlap, sections at headings outside code fences, the heading repeated on each piece of a long section.
+- **Indexing:** jobs run one at a time after the change commits and read the source as it is then. Only a Feature's latest Spec Version keeps chunks. A failed embedding call stores chunks without vectors; `POST /settings/embeddings/reindex` (`stale` by default, or `all`) fixes them, and is also how a new model takes effect.
