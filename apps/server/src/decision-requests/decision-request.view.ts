@@ -8,7 +8,10 @@ export const decisionRequestInclude = {
   feature: { select: { title: true, teamId: true } },
   raiser: person,
   decider: person,
-  recipients: { select: { user: person }, orderBy: { user: { name: 'asc' } } },
+  recipients: {
+    select: { user: person, onBehalfOfId: true },
+    orderBy: { user: { name: 'asc' } },
+  },
   choices: { orderBy: { position: 'asc' } },
   messages: { include: { author: person }, orderBy: { createdAt: 'asc' } },
   decision: {

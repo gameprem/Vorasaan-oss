@@ -19,6 +19,7 @@ import type {
   SubmitDecisionRequestInput,
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort, type DecisionForAi } from '../ai/ai.port.ts';
+import { activeDelegates } from '../delegations/active-delegations.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specProposalInclude, toSpecProposalView } from '../spec/spec.view.ts';
@@ -109,9 +110,10 @@ export class DecisionRequestsService {
       throw new UnprocessableEntityException('This Question was raised without Choices');
     }
 
-    const recipientIds = await this.chooseRecipients(request, input);
+    const submittedAt = new Date();
+    const recipients = await this.chooseRecipients(request, input, submittedAt);
     // Sent to one person → they decide. Sent to several → nobody until one Claims it.
-    const deciderId = recipientIds.length === 1 ? (recipientIds[0] ?? null) : null;
+    const deciderId = recipients.length === 1 ? (recipients[0]?.userId ?? null) : null;
 
     const updated = await this.db.$transaction(async (tx) => {
       if (input.choices) {
@@ -131,8 +133,8 @@ export class DecisionRequestsService {
           status,
           deciderRole: input.deciderRole,
           deciderId,
-          submittedAt: new Date(),
-          recipients: { create: recipientIds.map((userId) => ({ userId })) },
+          submittedAt,
+          recipients: { create: recipients },
         },
         include: decisionRequestInclude,
       });
@@ -272,6 +274,9 @@ export class DecisionRequestsService {
       throw new ForbiddenException('Only the Decider can decide this Decision Request');
     }
     const status = this.transition(request, 'decide');
+    // Acting as Delegate means the request reached the Decider in place of the delegator.
+    const onBehalfOfId =
+      request.recipients.find((r) => r.user.id === user.id)?.onBehalfOfId ?? null;
 
     let decision: DecisionForAi;
     if ('choiceId' in input) {
@@ -322,6 +327,7 @@ export class DecisionRequestsService {
         data: {
           requestId: id,
           decidedById: user.id,
+          onBehalfOfId,
           choiceId: 'choiceId' in input ? input.choiceId : null,
           customAnswer: 'customAnswer' in input ? input.customAnswer : null,
           rationale: input.rationale ?? null,
@@ -377,12 +383,16 @@ export class DecisionRequestsService {
 
   /**
    * Who the request goes to. The candidates are the Feature's Role Owners for the role or,
-   * when it has none, the Team members holding it; the Raiser is never one of them.
+   * when it has none, the Team members holding it; the Raiser is never one of them. Then a
+   * chosen person with an active Delegation for the role is replaced by their Delegate,
+   * who is recorded as receiving it on the delegator's behalf: one hop only, never the
+   * Raiser, and nobody twice (someone chosen in their own right keeps no delegator).
    */
   private async chooseRecipients(
     request: DecisionRequestWithRelations,
     input: SubmitDecisionRequestInput,
-  ): Promise<string[]> {
+    at: Date,
+  ): Promise<{ userId: string; onBehalfOfId: string | null }[]> {
     const role = input.deciderRole;
     const others = { not: request.raiserId };
     let candidates = (
@@ -406,13 +416,29 @@ export class DecisionRequestsService {
     }
 
     const recipients = input.recipients ?? 'ALL';
-    if (recipients === 'ALL') return candidates;
-    if (!candidates.includes(recipients.userId)) {
+    if (recipients !== 'ALL' && !candidates.includes(recipients.userId)) {
       throw new UnprocessableEntityException(
         `That person cannot receive this request as ${role}: send it to one of the Feature's ${role} Role Owners`,
       );
     }
-    return [recipients.userId];
+    const chosen = recipients === 'ALL' ? candidates : [recipients.userId];
+
+    const delegates = await activeDelegates(this.db, {
+      teamId: request.feature.teamId,
+      role,
+      delegatorIds: chosen,
+      at,
+    });
+    const onBehalfOf = new Map<string, string | null>();
+    for (const id of chosen) {
+      const delegateId = delegates.get(id);
+      if (delegateId && delegateId !== request.raiserId) {
+        if (!onBehalfOf.has(delegateId)) onBehalfOf.set(delegateId, id);
+      } else {
+        onBehalfOf.set(id, null);
+      }
+    }
+    return [...onBehalfOf].map(([userId, onBehalfOfId]) => ({ userId, onBehalfOfId }));
   }
 
   private async viewer(user: User): Promise<Viewer> {
