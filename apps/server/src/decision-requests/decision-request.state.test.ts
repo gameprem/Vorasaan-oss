@@ -19,6 +19,15 @@ describe('Decision Request state machine', () => {
     expect(nextStatus('NEEDS_INFO', 'provideInfo')).toBe('OPEN');
   });
 
+  test('Claim and reassign keep the request OPEN, and only from OPEN', () => {
+    expect(nextStatus('OPEN', 'claim')).toBe('OPEN');
+    expect(nextStatus('OPEN', 'reassign')).toBe('OPEN');
+    for (const from of DecisionRequestStatus.options.filter((s) => s !== 'OPEN')) {
+      expect(canTransition(from, 'claim')).toBe(false);
+      expect(canTransition(from, 'reassign')).toBe(false);
+    }
+  });
+
   test('withdraw is allowed only before a Decision', () => {
     for (const from of ['DRAFT', 'OPEN', 'NEEDS_INFO'] as const) {
       expect(nextStatus(from, 'withdraw')).toBe('WITHDRAWN');
@@ -31,6 +40,8 @@ describe('Decision Request state machine', () => {
   test('terminal states accept no events', () => {
     const events: DecisionRequestEvent[] = [
       'submit',
+      'claim',
+      'reassign',
       'withdraw',
       'askForInfo',
       'provideInfo',

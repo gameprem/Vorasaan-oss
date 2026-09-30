@@ -155,7 +155,7 @@ export async function runRaise(api: VorasaanApi, options: RaiseOptions): Promise
       ...(edited ? { choices } : {}),
     });
     p.outro(
-      `Sent to ${submitted.decider?.name ?? 'the Decider'} (${ROLE_LABEL[deciderRole]}). Request ${submitted.id}`,
+      `Sent to ${submitted.decider?.name ?? submitted.recipients.map((r) => r.name).join(', ')} (${ROLE_LABEL[deciderRole]}). Request ${submitted.id}`,
     );
   } catch (error) {
     // Never leave an orphaned DRAFT behind: withdraw it on cancel or a failed submit.
