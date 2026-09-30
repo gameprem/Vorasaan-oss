@@ -1,7 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient, User } from '@vorasaan/db';
 
-export type ProjectAccess = { organizationId: string; canEdit: boolean };
+export type ProjectAccess = { organizationId: string; canEdit: boolean; isAdmin: boolean };
 
 /**
  * Who may do what with a Project's Brief and Project Attachments: everyone in
@@ -25,11 +25,11 @@ export async function projectAccess(
     select: { role: true },
   });
   if (!membership) throw new ForbiddenException('You are not in this Organization');
-  if (membership.role === 'ADMIN') return { organizationId, canEdit: true };
+  if (membership.role === 'ADMIN') return { organizationId, canEdit: true, isAdmin: true };
   const po = await db.teamMembership.count({
     where: { userId: user.id, role: 'PO', team: { projectId } },
   });
-  return { organizationId, canEdit: po > 0 };
+  return { organizationId, canEdit: po > 0, isAdmin: false };
 }
 
 export async function assertCanEditProject(

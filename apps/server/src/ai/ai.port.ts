@@ -3,9 +3,13 @@ import {
   ChoiceDraft,
   ChoiceDrafts,
   DecisionRequestKind,
+  type GrillingRoundKind,
+  GuidelineCriterionKind,
+  MAX_GRILLING_QUESTIONS,
   TeamRole,
 } from '@vorasaan/shared';
 import { z } from 'zod';
+import type { WorkflowMemory } from './workflow-memory.ts';
 
 // The only way server code talks to an LLM. Production uses MastraAiPort;
 // tests use FakeAiPort, so no test ever hits the network.
@@ -47,7 +51,14 @@ export type AttachmentForAi = {
 
 /** Where a block of AI context comes from, so outputs can cite it by `id`. */
 export type ContextSource = {
-  kind: 'SPEC_VERSION' | 'DECISION_REQUEST' | 'DECISION' | 'ATTACHMENT' | 'BRIEF_VERSION';
+  kind:
+    | 'SPEC_VERSION'
+    | 'DECISION_REQUEST'
+    | 'DECISION'
+    | 'ATTACHMENT'
+    | 'BRIEF_VERSION'
+    /** A Feature's title, status and description, for a Feature with no Spec yet. */
+    | 'FEATURE';
   id: string;
   title: string;
   /** The Spec or Brief Version number, for Spec and Project Brief blocks. */
@@ -73,6 +84,31 @@ export const AttachmentSummary = z.object({
 });
 export type AttachmentSummary = z.infer<typeof AttachmentSummary>;
 
+/** One effective Feature Guidelines criterion (0031). Its text is untrusted. */
+export type GuidelineForAi = {
+  title: string;
+  description: string;
+  kind: GuidelineCriterionKind;
+  required: boolean;
+};
+
+/** One answered Grilling question. `answer` is a person's own words: untrusted. */
+export type GrillingAnswerForAi = { round: GrillingRoundKind; question: string; answer: string };
+
+export type ProjectForAi = { name: string };
+
+/** 0 to 7 questions: fewer when what is known already answers the round. */
+export const GrillingQuestionDrafts = z.object({
+  questions: z.array(z.string().trim().min(1).max(2_000)).max(MAX_GRILLING_QUESTIONS),
+});
+export type GrillingQuestionDrafts = z.infer<typeof GrillingQuestionDrafts>;
+
+export const BriefDraft = z.object({
+  proposedMarkdown: z.string().trim().min(1),
+  summary: z.string().trim().min(1),
+});
+export type BriefDraft = z.infer<typeof BriefDraft>;
+
 export interface AiPort {
   generateChoices(input: {
     specMarkdown: string;
@@ -96,6 +132,33 @@ export interface AiPort {
     specMarkdown: string;
     context: ContextBlock[];
   }): Promise<SpecProposalDraft>;
+
+  /**
+   * The questions of one Grilling round (ticket 0032), only about what the
+   * Project context and the earlier rounds leave unanswered.
+   */
+  grillingQuestions(input: {
+    project: ProjectForAi;
+    round: GrillingRoundKind;
+    role: TeamRole;
+    /** Retrieved Project context, the current Brief first (ContextRetriever.forProject). */
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+    /** Summaries of the rounds already done. */
+    memory: WorkflowMemory;
+  }): Promise<GrillingQuestionDrafts>;
+
+  /** The complete next Project Brief, from every Grilling answer and the Project context. */
+  draftBriefFromGrilling(input: {
+    project: ProjectForAi;
+    /** The whole current Brief (the template before v1): the base the draft edits. */
+    briefMarkdown: string;
+    /** Retrieved Project context, without the Brief. */
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+    memory: WorkflowMemory;
+    answers: GrillingAnswerForAi[];
+  }): Promise<BriefDraft>;
 }
 
 export class AiOutputError extends Error {

@@ -14,6 +14,10 @@ const pairs = [
   ['GuidelineCriterionKind', shared.GuidelineCriterionKind, db.GuidelineCriterionKind],
   ['AttachmentSource', shared.AttachmentSource, db.AttachmentSource],
   ['NotificationType', shared.NotificationType, db.NotificationType],
+  ['GrillingStatus', shared.GrillingStatus, db.GrillingStatus],
+  ['GrillingRoundKind', shared.GrillingRoundKind, db.GrillingRoundKind],
+  ['GrillingRoundStatus', shared.GrillingRoundStatus, db.GrillingRoundStatus],
+  ['GrillingSkipReason', shared.GrillingSkipReason, db.GrillingSkipReason],
 ] as const;
 
 describe('shared enums mirror Prisma', () => {

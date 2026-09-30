@@ -56,3 +56,15 @@ export const NotificationType = z.enum([
   'DELEGATION_STARTED',
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
+
+export const GrillingStatus = z.enum(['RUNNING', 'DRAFTED', 'CANCELLED']);
+export type GrillingStatus = z.infer<typeof GrillingStatus>;
+
+export const GrillingRoundKind = z.enum(['BUSINESS', 'UX', 'TECHNICAL']);
+export type GrillingRoundKind = z.infer<typeof GrillingRoundKind>;
+
+export const GrillingRoundStatus = z.enum(['ASKING', 'ANSWERED', 'SKIPPED']);
+export type GrillingRoundStatus = z.infer<typeof GrillingRoundStatus>;
+
+export const GrillingSkipReason = z.enum(['NO_ONE_WITH_ROLE', 'NOTHING_TO_ASK', 'BY_STARTER']);
+export type GrillingSkipReason = z.infer<typeof GrillingSkipReason>;

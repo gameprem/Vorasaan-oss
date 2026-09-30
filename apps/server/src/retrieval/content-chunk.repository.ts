@@ -14,6 +14,8 @@ export type ChunkScope = { organizationId: string; projectId: string; featureId:
  * - `outsideFeatureId`: the rest of the Project as seen from that Feature: other
  *   Features' Specs and Decisions, and Project-level chunks (no Feature). Other
  *   Features' Attachments belong to them, so they are left out.
+ * - `projectLevel`: only Project-level chunks (no Feature): the Brief and
+ *   Project Attachments.
  * - `sources`: only chunks cut from these kinds of source.
  */
 export type SearchScope = {
@@ -21,6 +23,7 @@ export type SearchScope = {
   projectId: string;
   featureId?: string;
   outsideFeatureId?: string;
+  projectLevel?: boolean;
   sources?: ChunkSource[];
 };
 
@@ -317,6 +320,7 @@ function scopeCondition(scope: SearchScope): Prisma.Sql {
       Prisma.sql`("source" <> 'ATTACHMENT' OR "featureId" IS NULL)`,
     );
   }
+  if (scope.projectLevel) conditions.push(Prisma.sql`"featureId" IS NULL`);
   if (scope.sources) {
     if (!scope.sources.length) return Prisma.sql`false`;
     conditions.push(

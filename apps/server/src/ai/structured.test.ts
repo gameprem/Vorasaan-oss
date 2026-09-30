@@ -3,7 +3,9 @@ import { loadAiConfig } from './ai.config.ts';
 import {
   AiOutputError,
   AttachmentSummary,
+  BriefDraft,
   GeneratedChoices,
+  GrillingQuestionDrafts,
   SpecProposalDraft,
 } from './ai.port.ts';
 import { FakeAiPort } from './fake-ai.port.ts';
@@ -69,6 +71,8 @@ describe('loadAiConfig', () => {
       draftSpecProposalModel: 'anthropic/claude-opus-5-5',
       summarizeAttachmentModel: 'anthropic/claude-opus-5-5',
       draftSpecFromAttachmentsModel: 'anthropic/claude-opus-5-5',
+      grillingQuestionsModel: 'anthropic/claude-opus-5-5',
+      draftBriefFromGrillingModel: 'anthropic/claude-opus-5-5',
     });
   });
 
@@ -84,6 +88,8 @@ describe('loadAiConfig', () => {
       draftSpecProposalModel: 'openai/some-model',
       summarizeAttachmentModel: 'anthropic/claude-haiku-4-5',
       draftSpecFromAttachmentsModel: 'openai/some-model',
+      grillingQuestionsModel: 'openai/some-model',
+      draftBriefFromGrillingModel: 'openai/some-model',
     });
   });
 });
@@ -113,5 +119,27 @@ describe('FakeAiPort', () => {
       ],
     });
     expect(SpecProposalDraft.safeParse(draft).success).toBe(true);
+
+    for (const round of ['BUSINESS', 'UX', 'TECHNICAL'] as const) {
+      const questions = await ai.grillingQuestions({
+        project: { name: 'Mobile Banking' },
+        round,
+        role: 'PO',
+        projectContext: [],
+        guidelines: [],
+        memory: { rounds: [] },
+      });
+      expect(GrillingQuestionDrafts.safeParse(questions).success).toBe(true);
+      expect(questions.questions.length).toBeGreaterThanOrEqual(3);
+    }
+    const brief = await ai.draftBriefFromGrilling({
+      project: { name: 'Mobile Banking' },
+      briefMarkdown: '',
+      projectContext: [],
+      guidelines: [],
+      memory: { rounds: [] },
+      answers: [{ round: 'BUSINESS', question: 'Goals?', answer: 'Grow payments.' }],
+    });
+    expect(BriefDraft.safeParse(brief).success).toBe(true);
   });
 });

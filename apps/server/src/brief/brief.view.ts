@@ -46,6 +46,7 @@ export function toBriefProposalView(p: BriefProposalWithRelations): BriefProposa
     baseVersion: p.baseVersion?.version ?? null,
     baseMarkdown: p.baseVersion?.markdown ?? '',
     proposedMarkdown: p.proposedMarkdown,
+    summary: p.summary,
     resultVersion: p.resultVersion?.version ?? null,
     createdAt: p.createdAt.toISOString(),
   };

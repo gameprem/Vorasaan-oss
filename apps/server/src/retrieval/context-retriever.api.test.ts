@@ -318,4 +318,68 @@ describe('ContextRetriever (real Postgres with pgvector)', () => {
   test('an unknown Feature gets no context', async () => {
     expect(await retriever.forFeature(crypto.randomUUID(), QUERY, 1_000)).toEqual([]);
   });
+
+  describe('forProject (Grilling)', () => {
+    async function projectMaterial() {
+      await buildProject();
+      const brief = await db.briefVersion.create({
+        data: {
+          projectId: SEED.projectId,
+          version: 1,
+          markdown: '# Project Brief\n\n## Business goals\nGrow mobile payments.\n',
+          source: 'MANUAL',
+          approvedById: pim.id,
+        },
+      });
+      const repoScan = await db.attachment.create({
+        data: {
+          projectId: SEED.projectId,
+          source: 'REPO_SCAN',
+          title: 'Repo Scan: mobile-bank',
+          snapshotText: `# mobile-bank\n\nModules: payments, cards. ${NEEDLE_PARAGRAPH}`,
+          snapshotAt: new Date(),
+          addedById: pim.id,
+        },
+      });
+      await indexing.index({ source: 'BRIEF_VERSION', id: brief.id });
+      await indexing.index({ source: 'ATTACHMENT', id: repoScan.id });
+      return { briefId: brief.id, repoScanId: repoScan.id };
+    }
+
+    test('the Brief first, then the Features and Project Attachments; never a Feature Attachment or another Project', async () => {
+      await configureEmbeddings();
+      const { briefId, repoScanId } = await projectMaterial();
+      for (const budget of [150, 1_000, CONTEXT_BUDGET.grilling, 60_000]) {
+        const blocks = await retriever.forProject(SEED.projectId, QUERY, budget);
+        expect(total(blocks)).toBeLessThanOrEqual(budget);
+        expect(blocks[0]?.source).toEqual({
+          kind: 'BRIEF_VERSION',
+          id: briefId,
+          title: 'Project Brief',
+          version: 1,
+        });
+        // The Brief is whole, so its chunks never repeat it.
+        expect(blocks.filter((b) => b.source.id === briefId)).toHaveLength(1);
+        expect(blocks.every((b) => b.scope === 'PROJECT')).toBe(true);
+        expectNoLeak(blocks);
+        // The Feature's own Attachments belong to it, not to the Project.
+        expect(blocks.some((b) => b.source.id === fixture.handbookId)).toBe(false);
+      }
+      const blocks = await retriever.forProject(SEED.projectId, QUERY, CONTEXT_BUDGET.grilling);
+      const titles = blocks.map((b) => b.source.title);
+      expect(titles).toContain('Spec: Async checkout');
+      for (const other of OTHER_FEATURES) expect(titles).toContain(`Spec: ${other.title}`);
+      const scan = blocks.findIndex((b) => b.source.id === repoScanId);
+      expect(scan).toBeGreaterThan(0);
+      expect(blocks[scan]?.text).toContain(NEEDLE_PARAGRAPH.slice(0, 40));
+
+      // With a tiny budget, the Brief is all there is room for.
+      const tiny = await retriever.forProject(SEED.projectId, QUERY, 80);
+      expect(tiny.map((b) => b.source.id)).toEqual([briefId]);
+    });
+
+    test('an unknown Project gets no context', async () => {
+      expect(await retriever.forProject(crypto.randomUUID(), QUERY, 1_000)).toEqual([]);
+    });
+  });
 });
