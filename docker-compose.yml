@@ -1,6 +1,7 @@
-# Local development:   docker compose up            -> Postgres only
-# With 9Router:        docker compose --profile router up
-# Full stack:          docker compose --profile app up   (needs docker/Dockerfile.* — not written yet)
+# Run everything:      docker compose up -d          then open http://localhost:3000
+# Local development:   docker compose up -d db       (Postgres only; run the apps with bun)
+# With 9Router:        docker compose --profile router up -d
+#                      then in Vorasaan choose "Custom URL" with http://ninerouter:20128/v1
 
 services:
   db:
@@ -10,7 +11,7 @@ services:
       POSTGRES_PASSWORD: vorasaan
       POSTGRES_DB: vorasaan
     ports:
-      - "5432:5432"
+      - "${VORASAAN_DB_PORT:-5432}:5432"
     volumes:
       - vorasaan_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,8 +19,43 @@ services:
       interval: 5s
       retries: 10
 
+  server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
+    environment:
+      DATABASE_URL: postgresql://vorasaan:vorasaan@db:5432/vorasaan
+      # Required: the server refuses to start without it. Generate: openssl rand -base64 32
+      VORASAAN_SECRET_KEY: ${VORASAAN_SECRET_KEY:-}
+      FILE_STORAGE_DRIVER: ${FILE_STORAGE_DRIVER:-local}
+      FILE_STORAGE_LOCAL_DIR: /data/files
+    ports:
+      - "${VORASAAN_API_PORT:-4000}:4000"
+    volumes:
+      - vorasaan_files:/data/files
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      retries: 20
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    environment:
+      VORASAAN_API_URL: http://server:4000
+      # Set to true only when serving over plain HTTP on a non-localhost address.
+      VORASAAN_INSECURE_COOKIES: ${VORASAAN_INSECURE_COOKIES:-false}
+    ports:
+      - "${VORASAAN_WEB_PORT:-3000}:3000"
+    depends_on:
+      server:
+        condition: service_healthy
+
   # Optional OpenAI-compatible LLM router (https://github.com/decolua/9router).
-  # Point an OPENAI_COMPATIBLE integration at http://ninerouter:20128/v1 in /setup.
   ninerouter:
     image: decolua/9router:latest
     profiles: ["router"]
@@ -27,35 +63,6 @@ services:
       - "20128:20128"
     volumes:
       - vorasaan_9router:/app/data
-
-  server:
-    profiles: ["app"]
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.server
-    ports:
-      - "4000:4000"
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://vorasaan:vorasaan@db:5432/vorasaan
-      FILE_STORAGE_LOCAL_DIR: /data/files
-    volumes:
-      - vorasaan_files:/data/files
-    depends_on:
-      db:
-        condition: service_healthy
-
-  web:
-    profiles: ["app"]
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.web
-    ports:
-      - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000
-    depends_on:
-      - server
 
 volumes:
   vorasaan_pgdata:

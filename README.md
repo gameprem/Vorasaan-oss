@@ -18,7 +18,7 @@
 ---
 
 > [!WARNING]
-> **Vorasaan is in early development.** The design is settled and the foundation is in place, but the product is not usable yet. Star and watch the repo to follow along, or jump in and help build it.
+> **Vorasaan is in early development.** You can install it and run the core loop end to end, but many MVP features are still missing. Star and watch the repo to follow along, or jump in and help build it.
 
 ## 🤔 Why Vorasaan?
 
@@ -59,49 +59,68 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 | | |
 | --- | --- |
 | 🎯 **Choice Engine** | Blockers and questions become 2–4 concrete options with impact on scope, time and risk. No more open-ended threads. |
-| 🧭 **Smart routing** | Business questions go to the PO, technical ones to the Tech Lead, UX to the Designer. Supports delegation while people are on leave. |
-| 📜 **Versioned Specs** | Markdown Specs with Confluence-style version history, diffs, and one-click revert. |
+| 🧭 **Smart routing** | Business questions go to the PO, technical ones to the Tech Lead, UX to the Designer. Delegation while people are on leave is *(planned)*. |
+| 📜 **Versioned Specs** | Markdown Specs with Confluence-style version history and AI-drafted diffs you approve. Revert is *(planned)*. |
 | 🗂️ **Decision Log** | Every decision is traceable: who decided, what the alternatives were, and which Spec version it produced. |
-| 📎 **One place for context** | Attach Confluence pages, Jira epics, files and URLs. Vorasaan snapshots them so the AI reasons over real context. |
-| 💻 **Terminal-native** | `vorasaan` is a live TUI inbox for developers, with OS notifications. Raise and answer without leaving your editor. |
+| 📎 **One place for context** | Attach Confluence pages, Jira epics, files and URLs so the AI reasons over real context *(planned)*. |
+| 💻 **Terminal-native** | Raise from the `vorasaan` CLI with AI-drafted Choices you review first. A live TUI inbox with OS notifications is *(planned)*. |
 | 🤝 **Agent handoff** | `vorasaan run --ai claude` hands your coding agent the approved Spec, not a guess *(planned)*. |
-| 🏠 **Self-hosted** | Your data stays on your infrastructure. Bring your own LLM key (Anthropic by default, or any OpenAI-compatible endpoint). |
+| 🏠 **Self-hosted** | One `docker compose up`. Your data stays on your infrastructure. Bring your own model: Claude API, OpenAI API, or any OpenAI-compatible URL + token. |
 
 ## 🚀 Getting started
 
-> Self-hosting with a single `docker compose up` is coming with the first release. For now, you can run the development environment and try the full loop locally.
+### Install with Docker
 
-### Prerequisites
-
-- [Bun](https://bun.sh) ≥ 1.4
-- [Docker](https://www.docker.com/) (for PostgreSQL)
-
-### Development setup
+You need [Docker](https://www.docker.com/) and an LLM provider: a **Claude API** key, an **OpenAI API** key, or any **OpenAI-compatible URL + token** (for example [9Router](https://github.com/decolua/9router)).
 
 ```bash
 git clone https://github.com/gameprem/Vorasaan.git
 cd Vorasaan
-
-cp .env.example .env          # then fill in the values
-docker compose up -d db       # PostgreSQL 17
-bun install
-bun run db:generate           # generate the Prisma client
-bun run db:migrate            # apply database migrations
+echo "VORASAAN_SECRET_KEY=$(openssl rand -base64 32)" > .env
+docker compose up -d
 ```
 
-### Try the loop (no API key needed)
+Open **http://localhost:3000**. The setup wizard walks you through:
+
+1. **Your organization**: its name, and your account as the first Admin.
+2. **AI provider**: Claude API, OpenAI API, or Custom URL + token. **Test connection** checks it before you continue.
+
+Then create a **Project** and a **Team**, **invite your team** with a link, create a **Feature**, choose its **Role Owners**, and write **Spec v1**.
+
+> [!TIP]
+> Running 9Router too? Start it with `docker compose --profile router up -d` and choose **Custom URL** with `http://ninerouter:20128/v1`.
+
+| Setting (`.env`) | Default | What it does |
+| --- | --- | --- |
+| `VORASAAN_SECRET_KEY` | *(required)* | Encrypts provider keys at rest |
+| `VORASAAN_WEB_PORT` / `VORASAAN_API_PORT` | `3000` / `4000` | Host ports |
+| `VORASAAN_INSECURE_COOKIES` | `false` | Set `true` only when serving over plain HTTP on a non-localhost address |
+
+### Raise from your terminal
+
+In the web app, open **Access tokens** and create a token. Then:
 
 ```bash
-bun run db:seed                                            # Pim (PO), Beam (Backend), Feature "Async checkout"
-VORASAAN_AI=fake bun run --filter @vorasaan/server dev     # API on :4000 (drop VORASAAN_AI to use Claude)
-bun run --filter @vorasaan/web dev                         # web on :3000
-
-# as Beam, raise a Blocker from the terminal
-export VORASAAN_USER=00000000-0000-4000-8000-000000000102
-bun apps/cli/src/index.ts raise
+bun apps/cli/src/index.ts login --url http://localhost:4000   # paste the token
+bun apps/cli/src/index.ts raise                               # pick a Feature, describe the blocker
 ```
 
-Then open http://localhost:3000, switch to **Pim**, decide, and approve the Spec change.
+A single-file binary is built with `bun run --filter @vorasaan/cli build` (`apps/cli/dist/vorasaan`).
+
+### Development
+
+Requires [Bun](https://bun.sh) ≥ 1.4 and Docker.
+
+```bash
+cp .env.example .env          # set VORASAAN_SECRET_KEY
+docker compose up -d db       # PostgreSQL only
+bun install
+bun run db:generate && bun run db:migrate
+bun run db:seed               # demo data: pim@acme.test / beam@acme.test, password vorasaan-demo
+
+VORASAAN_AI=fake bun run --filter @vorasaan/server dev   # API on :4000; drop VORASAAN_AI to use your provider
+bun run --filter @vorasaan/web dev                       # web on :3000
+```
 
 ### Useful commands
 
@@ -111,16 +130,15 @@ Then open http://localhost:3000, switch to **Pim**, decide, and approve the Spec
 | `bun run typecheck` | Type-check every workspace |
 | `bun run test` | Run the test suites |
 | `bun run check` | Lint, type-check and test in one go (run before committing) |
-| `docker compose --profile router up` | Also start [9Router](https://github.com/decolua/9router), an optional LLM router |
 
 ## 🏗️ Architecture
 
 ```
 vorasaan/
 ├── apps/
-│   ├── web/        Next.js 16 · Tailwind · shadcn/ui · BlockNote
+│   ├── web/        Next.js 16 · Tailwind
 │   ├── server/     NestJS 12 (Fastify) · Mastra agent workflows
-│   └── cli/        Commander · Ink TUI · single binary via bun build --compile
+│   └── cli/        Commander · single binary via bun build --compile
 ├── packages/
 │   ├── db/         Prisma 7 schema, migrations and client
 │   ├── shared/     Zod schemas: the single API contract
@@ -145,7 +163,8 @@ The domain language (Feature, Spec, Decision Request, Decider, and so on) is def
 - [x] Product design, domain model and glossary
 - [x] Monorepo foundation and database schema
 - [x] **Tracer bullet:** raise → AI Choices → decide → approved Spec version
-- [ ] **MVP:** onboarding, attachments, routing, delegation, inbox, TUI
+- [x] **Install & onboarding:** Docker install, setup wizard, provider choice, sign-in, invites, Projects/Teams/Features, CLI login
+- [ ] **MVP:** attachments, recipient choice + Claim, delegation, notifications, TUI
 - [ ] `vorasaan run --ai claude`: hand the approved Spec to your coding agent
 - [ ] **Grilling workflow:** structured PO → Designer → Dev questioning that produces the first Spec
 - [ ] **Design flow revisions** with cascade impact analysis

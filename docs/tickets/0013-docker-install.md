@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0011]
 slice: install-and-onboarding
 ---
@@ -7,7 +7,7 @@ slice: install-and-onboarding
 # 0013: One-command install with Docker
 
 ## Goal
-`docker compose --profile app up` runs the whole product.
+`docker compose up -d` runs the whole product.
 
 ## Scope
 - `docker/Dockerfile.server` and `docker/Dockerfile.web` on `oven/bun`.
@@ -16,4 +16,4 @@ slice: install-and-onboarding
 - README "Install" section.
 
 ## Acceptance criteria
-- [ ] Clean machine: copy `.env.example`, set the secret, `docker compose --profile app up`, open `/setup`.
+- [x] Clean machine: copy `.env.example`, set the secret, `docker compose up -d`, open `/setup`.
