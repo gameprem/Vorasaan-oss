@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+/*
+  Vorasaan: ink on cool paper. Jade is reserved for "decided / approved",
+  seal red for Blockers and removed lines. Everything else stays quiet.
+*/
+@theme {
+  --color-paper: #f3f5f8;
+  --color-sheet: #ffffff;
+  --color-ink: #1b2340;
+  --color-ink-soft: #4a5374;
+  --color-rule: #d6dbe4;
+  --color-jade: #0f7a5c;
+  --color-jade-wash: #e3f2ec;
+  --color-seal: #b42318;
+  --color-seal-wash: #fbe9e7;
+  --color-focus: #3b5bdb;
+
+  --font-sans: var(--font-plex-thai), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-paper: #11162a;
+    --color-sheet: #182039;
+    --color-ink: #e6e9f2;
+    --color-ink-soft: #a3abc6;
+    --color-rule: #2c3656;
+    --color-jade: #3fbf93;
+    --color-jade-wash: #123a30;
+    --color-seal: #f0786a;
+    --color-seal-wash: #3b1d1d;
+    --color-focus: #8aa2ff;
+  }
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+body {
+  background: var(--color-paper);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must override component styles */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must override component styles */
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* The one orchestrated moment: the decision stamp settling in. */
+@keyframes stamp {
+  from {
+    transform: scale(1.15) rotate(-4deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(-2deg);
+    opacity: 1;
+  }
+}
+.stamp {
+  animation: stamp 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+/* Rendered Spec Markdown */
+.spec {
+  max-width: 72ch;
+}
+.spec h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0 0 1rem;
+}
+.spec h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 2rem 0 0.5rem;
+}
+.spec p,
+.spec ul,
+.spec ol {
+  margin: 0 0 0.9rem;
+}
+.spec ul,
+.spec ol {
+  padding-left: 1.4rem;
+}
+.spec ul {
+  list-style: disc;
+}
+.spec ol {
+  list-style: decimal;
+}
+.spec li {
+  margin: 0.2rem 0;
+}
+.spec li:has(> input[type="checkbox"]) {
+  list-style: none;
+  margin-left: -1.4rem;
+}
+.spec input[type="checkbox"] {
+  margin-right: 0.5rem;
+  accent-color: var(--color-jade);
+}
+.spec code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}

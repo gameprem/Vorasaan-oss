@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DecisionRequestKind, DecisionRequestStatus, TeamRole } from './enums.ts';
+import { DecisionRequestKind, DecisionRequestStatus, ProposalStatus, TeamRole } from './enums.ts';
 
 const Id = z.uuid();
 const Timestamp = z.iso.datetime();
@@ -91,6 +91,8 @@ export const DecisionRequestView = z.object({
   decider: PersonRef.nullable(),
   choices: z.array(ChoiceView),
   decision: DecisionView.nullable(),
+  /** The Spec Proposal drafted from the Decision, if any. */
+  specProposal: z.object({ id: Id, status: ProposalStatus }).nullable(),
   submittedAt: Timestamp.nullable(),
   createdAt: Timestamp,
 });

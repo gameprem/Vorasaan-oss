@@ -58,6 +58,12 @@ describe('Decision Requests API: raise and submit', () => {
     ]);
   });
 
+  test('GET /features/:id returns one Feature; unknown is 404', async () => {
+    const res = await asPim<FeatureSummaryView>('GET', `/features/${SEED.featureId}`);
+    expect(res.body).toMatchObject({ title: 'Async checkout', myRoles: ['PO'] });
+    expect((await asPim('GET', `/features/${crypto.randomUUID()}`)).status).toBe(404);
+  });
+
   test('raise → DRAFT with AI Choices and a suggested role', async () => {
     const res = await raise();
     expect(res.status).toBe(201);

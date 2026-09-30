@@ -69,7 +69,7 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 
 ## 🚀 Getting started
 
-> Self-hosting with a single `docker compose up` is coming with the first release. For now, you can run the development environment.
+> Self-hosting with a single `docker compose up` is coming with the first release. For now, you can run the development environment and try the full loop locally.
 
 ### Prerequisites
 
@@ -89,6 +89,20 @@ bun run db:generate           # generate the Prisma client
 bun run db:migrate            # apply database migrations
 ```
 
+### Try the loop (no API key needed)
+
+```bash
+bun run db:seed                                            # Pim (PO), Beam (Backend), Feature "Async checkout"
+VORASAAN_AI=fake bun run --filter @vorasaan/server dev     # API on :4000 (drop VORASAAN_AI to use Claude)
+bun run --filter @vorasaan/web dev                         # web on :3000
+
+# as Beam, raise a Blocker from the terminal
+export VORASAAN_USER=00000000-0000-4000-8000-000000000102
+bun apps/cli/src/index.ts raise
+```
+
+Then open http://localhost:3000, switch to **Pim**, decide, and approve the Spec change.
+
 ### Useful commands
 
 | Command | What it does |
@@ -96,6 +110,7 @@ bun run db:migrate            # apply database migrations
 | `bun run lint` | Lint and format-check with Biome (`bun run format` to fix) |
 | `bun run typecheck` | Type-check every workspace |
 | `bun run test` | Run the test suites |
+| `bun run check` | Lint, type-check and test in one go (run before committing) |
 | `docker compose --profile router up` | Also start [9Router](https://github.com/decolua/9router), an optional LLM router |
 
 ## 🏗️ Architecture
@@ -129,7 +144,7 @@ The domain language (Feature, Spec, Decision Request, Decider, and so on) is def
 
 - [x] Product design, domain model and glossary
 - [x] Monorepo foundation and database schema
-- [ ] **Tracer bullet:** raise → AI Choices → decide → approved Spec version
+- [x] **Tracer bullet:** raise → AI Choices → decide → approved Spec version
 - [ ] **MVP:** onboarding, attachments, routing, delegation, inbox, TUI
 - [ ] `vorasaan run --ai claude`: hand the approved Spec to your coding agent
 - [ ] **Grilling workflow:** structured PO → Designer → Dev questioning that produces the first Spec

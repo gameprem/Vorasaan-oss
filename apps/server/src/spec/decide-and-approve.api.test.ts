@@ -92,6 +92,7 @@ describe('Decide, Spec Proposal, approve', () => {
 
     const after = await asPim<DecisionRequestView>('GET', `/decision-requests/${request.id}`);
     expect(after.body.status).toBe('SPEC_UPDATED');
+    expect(after.body.specProposal).toEqual({ id: decided.body.proposal.id, status: 'APPROVED' });
 
     const versions = await asBeam<SpecVersionView[]>(
       'GET',
