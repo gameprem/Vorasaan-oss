@@ -10,7 +10,7 @@ import { notFound, unstable_rethrow } from 'next/navigation';
 import { KindBadge, Notice, relativeTime } from '@/components/bits';
 import { RoleOwnersEditor } from '@/components/role-owners-editor';
 import { SpecPanel } from '@/components/spec-panel';
-import { ROLE_LABEL } from '@/components/ui';
+import { ROLE_LABEL, secondaryButton } from '@/components/ui';
 import { ApiError, api, currentUser } from '@/lib/api';
 
 export const metadata = { title: 'Feature' };
@@ -80,7 +80,14 @@ export default async function FeaturePage({
           {feature.teamName} team
         </Link>
       </p>
-      <h1 className="mt-1 mb-6 text-3xl font-semibold tracking-tight">{feature.title}</h1>
+      <div className="mt-1 mb-6 flex flex-wrap items-start justify-between gap-4">
+        <h1 className="text-3xl font-semibold tracking-tight">{feature.title}</h1>
+        {feature.myRoles.length > 0 && (
+          <Link href={`/features/${id}/raise`} className={secondaryButton}>
+            Raise a Decision Request
+          </Link>
+        )}
+      </div>
 
       <nav aria-label="Feature sections" className="flex gap-6 border-b border-rule">
         {TABS.map((t) => (
