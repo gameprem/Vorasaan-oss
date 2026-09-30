@@ -14,6 +14,7 @@ import type {
   DecisionRequestView,
   ListDecisionRequestsQuery,
   RaiseDecisionRequestInput,
+  ReassignInput,
   SubmitDecisionRequestInput,
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort, type DecisionForAi } from '../ai/ai.port.ts';
@@ -28,7 +29,10 @@ import {
 import {
   type DecisionRequestWithRelations,
   decisionRequestInclude,
+  isClaimant,
+  teamRoleKey,
   toDecisionRequestView,
+  type Viewer,
 } from './decision-request.view.ts';
 
 @Injectable()
@@ -88,7 +92,7 @@ export class DecisionRequestsService {
       },
       include: decisionRequestInclude,
     });
-    return toDecisionRequestView(created);
+    return toDecisionRequestView(created, await this.viewer(user));
   }
 
   async submit(
@@ -104,21 +108,9 @@ export class DecisionRequestsService {
       throw new UnprocessableEntityException('This Question was raised without Choices');
     }
 
-    // Tracer-bullet routing: exactly one Role Owner of the decider role.
-    // Recipient selection and Claim replace this in the MVP.
-    const owners = await this.db.roleOwner.findMany({
-      where: { featureId: request.featureId, role: input.deciderRole },
-    });
-    const [owner] = owners;
-    if (!owner || owners.length !== 1) {
-      throw new UnprocessableEntityException(
-        `Expected exactly one ${input.deciderRole} Role Owner on this Feature, found ${owners.length}`,
-      );
-    }
-    const deciderId = owner.userId;
-    if (deciderId === request.raiserId) {
-      throw new UnprocessableEntityException('The Decider cannot be the Raiser');
-    }
+    const recipientIds = await this.chooseRecipients(request, input);
+    // Sent to one person → they decide. Sent to several → nobody until one Claims it.
+    const deciderId = recipientIds.length === 1 ? (recipientIds[0] ?? null) : null;
 
     const updated = await this.db.$transaction(async (tx) => {
       if (input.choices) {
@@ -134,11 +126,70 @@ export class DecisionRequestsService {
       }
       return tx.decisionRequest.update({
         where: { id, status: request.status },
-        data: { status, deciderRole: input.deciderRole, deciderId, submittedAt: new Date() },
+        data: {
+          status,
+          deciderRole: input.deciderRole,
+          deciderId,
+          submittedAt: new Date(),
+          recipients: { create: recipientIds.map((userId) => ({ userId })) },
+        },
         include: decisionRequestInclude,
       });
     });
-    return toDecisionRequestView(updated);
+    return toDecisionRequestView(updated, await this.viewer(user));
+  }
+
+  /**
+   * Makes the caller the Decider. Allowed with no Decider yet, and also when the request
+   * was routed to someone else: the Claim replaces them.
+   */
+  async claim(user: User, id: string): Promise<DecisionRequestView> {
+    const request = await this.findOrThrow(id);
+    const viewer = await this.viewer(user);
+    if (!isClaimant(request, viewer)) {
+      throw new ForbiddenException(
+        `Only someone else holding the ${request.deciderRole} Team Role can Claim this request`,
+      );
+    }
+    this.transition(request, 'claim');
+    if (request.deciderId === user.id) return toDecisionRequestView(request, viewer);
+
+    const moved = await this.db.decisionRequest.updateMany({
+      where: { id, status: request.status, deciderId: request.deciderId },
+      data: { deciderId: user.id },
+    });
+    if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
+    return toDecisionRequestView(await this.findOrThrow(id), viewer);
+  }
+
+  /** The Decider hands the request to someone else holding the decider role in the Team. */
+  async reassign(user: User, id: string, input: ReassignInput): Promise<DecisionRequestView> {
+    const request = await this.findOrThrow(id);
+    if (request.deciderId !== user.id) {
+      throw new ForbiddenException('Only the Decider can reassign this Decision Request');
+    }
+    this.transition(request, 'reassign');
+    if (input.userId === request.raiserId) {
+      throw new UnprocessableEntityException('The Decider cannot be the Raiser');
+    }
+    if (input.userId === user.id) {
+      throw new UnprocessableEntityException('You are already the Decider');
+    }
+    const holdsRole = await this.db.teamMembership.count({
+      where: { teamId: request.feature.teamId, userId: input.userId, role: request.deciderRole },
+    });
+    if (!holdsRole) {
+      throw new UnprocessableEntityException(
+        `The new Decider must hold the ${request.deciderRole} Team Role in this Team`,
+      );
+    }
+
+    const moved = await this.db.decisionRequest.updateMany({
+      where: { id, status: request.status, deciderId: user.id },
+      data: { deciderId: input.userId },
+    });
+    if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
+    return toDecisionRequestView(await this.findOrThrow(id), await this.viewer(user));
   }
 
   async withdraw(user: User, id: string): Promise<DecisionRequestView> {
@@ -150,7 +201,7 @@ export class DecisionRequestsService {
       data: { status, closedAt: new Date() },
       include: decisionRequestInclude,
     });
-    return toDecisionRequestView(updated);
+    return toDecisionRequestView(updated, await this.viewer(user));
   }
 
   /**
@@ -159,7 +210,10 @@ export class DecisionRequestsService {
    */
   async decide(user: User, id: string, input: DecideInput): Promise<DecideResult> {
     const request = await this.findOrThrow(id);
-    if (request.deciderId !== user.id) {
+    // A recipient deciding a request nobody has Claimed yet Claims it implicitly.
+    const impliedClaim =
+      request.deciderId === null && request.recipients.some((r) => r.user.id === user.id);
+    if (request.deciderId !== user.id && !impliedClaim) {
       throw new ForbiddenException('Only the Decider can decide this Decision Request');
     }
     const status = this.transition(request, 'decide');
@@ -204,8 +258,8 @@ export class DecisionRequestsService {
 
     const { updated, proposal } = await this.db.$transaction(async (tx) => {
       const moved = await tx.decisionRequest.updateMany({
-        where: { id, status: request.status },
-        data: { status },
+        where: { id, status: request.status, deciderId: request.deciderId },
+        data: { status, deciderId: user.id },
       });
       if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
 
@@ -236,11 +290,14 @@ export class DecisionRequestsService {
       return { updated, proposal };
     });
 
-    return { request: toDecisionRequestView(updated), proposal: toSpecProposalView(proposal) };
+    return {
+      request: toDecisionRequestView(updated, await this.viewer(user)),
+      proposal: toSpecProposalView(proposal),
+    };
   }
 
-  async get(id: string): Promise<DecisionRequestView> {
-    return toDecisionRequestView(await this.findOrThrow(id));
+  async get(user: User, id: string): Promise<DecisionRequestView> {
+    return toDecisionRequestView(await this.findOrThrow(id), await this.viewer(user));
   }
 
   async list(user: User, query: ListDecisionRequestsQuery): Promise<DecisionRequestView[]> {
@@ -249,11 +306,69 @@ export class DecisionRequestsService {
         deciderId: query.decider === 'me' ? user.id : undefined,
         raiserId: query.raiser === 'me' ? user.id : undefined,
         status: query.status,
+        // Sent to me and still mine to Claim or decide, which only an OPEN request is.
+        ...(query.recipient === 'me' && {
+          status: 'OPEN',
+          recipients: { some: { userId: user.id } },
+          OR: [{ deciderId: null }, { deciderId: user.id }],
+        }),
       },
       orderBy: { createdAt: 'desc' },
       include: decisionRequestInclude,
     });
-    return requests.map(toDecisionRequestView);
+    const viewer = await this.viewer(user);
+    return requests.map((r) => toDecisionRequestView(r, viewer));
+  }
+
+  /**
+   * Who the request goes to. The candidates are the Feature's Role Owners for the role or,
+   * when it has none, the Team members holding it; the Raiser is never one of them.
+   */
+  private async chooseRecipients(
+    request: DecisionRequestWithRelations,
+    input: SubmitDecisionRequestInput,
+  ): Promise<string[]> {
+    const role = input.deciderRole;
+    const others = { not: request.raiserId };
+    let candidates = (
+      await this.db.roleOwner.findMany({
+        where: { featureId: request.featureId, role, userId: others },
+        select: { userId: true },
+      })
+    ).map((o) => o.userId);
+    if (!candidates.length) {
+      candidates = (
+        await this.db.teamMembership.findMany({
+          where: { teamId: request.feature.teamId, role, userId: others },
+          select: { userId: true },
+        })
+      ).map((m) => m.userId);
+    }
+    if (!candidates.length) {
+      throw new UnprocessableEntityException(
+        `Nobody but the Raiser holds the ${role} Team Role for this Feature`,
+      );
+    }
+
+    const recipients = input.recipients ?? 'ALL';
+    if (recipients === 'ALL') return candidates;
+    if (!candidates.includes(recipients.userId)) {
+      throw new UnprocessableEntityException(
+        `That person cannot receive this request as ${role}: send it to one of the Feature's ${role} Role Owners`,
+      );
+    }
+    return [recipients.userId];
+  }
+
+  private async viewer(user: User): Promise<Viewer> {
+    const memberships = await this.db.teamMembership.findMany({
+      where: { userId: user.id },
+      select: { teamId: true, role: true },
+    });
+    return {
+      userId: user.id,
+      teamRoles: new Set(memberships.map((m) => teamRoleKey(m.teamId, m.role))),
+    };
   }
 
   private async latestSpecMarkdown(featureId: string): Promise<string> {

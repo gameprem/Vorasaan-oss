@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import {
   ChoiceDraft,
   DecideInput,
+  ListDecisionRequestsQuery,
   RaiseDecisionRequestInput,
+  ReassignInput,
   SubmitDecisionRequestInput,
 } from './decision-request.ts';
 
@@ -69,6 +71,31 @@ describe('SubmitDecisionRequestInput', () => {
 
   test('rejects an unknown role', () => {
     expect(SubmitDecisionRequestInput.safeParse({ deciderRole: 'CEO' }).success).toBe(false);
+  });
+
+  test('recipients is ALL or one person, and defaults to ALL', () => {
+    expect(SubmitDecisionRequestInput.parse({ deciderRole: 'PO' }).recipients).toBe('ALL');
+    expect(
+      SubmitDecisionRequestInput.parse({ deciderRole: 'PO', recipients: { userId: uuid } })
+        .recipients,
+    ).toEqual({ userId: uuid });
+    for (const recipients of ['SOME', { userId: 'nope' }, [uuid]]) {
+      expect(SubmitDecisionRequestInput.safeParse({ deciderRole: 'PO', recipients }).success).toBe(
+        false,
+      );
+    }
+  });
+});
+
+describe('ReassignInput and ListDecisionRequestsQuery', () => {
+  test('reassign needs a user id', () => {
+    expect(ReassignInput.safeParse({ userId: uuid }).success).toBe(true);
+    expect(ReassignInput.safeParse({}).success).toBe(false);
+  });
+
+  test('recipient=me is a valid filter', () => {
+    expect(ListDecisionRequestsQuery.parse({ recipient: 'me' })).toEqual({ recipient: 'me' });
+    expect(ListDecisionRequestsQuery.safeParse({ recipient: 'you' }).success).toBe(false);
   });
 });
 

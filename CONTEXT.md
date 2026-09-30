@@ -78,6 +78,10 @@ _Avoid_: Reporter, requester
 The one person currently responsible for deciding a Decision Request. The Decider is never the Raiser. A request sent to several Role Owners has no Decider until one of them Claims it.
 _Avoid_: Assignee, approver, resolver
 
+**Recipient**:
+A person the Raiser sent a Decision Request to: one Role Owner of the decider role, or all of them (all Team members with that Team Role when the Feature has no such Role Owner). The Raiser is never a Recipient.
+_Avoid_: Assignee, addressee
+
 **Delegate**:
 A person with the same Team Role who decides on someone's behalf during a set period, such as leave.
 _Avoid_: Proxy, substitute, backup
