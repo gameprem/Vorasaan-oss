@@ -5,7 +5,9 @@ import {
   DecisionRequestKind,
   type GrillingRoundKind,
   GuidelineCriterionKind,
+  GuidelineFitVerdict,
   MAX_GRILLING_QUESTIONS,
+  SuggestionLevel,
   TeamRole,
 } from '@vorasaan/shared';
 import { z } from 'zod';
@@ -86,10 +88,25 @@ export type AttachmentSummary = z.infer<typeof AttachmentSummary>;
 
 /** One effective Feature Guidelines criterion (0031). Its text is untrusted. */
 export type GuidelineForAi = {
+  /**
+   * A short handle ("G1", "G2"...) the AI cites the criterion by, when the task
+   * returns criteria (Feature Suggestions, the fit check). The server maps it
+   * back to the criterion and drops any handle it didn't give.
+   */
+  ref?: string;
   title: string;
   description: string;
   kind: GuidelineCriterionKind;
   required: boolean;
+};
+
+/**
+ * What every AI workflow in a Project reads (ADR 0006): the latest Brief Version
+ * (shortened to fit) and the effective Feature Guidelines. Both are untrusted.
+ */
+export type ProjectFoundationForAi = {
+  brief: { version: number; markdown: string } | null;
+  guidelines: GuidelineForAi[];
 };
 
 /** One answered Grilling question. `answer` is a person's own words: untrusted. */
@@ -109,12 +126,61 @@ export const BriefDraft = z.object({
 });
 export type BriefDraft = z.infer<typeof BriefDraft>;
 
+/** The most Feature Suggestions one AI call may return. */
+export const MAX_SUGGESTIONS_FROM_AI = 10;
+
+export const FeatureSuggestionDraft = z.object({
+  title: z.string().trim().min(1).max(200),
+  rationale: z.string().trim().min(1).max(4_000),
+  businessValue: z.string().trim().min(1).max(2_000),
+  effort: SuggestionLevel,
+  risk: SuggestionLevel,
+  /** The `ref`s of the Guidelines it serves. */
+  servesGuidelines: z.array(z.string().trim().min(1).max(20)).max(50),
+});
+export type FeatureSuggestionDraft = z.infer<typeof FeatureSuggestionDraft>;
+
+export const FeatureSuggestionDrafts = z.object({
+  suggestions: z.array(FeatureSuggestionDraft).max(MAX_SUGGESTIONS_FROM_AI),
+});
+export type FeatureSuggestionDrafts = z.infer<typeof FeatureSuggestionDrafts>;
+
+/** A Feature Suggestion someone dismissed, and why. Its texts are untrusted. */
+export type DismissedSuggestionForAi = { title: string; rationale: string; reason: string };
+
+/** A Feature Suggestion (being accepted) as AI input. Its texts came from the AI; still data. */
+export type SuggestionForAi = {
+  title: string;
+  rationale: string;
+  businessValue: string;
+  effort: SuggestionLevel;
+  risk: SuggestionLevel;
+};
+
+export const FeatureFitDraft = z.object({
+  results: z
+    .array(
+      z.object({
+        /** The Guideline's `ref`. */
+        guideline: z.string().trim().min(1).max(20),
+        verdict: GuidelineFitVerdict,
+        reason: z.string().trim().min(1).max(1_000),
+        /** For an UNCLEAR verdict: what to ask to settle it. */
+        question: z.string().trim().max(1_000).nullish(),
+      }),
+    )
+    .max(100),
+});
+export type FeatureFitDraft = z.infer<typeof FeatureFitDraft>;
+
 export interface AiPort {
   generateChoices(input: {
     specMarkdown: string;
     request: RequestForAi;
     /** Retrieved context, most important first, without the Feature's own Spec. */
     context: ContextBlock[];
+    /** The Project Brief and effective Guidelines (0034); none when left out. */
+    foundation?: ProjectFoundationForAi;
   }): Promise<GeneratedChoices>;
 
   draftSpecProposal(input: {
@@ -122,6 +188,7 @@ export interface AiPort {
     request: RequestForAi;
     decision: DecisionForAi;
     context: ContextBlock[];
+    foundation?: ProjectFoundationForAi;
   }): Promise<SpecProposalDraft>;
 
   summarizeAttachment(input: { attachment: AttachmentForAi }): Promise<AttachmentSummary>;
@@ -159,6 +226,43 @@ export interface AiPort {
     memory: WorkflowMemory;
     answers: GrillingAnswerForAi[];
   }): Promise<BriefDraft>;
+
+  /**
+   * Up to `count` Feature Suggestions (ticket 0034) that serve the Brief's goals
+   * and the Guidelines, fill capability gaps, and repeat neither what exists nor
+   * what was dismissed.
+   */
+  suggestFeatures(input: {
+    project: ProjectForAi;
+    count: number;
+    /** Retrieved Project context, the current Brief first (ContextRetriever.forProject). */
+    projectContext: ContextBlock[];
+    /** Each with its `ref`. */
+    guidelines: GuidelineForAi[];
+    /** The Project's most recent Decisions, newest first. */
+    decisions: ContextBlock[];
+    /** Suggestions dismissed before, newest first, with the reasons. */
+    dismissed: DismissedSuggestionForAi[];
+    /** Titles of the suggestions still waiting for a PO, not to be repeated. */
+    pending: string[];
+  }): Promise<FeatureSuggestionDrafts>;
+
+  /** The first Spec of a Feature accepted from a Feature Suggestion. */
+  draftSpecFromSuggestion(input: {
+    project: ProjectForAi;
+    suggestion: SuggestionForAi;
+    /** Retrieved Project context, the current Brief first. */
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+  }): Promise<SpecProposalDraft>;
+
+  /** How a Feature about to be created meets each effective Guideline (each with its `ref`). */
+  checkFeatureFit(input: {
+    project: ProjectForAi;
+    feature: FeatureForAi;
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+  }): Promise<FeatureFitDraft>;
 }
 
 export class AiOutputError extends Error {

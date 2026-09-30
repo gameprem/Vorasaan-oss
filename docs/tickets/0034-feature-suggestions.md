@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0032]
 slice: project-foundation
 ---
@@ -25,5 +25,10 @@ The AI proposes Features that serve the business, and checks any Feature idea ag
 - Migration for `FeatureSuggestion`. `AiPort` methods, prompts, `FakeAiPort` and eval cases.
 
 ## Acceptance criteria (test first, real Postgres + `FakeAiPort`)
-- [ ] Generate → accept one → a DRAFT Feature exists with a PENDING Spec Proposal. Dismiss another with a reason, and the next generation's AI input includes that reason.
-- [ ] The fit check reports one line per effective Guideline.
+- [x] Generate → accept one → a DRAFT Feature exists with a PENDING Spec Proposal. Dismiss another with a reason, and the next generation's AI input includes that reason.
+- [x] The fit check reports one line per effective Guideline.
+
+## Decisions
+- Accept is allowed to a PO of the chosen Team or an Admin; the Team must belong to the suggestion's Project (422 otherwise).
+- The accepter becomes the new Feature's PO Role Owner **only if** they hold the PO Team Role in that Team, because Role Owners are always members of their Team (0012) and Claim and routing rely on it (0016). An Admin outside the Team gets a Feature with no Role Owner; Admins set Role Owners later through the existing endpoint. Either way, the accepter is the Spec Proposal's approver.
+- Effort and risk are LOW / MEDIUM / HIGH. `servesGuidelineIds` records the effective Guidelines at the time of generation.

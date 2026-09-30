@@ -68,3 +68,12 @@ export type GrillingRoundStatus = z.infer<typeof GrillingRoundStatus>;
 
 export const GrillingSkipReason = z.enum(['NO_ONE_WITH_ROLE', 'NOTHING_TO_ASK', 'BY_STARTER']);
 export type GrillingSkipReason = z.infer<typeof GrillingSkipReason>;
+
+export const FeatureSuggestionStatus = z.enum(['PENDING', 'ACCEPTED', 'DISMISSED']);
+export type FeatureSuggestionStatus = z.infer<typeof FeatureSuggestionStatus>;
+
+export const SuggestionLevel = z.enum(['LOW', 'MEDIUM', 'HIGH']);
+export type SuggestionLevel = z.infer<typeof SuggestionLevel>;
+
+export const FeatureStatus = z.enum(['DRAFT', 'IN_PROGRESS', 'DONE', 'ARCHIVED']);
+export type FeatureStatus = z.infer<typeof FeatureStatus>;

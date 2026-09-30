@@ -14,6 +14,7 @@ import { DecisionRequestsService } from './decision-requests/decision-requests.s
 import { DelegationsController } from './delegations/delegations.controller.ts';
 import { DelegationsService } from './delegations/delegations.service.ts';
 import { FeatureGuidelinesModule } from './feature-guidelines/feature-guidelines.module.ts';
+import { FeatureSuggestionsModule } from './feature-suggestions/feature-suggestions.module.ts';
 import { FeaturesController } from './features/features.controller.ts';
 import { GrillingModule } from './grilling/grilling.module.ts';
 import { HealthController } from './health/health.controller.ts';
@@ -38,6 +39,7 @@ import { SpecService } from './spec/spec.service.ts';
     InboxModule,
     FeatureGuidelinesModule,
     GrillingModule,
+    FeatureSuggestionsModule,
   ],
   controllers: [
     HealthController,

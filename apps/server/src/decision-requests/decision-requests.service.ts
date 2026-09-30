@@ -21,6 +21,7 @@ import type {
 import { AI_PORT, AiOutputError, type AiPort, type DecisionForAi } from '../ai/ai.port.ts';
 import { describeDecision } from '../ai/prompts.ts';
 import { activeDelegates } from '../delegations/active-delegations.ts';
+import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
 import { NotificationsService, type Outbox, type Tx } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import {
@@ -53,6 +54,7 @@ export class DecisionRequestsService {
     private readonly notifications: NotificationsService,
     private readonly indexing: IndexingService,
     private readonly retriever: ContextRetriever,
+    private readonly foundation: ProjectFoundation,
   ) {}
 
   async raise(user: User, input: RaiseDecisionRequestInput): Promise<DecisionRequestView> {
@@ -71,17 +73,23 @@ export class DecisionRequestsService {
     const withChoices = input.withChoices ?? true;
     let generated: Awaited<ReturnType<AiPort['generateChoices']>> | undefined;
     if (withChoices) {
+      // The Brief and Guidelines come out of the same budget as the retrieved context.
+      const { foundation, contextBudget } = await this.foundation.forFeature(
+        input.featureId,
+        CONTEXT_BUDGET.decisionRequest,
+      );
       const { spec, context } = splitFeatureSpec(
         await this.retriever.forFeature(
           input.featureId,
           `${input.title}\n\n${input.description}`,
-          CONTEXT_BUDGET.decisionRequest,
+          contextBudget,
         ),
       );
       try {
         generated = await this.ai.generateChoices({
           specMarkdown: spec?.text ?? '(This Feature has no Spec yet.)',
-          context,
+          context: withoutBrief(context),
+          foundation,
           request: {
             kind: input.kind,
             title: input.title,
@@ -348,11 +356,15 @@ export class DecisionRequestsService {
       orderBy: { role: 'asc' },
       select: { role: true },
     });
+    const { foundation, contextBudget } = await this.foundation.forFeature(
+      request.featureId,
+      CONTEXT_BUDGET.decisionRequest,
+    );
     const { context } = splitFeatureSpec(
       await this.retriever.forFeature(
         request.featureId,
         `${request.title}\n\n${request.description}\n\n${describeDecision(decision)}`,
-        CONTEXT_BUDGET.decisionRequest,
+        contextBudget,
         { excludeRequestId: request.id },
       ),
     );
@@ -362,7 +374,8 @@ export class DecisionRequestsService {
       draft = await this.ai.draftSpecProposal({
         // The whole current Spec: it is the base the draft edits, never shortened.
         specMarkdown: base?.markdown ?? '',
-        context,
+        context: withoutBrief(context),
+        foundation,
         request: {
           kind: request.kind,
           title: request.title,

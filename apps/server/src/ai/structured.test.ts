@@ -4,6 +4,8 @@ import {
   AiOutputError,
   AttachmentSummary,
   BriefDraft,
+  FeatureFitDraft,
+  FeatureSuggestionDrafts,
   GeneratedChoices,
   GrillingQuestionDrafts,
   SpecProposalDraft,
@@ -73,6 +75,9 @@ describe('loadAiConfig', () => {
       draftSpecFromAttachmentsModel: 'anthropic/claude-opus-5-5',
       grillingQuestionsModel: 'anthropic/claude-opus-5-5',
       draftBriefFromGrillingModel: 'anthropic/claude-opus-5-5',
+      suggestFeaturesModel: 'anthropic/claude-opus-5-5',
+      draftSpecFromSuggestionModel: 'anthropic/claude-opus-5-5',
+      checkFeatureFitModel: 'anthropic/claude-opus-5-5',
     });
   });
 
@@ -90,6 +95,9 @@ describe('loadAiConfig', () => {
       draftSpecFromAttachmentsModel: 'openai/some-model',
       grillingQuestionsModel: 'openai/some-model',
       draftBriefFromGrillingModel: 'openai/some-model',
+      suggestFeaturesModel: 'openai/some-model',
+      draftSpecFromSuggestionModel: 'openai/some-model',
+      checkFeatureFitModel: 'openai/some-model',
     });
   });
 });
@@ -141,5 +149,41 @@ describe('FakeAiPort', () => {
       answers: [{ round: 'BUSINESS', question: 'Goals?', answer: 'Grow payments.' }],
     });
     expect(BriefDraft.safeParse(brief).success).toBe(true);
+
+    const guidelines = [
+      { ref: 'G1', title: 'Serves a KPI', description: '', kind: 'KPI' as const, required: true },
+      { ref: 'G2', title: 'PCI', description: '', kind: 'CONSTRAINT' as const, required: true },
+    ];
+    const suggestions = await ai.suggestFeatures({
+      project: { name: 'Mobile Banking' },
+      count: 3,
+      projectContext: [],
+      guidelines,
+      decisions: [],
+      dismissed: [{ title: 'Suggested Feature 1', rationale: 'r', reason: 'No.' }],
+      pending: [],
+    });
+    expect(FeatureSuggestionDrafts.safeParse(suggestions).success).toBe(true);
+    expect(suggestions.suggestions.map((s) => s.title)).toEqual([
+      'Suggested Feature 2',
+      'Suggested Feature 3',
+      'Suggested Feature 4',
+    ]);
+    const suggestion = suggestions.suggestions[0];
+    if (!suggestion) throw new Error('expected a suggestion');
+    const first = await ai.draftSpecFromSuggestion({
+      project: { name: 'Mobile Banking' },
+      suggestion,
+      projectContext: [],
+      guidelines,
+    });
+    expect(SpecProposalDraft.safeParse(first).success).toBe(true);
+    const fit = await ai.checkFeatureFit({
+      project: { name: 'Mobile Banking' },
+      feature: { title: 'Card freeze', description: 'Serves a KPI.' },
+      projectContext: [],
+      guidelines,
+    });
+    expect(FeatureFitDraft.safeParse(fit).success).toBe(true);
   });
 });

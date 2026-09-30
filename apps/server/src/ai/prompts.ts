@@ -4,11 +4,14 @@ import type {
   AttachmentForAi,
   ContextBlock,
   DecisionForAi,
+  DismissedSuggestionForAi,
   FeatureForAi,
   GrillingAnswerForAi,
   GuidelineForAi,
   ProjectForAi,
+  ProjectFoundationForAi,
   RequestForAi,
+  SuggestionForAi,
 } from './ai.port.ts';
 import { renderMemory, type WorkflowMemory } from './workflow-memory.ts';
 
@@ -20,12 +23,12 @@ const KIND_MEANING = {
 /**
  * Neutralises anything in untrusted text that could open or close one of the
  * prompt's data blocks (<attachment>, <context>, <spec>, <brief>, <guidelines>,
- * <memory>, <answers>, <answer>), so retrieved content can't escape its fence in
- * the prompt.
+ * <memory>, <answers>, <answer>, <decisions>, <dismissed>, <suggestions>, <suggestion>,
+ * <feature>), so retrieved content can't escape its fence in the prompt.
  */
 export function fence(text: string): string {
   return text.replace(
-    /<(\s*\/?\s*(?:attachment|context|spec|brief|guidelines|memory|answers?)\b)/gi,
+    /<(\s*\/?\s*(?:attachment|context|spec|brief|guidelines|memory|answers?|decisions|dismissed|suggestions?|feature)\b)/gi,
     '‹$1',
   );
 }
@@ -75,13 +78,24 @@ export function renderContext(
     .join('\n\n');
 }
 
+/** The Project Brief (latest version, maybe shortened) as the inside of a <brief> block. */
+export function renderBrief(brief: ProjectFoundationForAi['brief']): string {
+  if (!brief) return '(This Project has no Project Brief yet.)';
+  return fence(`(Brief Version ${brief.version})\n${brief.markdown}`);
+}
+
+const NO_FOUNDATION: ProjectFoundationForAi = { brief: null, guidelines: [] };
+
 export function generateChoicesPrompt(
   specMarkdown: string,
   request: RequestForAi,
   context: ContextBlock[],
+  foundation: ProjectFoundationForAi = NO_FOUNDATION,
 ) {
   return renderSkill('generate-choices', {
     spec: fence(specMarkdown),
+    brief: renderBrief(foundation.brief),
+    guidelines: renderGuidelines(foundation.guidelines),
     context: renderContext(context),
     kind: request.kind,
     kindMeaning: KIND_MEANING[request.kind],
@@ -108,9 +122,12 @@ export function draftSpecProposalPrompt(
   request: RequestForAi,
   decision: DecisionForAi,
   context: ContextBlock[],
+  foundation: ProjectFoundationForAi = NO_FOUNDATION,
 ) {
   return renderSkill('draft-spec-proposal', {
     spec: fence(specMarkdown),
+    brief: renderBrief(foundation.brief),
+    guidelines: renderGuidelines(foundation.guidelines),
     context: renderContext(context),
     kind: request.kind,
     title: request.title,
@@ -151,16 +168,25 @@ const ROUND_FOCUS: Record<GrillingRoundKind, string> = {
     'non-functional requirements (performance, security, availability), technical constraints and debt.',
 };
 
-/** The effective Feature Guidelines as numbered lines. Human-written, but fenced like any data. */
+/**
+ * The effective Feature Guidelines as numbered lines, or lines led by their `ref`
+ * when they have one (for tasks that cite them). Human-written, but fenced like
+ * any data, and kept to one line each so none can pose as another criterion.
+ */
 export function renderGuidelines(guidelines: GuidelineForAi[]): string {
   if (guidelines.length === 0) return '(No Feature Guidelines.)';
   return guidelines
     .map((g, i) => {
       const required = g.required ? 'required' : 'optional';
-      const description = g.description ? `: ${g.description}` : '';
-      return fence(`${i + 1}. [${g.kind}, ${required}] ${g.title}${description}`);
+      const description = g.description ? `: ${oneLineOf(g.description)}` : '';
+      const handle = g.ref ? `${g.ref}.` : `${i + 1}.`;
+      return fence(`${handle} [${g.kind}, ${required}] ${oneLineOf(g.title)}${description}`);
     })
     .join('\n');
+}
+
+function oneLineOf(text: string): string {
+  return text.replace(/\s*[\r\n]+\s*/g, ' ').trim();
 }
 
 /** Every answered question as a fenced block; the answers are people's own words. */
@@ -208,5 +234,80 @@ export function draftBriefFromGrillingPrompt(input: {
     guidelines: renderGuidelines(input.guidelines),
     memory: renderMemory(input.memory),
     answers: renderGrillingAnswers(input.answers),
+  });
+}
+
+/** Dismissed Feature Suggestions and why, as fenced blocks; people's reasons are untrusted. */
+export function renderDismissed(dismissed: DismissedSuggestionForAi[]): string {
+  if (dismissed.length === 0) return '(None dismissed yet.)';
+  return dismissed
+    .map(
+      (d, i) =>
+        `<suggestion index="${i + 1}" title="${attribute(d.title)}">\n${fence(d.rationale)}\n\nDismissed because: ${fence(d.reason)}\n</suggestion>`,
+    )
+    .join('\n\n');
+}
+
+export function suggestFeaturesPrompt(input: {
+  project: ProjectForAi;
+  count: number;
+  projectContext: ContextBlock[];
+  guidelines: GuidelineForAi[];
+  decisions: ContextBlock[];
+  dismissed: DismissedSuggestionForAi[];
+  pending: string[];
+}) {
+  const pending = input.pending.length
+    ? input.pending.map((t) => `- ${oneLineOf(t)}`).join('\n')
+    : '(None.)';
+  return renderSkill('suggest-features', {
+    projectName: attribute(input.project.name),
+    count: String(input.count),
+    context: renderContext(input.projectContext, { projectLevel: true }),
+    guidelines: renderGuidelines(input.guidelines),
+    decisions: renderContext(input.decisions, { projectLevel: true }),
+    dismissed: renderDismissed(input.dismissed),
+    pending: fence(pending),
+  });
+}
+
+/** A Feature Suggestion as the inside of a <suggestion> block. */
+function renderSuggestion(s: SuggestionForAi): string {
+  return fence(
+    [
+      `Title: ${oneLineOf(s.title)}`,
+      `Effort: ${s.effort}. Risk: ${s.risk}.`,
+      `Rationale: ${s.rationale}`,
+      `Business value: ${s.businessValue}`,
+    ].join('\n'),
+  );
+}
+
+export function draftSpecFromSuggestionPrompt(input: {
+  project: ProjectForAi;
+  suggestion: SuggestionForAi;
+  projectContext: ContextBlock[];
+  guidelines: GuidelineForAi[];
+}) {
+  return renderSkill('draft-spec-from-suggestion', {
+    projectName: attribute(input.project.name),
+    suggestion: renderSuggestion(input.suggestion),
+    context: renderContext(input.projectContext, { projectLevel: true }),
+    guidelines: renderGuidelines(input.guidelines),
+  });
+}
+
+export function checkFeatureFitPrompt(input: {
+  project: ProjectForAi;
+  feature: FeatureForAi;
+  projectContext: ContextBlock[];
+  guidelines: GuidelineForAi[];
+}) {
+  const feature = `Title: ${oneLineOf(input.feature.title)}\n\n${input.feature.description || '(No description.)'}`;
+  return renderSkill('check-feature-fit', {
+    projectName: attribute(input.project.name),
+    feature: fence(feature),
+    context: renderContext(input.projectContext, { projectLevel: true }),
+    guidelines: renderGuidelines(input.guidelines),
   });
 }
