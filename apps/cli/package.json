@@ -1,0 +1,20 @@
+{
+  "name": "@vorasaan/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "vorasaan": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun src/index.ts",
+    "build": "bun build src/index.ts --compile --outfile dist/vorasaan",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.8.1",
+    "@vorasaan/shared": "workspace:*",
+    "commander": "^15.0.0"
+  }
+}

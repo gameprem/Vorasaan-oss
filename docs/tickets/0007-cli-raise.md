@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0005]
 slice: tracer-bullet
 ---
@@ -22,7 +22,7 @@ A developer raises a Decision Request from the terminal and reviews the AI's Cho
 - `bun run --filter @vorasaan/cli build` produces a single binary via `bun build --compile` (ADR 0005).
 
 ## Acceptance criteria
-- [ ] Against the seeded server, Beam can raise and submit a Blocker, and it shows up as `OPEN` for Pim.
-- [ ] API errors (e.g. 422 for an ambiguous Decider) are shown as readable messages, not stack traces.
-- [ ] The compiled binary runs without Bun or Node installed.
-- [ ] Tests cover argument parsing and the API client, using a stub HTTP server.
+- [x] Against the seeded server, Beam can raise and submit a Blocker, and it shows up as `OPEN` for Pim.
+- [x] API errors (e.g. 422 for an ambiguous Decider) are shown as readable messages, not stack traces.
+- [x] The compiled binary runs without Bun or Node installed.
+- [x] Tests cover argument parsing and the API client, using a stub HTTP server.
