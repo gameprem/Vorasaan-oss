@@ -2,7 +2,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@vorasaan/db';
 import { SEED, seed } from '@vorasaan/db/seed';
-import type { DecisionRequestView, FeatureSummaryView } from '@vorasaan/shared';
+import type {
+  DecisionRequestView,
+  FeatureSummaryView,
+  FeatureView,
+  TeamView,
+} from '@vorasaan/shared';
 import type { FakeAiPort } from '../ai/fake-ai.port.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
@@ -63,6 +68,40 @@ describe('Decision Requests API: raise and submit', () => {
     const res = await asPim<FeatureSummaryView>('GET', `/features/${SEED.featureId}`);
     expect(res.body).toMatchObject({ title: 'Async checkout', myRoles: ['PO'] });
     expect((await asPim('GET', `/features/${crypto.randomUUID()}`)).status).toBe(404);
+  });
+
+  test('openBlockers counts OPEN and NEEDS_INFO Blockers, not Questions or drafts', async () => {
+    const counts = async () => {
+      const feature = await asBeam<FeatureView>('GET', `/features/${SEED.featureId}`);
+      const team = await asBeam<TeamView>('GET', `/teams/${SEED.teamId}`);
+      const inTeam = team.body.features.find((f) => f.id === SEED.featureId);
+      return [feature.body.openBlockers, inTeam?.openBlockers];
+    };
+    expect(await counts()).toEqual([0, 0]);
+
+    const { body: blocker } = await raise();
+    expect(await counts()).toEqual([0, 0]); // a DRAFT doesn't block yet
+
+    await asBeam('POST', `/decision-requests/${blocker.id}/submit`, { deciderRole: 'PO' });
+    const { body: question } = await raise({ kind: 'QUESTION', withChoices: false });
+    await asBeam('POST', `/decision-requests/${question.id}/submit`, { deciderRole: 'PO' });
+    expect(await counts()).toEqual([1, 1]);
+
+    await asPim('POST', `/decision-requests/${blocker.id}/messages`, {
+      kind: 'QUESTION',
+      body: 'Which provider?',
+    });
+    expect(await counts()).toEqual([1, 1]); // NEEDS_INFO still blocks
+    await asBeam('POST', `/decision-requests/${blocker.id}/messages`, {
+      kind: 'ANSWER',
+      body: 'Stripe.',
+    });
+
+    const decided = await asPim('POST', `/decision-requests/${blocker.id}/decision`, {
+      customAnswer: 'Poll every 30 seconds.',
+    });
+    expect(decided.status).toBe(201);
+    expect(await counts()).toEqual([0, 0]);
   });
 
   test('raise → DRAFT with AI Choices and a suggested role', async () => {

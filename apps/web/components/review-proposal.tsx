@@ -8,7 +8,8 @@ export function ReviewProposal({
   requestId,
 }: {
   proposalId: string;
-  requestId: string;
+  /** The Decision Request the Proposal came from, or null. */
+  requestId: string | null;
 }) {
   const [approveState, approve, approving] = useActionState<ActionState>(
     approveProposal.bind(null, proposalId, requestId),
@@ -49,7 +50,9 @@ export function ReviewProposal({
         </form>
       </div>
       <p className="mt-3 text-sm text-ink-soft">
-        Rejecting keeps your Decision. Only the Spec stays as it is.
+        {requestId
+          ? 'Rejecting keeps your Decision. Only the Spec stays as it is.'
+          : 'Rejecting leaves the Spec as it is.'}
       </p>
     </div>
   );

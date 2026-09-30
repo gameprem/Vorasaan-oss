@@ -4,6 +4,7 @@ import type { FeatureSummaryView, FeatureView } from '@vorasaan/shared';
 import { CurrentUser } from '../auth/identity.guard.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { AtlassianSettingsService } from '../settings/atlassian-settings.service.ts';
+import { OPEN_BLOCKERS } from './open-blockers.ts';
 
 @Controller('features')
 export class FeaturesController {
@@ -43,6 +44,7 @@ export class FeaturesController {
       include: {
         team: { select: { name: true, project: { select: { name: true } } } },
         roleOwners: { where: { userId: user.id }, select: { role: true } },
+        _count: { select: { decisionRequests: OPEN_BLOCKERS } },
       },
     });
     if (!f) throw new NotFoundException('Feature not found');
@@ -55,6 +57,7 @@ export class FeaturesController {
       myRoles: f.roleOwners.map((o) => o.role),
       jiraIssueKey: f.jiraIssueKey,
       jiraIssueUrl: await this.atlassian.jiraIssueUrl(f.jiraIssueKey),
+      openBlockers: f._count.decisionRequests,
     };
   }
 }

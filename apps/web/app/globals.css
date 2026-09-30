@@ -124,3 +124,36 @@ body {
   font-family: var(--font-mono);
   font-size: 0.9em;
 }
+.spec h3 {
+  font-weight: 600;
+  margin: 1.5rem 0 0.4rem;
+}
+.spec a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.spec pre {
+  margin: 0 0 0.9rem;
+  overflow-x: auto;
+  border: 1px solid var(--color-rule);
+  border-radius: 0.5rem;
+  background: var(--color-paper);
+  padding: 0.75rem 1rem;
+  font-size: 0.9em;
+}
+.spec blockquote {
+  margin: 0 0 0.9rem;
+  border-left: 3px solid var(--color-rule);
+  padding-left: 1rem;
+  color: var(--color-ink-soft);
+}
+.spec table {
+  margin: 0 0 0.9rem;
+  border-collapse: collapse;
+}
+.spec th,
+.spec td {
+  border: 1px solid var(--color-rule);
+  padding: 0.35rem 0.75rem;
+  text-align: left;
+}

@@ -44,7 +44,15 @@ export const TeamView = z.object({
   name: z.string(),
   project: z.object({ id: z.uuid(), name: z.string() }),
   members: z.array(TeamMemberView),
-  features: z.array(z.object({ id: z.uuid(), title: z.string(), status: z.string() })),
+  features: z.array(
+    z.object({
+      id: z.uuid(),
+      title: z.string(),
+      status: z.string(),
+      /** Blockers that are OPEN or NEEDS_INFO; the Feature is Blocked while > 0. */
+      openBlockers: z.int().nonnegative(),
+    }),
+  ),
   /** Whether the current user may manage members and Features here. */
   canManage: z.boolean(),
 });
