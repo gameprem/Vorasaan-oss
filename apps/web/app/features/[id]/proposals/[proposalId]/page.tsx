@@ -4,13 +4,14 @@ import { notFound, unstable_rethrow } from 'next/navigation';
 import { Notice, relativeTime } from '@/components/bits';
 import { ReviewProposal } from '@/components/review-proposal';
 import { SpecDiff } from '@/components/spec-diff';
+import { approveProposal, rejectProposal } from '@/lib/actions';
 import { ApiError, api, currentUser } from '@/lib/api';
 import { isId } from '@/lib/ids';
 
 export const metadata = { title: 'Spec Proposal' };
 
 const ORIGIN: Record<SpecProposalView['source'], string> = {
-  AI_SUMMARY: 'Drafted by AI from the Attachments',
+  AI_SUMMARY: 'Drafted by AI (from the Attachments or a Feature Suggestion)',
   DECISION: 'Drafted by AI from a Decision',
   MANUAL: 'Written by hand',
   REVERT: 'A revert',
@@ -81,7 +82,15 @@ export default async function ProposalPage({
 
       {proposal.status === 'PENDING' &&
         (me?.id === proposal.approver.id ? (
-          <ReviewProposal proposalId={proposal.id} requestId={proposal.decisionRequestId} />
+          <ReviewProposal
+            approveAction={approveProposal.bind(null, proposal.id, proposal.decisionRequestId)}
+            rejectAction={rejectProposal.bind(null, proposal.id, proposal.decisionRequestId)}
+            note={
+              proposal.decisionRequestId
+                ? 'Rejecting keeps your Decision. Only the Spec stays as it is.'
+                : 'Rejecting leaves the Spec as it is.'
+            }
+          />
         ) : (
           <p className="mt-6 text-ink-soft">Waiting for {proposal.approver.name} to review it.</p>
         ))}

@@ -1,12 +1,17 @@
-import type { DelegationView, OrgMemberView, TeamView } from '@vorasaan/shared';
+import type {
+  DelegationView,
+  EffectiveFeatureGuidelinesView,
+  OrgMemberView,
+  TeamView,
+} from '@vorasaan/shared';
 import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
-import { ActionForm } from '@/components/action-form';
 import { BlockedBadge, Notice } from '@/components/bits';
 import { DelegationForm } from '@/components/delegation-form';
 import { DelegationList } from '@/components/delegation-list';
+import { NewFeatureForm } from '@/components/new-feature-form';
 import { TeamRolesEditor } from '@/components/team-roles-editor';
-import { field, ROLE_LABEL } from '@/components/ui';
+import { ROLE_LABEL } from '@/components/ui';
 import { ApiError, api, currentUser } from '@/lib/api';
 import { createFeature } from '@/lib/org-actions';
 
@@ -33,11 +38,20 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
     throw error;
   }
   const me = await currentUser();
+  // The effective Feature Guidelines, shown while creating a Feature; a failure only hides them.
+  const guidelines = team.canManage
+    ? await api<EffectiveFeatureGuidelinesView>(
+        `/projects/${team.project.id}/feature-guidelines/effective`,
+      ).catch((error: unknown) => {
+        unstable_rethrow(error);
+        return error instanceof ApiError ? error.message : 'Could not load the Feature Guidelines.';
+      })
+    : null;
 
   return (
     <section className="max-w-4xl">
       <p className="text-sm text-ink-soft">
-        <Link href="/projects" className="hover:underline">
+        <Link href={`/projects/${team.project.id}`} className="hover:underline">
           {team.project.name}
         </Link>
       </p>
@@ -63,20 +77,12 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
       )}
       {team.canManage && (
         <div className="mt-6">
-          <ActionForm
-            action={createFeature.bind(null, team.id)}
-            submitLabel="Create Feature"
-            pendingLabel="Creating…"
-          >
-            <label className="min-w-64 flex-1">
-              <span className="text-sm">New Feature</span>
-              <input name="title" required placeholder="Async checkout" className={field} />
-            </label>
-            <label className="w-40">
-              <span className="text-sm">Jira Epic (optional)</span>
-              <input name="jiraIssueKey" placeholder="MB-42" className={field} />
-            </label>
-          </ActionForm>
+          <NewFeatureForm
+            projectId={team.project.id}
+            guidelines={guidelines && typeof guidelines !== 'string' ? guidelines.criteria : []}
+            guidelinesError={typeof guidelines === 'string' ? guidelines : undefined}
+            createAction={createFeature.bind(null, team.id)}
+          />
         </div>
       )}
 

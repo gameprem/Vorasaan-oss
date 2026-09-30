@@ -22,6 +22,7 @@ import {
 import { ReviewProposal } from '@/components/review-proposal';
 import { SpecDiff } from '@/components/spec-diff';
 import { ROLE_LABEL } from '@/components/ui';
+import { approveProposal, rejectProposal } from '@/lib/actions';
 import { ApiError, api, currentUser } from '@/lib/api';
 
 export const metadata = { title: 'Decision Request' };
@@ -331,7 +332,11 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
             <SpecDiff before={proposal.baseMarkdown} after={proposal.proposedMarkdown} />
           </div>
           {proposal.status === 'PENDING' && userId === proposal.approver.id && (
-            <ReviewProposal proposalId={proposal.id} requestId={request.id} />
+            <ReviewProposal
+              approveAction={approveProposal.bind(null, proposal.id, request.id)}
+              rejectAction={rejectProposal.bind(null, proposal.id, request.id)}
+              note="Rejecting keeps your Decision. Only the Spec stays as it is."
+            />
           )}
           {proposal.status === 'APPROVED' && (
             <p className="mt-4">

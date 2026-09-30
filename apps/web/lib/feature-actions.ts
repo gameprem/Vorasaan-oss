@@ -1,20 +1,15 @@
 'use server';
 
-import {
-  AddUrlAttachmentInput,
-  type AttachmentView,
-  type SpecProposalView,
-  type SpecVersionView,
-  WriteSpecInput,
-} from '@vorasaan/shared';
+import { type SpecProposalView, type SpecVersionView, WriteSpecInput } from '@vorasaan/shared';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { ApiError, api } from './api';
 import { isId } from './ids';
 
-// Feature page actions: the Spec, its history and the Feature's Attachments. Each one only
-// forwards to the API as the signed-in user, which enforces who may do what. Ids arrive from
-// the browser, so they are checked to be UUIDs before they become part of an API path.
+// Feature page actions: the Spec and its history (Attachment actions are in
+// attachment-actions.ts). Each one only forwards to the API as the signed-in user, which
+// enforces who may do what. Ids arrive from the browser, so they are checked to be UUIDs
+// before they become part of an API path.
 
 export type FeatureActionState = { error?: string; ok?: boolean; stale?: boolean };
 
@@ -67,60 +62,6 @@ export async function revertSpec(
   );
   if (result.error) return result;
   redirect(`/features/${featureId}?tab=history`);
-}
-
-/** Attaches a public web page, a Confluence page or a Jira issue. */
-export async function addLinkAttachment(
-  featureId: string,
-  _prev: FeatureActionState,
-  formData: FormData,
-): Promise<FeatureActionState> {
-  if (!isId(featureId)) return INVALID;
-  const source = String(formData.get('source') ?? 'URL');
-  const ref = String(formData.get('ref') ?? '').trim();
-  const title = String(formData.get('title') ?? '').trim() || undefined;
-  if (!ref) return { error: 'Paste a link (or a Jira issue key) first.' };
-  const parsed = AddUrlAttachmentInput.safeParse(
-    source === 'CONFLUENCE'
-      ? { source, page: ref, title }
-      : source === 'JIRA'
-        ? { source, issue: ref, title }
-        : { source: 'URL', url: ref, title },
-  );
-  if (!parsed.success) {
-    return {
-      error:
-        source === 'URL'
-          ? 'Enter a full web address starting with https:// or http://.'
-          : 'Check the link and the title (at most 200 characters).',
-    };
-  }
-  return attempt(featureId, () =>
-    api<AttachmentView>(`/features/${featureId}/attachments`, {
-      method: 'POST',
-      body: parsed.data,
-    }),
-  );
-}
-
-export async function refreshAttachment(
-  featureId: string,
-  attachmentId: string,
-  _prev: FeatureActionState,
-): Promise<FeatureActionState> {
-  if (!isId(featureId) || !isId(attachmentId)) return INVALID;
-  return attempt(featureId, () =>
-    api<AttachmentView>(`/attachments/${attachmentId}/refresh`, { method: 'POST' }),
-  );
-}
-
-export async function deleteAttachment(
-  featureId: string,
-  attachmentId: string,
-  _prev: FeatureActionState,
-): Promise<FeatureActionState> {
-  if (!isId(featureId) || !isId(attachmentId)) return INVALID;
-  return attempt(featureId, () => api(`/attachments/${attachmentId}`, { method: 'DELETE' }));
 }
 
 /** Asks the AI for a Spec Proposal from the Attachments, then opens its review. */

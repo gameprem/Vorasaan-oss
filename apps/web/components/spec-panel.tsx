@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { SpecEditor } from './spec-editor';
+import { saveSpec } from '@/lib/feature-actions';
+import { type SaveMarkdownInput, SpecEditor } from './spec-editor';
 import { secondaryButton } from './ui';
 
 /** Shows the latest Spec, with "Edit Spec" for people allowed to write it. */
@@ -22,6 +23,7 @@ export function SpecPanel({
   canEdit: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const save = (input: SaveMarkdownInput) => saveSpec(featureId, input);
 
   if (!markdown) {
     return canEdit ? (
@@ -37,7 +39,7 @@ export function SpecPanel({
           </Link>
           .
         </p>
-        <SpecEditor featureId={featureId} current={null} baseVersion={0} />
+        <SpecEditor save={save} current={null} baseVersion={0} />
       </div>
     ) : (
       <p className="text-ink-soft">
@@ -49,7 +51,7 @@ export function SpecPanel({
   if (editing) {
     return (
       <SpecEditor
-        featureId={featureId}
+        save={save}
         current={markdown}
         baseVersion={version}
         onClose={() => setEditing(false)}

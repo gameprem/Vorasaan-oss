@@ -12,7 +12,7 @@ import { KindBadge, Notice, relativeTime } from '@/components/bits';
 import { LocalDate } from '@/components/delegation-list';
 import { MarkAllReadButton, MarkReadButton } from '@/components/notification-actions';
 import { notificationHref, notificationText } from '@/components/notification-text';
-import { ROLE_LABEL } from '@/components/ui';
+import { ROLE_LABEL, ROUND_LABEL } from '@/components/ui';
 import { ApiError, api } from '@/lib/api';
 
 export const metadata = { title: 'Inbox' };
@@ -41,8 +41,6 @@ const GROUPS: { kind: InboxItemKind; heading: string }[] = [
   { kind: 'ANSWER_GRILLING', heading: 'Grilling questions for your role' },
   { kind: 'APPROVE_BRIEF_PROPOSAL', heading: 'Brief Proposals to approve' },
 ];
-
-const ROUND_LABEL = { BUSINESS: 'Business', UX: 'UX', TECHNICAL: 'Technical' } as const;
 
 /** Where the action happens, plus what the row says. */
 function describe(item: InboxItem): {
@@ -96,8 +94,7 @@ function describe(item: InboxItem): {
       const g = item.grilling;
       return {
         key: `${g.id}:${g.round}:${g.role}`,
-        // The Project page (Brief and Grilling) arrives with ticket 0035.
-        href: `/projects/${item.project.id}`,
+        href: `/projects/${item.project.id}?tab=grilling#current-round`,
         badge: <Tag>Grilling</Tag>,
         title: `${ROUND_LABEL[g.round]} round: ${g.unanswered} question${g.unanswered === 1 ? '' : 's'} for ${ROLE_LABEL[g.role]}`,
         meta: item.project.name,
@@ -106,7 +103,7 @@ function describe(item: InboxItem): {
     case 'APPROVE_BRIEF_PROPOSAL':
       return {
         key: item.briefProposal.id,
-        href: `/projects/${item.project.id}`,
+        href: `/projects/${item.project.id}?tab=grilling#brief-proposal`,
         badge: <Tag>Brief Proposal</Tag>,
         title: `Brief change for ${item.project.name}`,
         meta: item.project.name,

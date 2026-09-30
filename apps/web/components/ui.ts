@@ -14,3 +14,4 @@ export const ROLE_LABEL = {
   MOBILE: 'Mobile',
   QA: 'QA',
 } as const;
+export const ROUND_LABEL = { BUSINESS: 'Business', UX: 'UX', TECHNICAL: 'Technical' } as const;
