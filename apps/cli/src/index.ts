@@ -3,6 +3,7 @@ import { ApiError } from './api.ts';
 import { runLogin, runLogout, runWhoami } from './commands/login.ts';
 import { runRaise } from './commands/raise.ts';
 import { UsageError } from './commands/raise-options.ts';
+import { confirmInTerminal, runScan } from './commands/scan.ts';
 import { ConfigError } from './config.ts';
 import { buildProgram } from './program.ts';
 
@@ -12,6 +13,8 @@ try {
     login: (options) => runLogin(options),
     logout: () => runLogout(),
     whoami: () => runWhoami(),
+    scan: (options, api) =>
+      runScan(options, { api, confirm: confirmInTerminal, print: (text) => console.log(text) }),
   }).parseAsync(process.argv);
 } catch (error) {
   // Expected failures get one readable line, not a stack trace.

@@ -51,6 +51,7 @@ enum AttachmentSource {
   URL
   CONFLUENCE
   JIRA
+  REPO_SCAN // a Repo Scan summary sent by `vorasaan scan`; no file, can't be refreshed
 }
 
 enum SpecVersionSource {

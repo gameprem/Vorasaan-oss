@@ -45,7 +45,7 @@ export type BriefVersionSource = z.infer<typeof BriefVersionSource>;
 export const GuidelineCriterionKind = z.enum(['KPI', 'CONSTRAINT', 'REQUIRED_SECTION']);
 export type GuidelineCriterionKind = z.infer<typeof GuidelineCriterionKind>;
 
-export const AttachmentSource = z.enum(['FILE', 'URL', 'CONFLUENCE', 'JIRA']);
+export const AttachmentSource = z.enum(['FILE', 'URL', 'CONFLUENCE', 'JIRA', 'REPO_SCAN']);
 export type AttachmentSource = z.infer<typeof AttachmentSource>;
 
 export const NotificationType = z.enum([
