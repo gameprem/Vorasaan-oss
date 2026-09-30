@@ -3,7 +3,12 @@ import type { RaiseOptions } from './commands/raise-options.ts';
 import { ConfigError } from './config.ts';
 import { buildProgram } from './program.ts';
 
-const env = { VORASAAN_USER: 'user-1', VORASAAN_API_URL: 'http://api.test' };
+const emptyConfigDir = `${import.meta.dir}/.test-config-${process.pid}`;
+const env = {
+  VORASAAN_USER: 'user-1',
+  VORASAAN_API_URL: 'http://api.test',
+  XDG_CONFIG_HOME: emptyConfigDir,
+};
 
 async function run(args: string[], runEnv: Record<string, string | undefined> = env) {
   let received: RaiseOptions | undefined;
@@ -12,6 +17,9 @@ async function run(args: string[], runEnv: Record<string, string | undefined> = 
       raise: async (_api, options) => {
         received = options;
       },
+      login: async () => {},
+      logout: async () => {},
+      whoami: async () => {},
     },
     runEnv,
   ).exitOverride();
@@ -51,7 +59,9 @@ describe('vorasaan raise argument parsing', () => {
     expect((await run(['raise', '-k', 'question', '--no-choices']))?.withChoices).toBe(false);
   });
 
-  test('fails with a readable error when VORASAAN_USER is missing', async () => {
-    await expect(run(['raise'], {})).rejects.toBeInstanceOf(ConfigError);
+  test('fails with a readable error when not signed in', async () => {
+    await expect(run(['raise'], { XDG_CONFIG_HOME: emptyConfigDir })).rejects.toBeInstanceOf(
+      ConfigError,
+    );
   });
 });

@@ -2,11 +2,13 @@ import type {
   ChoiceDraft,
   DecisionRequestView,
   FeatureSummaryView,
+  MeView,
   RaiseDecisionRequestInput,
   SubmitDecisionRequestInput,
 } from '@vorasaan/shared';
+import type { Credentials } from './config.ts';
 
-// DEV ONLY until PAT login lands: the server trusts this header as the caller's identity.
+// DEV ONLY: servers with VORASAAN_DEV_AUTH=true accept this header as the caller.
 const DEV_USER_HEADER = 'x-vorasaan-user';
 
 export class ApiError extends Error {
@@ -30,13 +32,17 @@ function readableMessage(status: number, body: unknown): string {
   return `Request failed with status ${status}`;
 }
 
-export type ApiConfig = { baseUrl: string; userId: string; fetch?: typeof fetch };
+export type ApiConfig = { baseUrl: string; credentials: Credentials; fetch?: typeof fetch };
 
 export class VorasaanApi {
   private readonly fetch: typeof fetch;
 
   constructor(private readonly config: ApiConfig) {
     this.fetch = config.fetch ?? fetch;
+  }
+
+  me() {
+    return this.request<MeView>('GET', '/me');
   }
 
   listFeatures() {
@@ -61,7 +67,9 @@ export class VorasaanApi {
       res = await this.fetch(new URL(path, this.config.baseUrl), {
         method,
         headers: {
-          [DEV_USER_HEADER]: this.config.userId,
+          ...('token' in this.config.credentials
+            ? { authorization: `Bearer ${this.config.credentials.token}` }
+            : { [DEV_USER_HEADER]: this.config.credentials.devUserId }),
           ...(body === undefined ? {} : { 'content-type': 'application/json' }),
         },
         body: body === undefined ? undefined : JSON.stringify(body),

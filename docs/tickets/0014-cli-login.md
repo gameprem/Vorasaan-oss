@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0010]
 slice: install-and-onboarding
 ---
@@ -15,4 +15,4 @@ Developers use their own identity in the CLI.
 - The API client sends `Authorization: Bearer`. `VORASAAN_USER` stays as a dev fallback.
 
 ## Acceptance criteria
-- [ ] login → whoami → raise works against a server without dev auth.
+- [x] login → whoami → raise works against a server without dev auth.
