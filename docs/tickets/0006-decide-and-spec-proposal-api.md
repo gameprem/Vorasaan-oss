@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0005]
 slice: tracer-bullet
 ---
@@ -23,8 +23,8 @@ The Decider decides, the AI drafts the Spec change, and the Decider's approval c
 - `GET /features/:id/spec-versions` and `GET /features/:id/decision-log` (entries link each Decision to the Spec Version it produced, if any).
 
 ## Acceptance criteria (test first, real Postgres + `FakeAiPort`)
-- [ ] Full path: raise → submit → decide (Choice B) → approve → the Feature has Spec v2, and the Decision Log shows B linked to v2.
-- [ ] A custom-answer Decision works the same way.
-- [ ] Only the Decider can decide, and only the approver can approve or reject.
-- [ ] Approving a stale proposal returns 409, and nothing is written.
-- [ ] Approve is atomic: a forced failure mid-way leaves no partial Spec Version.
+- [x] Full path: raise → submit → decide (Choice B) → approve → the Feature has Spec v2, and the Decision Log shows B linked to v2.
+- [x] A custom-answer Decision works the same way.
+- [x] Only the Decider can decide, and only the approver can approve or reject.
+- [x] Approving a stale proposal returns 409, and nothing is written.
+- [x] Approve is atomic: a forced failure mid-way leaves no partial Spec Version.

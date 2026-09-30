@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import type { User } from '@vorasaan/db';
 import {
+  DecideInput,
   ListDecisionRequestsQuery,
   RaiseDecisionRequestInput,
   SubmitDecisionRequestInput,
@@ -40,6 +41,15 @@ export class DecisionRequestsController {
     @Body({ schema: SubmitDecisionRequestInput }) body: SubmitDecisionRequestInput,
   ) {
     return this.service.submit(user, id, body);
+  }
+
+  @Post(':id/decision')
+  decide(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: DecideInput }) body: DecideInput,
+  ) {
+    return this.service.decide(user, id, body);
   }
 
   @Post(':id/withdraw')
