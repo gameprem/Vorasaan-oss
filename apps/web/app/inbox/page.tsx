@@ -14,7 +14,14 @@ export default async function InboxPage({
   const { welcome } = await searchParams;
   let requests: DecisionRequestView[];
   try {
-    requests = await api<DecisionRequestView[]>('/decision-requests?decider=me&status=OPEN');
+    // Routed to me, plus those sent to several people (me included) that nobody has Claimed.
+    const [mine, sentToMe] = await Promise.all([
+      api<DecisionRequestView[]>('/decision-requests?decider=me&status=OPEN'),
+      api<DecisionRequestView[]>('/decision-requests?recipient=me'),
+    ]);
+    requests = [...mine, ...sentToMe.filter((r) => !mine.some((m) => m.id === r.id))].sort((a, b) =>
+      (b.submittedAt ?? b.createdAt).localeCompare(a.submittedAt ?? a.createdAt),
+    );
   } catch (error) {
     unstable_rethrow(error); // let Next's redirect()/notFound() through
     return (
@@ -64,6 +71,7 @@ export default async function InboxPage({
                   </span>
                   <span className="block text-sm text-ink-soft">
                     {r.featureTitle}, raised by {r.raiser.name}
+                    {r.decider ? '' : '. Not Claimed yet'}
                   </span>
                 </span>
                 <span className="shrink-0 text-sm text-ink-soft">
