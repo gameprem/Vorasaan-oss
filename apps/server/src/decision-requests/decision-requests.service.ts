@@ -20,6 +20,7 @@ import type {
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort, type DecisionForAi } from '../ai/ai.port.ts';
 import { activeDelegates } from '../delegations/active-delegations.ts';
+import { NotificationsService, type Outbox, type Tx } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specProposalInclude, toSpecProposalView } from '../spec/spec.view.ts';
@@ -42,6 +43,7 @@ export class DecisionRequestsService {
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
     @Inject(AI_PORT) private readonly ai: AiPort,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async raise(user: User, input: RaiseDecisionRequestInput): Promise<DecisionRequestView> {
@@ -139,6 +141,9 @@ export class DecisionRequestsService {
         include: decisionRequestInclude,
       });
     });
+    await this.notifications.publish(
+      this.notifications.outbox().inboxChanged(recipients.map((r) => r.userId)),
+    );
     return toDecisionRequestView(updated, await this.viewer(user));
   }
 
@@ -157,11 +162,16 @@ export class DecisionRequestsService {
     this.transition(request, 'claim');
     if (request.deciderId === user.id) return toDecisionRequestView(request, viewer);
 
-    const moved = await this.db.decisionRequest.updateMany({
-      where: { id, status: request.status, deciderId: request.deciderId },
-      data: { deciderId: user.id },
+    const outbox = this.notifications.outbox();
+    await this.db.$transaction(async (tx) => {
+      const moved = await tx.decisionRequest.updateMany({
+        where: { id, status: request.status, deciderId: request.deciderId },
+        data: { deciderId: user.id },
+      });
+      if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
+      await this.claimed(tx, outbox, user, request);
     });
-    if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
+    await this.notifications.publish(outbox);
     return toDecisionRequestView(await this.findOrThrow(id), viewer);
   }
 
@@ -192,6 +202,9 @@ export class DecisionRequestsService {
       data: { deciderId: input.userId },
     });
     if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
+    await this.notifications.publish(
+      this.notifications.outbox().inboxChanged(user.id, input.userId),
+    );
     return toDecisionRequestView(await this.findOrThrow(id), await this.viewer(user));
   }
 
@@ -233,6 +246,7 @@ export class DecisionRequestsService {
     // A note alone never makes anyone the Decider.
     const deciderId = impliedClaim && input.kind === 'QUESTION' ? user.id : request.deciderId;
 
+    const outbox = this.notifications.outbox();
     const updated = await this.db.$transaction(async (tx) => {
       const moved = await tx.decisionRequest.updateMany({
         where: { id, status: request.status, deciderId: request.deciderId },
@@ -242,11 +256,15 @@ export class DecisionRequestsService {
       await tx.requestMessage.create({
         data: { requestId: id, authorId: user.id, kind: input.kind, body: input.body },
       });
+      if (deciderId !== request.deciderId) await this.claimed(tx, outbox, user, request);
+      // A QUESTION or ANSWER moves the item between the Decider's and the Raiser's Inbox.
+      if (status !== request.status) outbox.inboxChanged(request.raiserId, deciderId);
       return tx.decisionRequest.findUniqueOrThrow({
         where: { id },
         include: decisionRequestInclude,
       });
     });
+    await this.notifications.publish(outbox);
     return toDecisionRequestView(updated, await this.viewer(user));
   }
 
@@ -254,11 +272,27 @@ export class DecisionRequestsService {
     const request = await this.findOrThrow(id);
     this.assertRaiser(user, request);
     const status = this.transition(request, 'withdraw');
-    const updated = await this.db.decisionRequest.update({
-      where: { id, status: request.status },
-      data: { status, closedAt: new Date() },
-      include: decisionRequestInclude,
+    // The Decider, or while nobody has Claimed it everyone it was sent to.
+    const affected = request.deciderId
+      ? [request.deciderId]
+      : request.recipients.map((r) => r.user.id);
+    const outbox = this.notifications.outbox().inboxChanged(affected, request.raiserId);
+    const updated = await this.db.$transaction(async (tx) => {
+      const updated = await tx.decisionRequest.update({
+        where: { id, status: request.status },
+        data: { status, closedAt: new Date() },
+        include: decisionRequestInclude,
+      });
+      await this.notifications.notify(tx, outbox, {
+        type: 'REQUEST_WITHDRAWN',
+        to: affected,
+        actorId: user.id,
+        featureId: request.featureId,
+        requestId: id,
+      });
+      return updated;
     });
+    await this.notifications.publish(outbox);
     return toDecisionRequestView(updated, await this.viewer(user));
   }
 
@@ -316,12 +350,24 @@ export class DecisionRequestsService {
       throw error;
     }
 
+    const outbox = this.notifications.outbox().inboxChanged(
+      user.id,
+      request.recipients.map((r) => r.user.id),
+    );
     const { updated, proposal } = await this.db.$transaction(async (tx) => {
       const moved = await tx.decisionRequest.updateMany({
         where: { id, status: request.status, deciderId: request.deciderId },
         data: { status, deciderId: user.id },
       });
       if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
+      if (impliedClaim) await this.claimed(tx, outbox, user, request);
+      await this.notifications.notify(tx, outbox, {
+        type: 'REQUEST_DECIDED',
+        to: [request.raiserId],
+        actorId: user.id,
+        featureId: request.featureId,
+        requestId: id,
+      });
 
       const created = await tx.decision.create({
         data: {
@@ -350,6 +396,7 @@ export class DecisionRequestsService {
       });
       return { updated, proposal };
     });
+    await this.notifications.publish(outbox);
 
     return {
       request: toDecisionRequestView(updated, await this.viewer(user)),
@@ -468,6 +515,22 @@ export class DecisionRequestsService {
     });
     if (!request) throw new NotFoundException('Decision Request not found');
     return request;
+  }
+
+  /**
+   * `user` just became the Decider: REQUEST_CLAIMED to the other recipients and to the
+   * Decider it replaced, whose Inbox Items all change.
+   */
+  private async claimed(tx: Tx, outbox: Outbox, user: User, request: DecisionRequestWithRelations) {
+    const others = [request.deciderId, ...request.recipients.map((r) => r.user.id)];
+    outbox.inboxChanged(user.id, others);
+    await this.notifications.notify(tx, outbox, {
+      type: 'REQUEST_CLAIMED',
+      to: others,
+      actorId: user.id,
+      featureId: request.featureId,
+      requestId: request.id,
+    });
   }
 
   /** A recipient acting on a request that has no Decider yet becomes its Decider. */

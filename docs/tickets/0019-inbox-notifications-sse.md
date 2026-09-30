@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0017, 0018]
 slice: mvp-backend
 ---
@@ -26,6 +26,12 @@ One place tells each person what needs their action (Inbox Items) and what happe
 - `GET /events` (SSE, same auth as the API, PAT for the CLI): pushes `inbox.changed` and `notification.created` for the signed-in user. In-process event bus is enough (one instance per Organization).
 
 ## Acceptance criteria (test first, real Postgres)
-- [ ] Each Inbox Item kind appears and disappears with the state change that ends it.
-- [ ] Each Notification type is created for the right people and not for the actor.
-- [ ] An SSE client receives an event after a Decision is made.
+- [x] Each Inbox Item kind appears and disappears with the state change that ends it.
+- [x] Each Notification type is created for the right people and not for the actor.
+- [x] An SSE client receives an event after a Decision is made.
+
+## Notes
+- `DELEGATION_STARTED` for a Delegation that has already started is written in the create transaction. One that starts later is written lazily, on the Delegate's next `GET /inbox`, `GET /notifications` or `GET /events` heartbeat (~25 s). A new, additive `Notification.delegationId` (unique) links it to its Delegation and keeps it to one.
+- `REQUEST_CLAIMED` also reaches the Decider a Claim replaces, and follows an implied Claim (deciding or asking a question without Claiming first).
+- `GET /events` uses the API's Bearer auth (session token or PAT). The web will proxy it through a same-origin Next.js route that forwards its httpOnly session cookie as the Bearer header.
+- Events are pushed only after the transaction commits. `inbox.changed` carries no data: clients refetch `GET /inbox`.

@@ -41,3 +41,12 @@ export type SpecVersionSource = z.infer<typeof SpecVersionSource>;
 
 export const AttachmentSource = z.enum(['FILE', 'URL', 'CONFLUENCE', 'JIRA']);
 export type AttachmentSource = z.infer<typeof AttachmentSource>;
+
+export const NotificationType = z.enum([
+  'REQUEST_DECIDED',
+  'REQUEST_CLAIMED',
+  'REQUEST_WITHDRAWN',
+  'SPEC_VERSION_CREATED',
+  'DELEGATION_STARTED',
+]);
+export type NotificationType = z.infer<typeof NotificationType>;

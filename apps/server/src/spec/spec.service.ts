@@ -14,6 +14,7 @@ import type {
   SpecVersionView,
 } from '@vorasaan/shared';
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
+import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { diffLines } from './diff.ts';
 import {
@@ -33,7 +34,10 @@ class StaleStateError extends Error {}
 
 @Injectable()
 export class SpecService {
-  constructor(@InjectPrisma() private readonly db: PrismaClient) {}
+  constructor(
+    @InjectPrisma() private readonly db: PrismaClient,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async getProposal(id: string): Promise<SpecProposalView> {
     return toSpecProposalView(await this.findProposalOrThrow(id));
@@ -45,6 +49,7 @@ export class SpecService {
    */
   async approve(user: User, id: string): Promise<SpecVersionView> {
     const proposal = await this.findPendingForApprover(user, id);
+    const outbox = this.notifications.outbox().inboxChanged(user.id);
 
     try {
       const version = await this.db.$transaction(async (tx) => {
@@ -89,8 +94,10 @@ export class SpecService {
             throw new StaleStateError('The Decision Request is no longer awaiting a Spec update');
           }
         }
+        await this.notifications.specVersionCreated(tx, outbox, created);
         return created;
       });
+      await this.notifications.publish(outbox);
       return toSpecVersionView(version);
     } catch (error) {
       if (error instanceof StaleStateError) throw new ConflictException(error.message);
@@ -106,6 +113,7 @@ export class SpecService {
       data: { status: 'REJECTED', reviewedAt: new Date() },
       include: specProposalInclude,
     });
+    await this.notifications.publish(this.notifications.outbox().inboxChanged(user.id));
     return toSpecProposalView(updated);
   }
 
@@ -154,6 +162,7 @@ export class SpecService {
     await this.assertFeatureExists(featureId);
     await assertCanEditSpec(this.db, user, featureId);
     const target = await this.findVersionOrThrow(featureId, version);
+    const outbox = this.notifications.outbox();
 
     try {
       const created = await this.db.$transaction(async (tx) => {
@@ -173,7 +182,7 @@ export class SpecService {
             `v${current} already matches v${version}; there is nothing to revert`,
           );
         }
-        return tx.specVersion.create({
+        const created = await tx.specVersion.create({
           data: {
             featureId,
             version: current + 1,
@@ -185,7 +194,10 @@ export class SpecService {
           },
           include: specVersionInclude,
         });
+        await this.notifications.specVersionCreated(tx, outbox, created);
+        return created;
       });
+      await this.notifications.publish(outbox);
       return toSpecVersionView(created);
     } catch (error) {
       if (error instanceof StaleStateError) throw new ConflictException(error.message);
