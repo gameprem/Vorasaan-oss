@@ -2,6 +2,7 @@ export * from './ai-settings.ts';
 export * from './attachment.ts';
 export * from './auth.ts';
 export * from './decision-request.ts';
+export * from './delegation.ts';
 export * from './enums.ts';
 export * from './feature.ts';
 export * from './org.ts';

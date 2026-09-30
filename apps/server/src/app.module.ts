@@ -9,6 +9,8 @@ import { DevUsersController } from './auth/dev-users.controller.ts';
 import { IdentityGuard } from './auth/identity.guard.ts';
 import { DecisionRequestsController } from './decision-requests/decision-requests.controller.ts';
 import { DecisionRequestsService } from './decision-requests/decision-requests.service.ts';
+import { DelegationsController } from './delegations/delegations.controller.ts';
+import { DelegationsService } from './delegations/delegations.service.ts';
 import { FeaturesController } from './features/features.controller.ts';
 import { HealthController } from './health/health.controller.ts';
 import { OrgController } from './org/org.controller.ts';
@@ -27,6 +29,7 @@ import { SpecService } from './spec/spec.service.ts';
     DevUsersController,
     FeaturesController,
     DecisionRequestsController,
+    DelegationsController,
     SpecController,
     AiSettingsController,
     SetupController,
@@ -40,6 +43,7 @@ import { SpecService } from './spec/spec.service.ts';
     { provide: APP_PIPE, useValue: new StandardSchemaValidationPipe() },
     AuthService,
     DecisionRequestsService,
+    DelegationsService,
     SpecService,
     OrgService,
   ],

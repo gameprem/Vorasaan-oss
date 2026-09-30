@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0016]
 slice: mvp-backend
 ---
@@ -16,6 +16,6 @@ Someone going on leave names a Delegate for a Team and Team Role over a date ran
 - A Decision made by a Delegate records `onBehalfOfId` = the delegator. The view and Decision Log show "decided by C on behalf of A".
 
 ## Acceptance criteria (test first, real Postgres)
-- [ ] An active Delegation reroutes a single-recipient request to the Delegate; an expired or future one does not.
-- [ ] A Delegate without the Team Role is rejected (422). A Member can't create one for someone else (403); an Admin can.
-- [ ] The Decision records `onBehalfOfId`.
+- [x] An active Delegation reroutes a single-recipient request to the Delegate; an expired or future one does not.
+- [x] A Delegate without the Team Role is rejected (422). A Member can't create one for someone else (403); an Admin can.
+- [x] The Decision records `onBehalfOfId`.

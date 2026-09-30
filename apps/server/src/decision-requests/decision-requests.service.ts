@@ -19,6 +19,7 @@ import type {
   SubmitDecisionRequestInput,
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort, type DecisionForAi } from '../ai/ai.port.ts';
+import { activeDelegates } from '../delegations/active-delegations.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specProposalInclude, toSpecProposalView } from '../spec/spec.view.ts';
@@ -109,7 +110,8 @@ export class DecisionRequestsService {
       throw new UnprocessableEntityException('This Question was raised without Choices');
     }
 
-    const recipientIds = await this.chooseRecipients(request, input);
+    const submittedAt = new Date();
+    const recipientIds = await this.chooseRecipients(request, input, submittedAt);
     // Sent to one person → they decide. Sent to several → nobody until one Claims it.
     const deciderId = recipientIds.length === 1 ? (recipientIds[0] ?? null) : null;
 
@@ -131,7 +133,7 @@ export class DecisionRequestsService {
           status,
           deciderRole: input.deciderRole,
           deciderId,
-          submittedAt: new Date(),
+          submittedAt,
           recipients: { create: recipientIds.map((userId) => ({ userId })) },
         },
         include: decisionRequestInclude,
@@ -272,6 +274,7 @@ export class DecisionRequestsService {
       throw new ForbiddenException('Only the Decider can decide this Decision Request');
     }
     const status = this.transition(request, 'decide');
+    const onBehalfOfId = await this.delegatorActedFor(user, request);
 
     let decision: DecisionForAi;
     if ('choiceId' in input) {
@@ -322,6 +325,7 @@ export class DecisionRequestsService {
         data: {
           requestId: id,
           decidedById: user.id,
+          onBehalfOfId,
           choiceId: 'choiceId' in input ? input.choiceId : null,
           customAnswer: 'customAnswer' in input ? input.customAnswer : null,
           rationale: input.rationale ?? null,
@@ -377,28 +381,17 @@ export class DecisionRequestsService {
 
   /**
    * Who the request goes to. The candidates are the Feature's Role Owners for the role or,
-   * when it has none, the Team members holding it; the Raiser is never one of them.
+   * when it has none, the Team members holding it; the Raiser is never one of them. Then a
+   * chosen person with an active Delegation for the role is replaced by their Delegate:
+   * one hop only, never by the Raiser, and without listing anyone twice.
    */
   private async chooseRecipients(
     request: DecisionRequestWithRelations,
     input: SubmitDecisionRequestInput,
+    at: Date,
   ): Promise<string[]> {
     const role = input.deciderRole;
-    const others = { not: request.raiserId };
-    let candidates = (
-      await this.db.roleOwner.findMany({
-        where: { featureId: request.featureId, role, userId: others },
-        select: { userId: true },
-      })
-    ).map((o) => o.userId);
-    if (!candidates.length) {
-      candidates = (
-        await this.db.teamMembership.findMany({
-          where: { teamId: request.feature.teamId, role, userId: others },
-          select: { userId: true },
-        })
-      ).map((m) => m.userId);
-    }
+    const candidates = await this.candidates(request, role);
     if (!candidates.length) {
       throw new UnprocessableEntityException(
         `Nobody but the Raiser holds the ${role} Team Role for this Feature`,
@@ -406,13 +399,68 @@ export class DecisionRequestsService {
     }
 
     const recipients = input.recipients ?? 'ALL';
-    if (recipients === 'ALL') return candidates;
-    if (!candidates.includes(recipients.userId)) {
+    if (recipients !== 'ALL' && !candidates.includes(recipients.userId)) {
       throw new UnprocessableEntityException(
         `That person cannot receive this request as ${role}: send it to one of the Feature's ${role} Role Owners`,
       );
     }
-    return [recipients.userId];
+    const chosen = recipients === 'ALL' ? candidates : [recipients.userId];
+
+    const delegates = await activeDelegates(this.db, {
+      teamId: request.feature.teamId,
+      role,
+      delegatorIds: chosen,
+      at,
+    });
+    const routed = chosen.map((id) => {
+      const delegateId = delegates.get(id);
+      return delegateId && delegateId !== request.raiserId ? delegateId : id;
+    });
+    return [...new Set(routed)];
+  }
+
+  /** Who could receive the request as `role`, before Delegations. */
+  private async candidates(
+    request: DecisionRequestWithRelations,
+    role: DecisionRequestWithRelations['deciderRole'],
+  ): Promise<string[]> {
+    const others = { not: request.raiserId };
+    const owners = await this.db.roleOwner.findMany({
+      where: { featureId: request.featureId, role, userId: others },
+      select: { userId: true },
+    });
+    if (owners.length) return owners.map((o) => o.userId);
+    const members = await this.db.teamMembership.findMany({
+      where: { teamId: request.feature.teamId, role, userId: others },
+      select: { userId: true },
+    });
+    return members.map((m) => m.userId);
+  }
+
+  /**
+   * Whose behalf the user decides on, if they are acting as Delegate: the request reached
+   * them because a candidate's Delegation, active when it was submitted, replaced that
+   * candidate with them. Derived rather than stored, so it holds when the user is a
+   * Recipient, the delegator is a candidate but not a Recipient, and that Delegation
+   * still exists. Claiming a request that reached someone else is never acting as Delegate.
+   */
+  private async delegatorActedFor(
+    user: User,
+    request: DecisionRequestWithRelations,
+  ): Promise<string | null> {
+    const recipientIds = new Set(request.recipients.map((r) => r.user.id));
+    if (!request.submittedAt || !recipientIds.has(user.id)) return null;
+    const delegators = (await this.candidates(request, request.deciderRole)).filter(
+      (id) => !recipientIds.has(id),
+    );
+    if (!delegators.length) return null;
+    const delegates = await activeDelegates(this.db, {
+      teamId: request.feature.teamId,
+      role: request.deciderRole,
+      delegatorIds: delegators,
+      at: request.submittedAt,
+    });
+    return delegators.find((id) => delegates.get(id) === user.id) ?? null;
   }
 
   private async viewer(user: User): Promise<Viewer> {
