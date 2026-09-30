@@ -66,6 +66,12 @@ enum BriefVersionSource {
   REVERT // rolled back to an earlier version
 }
 
+enum GuidelineCriterionKind {
+  KPI // a measurable goal the Feature should move
+  CONSTRAINT // something the Feature must respect
+  REQUIRED_SECTION // a section the Feature's Spec must contain
+}
+
 enum ProposalStatus {
   PENDING
   APPROVED
@@ -192,6 +198,7 @@ model Organization {
   integrations OrgIntegration[]
   projects     Project[]
   chunks       ContentChunk[]
+  guidelines   GuidelineCriterion[]
 }
 
 model OrgMembership {
@@ -243,17 +250,18 @@ model OrgIntegration {
 
 // A product (e.g. "Mobile Banking"). Maps to a Jira project.
 model Project {
-  id             String          @id @default(uuid())
+  id             String               @id @default(uuid())
   organizationId String
   name           String
   jiraKey        String?
-  createdAt      DateTime        @default(now())
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime             @default(now())
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   teams          Team[]
   chunks         ContentChunk[]
   attachments    Attachment[] // Project-level Attachments (not on a Feature)
   briefVersions  BriefVersion[]
   briefProposals BriefProposal[]
+  guidelines     GuidelineCriterion[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -625,4 +633,32 @@ model ContentChunk {
   @@unique([source, sourceId, position])
   @@index([organizationId, projectId, featureId])
   @@index([featureId])
+}
+
+// One criterion of the Feature Guidelines (ADR 0006). With projectId null it is
+// part of the Organization default. With a projectId it is a Project override:
+// an addition (overridesId null), an edit of a default criterion (overridesId
+// set), or a default criterion hidden in that Project (overridesId set,
+// disabled). A disabled row keeps a copy of the default's text, unused.
+model GuidelineCriterion {
+  id             String                 @id @default(uuid())
+  organizationId String
+  projectId      String?
+  overridesId    String?
+  title          String
+  description    String
+  kind           GuidelineCriterionKind
+  required       Boolean
+  disabled       Boolean                @default(false)
+  position       Int
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project?               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Removing a default criterion removes the Projects' edits and hides of it.
+  overrides      GuidelineCriterion?    @relation("GuidelineOverride", fields: [overridesId], references: [id], onDelete: Cascade)
+  overriddenBy   GuidelineCriterion[]   @relation("GuidelineOverride")
+
+  @@unique([projectId, overridesId])
+  @@index([organizationId, projectId, position])
 }

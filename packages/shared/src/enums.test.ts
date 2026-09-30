@@ -11,6 +11,7 @@ const pairs = [
   ['ProposalStatus', shared.ProposalStatus, db.ProposalStatus],
   ['SpecVersionSource', shared.SpecVersionSource, db.SpecVersionSource],
   ['BriefVersionSource', shared.BriefVersionSource, db.BriefVersionSource],
+  ['GuidelineCriterionKind', shared.GuidelineCriterionKind, db.GuidelineCriterionKind],
   ['AttachmentSource', shared.AttachmentSource, db.AttachmentSource],
   ['NotificationType', shared.NotificationType, db.NotificationType],
 ] as const;

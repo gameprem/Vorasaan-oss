@@ -42,6 +42,9 @@ export type SpecVersionSource = z.infer<typeof SpecVersionSource>;
 export const BriefVersionSource = z.enum(['MANUAL', 'GRILLING', 'REVERT']);
 export type BriefVersionSource = z.infer<typeof BriefVersionSource>;
 
+export const GuidelineCriterionKind = z.enum(['KPI', 'CONSTRAINT', 'REQUIRED_SECTION']);
+export type GuidelineCriterionKind = z.infer<typeof GuidelineCriterionKind>;
+
 export const AttachmentSource = z.enum(['FILE', 'URL', 'CONFLUENCE', 'JIRA']);
 export type AttachmentSource = z.infer<typeof AttachmentSource>;
 
