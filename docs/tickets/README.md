@@ -47,3 +47,36 @@ Goal: install from scratch, choose an AI provider, sign in, and set up your own 
 | # | Ticket | Depends on |
 | --- | --- | --- |
 | 0015 | [CI on GitHub Actions](./0015-ci.md) | none |
+
+## MVP
+
+Goal: everything in REQUIREMENT §3 (Phases 2–4). The schema already covers the MVP domain, so most tickets need no migration.
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0016 | [Recipients, Claim and reassign](./0016-recipients-and-claim.md) | none |
+| 0017 | [Ask for more info (NEEDS_INFO thread)](./0017-needs-info-thread.md) | 0016 |
+| 0018 | [Delegations](./0018-delegations.md) | 0016 |
+| 0019 | [Inbox Items, Notifications and the event stream](./0019-inbox-notifications-sse.md) | 0017, 0018 |
+| 0020 | [Spec editing, diff and revert](./0020-spec-edit-diff-revert.md) | none |
+| 0021 | [Attachments: files and URLs, with Snapshots](./0021-attachments-file-and-url.md) | none |
+| 0022 | [Attachments from Confluence and Jira](./0022-attachments-atlassian.md) | 0021 |
+| 0023 | [AI: Attachment summary and an initial Spec from Attachments](./0023-ai-spec-from-attachments.md) | 0021 |
+| 0024 | [Web: review, send, Claim, reassign, ask for info, withdraw](./0024-web-request-actions.md) | 0016, 0017, 0018 |
+| 0025 | [Web: Inbox, Notifications and live updates](./0025-web-inbox-notifications.md) | 0019 |
+| 0026 | [Web: Feature page with editor, history, diff, Attachments](./0026-web-feature-page.md) | 0020, 0021, 0023 |
+| 0027 | [Web: Delegation settings](./0027-web-delegation-settings.md) | 0018 |
+| 0028 | [CLI: `vorasaan` TUI and `vorasaan init`](./0028-cli-tui.md) | 0019 |
+| 0029 | [CLI: live updates, OS notifications and acting from the TUI](./0029-cli-live-and-actions.md) | 0028, 0024 |
+
+```
+Decision Requests   0016 ─┬─ 0017 ─┬─ 0019 ─┬─ 0025
+                          └─ 0018 ─┘        └─ 0028 ── 0029
+                                  0016+0017+0018 ─ 0024 ─┘
+                                  0018 ─ 0027
+Spec                0020 ──────────────┐
+Attachments         0021 ─┬─ 0022      ├─ 0026
+                          └─ 0023 ─────┘
+```
+
+The three lanes (Decision Requests, Spec, Attachments) run in parallel. Inside the Decision Requests lane, 0017 and 0018 both change `decision-requests.service.ts`, so run them one after the other.
