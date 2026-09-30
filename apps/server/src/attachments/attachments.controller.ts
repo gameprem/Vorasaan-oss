@@ -48,7 +48,8 @@ export class AttachmentsController {
 
   /**
    * multipart/form-data (`title` field, then a `file` part) uploads a file;
-   * a JSON body (`AddUrlAttachmentInput`) attaches a public URL.
+   * a JSON body (`AddUrlAttachmentInput`) attaches a public URL, a Confluence
+   * page or a Jira issue.
    */
   @Post('features/:id/attachments')
   @UseInterceptors(uploadStream)

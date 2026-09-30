@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { JiraIssueKey } from './atlassian.ts';
 import { TeamRole } from './enums.ts';
 
 export const FeatureSummaryView = z.object({
@@ -11,3 +12,18 @@ export const FeatureSummaryView = z.object({
   myRoles: z.array(TeamRole),
 });
 export type FeatureSummaryView = z.infer<typeof FeatureSummaryView>;
+
+/** `GET /features/:id`. */
+export const FeatureView = FeatureSummaryView.extend({
+  /** The linked Jira Epic, if any. */
+  jiraIssueKey: z.string().nullable(),
+  /** The Epic on the Atlassian site; null when unlinked or Atlassian isn't connected. */
+  jiraIssueUrl: z.string().nullable(),
+});
+export type FeatureView = z.infer<typeof FeatureView>;
+
+/** `PATCH /features/:id`: `jiraIssueKey` null or "" unlinks the Jira Epic. */
+export const UpdateFeatureInput = z.object({
+  jiraIssueKey: JiraIssueKey.nullable().or(z.literal('').transform(() => null)),
+});
+export type UpdateFeatureInput = z.infer<typeof UpdateFeatureInput>;

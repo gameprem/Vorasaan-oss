@@ -24,6 +24,7 @@ import type {
   SpecVersionView,
   TeamRole,
   TeamView,
+  UpdateFeatureInput,
   WriteSpecInput,
 } from '@vorasaan/shared';
 import { AuthService, hashPassword } from '../auth/auth.service.ts';
@@ -284,6 +285,16 @@ export class OrgService {
         status: 'IN_PROGRESS',
       },
       select: { id: true, title: true },
+    });
+  }
+
+  /** Links or unlinks the Feature's Jira Epic (Admins and the Team's PO). */
+  async updateFeature(user: User, featureId: string, input: UpdateFeatureInput) {
+    await this.assertCanManageTeam(user, await this.teamOfFeature(featureId));
+    return this.db.feature.update({
+      where: { id: featureId },
+      data: { jiraIssueKey: input.jiraIssueKey },
+      select: { id: true, title: true, jiraIssueKey: true },
     });
   }
 

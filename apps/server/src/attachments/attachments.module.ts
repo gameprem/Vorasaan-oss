@@ -5,7 +5,9 @@ import { AttachmentsService } from './attachments.service.ts';
 import {
   ATTACHMENT_SNAPSHOTTERS,
   type AttachmentSnapshotter,
+  ConfluenceSnapshotter,
   FileSnapshotter,
+  JiraSnapshotter,
   UrlSnapshotter,
 } from './snapshotters.ts';
 
@@ -16,11 +18,13 @@ import {
     AttachmentsService,
     FileSnapshotter,
     UrlSnapshotter,
-    // One snapshotter per AttachmentSource; add Confluence and Jira here.
+    ConfluenceSnapshotter,
+    JiraSnapshotter,
+    // One snapshotter per AttachmentSource.
     {
       provide: ATTACHMENT_SNAPSHOTTERS,
       useFactory: (...snapshotters: AttachmentSnapshotter[]) => snapshotters,
-      inject: [FileSnapshotter, UrlSnapshotter],
+      inject: [FileSnapshotter, UrlSnapshotter, ConfluenceSnapshotter, JiraSnapshotter],
     },
   ],
 })

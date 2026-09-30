@@ -6,6 +6,7 @@ import {
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Put,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ import {
   CreateTeamInput,
   SetRoleOwnersInput,
   SetTeamRolesInput,
+  UpdateFeatureInput,
   WriteSpecInput,
 } from '@vorasaan/shared';
 import { AdminOnly } from '../auth/admin.guard.ts';
@@ -119,6 +121,15 @@ export class OrgController {
   }
 
   // Features
+
+  @Patch('features/:id')
+  updateFeature(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: UpdateFeatureInput }) body: UpdateFeatureInput,
+  ) {
+    return this.org.updateFeature(user, id, body);
+  }
 
   @Get('features/:id/role-owners')
   roleOwners(@Param('id', ParseUUIDPipe) id: string) {

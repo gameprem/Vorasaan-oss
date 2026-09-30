@@ -21,6 +21,7 @@ import {
   InjectFileStorage,
   StoredFileNotFoundError,
 } from '../storage/file-storage.ts';
+import { AtlassianError } from './atlassian.ts';
 import { attachmentLimits } from './attachment.config.ts';
 import { attachmentInclude, toAttachmentView } from './attachment.view.ts';
 import { UrlFetchError } from './fetch-url.ts';
@@ -113,24 +114,30 @@ export class AttachmentsService {
     }
   }
 
-  /** Attaches a public web page and snapshots its readable text. */
+  /**
+   * Attaches a public web page, a Confluence page or a Jira issue and snapshots
+   * its readable text.
+   */
   async addUrl(
     user: User,
     featureId: string,
     input: AddUrlAttachmentInput,
   ): Promise<AttachmentView> {
     await this.assertCanEdit(user, featureId);
-    const snapshot = await this.capture('URL', {
-      url: input.url,
+    const ref =
+      input.source === 'URL' ? input.url : input.source === 'CONFLUENCE' ? input.page : input.issue;
+    const snapshot = await this.capture(input.source, {
+      url: ref,
       storageKey: null,
       mimeType: null,
     });
+    const url = snapshot.url ?? ref;
     const created = await this.db.attachment.create({
       data: {
         featureId,
-        source: 'URL',
-        title: clip(input.title ?? snapshot.title ?? input.url),
-        url: input.url,
+        source: input.source,
+        title: clip(input.title ?? snapshot.title ?? url),
+        url,
         mimeType: snapshot.mimeType ?? null,
         snapshotText: snapshot.text,
         snapshotAt: new Date(),
@@ -141,7 +148,7 @@ export class AttachmentsService {
     return toAttachmentView(created);
   }
 
-  /** Re-fetches a URL (or re-reads a file) and replaces the Snapshot. */
+  /** Re-fetches a URL, Confluence page or Jira issue (or re-reads a file) and replaces the Snapshot. */
   async refresh(user: User, id: string): Promise<AttachmentView> {
     const attachment = await this.findOrThrow(id);
     await this.assertCanEdit(user, attachment.featureId);
@@ -244,7 +251,11 @@ async function readable<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (error) {
-    if (error instanceof UnreadableContentError || error instanceof UrlFetchError) {
+    if (
+      error instanceof UnreadableContentError ||
+      error instanceof UrlFetchError ||
+      error instanceof AtlassianError
+    ) {
       throw new UnprocessableEntityException(error.message);
     }
     if (error instanceof StoredFileNotFoundError) {
