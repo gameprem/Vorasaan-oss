@@ -13,6 +13,7 @@ import { DecisionRequestsController } from './decision-requests/decision-request
 import { DecisionRequestsService } from './decision-requests/decision-requests.service.ts';
 import { DelegationsController } from './delegations/delegations.controller.ts';
 import { DelegationsService } from './delegations/delegations.service.ts';
+import { FeatureGuidelinesModule } from './feature-guidelines/feature-guidelines.module.ts';
 import { FeaturesController } from './features/features.controller.ts';
 import { HealthController } from './health/health.controller.ts';
 import { InboxModule } from './inbox/inbox.module.ts';
@@ -34,6 +35,7 @@ import { SpecService } from './spec/spec.service.ts';
     AtlassianModule,
     AttachmentsModule,
     InboxModule,
+    FeatureGuidelinesModule,
   ],
   controllers: [
     HealthController,

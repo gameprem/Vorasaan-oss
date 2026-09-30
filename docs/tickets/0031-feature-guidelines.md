@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0030]
 slice: project-foundation
 ---
@@ -23,5 +23,5 @@ The business states what a good Feature must satisfy, once for the Organization 
 - Migration for the tables.
 
 ## Acceptance criteria (test first, real Postgres)
-- [ ] The effective list is the Organization default plus the Project's additions, minus what it disabled, with its edits applied.
-- [ ] Only Admins change the default. Only the Project's POs or Admins change the overrides.
+- [x] The effective list is the Organization default plus the Project's additions, minus what it disabled, with its edits applied.
+- [x] Only Admins change the default. Only the Project's POs or Admins change the overrides.
