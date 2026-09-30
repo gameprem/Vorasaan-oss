@@ -29,9 +29,12 @@ export function agentGenerate(task: string, model: MastraModel): StructuredGener
     instructions: INSTRUCTIONS,
     model: model as AgentModel,
   });
+  // Always stream: some OpenAI-compatible routers (e.g. 9Router) answer with SSE even
+  // for non-streaming requests, which breaks a plain generate() call. Streaming works
+  // with every provider, and we only need the final validated object.
   return async (prompt, schema) => {
-    const result = await agent.generate(prompt, { structuredOutput: { schema } });
-    return result.object;
+    const stream = await agent.stream(prompt, { structuredOutput: { schema } });
+    return stream.object;
   };
 }
 

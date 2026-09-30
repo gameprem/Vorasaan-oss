@@ -18,6 +18,7 @@ import type {
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort, type DecisionForAi } from '../ai/ai.port.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specProposalInclude, toSpecProposalView } from '../spec/spec.view.ts';
 import {
   type DecisionRequestEvent,
@@ -222,7 +223,7 @@ export class DecisionRequestsService {
           featureId: request.featureId,
           baseVersionId: base?.id ?? null,
           source: 'DECISION',
-          proposedMarkdown: draft.proposedMarkdown,
+          proposedMarkdown: normalizeMarkdown(draft.proposedMarkdown),
           approverId: user.id,
           decisionId: created.id,
         },

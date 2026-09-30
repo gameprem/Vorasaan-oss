@@ -29,6 +29,7 @@ import type {
 import { AuthService, hashPassword } from '../auth/auth.service.ts';
 import { hashToken, newToken } from '../auth/tokens.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specVersionInclude, toSpecVersionView } from '../spec/spec.view.ts';
 
 const INVITE_PREFIX = 'vsi_';
@@ -346,7 +347,7 @@ export class OrgService {
           data: {
             featureId,
             version: current + 1,
-            markdown: input.markdown,
+            markdown: normalizeMarkdown(input.markdown),
             source: 'MANUAL',
             summary: input.summary || (current === 0 ? 'Initial Spec' : 'Edited by hand'),
             approvedById: user.id,
