@@ -20,6 +20,7 @@ import { ATTACHMENT_CONTEXT_BUDGET, attachmentsForAi } from '../attachments/atta
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { IndexingService } from '../retrieval/indexing.service.ts';
 import { diffLines } from './diff.ts';
 import { normalizeMarkdown } from './markdown.ts';
 import {
@@ -43,6 +44,7 @@ export class SpecService {
     @InjectPrisma() private readonly db: PrismaClient,
     private readonly notifications: NotificationsService,
     @Inject(AI_PORT) private readonly ai: AiPort,
+    private readonly indexing: IndexingService,
   ) {}
 
   /**
@@ -158,6 +160,7 @@ export class SpecService {
         return created;
       });
       await this.notifications.publish(outbox);
+      this.indexing.schedule({ source: 'SPEC_VERSION', id: version.id });
       return toSpecVersionView(version);
     } catch (error) {
       if (error instanceof StaleStateError) throw new ConflictException(error.message);
@@ -258,6 +261,7 @@ export class SpecService {
         return created;
       });
       await this.notifications.publish(outbox);
+      this.indexing.schedule({ source: 'SPEC_VERSION', id: created.id });
       return toSpecVersionView(created);
     } catch (error) {
       if (error instanceof StaleStateError) throw new ConflictException(error.message);

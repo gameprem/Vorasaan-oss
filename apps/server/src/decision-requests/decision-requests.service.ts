@@ -23,6 +23,7 @@ import { ATTACHMENT_CONTEXT_BUDGET, attachmentsForAi } from '../attachments/atta
 import { activeDelegates } from '../delegations/active-delegations.ts';
 import { NotificationsService, type Outbox, type Tx } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { IndexingService } from '../retrieval/indexing.service.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specProposalInclude, toSpecProposalView } from '../spec/spec.view.ts';
 import {
@@ -45,6 +46,7 @@ export class DecisionRequestsService {
     @InjectPrisma() private readonly db: PrismaClient,
     @Inject(AI_PORT) private readonly ai: AiPort,
     private readonly notifications: NotificationsService,
+    private readonly indexing: IndexingService,
   ) {}
 
   async raise(user: User, input: RaiseDecisionRequestInput): Promise<DecisionRequestView> {
@@ -402,6 +404,9 @@ export class DecisionRequestsService {
       return { updated, proposal };
     });
     await this.notifications.publish(outbox);
+    if (proposal.decisionId) {
+      this.indexing.schedule({ source: 'DECISION', id: proposal.decisionId });
+    }
 
     return {
       request: toDecisionRequestView(updated, await this.viewer(user)),

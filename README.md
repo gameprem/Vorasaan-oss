@@ -96,6 +96,9 @@ Then create a **Project** and a **Team**, **invite your team** with a link, crea
 | `VORASAAN_WEB_PORT` / `VORASAAN_API_PORT` | `3000` / `4000` | Host ports |
 | `VORASAAN_INSECURE_COOKIES` | `false` | Set `true` only when serving over plain HTTP on a non-localhost address |
 
+> [!NOTE]
+> The database image is `pgvector/pgvector:pg17` (PostgreSQL 17 with the pgvector extension), so AI workflows can retrieve only the relevant parts of long documents. Upgrading from the plain `postgres:17-alpine` image keeps your data volume: run `docker compose pull db && docker compose up -d`, then rebuild text indexes once, because the new image sorts text with glibc instead of musl: `docker compose exec db psql -U vorasaan -c 'REINDEX DATABASE vorasaan'`. Embeddings need an OpenAI-compatible embeddings endpoint (URL, key and model), set by an Admin at `PUT /settings/embeddings`; without one, everything still works and content is indexed without vectors until you configure it and re-index (`POST /settings/embeddings/reindex`).
+
 ### Raise from your terminal
 
 In the web app, open **Access tokens** and create a token. Then:
@@ -113,7 +116,7 @@ Requires [Bun](https://bun.sh) ≥ 1.4 and Docker.
 
 ```bash
 cp .env.example .env          # set VORASAAN_SECRET_KEY
-docker compose up -d db       # PostgreSQL only
+docker compose up -d db       # PostgreSQL (with pgvector) only
 bun install
 bun run db:generate && bun run db:migrate
 bun run db:seed               # demo data: pim@acme.test / beam@acme.test, password vorasaan-demo

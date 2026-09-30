@@ -43,6 +43,7 @@ enum IntegrationProvider {
   OPENAI // OpenAI API (GPT and Codex models)
   OPENAI_COMPATIBLE // any OpenAI-compatible URL + token, e.g. 9Router
   ATLASSIAN
+  EMBEDDINGS // OpenAI-compatible embeddings endpoint for retrieval (ADR 0007)
 }
 
 enum AttachmentSource {
@@ -89,6 +90,13 @@ enum RequestMessageKind {
   QUESTION // Decider -> Raiser (NEEDS_INFO)
   ANSWER // Raiser -> Decider
   NOTE
+}
+
+// What a ContentChunk was cut from (BRIEF_VERSION comes with the Project Brief).
+enum ChunkSource {
+  ATTACHMENT // its current Snapshot
+  SPEC_VERSION // the Feature's latest Spec Version only
+  DECISION // with its Decision Request and rationale
 }
 
 // Informational only. Inbox Items are derived from DecisionRequest/SpecProposal state.
@@ -173,6 +181,7 @@ model Organization {
   invitations  Invitation[]
   integrations OrgIntegration[]
   projects     Project[]
+  chunks       ContentChunk[]
 }
 
 model OrgMembership {
@@ -224,13 +233,14 @@ model OrgIntegration {
 
 // A product (e.g. "Mobile Banking"). Maps to a Jira project.
 model Project {
-  id             String       @id @default(uuid())
+  id             String         @id @default(uuid())
   organizationId String
   name           String
   jiraKey        String?
-  createdAt      DateTime     @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   teams          Team[]
+  chunks         ContentChunk[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -266,7 +276,7 @@ model TeamMembership {
 // Someone deciding on another person's behalf for a period (e.g. leave).
 // Set by the delegator or an Admin; the Delegate must hold the same Team Role in the Team.
 model Delegation {
-  id          String   @id @default(uuid())
+  id          String        @id @default(uuid())
   teamId      String
   role        TeamRole
   delegatorId String
@@ -274,11 +284,11 @@ model Delegation {
   startsAt    DateTime
   endsAt      DateTime
   createdById String
-  createdAt   DateTime @default(now())
-  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  delegator   User     @relation("DelegationDelegator", fields: [delegatorId], references: [id], onDelete: Cascade)
-  delegate    User     @relation("DelegationDelegate", fields: [delegateId], references: [id], onDelete: Cascade)
-  createdBy   User     @relation("DelegationCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now())
+  team        Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  delegator   User          @relation("DelegationDelegator", fields: [delegatorId], references: [id], onDelete: Cascade)
+  delegate    User          @relation("DelegationDelegate", fields: [delegateId], references: [id], onDelete: Cascade)
+  createdBy   User          @relation("DelegationCreatedBy", fields: [createdById], references: [id])
   started     Notification? // DELEGATION_STARTED, to the Delegate
 
   @@index([delegatorId, teamId, role, startsAt, endsAt])
@@ -301,6 +311,7 @@ model Feature {
   specProposals    SpecProposal[]
   decisionRequests DecisionRequest[]
   notifications    Notification[]
+  chunks           ContentChunk[]
 
   @@index([teamId])
   @@index([jiraIssueKey])
@@ -521,4 +532,35 @@ model Notification {
   delegation    Delegation?      @relation(fields: [delegationId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
+}
+
+// ─── Retrieval (ADR 0007) ───────────────────────────────────────────────────
+
+// A piece of long content, embedded for retrieval. Rows are replaced whenever their
+// source is re-indexed. `embedding` is a pgvector `vector` of any dimension; it is
+// null when no embeddings provider is configured or the call failed. Vector reads,
+// writes and search are raw SQL in ContentChunkRepository only. Each dimension in
+// use gets a partial HNSW index, created on first use:
+//   USING hnsw ((embedding::vector(N)) vector_cosine_ops) WHERE "embeddingDims" = N
+model ContentChunk {
+  id             String                 @id @default(uuid())
+  organizationId String
+  projectId      String
+  featureId      String?
+  source         ChunkSource
+  sourceId       String
+  position       Int
+  text           String
+  tokenCount     Int
+  embedding      Unsupported("vector")?
+  embeddingModel String? // the model that produced `embedding`; vectors of different models are never compared
+  embeddingDims  Int?
+  createdAt      DateTime               @default(now())
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  feature        Feature?               @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([source, sourceId, position])
+  @@index([organizationId, projectId, featureId])
+  @@index([featureId])
 }

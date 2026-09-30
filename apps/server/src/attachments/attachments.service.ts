@@ -18,6 +18,7 @@ import {
 } from '@vorasaan/shared';
 import { AI_PORT, type AiPort } from '../ai/ai.port.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { IndexingService } from '../retrieval/indexing.service.ts';
 import {
   type FileStorage,
   InjectFileStorage,
@@ -57,6 +58,7 @@ export class AttachmentsService {
     @InjectFileStorage() private readonly storage: FileStorage,
     @Inject(ATTACHMENT_SNAPSHOTTERS) snapshotters: AttachmentSnapshotter[],
     @Inject(AI_PORT) private readonly ai: AiPort,
+    private readonly indexing: IndexingService,
   ) {
     this.snapshotters = new Map(snapshotters.map((s) => [s.source, s]));
   }
@@ -116,6 +118,7 @@ export class AttachmentsService {
         },
         include: attachmentInclude,
       });
+      this.indexing.schedule({ source: 'ATTACHMENT', id });
       return toAttachmentView(created);
     } catch (error) {
       await this.storage.delete(storageKey);
@@ -157,6 +160,7 @@ export class AttachmentsService {
       },
       include: attachmentInclude,
     });
+    this.indexing.schedule({ source: 'ATTACHMENT', id: created.id });
     return toAttachmentView(created);
   }
 
@@ -177,6 +181,7 @@ export class AttachmentsService {
       },
       include: attachmentInclude,
     });
+    this.indexing.schedule({ source: 'ATTACHMENT', id });
     return toAttachmentView(updated);
   }
 
@@ -205,6 +210,7 @@ export class AttachmentsService {
     const attachment = await this.findOrThrow(id);
     await this.assertCanEdit(user, attachment.featureId);
     await this.db.attachment.delete({ where: { id } });
+    this.indexing.schedule({ source: 'ATTACHMENT', id }); // gone: its chunks are removed
     if (attachment.storageKey) await this.storage.delete(attachment.storageKey);
   }
 
