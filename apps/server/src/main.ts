@@ -1,4 +1,17 @@
 import { createApp } from './app.ts';
+import { SecretBox } from './crypto/secret-box.ts';
+
+// Fail fast in production: without the key, provider secrets can't be stored or read.
+if (process.env.NODE_ENV === 'production') {
+  try {
+    SecretBox.fromEnv();
+  } catch (error) {
+    console.error(
+      `\n✖ ${(error as Error).message}\n  Add it to .env next to docker-compose.yml, then restart.\n`,
+    );
+    process.exit(1);
+  }
+}
 
 const app = await createApp();
 const port = Number(process.env.PORT ?? 4000);

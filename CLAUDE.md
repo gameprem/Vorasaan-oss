@@ -36,7 +36,7 @@ Open-source "AI proposes, human approves" alignment engine. Product scope: `REQU
 ## Commands
 
 ```bash
-docker compose up -d db     # Postgres for dev/tests
+docker compose up -d db     # Postgres for dev/tests (docker compose up -d = full stack)
 bun install
 bun run db:generate         # Prisma client
 bun run db:migrate          # create/apply migrations (dev)

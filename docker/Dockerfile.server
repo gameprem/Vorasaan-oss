@@ -1,0 +1,24 @@
+# Vorasaan API server (NestJS on Bun). Applies database migrations on start.
+FROM oven/bun:1.4.2 AS base
+WORKDIR /app
+# Prisma's schema engine needs OpenSSL at migrate time.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies from manifests only, so code changes don't bust this layer.
+COPY package.json bun.lock turbo.json tsconfig.base.json ./
+COPY apps/server/package.json apps/server/
+COPY apps/web/package.json apps/web/
+COPY apps/cli/package.json apps/cli/
+COPY packages/db/package.json packages/db/
+COPY packages/shared/package.json packages/shared/
+COPY packages/skills/package.json packages/skills/
+RUN bun install --frozen-lockfile
+
+COPY packages ./packages
+COPY apps/server ./apps/server
+RUN cd packages/db && bun --bun prisma generate
+
+ENV NODE_ENV=production PORT=4000
+EXPOSE 4000
+CMD ["sh", "-c", "cd /app/packages/db && bun --bun prisma migrate deploy && cd /app/apps/server && exec bun src/main.ts"]

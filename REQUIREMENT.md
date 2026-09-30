@@ -172,7 +172,7 @@ Bun, Commander.js (subcommands), **Ink** (persistent TUI), SSE client, OS notifi
 - [x] `CONTEXT.md` glossary, ADRs 0001–0005, `CLAUDE.md`, `README.md`.
 - [ ] Scaffold `apps/web`, `apps/server`, `apps/cli` and `packages/skills` as workspace packages.
 - [ ] Zod schemas in `packages/shared` (align with Prisma enums: add `TECH_LEAD`, `DecisionRequest` replaces `BlockerPayload`).
-- [ ] `docker/Dockerfile.server` and `docker/Dockerfile.web` for the `app` compose profile.
+- [x] `docker/Dockerfile.server` and `docker/Dockerfile.web`; `docker compose up` runs the whole product.
 
 ### Tracer bullet (first)
 Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → web page to decide → Spec Proposal approved → Spec v2 in the Decision Log. No auth, onboarding, TUI, recipients/Claim/Delegation, NEEDS_INFO, Attachments or SSE yet. Broken into tickets in `docs/tickets/`.
