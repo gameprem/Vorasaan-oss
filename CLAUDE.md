@@ -29,7 +29,7 @@ Open-source "AI proposes, human approves" alignment engine. Product scope: `REQU
 
 - `bun test`. Service-layer tests run against a real Postgres (`docker compose up db`), never a mocked Prisma.
 - Test-drive the Decision Request state machine (states, Claim, Delegation, NEEDS_INFO) before implementing it.
-- LLM calls go through an interface. Tests use a deterministic fake. Prompt quality is measured by the eval set, run manually, not in CI.
+- LLM calls go through an interface. Tests use a deterministic fake. Prompt quality is measured by the eval set, run manually, not in automated tests.
 
 ## Commands
 
@@ -43,4 +43,4 @@ bun run typecheck
 bun run test
 ```
 
-CI (GitHub Actions) runs lint, typecheck and test on every PR. All three must pass before merge.
+There is no CI yet: run lint, typecheck and test locally before opening a PR. All three must pass.

@@ -6,7 +6,6 @@
 
 **AI proposes. Humans approve. Your coding agent builds the right thing.**
 
-[![CI](https://github.com/gameprem/Vorasaan/actions/workflows/ci.yml/badge.svg)](https://github.com/gameprem/Vorasaan/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-pre--alpha-orange.svg)](#-roadmap)
 [![Built with Bun](https://img.shields.io/badge/built%20with-Bun-fbf0df?logo=bun&logoColor=black)](https://bun.sh)
@@ -129,7 +128,7 @@ The domain language (Feature, Spec, Decision Request, Decider, and so on) is def
 ## 🗺️ Roadmap
 
 - [x] Product design, domain model and glossary
-- [x] Monorepo foundation, database schema and CI
+- [x] Monorepo foundation and database schema
 - [ ] **Tracer bullet:** raise → AI Choices → decide → approved Spec version
 - [ ] **MVP:** onboarding, attachments, routing, delegation, inbox, TUI
 - [ ] `vorasaan run --ai claude`: hand the approved Spec to your coding agent
