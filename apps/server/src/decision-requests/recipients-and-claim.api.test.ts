@@ -110,6 +110,21 @@ describe('Decision Requests API: recipients, Claim and reassign', () => {
     expect(pimView.body.canClaim).toBe(true);
   });
 
+  test('recipient=me lists only OPEN requests: withdrawn or decided ones leave it', async () => {
+    const nok = await person('Nok', ['PO'], ['PO']);
+    const withdrawn = await submit({ deciderRole: 'PO', recipients: 'ALL' });
+    await asBeam('POST', `/decision-requests/${withdrawn.body.id}/withdraw`);
+    const decided = await submit({ deciderRole: 'PO', recipients: { userId: nok.id } });
+    await nok.call('POST', `/decision-requests/${decided.body.id}/decision`, {
+      choiceId: decided.body.choices[0]?.id,
+    });
+
+    for (const call of [asPim, nok.call]) {
+      const list = await call<DecisionRequestView[]>('GET', '/decision-requests?recipient=me');
+      expect(list.body).toEqual([]);
+    }
+  });
+
   test('sending to one of several Role Owners makes them the Decider', async () => {
     const nok = await person('Nok', ['PO'], ['PO']);
     const res = await submit({ deciderRole: 'PO', recipients: { userId: nok.id } });

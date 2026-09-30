@@ -306,8 +306,9 @@ export class DecisionRequestsService {
         deciderId: query.decider === 'me' ? user.id : undefined,
         raiserId: query.raiser === 'me' ? user.id : undefined,
         status: query.status,
-        // Sent to me and still mine to Claim or decide.
+        // Sent to me and still mine to Claim or decide, which only an OPEN request is.
         ...(query.recipient === 'me' && {
+          status: 'OPEN',
           recipients: { some: { userId: user.id } },
           OR: [{ deciderId: null }, { deciderId: user.id }],
         }),
