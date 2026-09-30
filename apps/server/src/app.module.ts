@@ -1,6 +1,7 @@
 import { Module, StandardSchemaValidationPipe } from '@nestjs/common';
 import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { MastraModule } from './ai/mastra.module.ts';
+import { AttachmentsModule } from './attachments/attachments.module.ts';
 import { AdminGuard } from './auth/admin.guard.ts';
 import { AuthController } from './auth/auth.controller.ts';
 import { AuthService } from './auth/auth.service.ts';
@@ -19,7 +20,7 @@ import { SpecController } from './spec/spec.controller.ts';
 import { SpecService } from './spec/spec.service.ts';
 
 @Module({
-  imports: [PrismaModule, MastraModule],
+  imports: [PrismaModule, MastraModule, AttachmentsModule],
   controllers: [
     HealthController,
     AuthController,
