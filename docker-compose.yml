@@ -1,0 +1,46 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: vorasaan_admin
+      POSTGRES_PASSWORD: vorasaan_password
+      POSTGRES_DB: vorasaan_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - vorasaan_pgdata:/var/lib/postgresql/data
+
+  ninerouter:
+    image: 9router/9router:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config/9router.yaml:/etc/9router/config.yaml
+
+  server:
+    build: 
+      context: .
+      dockerfile: docker/Dockerfile.server
+    ports:
+      - "4000:4000"
+    environment:
+      - DATABASE_URL=postgres://vorasaan_admin:vorasaan_password@db:5432/vorasaan_db
+      - NINEROUTER_URL=http://ninerouter:8080/v1
+    depends_on:
+      - db
+      - ninerouter
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://server:4000
+    depends_on:
+      - server
+
+volumes:
+  vorasaan_pgdata:

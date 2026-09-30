@@ -1,0 +1,511 @@
+// Vorasaan domain schema. Terms follow CONTEXT.md.
+// Hierarchy: Organization -> Project -> Team -> Feature.
+// Mastra keeps its workflow snapshots in a separate Postgres schema; nothing here depends on it.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum OrgRole {
+  ADMIN
+  MEMBER
+}
+
+enum TeamRole {
+  PO
+  DESIGNER
+  TECH_LEAD
+  BACKEND
+  FRONTEND
+  MOBILE
+  QA
+}
+
+enum FeatureStatus {
+  DRAFT
+  IN_PROGRESS
+  DONE
+  ARCHIVED
+}
+
+enum IntegrationProvider {
+  ANTHROPIC
+  OPENAI_COMPATIBLE // e.g. 9Router
+  ATLASSIAN
+}
+
+enum AttachmentSource {
+  FILE
+  URL
+  CONFLUENCE
+  JIRA
+}
+
+enum SpecVersionSource {
+  MANUAL // PO edited in the web editor
+  AI_SUMMARY // AI draft from Attachments, approved by a human
+  DECISION // AI draft after a Decision, approved by the Decider
+  REVERT // rolled back to an earlier version
+}
+
+enum ProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DecisionRequestKind {
+  BLOCKER // stops the Raiser's work; marks the Feature as Blocked
+  QUESTION // Raiser keeps working
+}
+
+enum DecisionRequestStatus {
+  DRAFT // Choices generated, Raiser still reviewing
+  OPEN // waiting for a Decider (or a Claim)
+  NEEDS_INFO // Decider asked the Raiser a question
+  DECIDED // Decision made; terminal if no Spec change is needed
+  SPEC_UPDATED // Spec Proposal approved, new Spec Version created
+  WITHDRAWN
+}
+
+enum RequestContextKind {
+  TEXT
+  FILE
+  DIFF
+}
+
+enum RequestMessageKind {
+  QUESTION // Decider -> Raiser (NEEDS_INFO)
+  ANSWER // Raiser -> Decider
+  NOTE
+}
+
+// Informational only. Inbox Items are derived from DecisionRequest/SpecProposal state.
+enum NotificationType {
+  REQUEST_DECIDED // to the Raiser
+  REQUEST_CLAIMED // to the other recipients
+  REQUEST_WITHDRAWN // to the Decider or recipients
+  SPEC_VERSION_CREATED // to the Feature's PO Role Owners
+  DELEGATION_STARTED // to the Delegate
+}
+
+// ─── Identity & access ──────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orgMemberships  OrgMembership[]
+  teamMemberships TeamMembership[]
+  roleOwnerships  RoleOwner[]
+  sessions        Session[]
+  accessTokens    PersonalAccessToken[]
+  notifications   Notification[]
+  invitationsSent Invitation[]
+  attachments     Attachment[]
+
+  requestsRaised     DecisionRequest[]  @relation("RequestRaiser")
+  requestsDeciding   DecisionRequest[]  @relation("RequestDecider")
+  requestsReceived   RequestRecipient[]
+  requestMessages    RequestMessage[]
+  decisionsMade      Decision[]         @relation("DecisionDecidedBy")
+  decisionsDelegated Decision[]         @relation("DecisionOnBehalfOf")
+
+  proposalsToApprove SpecProposal[] @relation("ProposalApprover")
+  specVersions       SpecVersion[]  @relation("SpecVersionApprovedBy")
+
+  delegationsGiven    Delegation[] @relation("DelegationDelegator")
+  delegationsReceived Delegation[] @relation("DelegationDelegate")
+  delegationsCreated  Delegation[] @relation("DelegationCreatedBy")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// CLI auth for the MVP. Browser-based `vorasaan login` comes later.
+model PersonalAccessToken {
+  id         String    @id @default(uuid())
+  userId     String
+  name       String
+  tokenHash  String    @unique
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ─── Organization ───────────────────────────────────────────────────────────
+
+// One per self-hosted instance for now; kept as a model so SaaS stays possible.
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  memberships  OrgMembership[]
+  invitations  Invitation[]
+  integrations OrgIntegration[]
+  projects     Project[]
+}
+
+model OrgMembership {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  role           OrgRole      @default(MEMBER)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+model Invitation {
+  id             String       @id @default(uuid())
+  organizationId String
+  email          String
+  role           OrgRole      @default(MEMBER)
+  tokenHash      String       @unique
+  invitedById    String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy      User         @relation(fields: [invitedById], references: [id])
+
+  @@index([organizationId, email])
+}
+
+// LLM provider and Atlassian credentials, set by an Admin in /setup or settings.
+model OrgIntegration {
+  id              String              @id @default(uuid())
+  organizationId  String
+  provider        IntegrationProvider
+  baseUrl         String?
+  accountEmail    String? // Atlassian API tokens are paired with an email
+  secretEncrypted String
+  isDefaultLlm    Boolean             @default(false)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
+}
+
+// ─── Project / Team / Feature ───────────────────────────────────────────────
+
+// A product (e.g. "Mobile Banking"). Maps to a Jira project.
+model Project {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  jiraKey        String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  teams          Team[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, jiraKey])
+}
+
+model Team {
+  id          String           @id @default(uuid())
+  projectId   String
+  name        String
+  createdAt   DateTime         @default(now())
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  members     TeamMembership[]
+  features    Feature[]
+  delegations Delegation[]
+
+  @@unique([projectId, name])
+}
+
+// A Team Role may be held by many people; a person may hold several Team Roles.
+model TeamMembership {
+  id        String   @id @default(uuid())
+  teamId    String
+  userId    String
+  role      TeamRole
+  createdAt DateTime @default(now())
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId, role])
+  @@index([teamId, role])
+}
+
+// Someone deciding on another person's behalf for a period (e.g. leave).
+// Set by the delegator or an Admin; the Delegate must hold the same Team Role in the Team.
+model Delegation {
+  id          String   @id @default(uuid())
+  teamId      String
+  role        TeamRole
+  delegatorId String
+  delegateId  String
+  startsAt    DateTime
+  endsAt      DateTime
+  createdById String
+  createdAt   DateTime @default(now())
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  delegator   User     @relation("DelegationDelegator", fields: [delegatorId], references: [id], onDelete: Cascade)
+  delegate    User     @relation("DelegationDelegate", fields: [delegateId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation("DelegationCreatedBy", fields: [createdById], references: [id])
+
+  @@index([delegatorId, teamId, role, startsAt, endsAt])
+}
+
+model Feature {
+  id           String        @id @default(uuid())
+  teamId       String
+  title        String
+  description  String?
+  status       FeatureStatus @default(DRAFT)
+  jiraIssueKey String? // optional, read-only link to a Jira Epic
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  team         Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  roleOwners       RoleOwner[]
+  attachments      Attachment[]
+  specVersions     SpecVersion[]
+  specProposals    SpecProposal[]
+  decisionRequests DecisionRequest[]
+  notifications    Notification[]
+
+  @@index([teamId])
+  @@index([jiraIssueKey])
+}
+
+// A Feature may have several Role Owners for the same Team Role.
+model RoleOwner {
+  id        String   @id @default(uuid())
+  featureId String
+  userId    String
+  role      TeamRole
+  feature   Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([featureId, userId, role])
+  @@index([userId])
+}
+
+// External docs aggregated on the Feature page. Content is snapshotted so the AI
+// can use it as context; "Refresh" re-fetches.
+model Attachment {
+  id           String           @id @default(uuid())
+  featureId    String
+  source       AttachmentSource
+  title        String
+  url          String?
+  storageKey   String? // uploaded file location
+  mimeType     String?
+  snapshotText String?
+  snapshotAt   DateTime?
+  addedById    String
+  createdAt    DateTime         @default(now())
+  feature      Feature          @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  addedBy      User             @relation(fields: [addedById], references: [id])
+
+  @@index([featureId])
+}
+
+// ─── Spec ───────────────────────────────────────────────────────────────────
+
+// Immutable. The highest version is the current Spec. Markdown is canonical (ADR 0002).
+model SpecVersion {
+  id             String            @id @default(uuid())
+  featureId      String
+  version        Int
+  markdown       String
+  source         SpecVersionSource
+  summary        String? // one-line "what changed"
+  approvedById   String
+  proposalId     String?           @unique
+  revertedFromId String?
+  createdAt      DateTime          @default(now())
+  feature        Feature           @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  approvedBy     User              @relation("SpecVersionApprovedBy", fields: [approvedById], references: [id])
+  proposal       SpecProposal?     @relation(fields: [proposalId], references: [id])
+  revertedFrom   SpecVersion?      @relation("SpecRevert", fields: [revertedFromId], references: [id])
+  reverts        SpecVersion[]     @relation("SpecRevert")
+  basedProposals SpecProposal[]    @relation("ProposalBase")
+  notifications  Notification[]
+
+  @@unique([featureId, version])
+}
+
+// AI-drafted change awaiting approval. An Inbox Item for `approverId` while PENDING.
+model SpecProposal {
+  id               String            @id @default(uuid())
+  featureId        String
+  baseVersionId    String? // null when drafting the first version
+  source           SpecVersionSource // AI_SUMMARY or DECISION
+  proposedMarkdown String
+  status           ProposalStatus    @default(PENDING)
+  approverId       String // the Decider for DECISION, the requesting PO for AI_SUMMARY
+  decisionId       String?           @unique
+  reviewedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  feature          Feature           @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  baseVersion      SpecVersion?      @relation("ProposalBase", fields: [baseVersionId], references: [id])
+  decision         Decision?         @relation(fields: [decisionId], references: [id])
+  approver         User              @relation("ProposalApprover", fields: [approverId], references: [id])
+  resultVersion    SpecVersion?
+
+  @@index([approverId, status])
+  @@index([featureId, status])
+}
+
+// ─── Decision Requests ──────────────────────────────────────────────────────
+
+// A Blocker or a Question. Inbox Items derive from it:
+//   OPEN + deciderId = me                       -> decide
+//   OPEN + deciderId null + I'm a recipient     -> claim / decide
+//   NEEDS_INFO + raiserId = me                  -> answer
+model DecisionRequest {
+  id            String                @id @default(uuid())
+  featureId     String
+  kind          DecisionRequestKind
+  withChoices   Boolean               @default(true) // false: plain-text Question
+  raiserId      String
+  title         String
+  description   String
+  suggestedRole TeamRole? // AI suggestion
+  deciderRole   TeamRole // confirmed by the Raiser
+  deciderId     String? // null until Claimed when sent to several recipients
+  status        DecisionRequestStatus @default(DRAFT)
+  submittedAt   DateTime?
+  closedAt      DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  feature       Feature               @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  raiser        User                  @relation("RequestRaiser", fields: [raiserId], references: [id])
+  decider       User?                 @relation("RequestDecider", fields: [deciderId], references: [id])
+
+  recipients    RequestRecipient[]
+  contexts      RequestContext[]
+  choices       Choice[]
+  messages      RequestMessage[]
+  decision      Decision?
+  notifications Notification[]
+
+  @@index([featureId, kind, status])
+  @@index([deciderId, status])
+  @@index([raiserId, status])
+}
+
+// Who the Raiser sent the request to (one Role Owner, or all of them for the role).
+// Resolved through active Delegations at send time.
+model RequestRecipient {
+  id        String          @id @default(uuid())
+  requestId String
+  userId    String
+  request   DecisionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, userId])
+  @@index([userId])
+}
+
+// Local context sent from the CLI (--file, --diff) or pasted text.
+model RequestContext {
+  id        String             @id @default(uuid())
+  requestId String
+  kind      RequestContextKind
+  path      String?
+  content   String
+  request   DecisionRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+}
+
+// 2-4 per request, editable by the Raiser while DRAFT.
+model Choice {
+  id           String          @id @default(uuid())
+  requestId    String
+  position     Int
+  label        String // "A", "B", ...
+  title        String
+  description  String
+  impactScope  String
+  impactTime   String
+  impactRisk   String
+  editedByUser Boolean         @default(false)
+  request      DecisionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  decisions    Decision[]
+
+  @@unique([requestId, position])
+}
+
+model RequestMessage {
+  id        String             @id @default(uuid())
+  requestId String
+  authorId  String
+  kind      RequestMessageKind
+  body      String
+  createdAt DateTime           @default(now())
+  request   DecisionRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  author    User               @relation(fields: [authorId], references: [id])
+
+  @@index([requestId, createdAt])
+}
+
+// A Decision Log entry: a picked Choice or a free-text answer.
+model Decision {
+  id           String          @id @default(uuid())
+  requestId    String          @unique
+  decidedById  String
+  onBehalfOfId String? // set when decided as a Delegate
+  choiceId     String?
+  customAnswer String?
+  rationale    String?
+  createdAt    DateTime        @default(now())
+  request      DecisionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  decidedBy    User            @relation("DecisionDecidedBy", fields: [decidedById], references: [id])
+  onBehalfOf   User?           @relation("DecisionOnBehalfOf", fields: [onBehalfOfId], references: [id])
+  choice       Choice?         @relation(fields: [choiceId], references: [id])
+  specProposal SpecProposal?
+}
+
+// ─── Notifications ──────────────────────────────────────────────────────────
+
+// Informational messages with read state. Streamed to web and CLI (SSE, OS notifications).
+model Notification {
+  id            String           @id @default(uuid())
+  userId        String
+  type          NotificationType
+  featureId     String?
+  requestId     String?
+  specVersionId String?
+  readAt        DateTime?
+  createdAt     DateTime         @default(now())
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature       Feature?         @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  request       DecisionRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  specVersion   SpecVersion?     @relation(fields: [specVersionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
