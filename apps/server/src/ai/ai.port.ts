@@ -45,6 +45,27 @@ export type AttachmentForAi = {
   text: string;
 };
 
+/** Where a block of AI context comes from, so outputs can cite it by `id`. */
+export type ContextSource = {
+  kind: 'SPEC_VERSION' | 'DECISION_REQUEST' | 'DECISION' | 'ATTACHMENT';
+  id: string;
+  title: string;
+  /** The Spec Version number, for Spec blocks. */
+  version?: number;
+};
+
+/**
+ * One block of retrieved context (ADR 0007): all or part of a Spec, a Decision
+ * Request, a Decision or an Attachment. `text` is untrusted, so prompts fence it
+ * off as data. `scope` says whether it belongs to the Feature being worked on or
+ * to the rest of its Project.
+ */
+export type ContextBlock = {
+  source: ContextSource;
+  scope: 'FEATURE' | 'PROJECT';
+  text: string;
+};
+
 export type FeatureForAi = { title: string; description: string };
 
 export const AttachmentSummary = z.object({
@@ -56,14 +77,15 @@ export interface AiPort {
   generateChoices(input: {
     specMarkdown: string;
     request: RequestForAi;
-    attachments: AttachmentForAi[];
+    /** Retrieved context, most important first, without the Feature's own Spec. */
+    context: ContextBlock[];
   }): Promise<GeneratedChoices>;
 
   draftSpecProposal(input: {
     specMarkdown: string;
     request: RequestForAi;
     decision: DecisionForAi;
-    attachments: AttachmentForAi[];
+    context: ContextBlock[];
   }): Promise<SpecProposalDraft>;
 
   summarizeAttachment(input: { attachment: AttachmentForAi }): Promise<AttachmentSummary>;
@@ -72,7 +94,7 @@ export interface AiPort {
   draftSpecFromAttachments(input: {
     feature: FeatureForAi;
     specMarkdown: string;
-    attachments: AttachmentForAi[];
+    context: ContextBlock[];
   }): Promise<SpecProposalDraft>;
 }
 

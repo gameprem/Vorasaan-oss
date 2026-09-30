@@ -3,9 +3,11 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@vorasaan/db';
 import { SEED, seed } from '@vorasaan/db/seed';
 import type { DecisionRequestView, SpecProposalView, SpecVersionView } from '@vorasaan/shared';
-import { AiOutputError, type AttachmentForAi } from '../ai/ai.port.ts';
+import { AiOutputError, type ContextBlock } from '../ai/ai.port.ts';
 import type { FakeAiPort } from '../ai/fake-ai.port.ts';
-import { ATTACHMENT_CONTEXT_BUDGET } from '../attachments/attachment-context.ts';
+import { CONTEXT_TRUNCATION_MARKER } from '../attachments/attachment-context.ts';
+import { estimateTokens } from '../retrieval/chunker.ts';
+import { blockTokens, CONTEXT_BUDGET } from '../retrieval/context-retriever.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 import { as } from '../test/http.ts';
@@ -53,6 +55,9 @@ describe('Spec Proposal from Attachments', () => {
     return call.input as T;
   }
 
+  const attachmentsIn = (context: ContextBlock[]) =>
+    context.filter((b) => b.source.kind === 'ATTACHMENT');
+
   beforeAll(async () => {
     ({ app, ai } = await createTestApp());
     db = createTestPrisma();
@@ -87,13 +92,17 @@ describe('Spec Proposal from Attachments', () => {
     expect(res.body.baseVersion).toBe(current.version);
     expect(res.body.decisionRequestId).toBeNull();
 
-    // Full Snapshots (not summaries), most recent first, plus the current Spec as the base.
-    const input = lastInput<{ specMarkdown: string; attachments: AttachmentForAi[] }>(
+    // Not indexed yet: full Snapshots (not summaries), most recent first, plus the
+    // whole current Spec as the base (not repeated in the context).
+    const input = lastInput<{ specMarkdown: string; context: ContextBlock[] }>(
       'draftSpecFromAttachments',
     );
     expect(input.specMarkdown).toBe(current.markdown);
-    expect(input.attachments.map((a) => a.title)).toEqual(['Kickoff notes', 'Provider API']);
-    expect(input.attachments[1]?.text).toContain('Poll at most 5 req/s');
+    expect(input.context.some((b) => b.source.kind === 'SPEC_VERSION')).toBe(false);
+    const attachments = attachmentsIn(input.context);
+    expect(attachments.map((a) => a.source.title)).toEqual(['Kickoff notes', 'Provider API']);
+    expect(attachments[1]?.text).toContain('Poll at most 5 req/s');
+    expect(attachments.every((a) => a.scope === 'FEATURE')).toBe(true);
 
     const approved = await asPim<SpecVersionView>('POST', `/spec-proposals/${res.body.id}/approve`);
     expect(approved.status).toBe(201);
@@ -168,8 +177,8 @@ describe('Spec Proposal from Attachments', () => {
     expect(res.status).toBe(404);
   });
 
-  test('Choice generation and Spec Proposal drafting get Attachment context within budget', async () => {
-    await attach('Old page', 'o'.repeat(ATTACHMENT_CONTEXT_BUDGET.decisionRequest), 30);
+  test('Choice generation and Spec Proposal drafting get retrieved context within budget', async () => {
+    await attach('Old page', 'o '.repeat(4 * CONTEXT_BUDGET.decisionRequest), 30);
     await attach('Provider API', 'Full Snapshot text.', 10, 'Summary: polling only.');
     await attach('Kickoff notes', 'Retry must be one tap.', 1);
 
@@ -179,16 +188,28 @@ describe('Spec Proposal from Attachments', () => {
       title: 'Provider has no webhook',
       description: 'Only polling is available.',
     });
-    const choicesInput = lastInput<{ attachments: AttachmentForAi[] }>('generateChoices');
-    expect(choicesInput.attachments.map((a) => a.title)).toEqual([
+    const choicesInput = lastInput<{ specMarkdown: string; context: ContextBlock[] }>(
+      'generateChoices',
+    );
+    const current = await db.specVersion.findFirstOrThrow({
+      where: { featureId: SEED.featureId },
+      orderBy: { version: 'desc' },
+    });
+    expect(choicesInput.specMarkdown).toBe(current.markdown);
+    const attachments = attachmentsIn(choicesInput.context);
+    expect(attachments.map((a) => a.source.title)).toEqual([
       'Kickoff notes',
       'Provider API',
       'Old page',
     ]);
-    // The summary stands in for the Snapshot when there is one.
-    expect(choicesInput.attachments[1]?.text).toBe('Summary: polling only.');
-    const used = choicesInput.attachments.reduce((n, a) => n + a.text.length, 0);
-    expect(used).toBe(ATTACHMENT_CONTEXT_BUDGET.decisionRequest);
+    // Not indexed yet, so 0023's truncation: the whole Snapshot, the last one shortened.
+    expect(attachments[1]?.text).toBe('Full Snapshot text.');
+    expect(attachments[2]?.text.endsWith(CONTEXT_TRUNCATION_MARKER)).toBe(true);
+    const used =
+      estimateTokens(choicesInput.specMarkdown) +
+      choicesInput.context.reduce((n, b) => n + blockTokens(b), 0);
+    expect(used).toBeLessThanOrEqual(CONTEXT_BUDGET.decisionRequest);
+    expect(used).toBeGreaterThan(CONTEXT_BUDGET.decisionRequest - 100);
 
     await asBeam('POST', `/decision-requests/${raised.id}/submit`, { deciderRole: 'PO' });
     const choice = raised.choices[0];
@@ -197,9 +218,11 @@ describe('Spec Proposal from Attachments', () => {
       choiceId: choice.id,
     });
     expect(decided.status).toBe(201);
-    const draftInput = lastInput<{ attachments: AttachmentForAi[] }>('draftSpecProposal');
-    expect(draftInput.attachments.map((a) => a.title)).toEqual(
-      choicesInput.attachments.map((a) => a.title),
+    const draftInput = lastInput<{ context: ContextBlock[] }>('draftSpecProposal');
+    expect(attachmentsIn(draftInput.context).map((a) => a.source.title)).toEqual(
+      attachments.map((a) => a.source.title),
     );
+    // The request being decided is in the prompt already, not repeated as context.
+    expect(draftInput.context.some((b) => b.source.id === raised.id)).toBe(false);
   });
 });

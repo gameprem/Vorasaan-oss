@@ -19,10 +19,15 @@ import type {
   SubmitDecisionRequestInput,
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort, type DecisionForAi } from '../ai/ai.port.ts';
-import { ATTACHMENT_CONTEXT_BUDGET, attachmentsForAi } from '../attachments/attachment-context.ts';
+import { describeDecision } from '../ai/prompts.ts';
 import { activeDelegates } from '../delegations/active-delegations.ts';
 import { NotificationsService, type Outbox, type Tx } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import {
+  CONTEXT_BUDGET,
+  ContextRetriever,
+  splitFeatureSpec,
+} from '../retrieval/context-retriever.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specProposalInclude, toSpecProposalView } from '../spec/spec.view.ts';
@@ -47,6 +52,7 @@ export class DecisionRequestsService {
     @Inject(AI_PORT) private readonly ai: AiPort,
     private readonly notifications: NotificationsService,
     private readonly indexing: IndexingService,
+    private readonly retriever: ContextRetriever,
   ) {}
 
   async raise(user: User, input: RaiseDecisionRequestInput): Promise<DecisionRequestView> {
@@ -65,12 +71,17 @@ export class DecisionRequestsService {
     const withChoices = input.withChoices ?? true;
     let generated: Awaited<ReturnType<AiPort['generateChoices']>> | undefined;
     if (withChoices) {
-      const spec = await this.latestSpecMarkdown(input.featureId);
-      const attachments = await this.attachmentContext(input.featureId);
+      const { spec, context } = splitFeatureSpec(
+        await this.retriever.forFeature(
+          input.featureId,
+          `${input.title}\n\n${input.description}`,
+          CONTEXT_BUDGET.decisionRequest,
+        ),
+      );
       try {
         generated = await this.ai.generateChoices({
-          specMarkdown: spec,
-          attachments,
+          specMarkdown: spec?.text ?? '(This Feature has no Spec yet.)',
+          context,
           request: {
             kind: input.kind,
             title: input.title,
@@ -337,13 +348,21 @@ export class DecisionRequestsService {
       orderBy: { role: 'asc' },
       select: { role: true },
     });
-    const attachments = await this.attachmentContext(request.featureId);
+    const { context } = splitFeatureSpec(
+      await this.retriever.forFeature(
+        request.featureId,
+        `${request.title}\n\n${request.description}\n\n${describeDecision(decision)}`,
+        CONTEXT_BUDGET.decisionRequest,
+        { excludeRequestId: request.id },
+      ),
+    );
 
     let draft: Awaited<ReturnType<AiPort['draftSpecProposal']>>;
     try {
       draft = await this.ai.draftSpecProposal({
+        // The whole current Spec: it is the base the draft edits, never shortened.
         specMarkdown: base?.markdown ?? '',
-        attachments,
+        context,
         request: {
           kind: request.kind,
           title: request.title,
@@ -507,23 +526,6 @@ export class DecisionRequestsService {
       userId: user.id,
       teamRoles: new Set(memberships.map((m) => teamRoleKey(m.teamId, m.role))),
     };
-  }
-
-  /** Attachment context for Choices and Spec Proposals: summaries where present, within budget. */
-  private attachmentContext(featureId: string) {
-    return attachmentsForAi(this.db, featureId, {
-      budgetChars: ATTACHMENT_CONTEXT_BUDGET.decisionRequest,
-      preferSummary: true,
-    });
-  }
-
-  private async latestSpecMarkdown(featureId: string): Promise<string> {
-    const latest = await this.db.specVersion.findFirst({
-      where: { featureId },
-      orderBy: { version: 'desc' },
-      select: { markdown: true },
-    });
-    return latest?.markdown ?? '(This Feature has no Spec yet.)';
   }
 
   private async findOrThrow(id: string): Promise<DecisionRequestWithRelations> {

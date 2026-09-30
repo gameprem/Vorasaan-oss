@@ -4,6 +4,7 @@ import {
   type AiPort,
   type AttachmentForAi,
   AttachmentSummary,
+  type ContextBlock,
   type DecisionForAi,
   type FeatureForAi,
   GeneratedChoices,
@@ -57,13 +58,9 @@ export class MastraAiPort implements AiPort {
   async generateChoices(input: {
     specMarkdown: string;
     request: RequestForAi;
-    attachments: AttachmentForAi[];
+    context: ContextBlock[];
   }) {
-    const prompt = await generateChoicesPrompt(
-      input.specMarkdown,
-      input.request,
-      input.attachments,
-    );
+    const prompt = await generateChoicesPrompt(input.specMarkdown, input.request, input.context);
     const generate = agentGenerate('generate-choices', await this.resolveModel('generateChoices'));
     return generateStructured(generate, 'generate-choices', prompt, GeneratedChoices);
   }
@@ -72,13 +69,13 @@ export class MastraAiPort implements AiPort {
     specMarkdown: string;
     request: RequestForAi;
     decision: DecisionForAi;
-    attachments: AttachmentForAi[];
+    context: ContextBlock[];
   }) {
     const prompt = await draftSpecProposalPrompt(
       input.specMarkdown,
       input.request,
       input.decision,
-      input.attachments,
+      input.context,
     );
     const generate = agentGenerate(
       'draft-spec-proposal',
@@ -99,12 +96,12 @@ export class MastraAiPort implements AiPort {
   async draftSpecFromAttachments(input: {
     feature: FeatureForAi;
     specMarkdown: string;
-    attachments: AttachmentForAi[];
+    context: ContextBlock[];
   }) {
     const prompt = await draftSpecFromAttachmentsPrompt(
       input.feature,
       input.specMarkdown,
-      input.attachments,
+      input.context,
     );
     const generate = agentGenerate(
       'draft-spec-from-attachments',

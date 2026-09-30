@@ -11,6 +11,7 @@ import {
 } from './content-chunk.repository.ts';
 import { assertVectors } from './embedding.port.ts';
 import { EmbeddingSettingsService } from './embedding-settings.service.ts';
+import { decisionText } from './source-text.ts';
 
 export type IndexTarget = { source: ChunkSource; id: string };
 
@@ -207,17 +208,7 @@ export class IndexingService implements BeforeApplicationShutdown {
       },
     });
     if (!decision) return null;
-    const outcome = decision.choice
-      ? `Choice ${decision.choice.label}: ${decision.choice.title}\n\n${decision.choice.description}`
-      : (decision.customAnswer ?? '');
-    const text = [
-      `# Decision: ${decision.request.title}`,
-      decision.request.description,
-      `## Decided\n${outcome}`,
-      decision.rationale ? `## Rationale\n${decision.rationale}` : '',
-    ]
-      .filter((part) => part.trim())
-      .join('\n\n');
+    const text = decisionText(decision);
     return { scope: scopeOf(decision.request.feature), text };
   }
 }

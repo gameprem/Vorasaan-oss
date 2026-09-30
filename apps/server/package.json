@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "bun test",
     "eval:choices": "bun scripts/eval-choices.ts",
-    "eval:spec-from-attachments": "bun scripts/eval-spec-from-attachments.ts"
+    "eval:spec-from-attachments": "bun scripts/eval-spec-from-attachments.ts",
+    "eval:retrieval": "bun scripts/eval-retrieval.ts"
   },
   "dependencies": {
     "@fastify/multipart": "^10.1.0",
