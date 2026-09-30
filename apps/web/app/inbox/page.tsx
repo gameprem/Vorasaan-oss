@@ -1,8 +1,15 @@
-import type { InboxItem, InboxItemKind, NotificationList } from '@vorasaan/shared';
+import type {
+  DelegationView,
+  InboxItem,
+  InboxItemKind,
+  NotificationList,
+  ProjectView,
+} from '@vorasaan/shared';
 import Link from 'next/link';
 import { unstable_rethrow } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { KindBadge, Notice, relativeTime } from '@/components/bits';
+import { LocalDate } from '@/components/delegation-list';
 import { MarkAllReadButton, MarkReadButton } from '@/components/notification-actions';
 import { notificationHref, notificationText } from '@/components/notification-text';
 import { ROLE_LABEL } from '@/components/ui';
@@ -121,10 +128,24 @@ export default async function InboxPage({
   searchParams: Promise<{ welcome?: string }>;
 }) {
   const { welcome } = await searchParams;
-  const [inbox, notifications] = await Promise.all([
+  const [inbox, notifications, delegatedToMe] = await Promise.all([
     load<InboxItem[]>('/inbox', 'Inbox'),
     load<NotificationList>('/notifications?limit=50', 'Notifications'),
+    // Who is delegating to me right now, for the banner. It is optional: no error shown.
+    load<DelegationView[]>('/me/delegations?as=delegate&active=true', 'Delegations'),
   ]);
+  // Team names only matter when there is a banner to show.
+  const projects =
+    delegatedToMe.ok && delegatedToMe.value.length > 0
+      ? await load<ProjectView[]>('/projects', 'Projects')
+      : undefined;
+  const teamName = (teamId: string) => {
+    if (!projects?.ok) return undefined;
+    for (const p of projects.value) {
+      const team = p.teams.find((t) => t.id === teamId);
+      if (team) return `${team.name} (${p.name})`;
+    }
+  };
 
   return (
     <section className="max-w-3xl">
@@ -144,6 +165,21 @@ export default async function InboxPage({
         </div>
       )}
       <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
+
+      {delegatedToMe.ok && delegatedToMe.value.length > 0 && (
+        <section aria-label="You are a Delegate" className="mt-6 space-y-2">
+          {delegatedToMe.value.map((d) => {
+            const team = teamName(d.teamId);
+            return (
+              <Notice key={d.id}>
+                <span className="font-medium text-ink">{d.delegator.name}</span> is on leave until{' '}
+                <LocalDate iso={d.endsAt} />; requests for their {ROLE_LABEL[d.role]} role
+                {team ? ` in Team ${team}` : ''} come to you.
+              </Notice>
+            );
+          })}
+        </section>
+      )}
 
       <div className="mt-6 space-y-10">
         {!inbox.ok ? (

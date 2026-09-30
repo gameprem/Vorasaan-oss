@@ -200,6 +200,37 @@ describe('Delegations API', () => {
     expect((await asPim('DELETE', `/teams/${other}/delegations/${d.id}`)).status).toBe(404);
   });
 
+  test('/me/delegations lists my own, as delegator or as Delegate, across Teams', async () => {
+    const nok = await person('Nok', ['PO']);
+    const tee = await person('Tee', ['PO']);
+    const current = await delegation(pim.id, nok.id, -1, 5);
+    const upcoming = await delegation(pim.id, tee.id, 6, 9);
+    await delegation(pim.id, nok.id, -10, -3); // ended
+    const others = await delegation(tee.id, nok.id, -1, 5);
+
+    const given = await asPim<DelegationView[]>('GET', '/me/delegations');
+    expect(given.status).toBe(200);
+    expect(given.body.map((d) => [d.id, d.active, d.canDelete])).toEqual([
+      [current.id, true, true],
+      [upcoming.id, false, true],
+    ]);
+
+    const toNok = await nok.call<DelegationView[]>('GET', '/me/delegations?as=delegate');
+    expect(toNok.body.map((d) => [d.id, d.canDelete])).toEqual([
+      [current.id, false],
+      [others.id, false],
+    ]);
+    const toTee = await tee.call<DelegationView[]>('GET', '/me/delegations?as=delegate');
+    expect(toTee.body.map((d) => d.id)).toEqual([upcoming.id]);
+    const activeToTee = await tee.call<DelegationView[]>(
+      'GET',
+      '/me/delegations?as=delegate&active=true',
+    );
+    expect(activeToTee.body).toEqual([]);
+
+    expect((await asBeam('GET', '/me/delegations?as=everyone')).status).toBe(400);
+  });
+
   // ─── Routing at submit ────────────────────────────────────────────────────
 
   test('an active Delegation reroutes a single-recipient request to the Delegate', async () => {

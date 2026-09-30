@@ -37,3 +37,14 @@ export const DelegationView = z.object({
   canDelete: z.boolean(),
 });
 export type DelegationView = z.infer<typeof DelegationView>;
+
+/**
+ * `GET /me/delegations`: the caller's current and upcoming Delegations, either the ones
+ * they gave (`delegator`, the default) or the ones naming them as Delegate (`delegate`).
+ * `active=true` keeps only those that apply right now.
+ */
+export const MyDelegationsQuery = z.object({
+  as: z.enum(['delegator', 'delegate']).default('delegator'),
+  active: z.enum(['true', 'false']).optional(),
+});
+export type MyDelegationsQuery = z.infer<typeof MyDelegationsQuery>;

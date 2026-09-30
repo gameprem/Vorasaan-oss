@@ -1,11 +1,13 @@
-import type { OrgMemberView, TeamView } from '@vorasaan/shared';
+import type { DelegationView, OrgMemberView, TeamView } from '@vorasaan/shared';
 import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { ActionForm } from '@/components/action-form';
-import { BlockedBadge } from '@/components/bits';
+import { BlockedBadge, Notice } from '@/components/bits';
+import { DelegationForm } from '@/components/delegation-form';
+import { DelegationList } from '@/components/delegation-list';
 import { TeamRolesEditor } from '@/components/team-roles-editor';
 import { field, ROLE_LABEL } from '@/components/ui';
-import { ApiError, api } from '@/lib/api';
+import { ApiError, api, currentUser } from '@/lib/api';
 import { createFeature } from '@/lib/org-actions';
 
 export const metadata = { title: 'Team' };
@@ -14,16 +16,23 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   let team: TeamView;
   let members: OrgMemberView[];
+  let delegations: DelegationView[] | string;
   try {
-    [team, members] = await Promise.all([
+    [team, members, delegations] = await Promise.all([
       api<TeamView>(`/teams/${id}`),
       api<OrgMemberView[]>('/members'),
+      // Not being able to list Delegations should not hide the rest of the Team.
+      api<DelegationView[]>(`/teams/${id}/delegations`).catch((error: unknown) => {
+        unstable_rethrow(error);
+        return error instanceof ApiError ? error.message : 'Could not load Delegations.';
+      }),
     ]);
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof ApiError && (error.status === 404 || error.status === 400)) notFound();
     throw error;
   }
+  const me = await currentUser();
 
   return (
     <section className="max-w-4xl">
@@ -90,6 +99,44 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           </ul>
         )}
       </div>
+
+      <h2 className="mt-12 text-lg font-semibold">Delegations</h2>
+      <p className="mt-1 text-sm text-ink-soft">
+        Who decides for whom while someone is away. Set your own in{' '}
+        <Link href="/settings/delegations" className="underline underline-offset-2">
+          Settings → Delegations
+        </Link>
+        .
+      </p>
+      <div className="mt-4">
+        {typeof delegations === 'string' ? (
+          <Notice tone="error">{delegations}</Notice>
+        ) : (
+          <DelegationList
+            delegations={delegations}
+            empty="No current or upcoming Delegations in this Team."
+          />
+        )}
+      </div>
+      {me?.isAdmin && team.members.length > 1 && (
+        <div className="mt-6">
+          <h3 className="font-semibold">Name a Delegate for a member</h3>
+          <div className="mt-3">
+            <DelegationForm
+              teams={[
+                {
+                  id: team.id,
+                  name: team.name,
+                  members: team.members,
+                  projectName: team.project.name,
+                },
+              ]}
+              meId={me.id}
+              forAnyone
+            />
+          </div>
+        </div>
+      )}
     </section>
   );
 }

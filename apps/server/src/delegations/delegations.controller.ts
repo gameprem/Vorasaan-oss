@@ -7,9 +7,10 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import type { User } from '@vorasaan/db';
-import { CreateDelegationInput } from '@vorasaan/shared';
+import { CreateDelegationInput, MyDelegationsQuery } from '@vorasaan/shared';
 import { CurrentUser } from '../auth/identity.guard.ts';
 import { DelegationsService } from './delegations.service.ts';
 
@@ -39,5 +40,19 @@ export class DelegationsController {
     @Param('delegationId', ParseUUIDPipe) id: string,
   ) {
     await this.service.delete(user, teamId, id);
+  }
+}
+
+/** The caller's own Delegations across Teams: the ones they gave, or the ones naming them. */
+@Controller('me/delegations')
+export class MyDelegationsController {
+  constructor(private readonly service: DelegationsService) {}
+
+  @Get()
+  list(
+    @CurrentUser() user: User,
+    @Query({ schema: MyDelegationsQuery }) query: MyDelegationsQuery,
+  ) {
+    return this.service.mine(user, query);
   }
 }
