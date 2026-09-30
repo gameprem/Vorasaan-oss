@@ -31,6 +31,7 @@ import { hashToken, newToken } from '../auth/tokens.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specVersionInclude, toSpecVersionView } from '../spec/spec.view.ts';
+import { assertCanEditSpec } from '../spec/spec-access.ts';
 
 const INVITE_PREFIX = 'vsi_';
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -324,11 +325,7 @@ export class OrgService {
   /** Admins and the Feature's PO Role Owners write the Spec by hand. */
   async writeSpec(user: User, featureId: string, input: WriteSpecInput): Promise<SpecVersionView> {
     await this.teamOfFeature(featureId);
-    const allowed =
-      (await this.isAdmin(user.id)) ||
-      (await this.db.roleOwner.count({ where: { featureId, userId: user.id, role: 'PO' } })) > 0;
-    if (!allowed)
-      throw new ForbiddenException("Only an Admin or the Feature's PO can edit the Spec");
+    await assertCanEditSpec(this.db, user, featureId);
 
     try {
       const version = await this.db.$transaction(async (tx) => {

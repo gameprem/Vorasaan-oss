@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: []
 slice: mvp-backend
 ---
@@ -17,6 +17,6 @@ A PO edits the Spec directly, compares any two Spec Versions, and reverts to an 
 - Spec Versions stay immutable.
 
 ## Acceptance criteria (test first, real Postgres)
-- [ ] A non-PO editing or reverting gets 403; a stale edit gets 409.
-- [ ] Revert to v1 from v3 creates v4 with v1's Markdown and `revertedFromId` = v1.
-- [ ] The diff of two versions lists added and removed lines.
+- [x] A non-PO editing or reverting gets 403; a stale edit gets 409.
+- [x] Revert to v1 from v3 creates v4 with v1's Markdown and `revertedFromId` = v1.
+- [x] The diff of two versions lists added and removed lines.

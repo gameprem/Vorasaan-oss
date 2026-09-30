@@ -3,11 +3,19 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import type { PrismaClient, User } from '@vorasaan/db';
-import type { DecisionLogEntry, SpecProposalView, SpecVersionView } from '@vorasaan/shared';
+import type {
+  DecisionLogEntry,
+  RevertSpecInput,
+  SpecDiff,
+  SpecProposalView,
+  SpecVersionView,
+} from '@vorasaan/shared';
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { diffLines } from './diff.ts';
 import {
   type SpecProposalWithRelations,
   specProposalInclude,
@@ -15,6 +23,7 @@ import {
   toSpecProposalView,
   toSpecVersionView,
 } from './spec.view.ts';
+import { assertCanEditSpec } from './spec-access.ts';
 
 /** Thrown inside the approve transaction to roll everything back. */
 class StaleStateError extends Error {}
@@ -107,6 +116,85 @@ export class SpecService {
     return versions.map(toSpecVersionView);
   }
 
+  async getVersion(featureId: string, version: number): Promise<SpecVersionView> {
+    await this.assertFeatureExists(featureId);
+    return toSpecVersionView(await this.findVersionOrThrow(featureId, version));
+  }
+
+  /** `from = 0` stands for the empty Spec before v1. */
+  async diff(featureId: string, from: number, to: number): Promise<SpecDiff> {
+    await this.assertFeatureExists(featureId);
+    const [before, after] = await Promise.all([
+      from === 0 ? '' : this.findVersionOrThrow(featureId, from).then((v) => v.markdown),
+      this.findVersionOrThrow(featureId, to).then((v) => v.markdown),
+    ]);
+    const lines = diffLines(before, after);
+    return {
+      from,
+      to,
+      added: lines.filter((l) => l.kind === 'ADDED').length,
+      removed: lines.filter((l) => l.kind === 'REMOVED').length,
+      lines,
+    };
+  }
+
+  /**
+   * Restores an earlier Spec Version's Markdown as the next version. Nothing is
+   * deleted: the history keeps every version, and the new one records its origin.
+   */
+  async revert(
+    user: User,
+    featureId: string,
+    version: number,
+    input: RevertSpecInput,
+  ): Promise<SpecVersionView> {
+    await this.assertFeatureExists(featureId);
+    await assertCanEditSpec(this.db, user, featureId);
+    const target = await this.findVersionOrThrow(featureId, version);
+
+    try {
+      const created = await this.db.$transaction(async (tx) => {
+        const latest = await tx.specVersion.findFirst({
+          where: { featureId },
+          orderBy: { version: 'desc' },
+          select: { version: true, markdown: true },
+        });
+        const current = latest?.version ?? 0;
+        if (current !== input.baseVersion) {
+          throw new StaleStateError(
+            `The Spec is now at v${current}. Reload to see the latest before reverting.`,
+          );
+        }
+        if (latest?.markdown === target.markdown) {
+          throw new UnprocessableEntityException(
+            `v${current} already matches v${version}; there is nothing to revert`,
+          );
+        }
+        return tx.specVersion.create({
+          data: {
+            featureId,
+            version: current + 1,
+            markdown: target.markdown,
+            source: 'REVERT',
+            summary: input.summary || `Reverted to v${version}`,
+            approvedById: user.id,
+            revertedFromId: target.id,
+          },
+          include: specVersionInclude,
+        });
+      });
+      return toSpecVersionView(created);
+    } catch (error) {
+      if (error instanceof StaleStateError) throw new ConflictException(error.message);
+      if ((error as { code?: string })?.code === 'P2002') {
+        throw new ConflictException(
+          'Someone saved the Spec at the same time. Reload and try again.',
+        );
+      }
+      throw error;
+    }
+  }
+
   async decisionLog(featureId: string): Promise<DecisionLogEntry[]> {
     await this.assertFeatureExists(featureId);
     const person = { select: { id: true, name: true } } as const;
@@ -154,6 +242,15 @@ export class SpecService {
       throw new ConflictException(`This Spec Proposal is already ${proposal.status}`);
     }
     return proposal;
+  }
+
+  private async findVersionOrThrow(featureId: string, version: number) {
+    const found = await this.db.specVersion.findUnique({
+      where: { featureId_version: { featureId, version } },
+      include: specVersionInclude,
+    });
+    if (!found) throw new NotFoundException(`Spec Version v${version} not found`);
+    return found;
   }
 
   private async assertFeatureExists(featureId: string) {
