@@ -1,17 +1,17 @@
 import type { DecisionRequestView, SpecProposalView } from '@vorasaan/shared';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, unstable_rethrow } from 'next/navigation';
 import { KindBadge, Notice, relativeTime, statusText } from '@/components/bits';
 import { DecideForm } from '@/components/decide-form';
 import { ReviewProposal } from '@/components/review-proposal';
 import { SpecDiff } from '@/components/spec-diff';
-import { ApiError, api, currentUserId } from '@/lib/api';
+import { ApiError, api, currentUser } from '@/lib/api';
 
 export const metadata = { title: 'Decision Request' };
 
 export default async function RequestPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const userId = await currentUserId();
+  const userId = (await currentUser())?.id;
 
   let request: DecisionRequestView;
   let proposal: SpecProposalView | undefined;
@@ -21,6 +21,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       proposal = await api<SpecProposalView>(`/spec-proposals/${request.specProposal.id}`);
     }
   } catch (error) {
+    unstable_rethrow(error); // let Next's redirect()/notFound() through
     if (error instanceof ApiError && (error.status === 404 || error.status === 400)) notFound();
     return (
       <Notice tone="error">

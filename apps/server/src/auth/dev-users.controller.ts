@@ -1,9 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@vorasaan/db';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
-import { Public } from './dev-user.guard.ts';
+import { devAuthEnabled, Public } from './identity.guard.ts';
 
-// DEV ONLY: feeds the web app's user switcher while x-vorasaan-user stands in for auth.
+// DEV ONLY: feeds the web app's user switcher. 404 unless VORASAAN_DEV_AUTH=true.
 @Controller('dev/users')
 export class DevUsersController {
   constructor(@InjectPrisma() private readonly db: PrismaClient) {}
@@ -11,6 +11,7 @@ export class DevUsersController {
   @Public()
   @Get()
   list() {
+    if (!devAuthEnabled()) throw new NotFoundException();
     return this.db.user.findMany({
       orderBy: { name: 'asc' },
       select: { id: true, name: true, email: true },

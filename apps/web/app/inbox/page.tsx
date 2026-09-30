@@ -1,21 +1,17 @@
 import type { DecisionRequestView } from '@vorasaan/shared';
 import Link from 'next/link';
+import { unstable_rethrow } from 'next/navigation';
 import { KindBadge, Notice, relativeTime } from '@/components/bits';
-import { ApiError, api, currentUserId } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 
 export const metadata = { title: 'Inbox' };
 
 export default async function InboxPage() {
-  if (!(await currentUserId())) {
-    return (
-      <Notice>Choose who you are in the top right to see the requests waiting for you.</Notice>
-    );
-  }
-
   let requests: DecisionRequestView[];
   try {
     requests = await api<DecisionRequestView[]>('/decision-requests?decider=me&status=OPEN');
   } catch (error) {
+    unstable_rethrow(error); // let Next's redirect()/notFound() through
     return (
       <Notice tone="error">
         {error instanceof ApiError ? error.message : 'Something went wrong loading your Inbox.'}

@@ -1,5 +1,5 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { DEV_USER_HEADER } from '../dev-identity/dev-user.guard.ts';
+import { DEV_USER_HEADER } from '../auth/identity.guard.ts';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 

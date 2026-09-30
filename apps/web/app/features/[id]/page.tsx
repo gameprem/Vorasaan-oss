@@ -1,6 +1,6 @@
 import type { DecisionLogEntry, FeatureSummaryView, SpecVersionView } from '@vorasaan/shared';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, unstable_rethrow } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { KindBadge, Notice, relativeTime } from '@/components/bits';
@@ -43,6 +43,7 @@ export default async function FeaturePage({
       api<DecisionLogEntry[]>(`/features/${id}/decision-log`),
     ]);
   } catch (error) {
+    unstable_rethrow(error); // let Next's redirect()/notFound() through
     if (error instanceof ApiError && (error.status === 404 || error.status === 400)) notFound();
     return (
       <Notice tone="error">

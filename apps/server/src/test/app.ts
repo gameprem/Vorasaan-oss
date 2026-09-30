@@ -18,6 +18,8 @@ export async function createTestApp(): Promise<TestApp> {
   await prepareTestDatabase();
   process.env.DATABASE_URL = testDatabaseUrl;
   process.env.VORASAAN_SECRET_KEY ??= 'test-secret-key-for-vorasaan-tests';
+  // Most API tests act as seeded users via the dev header; auth tests turn it off.
+  process.env.VORASAAN_DEV_AUTH = 'true';
   const ai = new FakeAiPort();
   const connection: TestApp['connection'] = { tester: async () => {}, calls: 0 };
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })

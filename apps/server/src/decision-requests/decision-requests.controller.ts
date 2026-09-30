@@ -6,7 +6,7 @@ import {
   RaiseDecisionRequestInput,
   SubmitDecisionRequestInput,
 } from '@vorasaan/shared';
-import { CurrentUser } from '../dev-identity/dev-user.guard.ts';
+import { CurrentUser } from '../auth/identity.guard.ts';
 import { DecisionRequestsService } from './decision-requests.service.ts';
 
 @Controller('decision-requests')
