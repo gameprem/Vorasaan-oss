@@ -139,7 +139,7 @@ The source of truth is `packages/db/prisma/schema.prisma`.
 
 ## 5. Technical Architecture
 
-**Turborepo + pnpm monorepo, ESM everywhere, Node 22** (move to Node 24 before Node 22 EOL on 2027-04-30). Lint/format: Biome. Tests: Vitest.
+**Bun + Turborepo monorepo, ESM everywhere** ([ADR 0005](./docs/adr/0005-bun-as-runtime-and-package-manager.md)). Bun is the runtime, package manager and test runner. Workspace packages export `.ts` source directly. Lint/format: Biome.
 
 ### `apps/web`
 Next.js 16 (App Router), TailwindCSS, Shadcn UI, BlockNote (Markdown in and out).
@@ -151,7 +151,7 @@ Next.js 16 (App Router), TailwindCSS, Shadcn UI, BlockNote (Markdown in and out)
 * Atlassian connector: read-only fetch in the MVP.
 
 ### `apps/cli`
-Node.js, Commander.js (subcommands), **Ink** (persistent TUI), SSE client, OS notifications.
+Bun, Commander.js (subcommands), **Ink** (persistent TUI), SSE client, OS notifications. Shipped as a single binary via `bun build --compile`.
 
 ### `packages/`
 * `db`: Prisma 7 schema (`prisma-client` generator, `@prisma/adapter-pg`, URL in `prisma.config.ts`) and `createPrismaClient()`.
@@ -166,9 +166,10 @@ Node.js, Commander.js (subcommands), **Ink** (persistent TUI), SSE client, OS no
 ## 6. Roadmap
 
 ### Phase 1: Foundation
-- [x] Root `package.json`, `turbo.json` (`tasks`), Biome, base tsconfig, `.nvmrc`, CI.
+- [x] Root `package.json` (Bun workspaces), `turbo.json` (`tasks`), Biome, base tsconfig.
+- [ ] CI (GitHub Actions: lint, typecheck, test with Postgres), added once the tracer bullet has tests.
 - [x] `schema.prisma` for the MVP domain model (Prisma 7) + initial migration.
-- [x] `CONTEXT.md` glossary, ADRs 0001–0004, `CLAUDE.md`.
+- [x] `CONTEXT.md` glossary, ADRs 0001–0005, `CLAUDE.md`, `README.md`.
 - [ ] Scaffold `apps/web`, `apps/server`, `apps/cli` and `packages/skills` as workspace packages.
 - [ ] Zod schemas in `packages/shared` (align with Prisma enums: add `TECH_LEAD`, `DecisionRequest` replaces `BlockerPayload`).
 - [ ] `docker/Dockerfile.server` and `docker/Dockerfile.web` for the `app` compose profile.

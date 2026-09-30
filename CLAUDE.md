@@ -16,7 +16,7 @@ Open-source "AI proposes, human approves" alignment engine. Product scope: `REQU
 
 ## Stack & conventions
 
-- Node 22 (`.nvmrc`), pnpm via corepack, Turborepo. **ESM everywhere** (`"type": "module"`, `NodeNext`, `.js` in relative imports).
+- **Bun** (version in `package.json` `packageManager`) as runtime, package manager and test runner, plus Turborepo (ADR 0005). **ESM everywhere.** Workspace packages export `.ts` source; there is no build step for `packages/*`.
 - `apps/server`: NestJS 12 + Fastify. Mastra is a library inside `MastraModule` (ADR 0003).
 - `apps/web`: Next.js 16. `apps/cli`: Commander + Ink.
 - `packages/db`: Prisma 7 (`prisma-client` generator, `@prisma/adapter-pg`). Use `createPrismaClient()`; never `new PrismaClient()` elsewhere.
@@ -27,20 +27,20 @@ Open-source "AI proposes, human approves" alignment engine. Product scope: `REQU
 
 ## Testing
 
-- Vitest. Service-layer tests run against a real Postgres (`docker compose up db`), never a mocked Prisma.
+- `bun test`. Service-layer tests run against a real Postgres (`docker compose up db`), never a mocked Prisma.
 - Test-drive the Decision Request state machine (states, Claim, Delegation, NEEDS_INFO) before implementing it.
-- LLM calls go through an interface. Tests use a deterministic fake. Prompt quality is measured by the eval set, run manually, not in CI.
+- LLM calls go through an interface. Tests use a deterministic fake. Prompt quality is measured by the eval set, run manually, not in automated tests.
 
 ## Commands
 
 ```bash
 docker compose up -d db     # Postgres for dev/tests
-pnpm install
-pnpm db:generate            # Prisma client
-pnpm db:migrate             # create/apply migrations (dev)
-pnpm lint                   # Biome (pnpm format to fix)
-pnpm typecheck
-pnpm test
+bun install
+bun run db:generate         # Prisma client
+bun run db:migrate          # create/apply migrations (dev)
+bun run lint                # Biome (bun run format to fix)
+bun run typecheck
+bun run test
 ```
 
-CI (GitHub Actions) runs lint, typecheck and test on every PR. All three must pass before merge.
+There is no CI yet: run lint, typecheck and test locally before opening a PR. All three must pass.
