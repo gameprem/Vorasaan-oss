@@ -80,3 +80,22 @@ Attachments         0021 ─┬─ 0022      ├─ 0026
 ```
 
 The three lanes (Decision Requests, Spec, Attachments) run in parallel. Inside the Decision Requests lane, 0017 and 0018 both change `decision-requests.service.ts`, so run them one after the other.
+
+## Project foundation
+
+Goal: a Project has a shared, human-approved foundation before and alongside its Features (REQUIREMENT §3.8, ADR 0006). Scheduled after the MVP backend (0019, 0022, 0023) and before the MVP Web UI (0024+).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0030 | [Project Brief and Project-level Attachments](./0030-project-brief.md) | none |
+| 0031 | [Feature Guidelines](./0031-feature-guidelines.md) | 0030 |
+| 0032 | [Grilling a Project into a Brief](./0032-grilling.md) | 0030, 0031 |
+| 0033 | [Repo Scan from the CLI (opt-in)](./0033-repo-scan.md) | 0030 |
+| 0034 | [Feature Suggestions and the Guidelines fit check](./0034-feature-suggestions.md) | 0032 |
+| 0035 | [Web: Project Brief, Grilling, Guidelines and Suggestions](./0035-web-project-foundation.md) | 0034 |
+
+```
+0030 ─┬─ 0031 ─┬─ 0032 ── 0034 ── 0035
+      │        │
+      └─ 0033 ─┘ (Grilling and Suggestions use the latest Repo Scan if there is one)
+```
