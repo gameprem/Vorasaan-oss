@@ -108,6 +108,17 @@ A Feature may have several open Decision Requests at once.
 * **Team Roles:** `PO`, `DESIGNER`, `TECH_LEAD`, `BACKEND`, `FRONTEND`, `MOBILE`, `QA`. They are held per Team membership: a person can hold several, and one Team Role can be held by many people.
 * Everyone in the Organization can **read** every Feature. **Actions** (decide, Claim, approve Spec Proposals) require the matching Team Role. NestJS Guards enforce this.
 
+### 3.8. Project Brief, Grilling & Feature Suggestions ([ADR 0006](./docs/adr/0006-project-brief-above-features.md))
+Before and alongside Features, a Project has a shared foundation the AI and new Features build on. It works for a **new Project** (start from Grilling) and an **existing one** (start from what is already there).
+
+* **Project Brief:** Markdown, versioned like the Spec (Brief Versions, diff, revert). Sections: business goals, target users, **current capabilities**, constraints, non-goals. Admins and the POs of the Project's Teams approve changes.
+* **Grilling:** the AI asks rounds of questions (business → UX → technical) to the people with those Team Roles, then drafts a Brief proposal that a PO approves. It can be re-run later to update the Brief.
+* **Existing Projects:** before asking, the AI reads what exists: Project-level Attachments (docs, Confluence, Jira project), the Features and Specs already in Vorasaan, and an optional **Repo Scan** from `vorasaan scan` (or `vorasaan init --scan`). It drafts "current capabilities" and asks only about the gaps.
+  * The Repo Scan is opt-in every time, shown to the user before sending, and contains a summary only (README, dependency manifests, main modules and routes), never whole source files.
+* **Feature Guidelines:** criteria a Feature must meet for the business (KPIs it serves, constraints, required sections). An Admin sets the Organization default; each Project can override or extend it. Shown as a checklist when someone proposes a Feature, and used by the AI to check a Feature idea's fit and ask about what is missing.
+* **Feature Suggestions:** the AI proposes Features from the Brief, the Guidelines, capability gaps and the Decision Log, each with rationale, business value, effort and risk. A PO **accepts** (a Feature is created with an AI-drafted Spec Proposal) or **dismisses with a reason** (used as context next time).
+* The Brief and the effective Guidelines are context for every AI workflow in the Project (Choices, Spec Proposals, Suggestions).
+
 ---
 
 ## 4. Domain Model
@@ -186,6 +197,13 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 - [ ] Decision Request state machine, recipients, Claim, reassign, NEEDS_INFO thread.
 - [ ] Delegations.
 - [ ] Inbox Items (derived) + Notifications + SSE stream.
+
+### Project foundation (after the MVP backend, before the MVP Web UI)
+- [ ] Project Brief with Brief Versions and Project-level Attachments.
+- [ ] Feature Guidelines (Organization default + Project override).
+- [ ] Grilling workflow, including existing Projects and the opt-in Repo Scan.
+- [ ] Feature Suggestions and the Guidelines fit check.
+- [ ] Web and CLI for all of the above.
 
 ### Phase 3: MVP Web UI
 - [ ] Setup wizard, onboarding, members & invitations.

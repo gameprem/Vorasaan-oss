@@ -56,6 +56,32 @@ _Avoid_: Cache, copy
 An AI-drafted change to a Spec, awaiting approval. Once approved, it becomes a new Spec Version.
 _Avoid_: Revision, change request, draft
 
+### Project context
+
+**Project Brief**:
+The living, human-approved description of a Project as a whole: its business goals, users, what it already does, constraints and non-goals. Every AI workflow in the Project reads it.
+_Avoid_: Project description, charter, PRD
+
+**Brief Version**:
+An immutable, numbered snapshot of a Project Brief, approved by a named person.
+_Avoid_: Draft, history entry
+
+**Grilling**:
+Rounds of AI-asked questions to the people in a Project (business, then UX, then technical) whose answers the AI turns into a Project Brief proposal.
+_Avoid_: Interview, survey, questionnaire
+
+**Repo Scan**:
+An opt-in summary of an existing codebase (README, dependencies, main modules and routes) that the CLI sends as context. It never contains whole source files.
+_Avoid_: Code upload, import
+
+**Feature Guidelines**:
+The criteria a new Feature must meet for the business (goals it serves, constraints it respects). Set as an Organization default that a Project can override.
+_Avoid_: Rules, policy, checklist
+
+**Feature Suggestion**:
+A Feature the AI proposes from the Project Brief, the Feature Guidelines and the Decision Log, with its rationale. A PO accepts it (it becomes a Feature) or dismisses it with a reason.
+_Avoid_: Idea, recommendation, backlog item
+
 ### Decision Requests
 
 **Decision Request**:
