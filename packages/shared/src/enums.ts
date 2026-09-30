@@ -30,6 +30,9 @@ export const DecisionRequestStatus = z.enum([
 ]);
 export type DecisionRequestStatus = z.infer<typeof DecisionRequestStatus>;
 
+export const RequestMessageKind = z.enum(['QUESTION', 'ANSWER', 'NOTE']);
+export type RequestMessageKind = z.infer<typeof RequestMessageKind>;
+
 export const ProposalStatus = z.enum(['PENDING', 'APPROVED', 'REJECTED']);
 export type ProposalStatus = z.infer<typeof ProposalStatus>;
 

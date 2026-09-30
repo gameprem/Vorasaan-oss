@@ -19,6 +19,28 @@ describe('Decision Request state machine', () => {
     expect(nextStatus('NEEDS_INFO', 'provideInfo')).toBe('OPEN');
   });
 
+  test('askForInfo only from OPEN, provideInfo only from NEEDS_INFO', () => {
+    for (const from of DecisionRequestStatus.options) {
+      expect(canTransition(from, 'askForInfo')).toBe(from === 'OPEN');
+      expect(canTransition(from, 'provideInfo')).toBe(from === 'NEEDS_INFO');
+    }
+  });
+
+  test('a Decision cannot be made while waiting for more info', () => {
+    expect(canTransition('NEEDS_INFO', 'decide')).toBe(false);
+    expect(() => nextStatus('NEEDS_INFO', 'decide')).toThrow(
+      'Cannot decide a Decision Request that is NEEDS_INFO',
+    );
+  });
+
+  test('a note keeps the status, and only while OPEN or NEEDS_INFO', () => {
+    expect(nextStatus('OPEN', 'addNote')).toBe('OPEN');
+    expect(nextStatus('NEEDS_INFO', 'addNote')).toBe('NEEDS_INFO');
+    for (const from of ['DRAFT', 'DECIDED', 'SPEC_UPDATED', 'WITHDRAWN'] as const) {
+      expect(canTransition(from, 'addNote')).toBe(false);
+    }
+  });
+
   test('Claim and reassign keep the request OPEN, and only from OPEN', () => {
     expect(nextStatus('OPEN', 'claim')).toBe('OPEN');
     expect(nextStatus('OPEN', 'reassign')).toBe('OPEN');
@@ -45,6 +67,7 @@ describe('Decision Request state machine', () => {
       'withdraw',
       'askForInfo',
       'provideInfo',
+      'addNote',
       'decide',
       'approveSpecProposal',
     ];

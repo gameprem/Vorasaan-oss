@@ -3,6 +3,7 @@ import type { User } from '@vorasaan/db';
 import {
   DecideInput,
   ListDecisionRequestsQuery,
+  PostRequestMessageInput,
   RaiseDecisionRequestInput,
   ReassignInput,
   SubmitDecisionRequestInput,
@@ -56,6 +57,15 @@ export class DecisionRequestsController {
     @Body({ schema: ReassignInput }) body: ReassignInput,
   ) {
     return this.service.reassign(user, id, body);
+  }
+
+  @Post(':id/messages')
+  postMessage(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: PostRequestMessageInput }) body: PostRequestMessageInput,
+  ) {
+    return this.service.postMessage(user, id, body);
   }
 
   @Post(':id/decision')

@@ -10,6 +10,7 @@ export const decisionRequestInclude = {
   decider: person,
   recipients: { select: { user: person }, orderBy: { user: { name: 'asc' } } },
   choices: { orderBy: { position: 'asc' } },
+  messages: { include: { author: person }, orderBy: { createdAt: 'asc' } },
   decision: {
     include: {
       decidedBy: person,
@@ -74,6 +75,13 @@ export function toDecisionRequestView(
       impactTime: c.impactTime,
       impactRisk: c.impactRisk,
       editedByUser: c.editedByUser,
+    })),
+    messages: r.messages.map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      author: m.author,
+      body: m.body,
+      createdAt: m.createdAt.toISOString(),
     })),
     decision: r.decision && {
       id: r.decision.id,

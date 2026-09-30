@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { DecisionRequestKind, DecisionRequestStatus, ProposalStatus, TeamRole } from './enums.ts';
+import {
+  DecisionRequestKind,
+  DecisionRequestStatus,
+  ProposalStatus,
+  RequestMessageKind,
+  TeamRole,
+} from './enums.ts';
 
 const Id = z.uuid();
 const Timestamp = z.iso.datetime();
@@ -57,6 +63,17 @@ export type SubmitDecisionRequestInput = z.input<typeof SubmitDecisionRequestInp
 export const ReassignInput = z.strictObject({ userId: Id });
 export type ReassignInput = z.infer<typeof ReassignInput>;
 
+/**
+ * A message in a Decision Request's thread. The Decider asks a QUESTION (OPEN → NEEDS_INFO),
+ * the Raiser gives an ANSWER (NEEDS_INFO → OPEN), and either may add a NOTE at any point
+ * before a Decision.
+ */
+export const PostRequestMessageInput = z.strictObject({
+  kind: RequestMessageKind,
+  body: Text.max(10_000),
+});
+export type PostRequestMessageInput = z.infer<typeof PostRequestMessageInput>;
+
 const Rationale = z.string().trim().min(1).optional();
 
 /** Exactly one of `choiceId` or `customAnswer`. */
@@ -91,6 +108,15 @@ export const DecisionView = z.object({
 });
 export type DecisionView = z.infer<typeof DecisionView>;
 
+export const RequestMessageView = z.object({
+  id: Id,
+  kind: RequestMessageKind,
+  author: PersonRef,
+  body: z.string(),
+  createdAt: Timestamp,
+});
+export type RequestMessageView = z.infer<typeof RequestMessageView>;
+
 export const DecisionRequestView = z.object({
   id: Id,
   featureId: Id,
@@ -112,6 +138,8 @@ export const DecisionRequestView = z.object({
    */
   canClaim: z.boolean(),
   choices: z.array(ChoiceView),
+  /** The ask-for-more-info thread between Decider and Raiser, oldest first. */
+  messages: z.array(RequestMessageView),
   decision: DecisionView.nullable(),
   /** The Spec Proposal drafted from the Decision, if any. */
   specProposal: z.object({ id: Id, status: ProposalStatus }).nullable(),
