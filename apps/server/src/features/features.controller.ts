@@ -1,7 +1,7 @@
 import { Controller, Get, NotFoundException, Param, ParseUUIDPipe } from '@nestjs/common';
 import type { PrismaClient, User } from '@vorasaan/db';
 import type { FeatureSummaryView } from '@vorasaan/shared';
-import { CurrentUser } from '../dev-identity/dev-user.guard.ts';
+import { CurrentUser } from '../auth/identity.guard.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 
 @Controller('features')

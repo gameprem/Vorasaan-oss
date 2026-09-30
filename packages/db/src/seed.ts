@@ -13,8 +13,8 @@ export const SEED = {
   },
 } as const;
 
-// Placeholder; real password auth arrives with the MVP.
-const DEV_PASSWORD_HASH = 'dev-seed-no-login';
+/** Every seeded user can sign in with this password (local demos only). */
+export const SEED_PASSWORD = 'vorasaan-demo';
 
 export const SEED_SPEC_V1 = `# Async checkout
 
@@ -50,6 +50,7 @@ Today checkout blocks for up to 8 seconds while we call the provider synchronous
 /** Seeds the tracer-bullet world. Safe to run repeatedly. */
 export async function seed(db: PrismaClient) {
   const { pim, beam } = SEED.users;
+  const passwordHash = await Bun.password.hash(SEED_PASSWORD, { algorithm: 'argon2id' });
 
   await db.organization.upsert({
     where: { id: SEED.organizationId },
@@ -60,8 +61,8 @@ export async function seed(db: PrismaClient) {
   for (const user of [pim, beam]) {
     await db.user.upsert({
       where: { id: user.id },
-      update: {},
-      create: { ...user, passwordHash: DEV_PASSWORD_HASH },
+      update: { passwordHash },
+      create: { ...user, passwordHash },
     });
     await db.orgMembership.upsert({
       where: { organizationId_userId: { organizationId: SEED.organizationId, userId: user.id } },

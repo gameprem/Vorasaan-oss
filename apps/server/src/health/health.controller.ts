@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import type { PrismaClient } from '@vorasaan/db';
-import { Public } from '../dev-identity/dev-user.guard.ts';
+import { Public } from '../auth/identity.guard.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 
 @Controller('health')

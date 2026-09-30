@@ -4,15 +4,15 @@ import type { DecideResult, SpecProposalView, SpecVersionView } from '@vorasaan/
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { ApiError, api, USER_COOKIE } from './api';
+import { ApiError, api, DEV_USER_COOKIE } from './api';
 
 export type ActionState = { error?: string };
 
 export async function switchUser(formData: FormData) {
   const id = String(formData.get('userId') ?? '');
   const jar = await cookies();
-  if (id) jar.set(USER_COOKIE, id, { path: '/', sameSite: 'lax' });
-  else jar.delete(USER_COOKIE);
+  if (id) jar.set(DEV_USER_COOKIE, id, { path: '/', sameSite: 'lax' });
+  else jar.delete(DEV_USER_COOKIE);
   revalidatePath('/', 'layout');
 }
 

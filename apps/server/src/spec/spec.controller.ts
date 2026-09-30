@@ -1,6 +1,6 @@
 import { Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import type { User } from '@vorasaan/db';
-import { CurrentUser } from '../dev-identity/dev-user.guard.ts';
+import { CurrentUser } from '../auth/identity.guard.ts';
 import { SpecService } from './spec.service.ts';
 
 @Controller()
