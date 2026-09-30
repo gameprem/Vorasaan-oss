@@ -21,6 +21,7 @@
 | Spec format | **Markdown is canonical** ([ADR 0002](./docs/adr/0002-markdown-is-the-canonical-spec-format.md)). BlockNote converts to and from Markdown when editing. |
 | File storage | Attachment files go through a `FileStorage` interface. The default is local disk (a Docker volume); any S3-compatible bucket (S3, MinIO, R2) is enabled by setting `FILE_STORAGE_DRIVER=s3` and `S3_*` env vars. |
 | Default model | `claude-opus-5-5` for every workflow. Each workflow can name its own model so they can be split later. Admins can change it. |
+| AI context | **Retrieval, not everything** ([ADR 0007](./docs/adr/0007-retrieval-with-pgvector.md)). Content is chunked and embedded into Postgres with pgvector. A workflow gets its Feature's own context first, then the most relevant chunks from the Project, within a token budget. Embeddings go through an `EmbeddingPort`; the default is any OpenAI-compatible endpoint set by an Admin. |
 
 ---
 
@@ -170,7 +171,7 @@ Bun, Commander.js (subcommands), **Ink** (persistent TUI), SSE client, OS notifi
 * `skills`: Markdown prompt templates per team/role (Choice generation, decider-role suggestion, Spec Proposal drafting, Attachment summary).
 
 ### Infrastructure
-`docker-compose.yml`: PostgreSQL by default. `--profile router` adds 9Router (`decolua/9router`, port 20128). `--profile app` adds server and web.
+`docker-compose.yml`: PostgreSQL with pgvector by default. `--profile router` adds 9Router (`decolua/9router`, port 20128). `--profile app` adds server and web.
 
 ---
 
@@ -198,6 +199,10 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 - [ ] Delegations.
 - [ ] Inbox Items (derived) + Notifications + SSE stream.
 
+### Retrieval (after the MVP backend, before the Project foundation)
+- [ ] pgvector, content chunks, `EmbeddingPort` and indexing.
+- [ ] A context retriever used by every AI workflow.
+
 ### Project foundation (after the MVP backend, before the MVP Web UI)
 - [ ] Project Brief with Brief Versions and Project-level Attachments.
 - [ ] Feature Guidelines (Organization default + Project override).
@@ -217,7 +222,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 - [ ] OS notifications.
 
 ### Post-MVP (in order)
-1. `vorasaan run --ai claude`: inject the latest Spec Markdown as context.
+1. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything.
 2. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec.
 3. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
 4. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.

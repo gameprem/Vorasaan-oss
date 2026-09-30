@@ -81,9 +81,18 @@ Attachments         0021 ─┬─ 0022      ├─ 0026
 
 The three lanes (Decision Requests, Spec, Attachments) run in parallel. Inside the Decision Requests lane, 0017 and 0018 both change `decision-requests.service.ts`, so run them one after the other.
 
+## Retrieval
+
+Goal: AI workflows retrieve only the relevant context instead of reading everything (ADR 0007). Scheduled right after 0023.
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0036 | [Vector foundation: pgvector, chunks, EmbeddingPort, indexing](./0036-vector-foundation.md) | 0023 |
+| 0037 | [Context retriever for every AI workflow](./0037-context-retriever.md) | 0036 |
+
 ## Project foundation
 
-Goal: a Project has a shared, human-approved foundation before and alongside its Features (REQUIREMENT §3.8, ADR 0006). Scheduled after the MVP backend (0019, 0022, 0023) and before the MVP Web UI (0024+).
+Goal: a Project has a shared, human-approved foundation before and alongside its Features (REQUIREMENT §3.8, ADR 0006). Scheduled after the MVP backend (0019, 0022, 0023) and Retrieval (0036, 0037), and before the MVP Web UI (0024+).
 
 | # | Ticket | Depends on |
 | --- | --- | --- |
