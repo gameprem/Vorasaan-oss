@@ -1,6 +1,6 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
-  "globalEnv": ["DATABASE_URL"],
+  "globalEnv": ["DATABASE_URL", "TEST_DATABASE_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build", "db:generate"],

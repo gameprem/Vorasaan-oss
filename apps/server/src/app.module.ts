@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
-import { FeatureModule } from './modules/feature/feature.module';
-import { JiraModule } from './modules/jira/jira.module';
-import { MastraModule } from './modules/mastra/mastra.module';
+import { APP_GUARD } from '@nestjs/core';
+import { DevUserGuard } from './dev-identity/dev-user.guard.ts';
+import { HealthController } from './health/health.controller.ts';
+import { MeController } from './me/me.controller.ts';
+import { PrismaModule } from './prisma/prisma.module.ts';
 
 @Module({
-  imports: [
-    MastraModule, // ห่อหุ้ม Mastra Agent Engine
-    FeatureModule, // จัดการ API หน้าบ้านและ CLI
-    JiraModule, // จัดการ Atlassian Webhooks
-  ],
+  imports: [PrismaModule],
+  controllers: [HealthController, MeController],
+  providers: [{ provide: APP_GUARD, useClass: DevUserGuard }],
 })
 export class AppModule {}

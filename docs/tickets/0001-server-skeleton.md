@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: []
 slice: tracer-bullet
 ---
@@ -18,10 +18,10 @@ A NestJS 12 app on Bun, wired to Postgres, with a test harness that later ticket
 - **Test harness:** a helper that points at `DATABASE_URL` (a `vorasaan_test` database), applies migrations once, and truncates all tables between tests. Add a `test` script (`bun test`) to the package.
 
 ## Acceptance criteria
-- [ ] `bun run dev` in `apps/server` starts the server on port 4000; `GET /health` returns 200.
-- [ ] A test proves the dev guard: 401 without the header, 401 for an unknown id, 200 for a seeded user.
-- [ ] `bun run test` at the repo root runs the server tests against real Postgres.
-- [ ] `bun run lint` and `bun run typecheck` pass.
+- [x] `bun run dev` in `apps/server` starts the server on port 4000; `GET /health` returns 200.
+- [x] A test proves the dev guard: 401 without the header, 401 for an unknown id, 200 for a seeded user.
+- [x] `bun run test` at the repo root runs the server tests against real Postgres.
+- [x] `bun run lint` and `bun run typecheck` pass.
 
 ## Notes
 - If NestJS decorators or DI misbehave on Bun, record the workaround and consider an ADR amendment (ADR 0005).
