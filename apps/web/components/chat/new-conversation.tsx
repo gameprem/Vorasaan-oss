@@ -3,6 +3,7 @@
 import type { AiModelsView, ConversationScopeView } from '@vorasaan/shared';
 import Link from 'next/link';
 import { useId, useState } from 'react';
+import type { Lang } from '@/lib/lang';
 import { scopeKey } from '@/lib/scope-key';
 import { Chat } from './chat';
 
@@ -10,7 +11,7 @@ import { Chat } from './chat';
 // their real pending work. Picking a Project or Feature (or starting inside one) turns the
 // starters into chips above the composer. The first message creates the Conversation.
 
-export type Lang = 'en' | 'th';
+export type { Lang };
 
 export type Starter = {
   text: string;
@@ -142,7 +143,7 @@ export function NewConversation({
               {starters.map((s) => (
                 <li key={`${s.text}-${s.sub}`} className="contents">
                   {s.href ? (
-                    <Link href={s.href} className="starter" lang={lang}>
+                    <Link href={s.href} className="starter" lang={lang} prefetch={false}>
                       {s.tag && <span className="tag">{s.tag}</span>}
                       <span>{s.text}</span>
                       <small>{s.sub}</small>

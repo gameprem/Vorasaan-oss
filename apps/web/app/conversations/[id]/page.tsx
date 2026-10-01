@@ -5,6 +5,7 @@ import { Chat } from '@/components/chat/chat';
 import { ApiError, api, currentUser } from '@/lib/api';
 import { chipsFor, contextLabel, loadDoc, loadModels, placeholderFor } from '@/lib/chat-data';
 import { isId } from '@/lib/ids';
+import { requestLanguage } from '@/lib/lang';
 
 async function load(id: string) {
   if (!isId(id)) notFound();
@@ -31,7 +32,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   const [conversation, me] = await Promise.all([load(id), currentUser()]);
   if (!me) redirect('/login');
   const { scope, grilling } = conversation;
-  const [doc, models] = await Promise.all([loadDoc(scope), loadModels()]);
+  const [doc, models, lang] = await Promise.all([loadDoc(scope), loadModels(), requestLanguage()]);
 
   return (
     <Chat
@@ -42,10 +43,11 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
       scope={scope}
       doc={doc}
       chips={chipsFor(scope, grilling)}
-      placeholder={placeholderFor(scope, grilling)}
-      context={contextLabel(scope, doc, grilling)}
+      placeholder={placeholderFor(scope, grilling, lang)}
+      context={contextLabel(scope, doc, grilling, lang)}
       // A Grilling Conversation's questions come from the server: no model to pick.
       models={grilling ? null : models}
+      lang={lang}
     />
   );
 }

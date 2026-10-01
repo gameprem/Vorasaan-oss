@@ -1,45 +1,21 @@
 import type { ConversationScopeView, FeatureSummaryView, InboxItem } from '@vorasaan/shared';
-import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
-  type Lang,
   NewConversation,
   type ScopeOption,
   type Starter,
 } from '@/components/chat/new-conversation';
 import { ROUND_LABEL } from '@/components/ui';
 import { api, currentUser } from '@/lib/api';
-import { chipsFor, loadModels } from '@/lib/chat-data';
+import { chipsFor, grillingConversationHref, loadModels } from '@/lib/chat-data';
 import { isId } from '@/lib/ids';
+import { type Lang, requestLanguage } from '@/lib/lang';
 import { scopeKey } from '@/lib/scope-key';
 import { loadSidebar, type SidebarProject } from '@/lib/sidebar';
 
 export const metadata = { title: 'New conversation' };
 
 const MAX_STARTERS = 4;
-
-/**
- * The visitor's language, from the browser's Accept-Language: Thai when Thai comes before
- * English, English otherwise. Nothing stores a language preference yet.
- */
-function preferredLanguage(header: string | null): Lang {
-  const tags = (header ?? '')
-    .split(',')
-    .map((part) => {
-      const [tag = '', ...params] = part.trim().toLowerCase().split(';');
-      const q = Number(
-        params
-          .find((p) => p.trim().startsWith('q='))
-          ?.trim()
-          .slice(2) ?? 1,
-      );
-      return { tag, q: Number.isFinite(q) ? q : 0 };
-    })
-    .filter((t) => t.tag && t.q > 0)
-    .sort((a, b) => b.q - a.q);
-  const first = tags.find((t) => t.tag.startsWith('th') || t.tag.startsWith('en'));
-  return first?.tag.startsWith('th') ? 'th' : 'en';
-}
 
 const STARTER_COPY = {
   en: {
@@ -134,9 +110,7 @@ function startersFrom(
           text: t.grilling(ROUND_LABEL[item.grilling.round], item.grilling.unanswered),
           sub: item.project.name,
           tag: 'Grilling',
-          href: item.grilling.conversationId
-            ? `/conversations/${item.grilling.conversationId}`
-            : `/projects/${item.project.id}?tab=grilling`,
+          href: grillingConversationHref(item.grilling),
         });
         break;
     }
@@ -194,7 +168,7 @@ export default async function NewConversationPage({
   const me = await currentUser();
   if (!me) redirect('/login');
   const { feature, project } = await searchParams;
-  const lang = preferredLanguage((await headers()).get('accept-language'));
+  const lang = await requestLanguage();
   const [sidebar, inbox, myFeatures, models] = await Promise.all([
     loadSidebar(),
     api<InboxItem[]>('/inbox').catch(() => []),

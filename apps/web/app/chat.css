@@ -905,3 +905,121 @@
     width: 100%;
   }
 }
+
+/* ── Grilling (ticket 0047) ─────────────────────────────────────────────── */
+/* The three rounds above the thread, the current one in ink. */
+.rounds {
+  list-style: none;
+  max-width: 780px;
+  margin: 0 auto 18px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.round {
+  background: var(--rail);
+  border-radius: var(--r-s);
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 0;
+}
+.round.now {
+  background: var(--ink-wash);
+  color: var(--ink);
+}
+.round-status {
+  display: block;
+  color: var(--fg-soft);
+  font-size: 12px;
+  font-weight: 400;
+}
+/* Questions someone else answered: one quiet row each, opened on a click. */
+.answered-list {
+  display: grid;
+  gap: 6px;
+  margin-top: -12px;
+}
+.answered {
+  font-size: 13px;
+  color: var(--fg-soft);
+  background: var(--rail);
+  border-radius: var(--r-s);
+}
+.answered summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--r-s);
+}
+.answered summary::-webkit-details-marker {
+  display: none;
+}
+.answered summary::before {
+  content: "▸";
+  color: var(--fg-faint);
+}
+.answered[open] summary::before {
+  content: "▾";
+}
+.answered summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.answered .q {
+  color: var(--fg);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.answered .answer {
+  padding: 0 14px 10px 30px;
+  color: var(--fg);
+  display: grid;
+  gap: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.answered .answer p {
+  margin: 0;
+}
+.answered .answer .fq {
+  color: var(--fg-soft);
+  font-style: italic;
+}
+/* What the server reports (someone answered, the round ended): not the AI's voice. */
+.sys-note {
+  justify-self: center;
+  max-width: 62ch;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-soft);
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: var(--rail);
+  overflow-wrap: anywhere;
+}
+.msg.ai .ask {
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .rounds {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .round {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .round-status {
+    font-size: 11px;
+  }
+  .sys-note {
+    border-radius: var(--r-s);
+  }
+}

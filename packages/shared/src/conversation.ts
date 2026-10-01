@@ -9,6 +9,8 @@ import {
   GrillingStatus,
   TeamRole,
 } from './enums.ts';
+import { GrillingFollowUp } from './grilling.ts';
+import { GrillingNote } from './grilling-notes.ts';
 
 const Id = z.uuid();
 const Timestamp = z.iso.datetime();
@@ -101,6 +103,12 @@ export const ConversationMessageView = z.object({
    * saying which model it used instead.
    */
   modelNotice: z.string().nullable(),
+  /**
+   * ASSISTANT, in a Grilling Conversation: what the server wrote, as Grilling Notes
+   * (ticket 0047), so a client can show it in the reader's language and show notices
+   * quietly. `content` is the same in English. Null for anything else.
+   */
+  grillingNotes: z.array(GrillingNote).nullable(),
   createdAt: Timestamp,
 });
 export type ConversationMessageView = z.infer<typeof ConversationMessageView>;
@@ -133,10 +141,27 @@ export const GrillingConversationQuestion = z.object({
   status: z.enum(['ANSWERED', 'ASKING', 'OPEN', 'SKIPPED']),
   answeredBy: PersonRef.nullable(),
   answeredAt: Timestamp.nullable(),
+  /** ANSWERED: the answer and the follow-ups asked in the answerer's Conversation (0047). */
+  answer: z.string().nullable(),
+  followUps: z.array(GrillingFollowUp),
   /** ASKING: the follow-ups asked on it so far. */
   followUpsAsked: z.int().nonnegative(),
 });
 export type GrillingConversationQuestion = z.infer<typeof GrillingConversationQuestion>;
+
+/**
+ * One of the Grilling's three rounds, for the header of a Grilling Conversation
+ * (ticket 0047): UPCOMING until the Grilling reaches it, then ASKING, ANSWERED or
+ * SKIPPED, with how many of its questions have an answer.
+ */
+export const GrillingRoundProgress = z.object({
+  kind: GrillingRoundKind,
+  role: TeamRole,
+  status: z.union([GrillingRoundStatus, z.literal('UPCOMING')]),
+  answered: z.int().nonnegative(),
+  total: z.int().nonnegative(),
+});
+export type GrillingRoundProgress = z.infer<typeof GrillingRoundProgress>;
 
 /** A Grilling Conversation's round and its progress, e.g. "3 of 5 answered". */
 export const GrillingConversationProgress = z.object({
@@ -145,6 +170,8 @@ export const GrillingConversationProgress = z.object({
   answered: z.int().nonnegative(),
   total: z.int().nonnegative(),
   questions: z.array(GrillingConversationQuestion),
+  /** Every round of the Grilling, in the order they are asked (0047). */
+  rounds: z.array(GrillingRoundProgress),
 });
 export type GrillingConversationProgress = z.infer<typeof GrillingConversationProgress>;
 

@@ -14,6 +14,7 @@ import { MarkAllReadButton, MarkReadButton } from '@/components/notification-act
 import { notificationHref, notificationText } from '@/components/notification-text';
 import { ROLE_LABEL, ROUND_LABEL } from '@/components/ui';
 import { ApiError, api } from '@/lib/api';
+import { grillingConversationHref } from '@/lib/chat-data';
 
 export const metadata = { title: 'Inbox' };
 
@@ -94,7 +95,8 @@ function describe(item: InboxItem): {
       const g = item.grilling;
       return {
         key: `${g.id}:${g.round}:${g.role}`,
-        href: `/projects/${item.project.id}?tab=grilling#current-round`,
+        // Answered in the person's own Grilling Conversation (0047).
+        href: grillingConversationHref(g),
         badge: <Tag>Grilling</Tag>,
         title: `${ROUND_LABEL[g.round]} round: ${g.unanswered} question${g.unanswered === 1 ? '' : 's'} for ${ROLE_LABEL[g.role]}`,
         meta: item.project.name,
@@ -202,6 +204,8 @@ export default async function InboxPage({
                       <li key={d.key}>
                         <Link
                           href={d.href}
+                          // Opening a missing Grilling Conversation creates it: only on a click.
+                          prefetch={item.kind === 'ANSWER_GRILLING' ? false : undefined}
                           className="group flex flex-col gap-1.5 py-4 sm:flex-row sm:items-start sm:gap-4"
                         >
                           <span className="shrink-0 sm:w-32">{d.badge}</span>

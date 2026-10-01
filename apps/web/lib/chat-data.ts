@@ -6,7 +6,9 @@ import type {
   SpecVersionView,
 } from '@vorasaan/shared';
 import type { ChatDoc } from '@/components/chat/doc-panel';
+import { GRILLING_UI } from '@/components/chat/grilling-copy';
 import { api } from './api';
+import type { Lang } from './lang';
 
 // What the chat view shows around a Conversation (ticket 0046), loaded on the server.
 
@@ -56,7 +58,8 @@ export function chipsFor(
   scope: ConversationScopeView,
   grilling: GrillingConversationRef | null = null,
 ): string[] {
-  if (grilling) return ['skip'];
+  // A Grilling Conversation's "Skip this question" chip is the chat's own (0047).
+  if (grilling) return [];
   return scope.kind === 'FEATURE'
     ? ['Raise a Blocker', 'Draft the Spec from the Attachments', 'Summarize the open questions']
     : ['Suggest Features', 'Draft the Project Brief', 'What is this Project missing?'];
@@ -65,8 +68,9 @@ export function chipsFor(
 export function placeholderFor(
   scope: ConversationScopeView | null,
   grilling: GrillingConversationRef | null = null,
+  lang: Lang = 'en',
 ): string {
-  if (grilling) return 'Answer in your own words, or type "skip"…';
+  if (grilling) return GRILLING_UI[lang].placeholder;
   if (!scope) return 'Tell Vorasaan what you need…';
   return scope.kind === 'FEATURE'
     ? 'Ask about this Feature, or tell the AI what to draft…'
@@ -78,10 +82,24 @@ export function contextLabel(
   scope: ConversationScopeView,
   doc: ChatDoc | null,
   grilling: GrillingConversationRef | null = null,
+  lang: Lang = 'en',
 ): string {
-  if (grilling) return 'Your answers go to the Brief Proposal, attributed to you';
+  if (grilling) return GRILLING_UI[lang].context;
   const name = scope.kind === 'FEATURE' ? scope.feature.title : scope.project.name;
   if (!doc) return `Context: ${name}`;
   const what = doc.kind === 'SPEC' ? 'Spec' : 'Brief';
   return `Context: ${name} · ${doc.version > 0 ? `${what} v${doc.version}` : `no ${what} yet`}`;
+}
+
+/**
+ * Where an "Answer Grilling" Inbox Item or starter goes (ticket 0047): the person's
+ * Grilling Conversation, or the page that opens it when they have none yet.
+ */
+export function grillingConversationHref(grilling: {
+  id: string;
+  conversationId: string | null;
+}): string {
+  return grilling.conversationId
+    ? `/conversations/${grilling.conversationId}`
+    : `/grillings/${grilling.id}/conversation`;
 }

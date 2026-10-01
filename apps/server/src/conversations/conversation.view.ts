@@ -6,6 +6,7 @@ import {
   ConversationToolCall,
   type ConversationView,
   type GrillingConversationProgress,
+  GrillingNote,
 } from '@vorasaan/shared';
 import { z } from 'zod';
 import { fromRecordedModelColumns } from '../ai/recorded-model.ts';
@@ -23,6 +24,7 @@ export type ConversationWithScope = Prisma.ConversationGetPayload<{
 type MessageRow = Prisma.ConversationMessageGetPayload<object>;
 
 const StoredToolCalls = z.array(ConversationToolCall);
+const StoredGrillingNotes = z.array(GrillingNote);
 
 export function toConversationListItem(c: ConversationWithScope): ConversationListItem {
   return {
@@ -42,6 +44,7 @@ export function toConversationListItem(c: ConversationWithScope): ConversationLi
 
 export function toConversationMessageView(m: MessageRow): ConversationMessageView {
   const toolCalls = m.toolCalls === null ? null : StoredToolCalls.safeParse(m.toolCalls);
+  const notes = m.grillingNotes === null ? null : StoredGrillingNotes.safeParse(m.grillingNotes);
   return {
     id: m.id,
     role: m.role,
@@ -50,6 +53,7 @@ export function toConversationMessageView(m: MessageRow): ConversationMessageVie
     toolCallId: m.toolCallId,
     model: fromRecordedModelColumns(m),
     modelNotice: m.modelNotice,
+    grillingNotes: notes?.success ? notes.data : null,
     createdAt: m.createdAt.toISOString(),
   };
 }
