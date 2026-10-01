@@ -151,3 +151,13 @@ After the MVP release, the web app becomes a chat app (ADR 0008):
       ├─ 0045 ─┴─ 0046 ─┬─ 0047 ── 0048
       └─ 0044 ──────────┘
 ```
+
+## Platforms and Coverage (Post-MVP 2)
+
+Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anything a team adds). Features target them, and Coverage shows which are covered or missing and why (ADR 0009).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0050 | [Platforms per Project, targeted by Features](./0050-platforms.md) | none |
+| 0051 | [Coverage per Platform, and the AI uses it](./0051-coverage.md) | 0050 |
+| 0052 | [Web and CLI: Platforms and Coverage](./0052-web-cli-platforms.md) | 0051, 0045 |

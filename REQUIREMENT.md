@@ -236,9 +236,13 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [ ] Chat view, Action Cards and the document panel (0046).
    - [ ] Grilling in the chat view (0047).
    - [ ] End-to-end tests for the chat UI (0048).
-2. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything.
-3. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec, as per-person Conversations (ADR 0008).
-4. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
-5. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.
-6. Browser-based `vorasaan login`.
-7. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.
+2. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why, using the checks each Platform switches on. The AI fills or asks about the gaps.
+   - [ ] Platforms per Project, targeted by Features (0050).
+   - [ ] Coverage per Platform, used by the AI (0051).
+   - [ ] Web and CLI: Platform chips and the Coverage matrix (0052).
+3. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything.
+4. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec, as per-person Conversations (ADR 0008).
+5. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
+6. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.
+7. Browser-based `vorasaan login`.
+8. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.
