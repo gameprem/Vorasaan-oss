@@ -1,9 +1,12 @@
 import type { Prisma } from '@vorasaan/db';
-import type { ActionCardView } from '@vorasaan/shared';
+import type { ActionCardDetail, ActionCardView } from '@vorasaan/shared';
 
 export type ActionCardRow = Prisma.ActionCardGetPayload<object>;
 
-export function toActionCardView(c: ActionCardRow): ActionCardView {
+export function toActionCardView(
+  c: ActionCardRow,
+  detail: ActionCardDetail | null,
+): ActionCardView {
   return {
     id: c.id,
     conversationId: c.conversationId,
@@ -15,5 +18,6 @@ export function toActionCardView(c: ActionCardRow): ActionCardView {
     summary: c.summary,
     createdAt: c.createdAt.toISOString(),
     reviewedAt: c.reviewedAt?.toISOString() ?? null,
+    detail,
   };
 }

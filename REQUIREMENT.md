@@ -233,7 +233,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [x] Action Cards (0043).
    - [x] Grilling as per-person Conversations (0044).
    - [x] App shell with the Sidebar and the Settings modal (0045).
-   - [ ] Chat view, Action Cards and the document panel (0046).
+   - [x] Chat view, Action Cards and the document panel (0046).
    - [ ] Grilling in the chat view (0047).
    - [ ] End-to-end tests for the chat UI (0048).
    - [x] Several AI providers and Approved Models chosen by an Admin, with a model per AI task (0053, [ADR 0010](./docs/adr/0010-approved-models-and-the-chat-picker.md)).

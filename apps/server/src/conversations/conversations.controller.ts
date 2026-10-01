@@ -64,6 +64,17 @@ export class ConversationsController {
     return this.conversations.retry(user, id);
   }
 
+  /**
+   * Stops the reply being written (ticket 0046): what it wrote so far is kept as
+   * the reply, and the request that asked for it answers with it. 409 when no
+   * reply is being written.
+   */
+  @Post(':id/stop')
+  @HttpCode(202)
+  stop(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.conversations.stop(user, id);
+  }
+
   @Delete(':id')
   @HttpCode(204)
   async delete(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {

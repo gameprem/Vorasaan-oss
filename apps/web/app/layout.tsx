@@ -9,6 +9,7 @@ import { api, currentUser, DEV_USER_COOKIE, type DevUser, devAuth } from '@/lib/
 import { logout } from '@/lib/auth-actions';
 import { loadSidebar } from '@/lib/sidebar';
 import './globals.css';
+import './chat.css';
 
 // The type from ADR 0008: Figtree, with Anuphan for Thai.
 const figtree = Figtree({ subsets: ['latin'], variable: '--font-figtree' });
@@ -32,7 +33,9 @@ export default async function RootLayout({
   const me = await currentUser();
   const dev = devAuth();
   const devUsers = dev
-    ? await api<DevUser[]>('/dev/users', { redirectOnUnauthorized: false }).catch(() => [])
+    ? await api<DevUser[]>('/dev/users', { redirectOnUnauthorized: false, anonymous: true }).catch(
+        () => [],
+      )
     : [];
   const devUserId = dev ? jar.get(DEV_USER_COOKIE)?.value : undefined;
   const switcher = dev && <UserSwitcher users={devUsers} currentId={devUserId} />;

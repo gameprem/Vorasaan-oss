@@ -1,9 +1,9 @@
 import type { ConversationView } from '@vorasaan/shared';
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { relativeTime } from '@/components/bits';
-import { ApiError, api } from '@/lib/api';
+import { notFound, redirect } from 'next/navigation';
+import { Chat } from '@/components/chat/chat';
+import { ApiError, api, currentUser } from '@/lib/api';
+import { chipsFor, contextLabel, loadDoc, placeholderFor } from '@/lib/chat-data';
 import { isId } from '@/lib/ids';
 
 async function load(id: string) {
@@ -25,38 +25,25 @@ export async function generateMetadata({
   return { title: (await load(id)).title };
 }
 
-// A placeholder that the chat view (ticket 0046) replaces: it names the Conversation and
-// where it belongs, so the Sidebar's recent Conversations lead somewhere real.
+// A Conversation (ADR 0008): the chat, its Action Cards, and its Spec or Project Brief.
 export default async function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const conversation = await load(id);
-  const { scope } = conversation;
-  const people = conversation.messages.filter((m) => m.role === 'USER').length;
+  const [conversation, me] = await Promise.all([load(id), currentUser()]);
+  if (!me) redirect('/login');
+  const { scope, grilling } = conversation;
+  const doc = await loadDoc(scope);
 
   return (
-    <section className="mx-auto max-w-[780px]">
-      <p className="text-fg-soft">
-        <Link href={`/projects/${scope.project.id}`} className="hover:text-fg hover:underline">
-          {scope.project.name}
-        </Link>
-        {scope.kind === 'FEATURE' && (
-          <>
-            {' › '}
-            <Link href={`/features/${scope.feature.id}`} className="hover:text-fg hover:underline">
-              {scope.feature.title}
-            </Link>
-          </>
-        )}
-      </p>
-      <h1 className="mt-1 text-2xl font-semibold tracking-tight">{conversation.title}</h1>
-      <p className="mt-2 text-sm text-fg-soft">
-        {people} message{people === 1 ? '' : 's'} from you · last active{' '}
-        {relativeTime(conversation.updatedAt)}
-      </p>
-      <p className="mt-8 rounded-card bg-rail px-5 py-4 text-fg-soft">
-        The chat view for this Conversation is coming. Its messages and Action Cards are kept, and
-        will show here.
-      </p>
-    </section>
+    <Chat
+      // Another Conversation is another chat: nothing of this one's state carries over.
+      key={conversation.id}
+      me={{ id: me.id, name: me.name }}
+      initial={conversation}
+      scope={scope}
+      doc={doc}
+      chips={chipsFor(scope, grilling)}
+      placeholder={placeholderFor(scope, grilling)}
+      context={contextLabel(scope, doc, grilling)}
+    />
   );
 }

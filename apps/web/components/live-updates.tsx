@@ -1,13 +1,20 @@
 'use client';
 
-import { NotificationCreatedEvent, type ServerEventName } from '@vorasaan/shared';
+import { NotificationCreatedEvent, ServerEvent, type ServerEventName } from '@vorasaan/shared';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import {
+  CONVERSATION_EVENT_NAMES,
+  type ConversationEvent,
+  dispatchConversationEvent,
+} from '@/lib/conversation-events';
 import { notificationText } from './notification-text';
 
 // Listens to the signed-in user's event stream (through the same-origin /api/events
 // bridge) and re-renders the current route when their Inbox Items or Notifications
-// change, so the Inbox and the header's unread count stay live without a reload.
+// change, so the Inbox and the header's unread count stay live without a reload. The
+// `conversation.*` events (a reply streaming, its Action Cards) are handed on to the chat
+// view as window events (lib/conversation-events.ts), over this same stream.
 
 const INBOX_CHANGED: ServerEventName = 'inbox.changed';
 const NOTIFICATION_CREATED: ServerEventName = 'notification.created';
@@ -60,6 +67,18 @@ export function LiveUpdates() {
           `New Notification: ${parsed.success ? notificationText(parsed.data.notification) : 'open your Inbox.'}`,
         );
       });
+      for (const name of CONVERSATION_EVENT_NAMES) {
+        es.addEventListener(name, (e) => {
+          let data: unknown;
+          try {
+            data = JSON.parse((e as MessageEvent<string>).data);
+          } catch {
+            return;
+          }
+          const parsed = ServerEvent.safeParse({ event: name, data });
+          if (parsed.success) dispatchConversationEvent(parsed.data as ConversationEvent);
+        });
+      }
       es.onerror = () => {
         // Take reconnecting over from the browser so it is bounded and backs off.
         es.close();

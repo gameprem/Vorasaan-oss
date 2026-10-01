@@ -8,6 +8,7 @@ export const metadata = { title: 'Set up' };
 export default async function SetupPage() {
   const { needsSetup } = await api<SetupStatus>('/setup/status', {
     redirectOnUnauthorized: false,
+    anonymous: true,
   });
   if (!needsSetup) redirect('/login');
   return <SetupWizard />;

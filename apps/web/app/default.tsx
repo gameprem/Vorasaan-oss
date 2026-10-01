@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 
-// The modal slot's catch-all matches every URL, so an unknown one reaches the page slot
-// here instead of 404ing on its own.
+// The page slot's fallback when a full load can't recover what it showed: not found,
+// rather than an empty page.
 export default function NoPage() {
   notFound();
 }
