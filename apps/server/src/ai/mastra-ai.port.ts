@@ -1,4 +1,5 @@
 import { Agent } from '@mastra/core/agent';
+import { createTool } from '@mastra/core/tools';
 import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
 import { z } from 'zod';
 import {
@@ -229,13 +230,9 @@ export class MastraAiPort implements AiPort {
     tools: ChatTool[];
     signal?: AbortSignal;
   }): AsyncIterable<ChatChunk> {
-    if (input.tools.length) {
-      // Tools arrive with Action Cards (0043); never silently drop one before then.
-      throw new Error('Chat tools are not supported yet');
-    }
     const instructions = await chatPrompt(input);
     const model = await this.resolveModel('chat');
-    yield* streamChat(model, instructions, input.recentMessages, input.signal);
+    yield* streamChat(model, instructions, input.recentMessages, input.tools, input.signal);
   }
 
   async summarizeConversation(input: {
@@ -252,28 +249,115 @@ export class MastraAiPort implements AiPort {
   }
 }
 
-/** The recent messages as the chat itself. Tool calls and results reach the AI from 0043 on. */
-function toAgentMessages(messages: ChatMessageForAi[]) {
-  return messages.map((m) => {
-    if (m.role === 'USER') return { role: 'user' as const, content: m.content };
-    if (m.role === 'ASSISTANT') return { role: 'assistant' as const, content: m.content };
-    return {
-      role: 'user' as const,
-      content: `(Result of tool call ${m.toolCallId})\n${m.content}`,
+type AgentMessage =
+  | { role: 'user'; content: string }
+  | {
+      role: 'assistant';
+      content:
+        | string
+        | (
+            | { type: 'text'; text: string }
+            | { type: 'tool-call'; toolCallId: string; toolName: string; input: unknown }
+          )[];
+    }
+  | {
+      role: 'tool';
+      content: {
+        type: 'tool-result';
+        toolCallId: string;
+        toolName: string;
+        output: { type: 'text'; value: string };
+      }[];
     };
-  });
+
+/**
+ * The recent messages as the chat itself, in the AI SDK's model message format.
+ * With tools offered, earlier tool calls and their results are passed as such;
+ * a call whose result isn't among the messages is left out, and a result whose
+ * call isn't (it was folded into the summary) becomes plain text. Without tools
+ * (the last step of a turn), every call and result is plain text, since some
+ * providers refuse tool messages when no tools are defined.
+ */
+export function toAgentMessages(messages: ChatMessageForAi[], withTools: boolean): AgentMessage[] {
+  const answered = new Set(messages.flatMap((m) => (m.role === 'TOOL' ? [m.toolCallId] : [])));
+  const called = new Map<string, string>();
+  const out: AgentMessage[] = [];
+  for (const m of messages) {
+    if (m.role === 'USER') {
+      out.push({ role: 'user', content: m.content });
+    } else if (m.role === 'ASSISTANT') {
+      const calls = (m.toolCalls ?? []).filter((c) => answered.has(c.id));
+      if (!withTools || !calls.length) {
+        const described = calls.map(
+          (c) => `(Called the tool ${c.name} with ${JSON.stringify(c.args)})`,
+        );
+        const content = [m.content, ...described].filter((t) => t.trim()).join('\n\n');
+        out.push({ role: 'assistant', content: content || '(No text.)' });
+        continue;
+      }
+      for (const c of calls) called.set(c.id, c.name);
+      out.push({
+        role: 'assistant',
+        content: [
+          ...(m.content.trim() ? [{ type: 'text' as const, text: m.content }] : []),
+          ...calls.map((c) => ({
+            type: 'tool-call' as const,
+            toolCallId: c.id,
+            toolName: c.name,
+            input: c.args ?? {},
+          })),
+        ],
+      });
+    } else {
+      const toolName = called.get(m.toolCallId);
+      if (!withTools || !toolName) {
+        out.push({ role: 'user', content: `(Result of an earlier tool call)\n${m.content}` });
+        continue;
+      }
+      out.push({
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: m.toolCallId,
+            toolName,
+            output: { type: 'text', value: m.content },
+          },
+        ],
+      });
+    }
+  }
+  return out;
 }
 
-/** A Conversation reply: plain text streamed as written, one model step, no server-side tools. */
+/**
+ * The offered tools, without an `execute`: the model may call them, but only
+ * the server runs them (ADR 0008), so the step ends at the first tool call.
+ */
+function toAgentTools(tools: ChatTool[]) {
+  return Object.fromEntries(
+    tools.map((t) => [
+      t.name,
+      createTool({ id: t.name, description: t.description, inputSchema: t.inputSchema }),
+    ]),
+  );
+}
+
+/**
+ * One step of a Conversation reply: text streamed as written, and the tools the
+ * model calls. Mastra runs none of them; they are client tools the server runs.
+ */
 async function* streamChat(
   model: MastraModel,
   instructions: string,
   messages: ChatMessageForAi[],
+  tools: ChatTool[],
   signal: AbortSignal | undefined,
 ): AsyncIterable<ChatChunk> {
   const agent = new Agent({ id: 'chat', name: 'chat', instructions, model: model as AgentModel });
-  const output = await agent.stream(toAgentMessages(messages), {
+  const output = await agent.stream(toAgentMessages(messages, tools.length > 0), {
     maxSteps: 1,
+    ...(tools.length ? { clientTools: toAgentTools(tools) } : {}),
     ...(signal ? { abortSignal: signal } : {}),
   });
   for await (const chunk of output.fullStream) {

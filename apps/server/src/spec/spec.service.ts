@@ -114,6 +114,43 @@ export class SpecService {
     return toSpecProposalView(proposal);
   }
 
+  /**
+   * A Spec Proposal the AI drafted in a Conversation (an Action Card, ticket
+   * 0043), for the drafting PO or Admin to approve. Only someone who may edit
+   * the Spec drafts one; nothing changes until it is approved.
+   */
+  async proposeFromConversation(
+    user: User,
+    featureId: string,
+    input: { proposedMarkdown: string },
+  ): Promise<SpecProposalView> {
+    await this.assertFeatureExists(featureId);
+    await assertCanEditSpec(this.db, user, featureId);
+    const base = await this.db.specVersion.findFirst({
+      where: { featureId },
+      orderBy: { version: 'desc' },
+      select: { id: true, markdown: true },
+    });
+    const proposedMarkdown = normalizeMarkdown(input.proposedMarkdown);
+    if (base && base.markdown === proposedMarkdown) {
+      throw new UnprocessableEntityException(
+        'The draft is the same as the current Spec, so there is nothing to propose',
+      );
+    }
+    const proposal = await this.db.specProposal.create({
+      data: {
+        featureId,
+        baseVersionId: base?.id ?? null,
+        source: 'CONVERSATION',
+        proposedMarkdown,
+        approverId: user.id,
+      },
+      include: specProposalInclude,
+    });
+    await this.notifications.publish(this.notifications.outbox().inboxChanged(user.id));
+    return toSpecProposalView(proposal);
+  }
+
   async getProposal(id: string): Promise<SpecProposalView> {
     return toSpecProposalView(await this.findProposalOrThrow(id));
   }

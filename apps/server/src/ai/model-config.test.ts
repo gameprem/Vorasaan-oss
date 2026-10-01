@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { z } from 'zod';
 import { MastraAiPort } from './mastra-ai.port.ts';
 import { toMastraModel } from './model-config.ts';
 
@@ -88,12 +87,5 @@ describe('MastraAiPort', () => {
     ).rejects.toThrow('stop');
     expect(tasks).toEqual(['chat', 'summarizeConversation']);
   });
-
-  test('chat refuses tools until Action Cards wire them up, rather than dropping them', async () => {
-    const port = new MastraAiPort(async () => 'anthropic/never-called');
-    const tool = { name: 'searchContext', description: 'd', inputSchema: z.object({}) };
-    await expect(drain(port.chat({ ...chatInput, tools: [tool] }))).rejects.toThrow(
-      'not supported',
-    );
-  });
+  // Chat with tools runs against a stand-in provider in mastra-chat.test.ts.
 });

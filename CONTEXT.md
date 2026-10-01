@@ -169,5 +169,5 @@ An AI model an Admin allows people to use, with a recognizable name (such as "Fa
 _Avoid_: Engine, LLM option, model preset
 
 **Action Card**:
-A proposal the AI makes inside a Conversation (a Decision Request draft, a Spec Proposal, a Brief Proposal, a Feature Suggestion), shown with the buttons to approve, edit or decline it.
+A proposal the AI makes inside a Conversation (a Decision Request draft, a Spec Proposal, a Brief Proposal, a Feature Suggestion), shown with the buttons to approve, edit or decline it. Only the Conversation's owner acts on it. It goes stale when what it proposes changes elsewhere (for example the proposal is approved from the Inbox), and can then no longer be approved.
 _Avoid_: Tool result, command, auto-action

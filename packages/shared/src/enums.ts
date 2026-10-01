@@ -36,10 +36,16 @@ export type RequestMessageKind = z.infer<typeof RequestMessageKind>;
 export const ProposalStatus = z.enum(['PENDING', 'APPROVED', 'REJECTED']);
 export type ProposalStatus = z.infer<typeof ProposalStatus>;
 
-export const SpecVersionSource = z.enum(['MANUAL', 'AI_SUMMARY', 'DECISION', 'REVERT']);
+export const SpecVersionSource = z.enum([
+  'MANUAL',
+  'AI_SUMMARY',
+  'DECISION',
+  'REVERT',
+  'CONVERSATION',
+]);
 export type SpecVersionSource = z.infer<typeof SpecVersionSource>;
 
-export const BriefVersionSource = z.enum(['MANUAL', 'GRILLING', 'REVERT']);
+export const BriefVersionSource = z.enum(['MANUAL', 'GRILLING', 'REVERT', 'CONVERSATION']);
 export type BriefVersionSource = z.infer<typeof BriefVersionSource>;
 
 export const GuidelineCriterionKind = z.enum(['KPI', 'CONSTRAINT', 'REQUIRED_SECTION']);
@@ -80,3 +86,14 @@ export type FeatureStatus = z.infer<typeof FeatureStatus>;
 
 export const ConversationMessageRole = z.enum(['USER', 'ASSISTANT', 'TOOL']);
 export type ConversationMessageRole = z.infer<typeof ConversationMessageRole>;
+
+export const ActionCardKind = z.enum([
+  'DECISION_REQUEST',
+  'SPEC_PROPOSAL',
+  'BRIEF_PROPOSAL',
+  'FEATURE_SUGGESTION',
+]);
+export type ActionCardKind = z.infer<typeof ActionCardKind>;
+
+export const ActionCardStatus = z.enum(['PROPOSED', 'APPROVED', 'DECLINED', 'STALE']);
+export type ActionCardStatus = z.infer<typeof ActionCardStatus>;

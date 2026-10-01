@@ -7,11 +7,9 @@ import { AuthController } from './auth/auth.controller.ts';
 import { AuthService } from './auth/auth.service.ts';
 import { DevUsersController } from './auth/dev-users.controller.ts';
 import { IdentityGuard } from './auth/identity.guard.ts';
-import { BriefController } from './brief/brief.controller.ts';
-import { BriefService } from './brief/brief.service.ts';
+import { BriefModule } from './brief/brief.module.ts';
 import { ConversationsModule } from './conversations/conversations.module.ts';
-import { DecisionRequestsController } from './decision-requests/decision-requests.controller.ts';
-import { DecisionRequestsService } from './decision-requests/decision-requests.service.ts';
+import { DecisionRequestsModule } from './decision-requests/decision-requests.module.ts';
 import {
   DelegationsController,
   MyDelegationsController,
@@ -30,8 +28,7 @@ import { RetrievalModule } from './retrieval/retrieval.module.ts';
 import { AiSettingsController } from './settings/ai-settings.controller.ts';
 import { AtlassianModule } from './settings/atlassian.module.ts';
 import { SetupController } from './setup/setup.controller.ts';
-import { SpecController } from './spec/spec.controller.ts';
-import { SpecService } from './spec/spec.service.ts';
+import { SpecModule } from './spec/spec.module.ts';
 
 @Module({
   imports: [
@@ -44,6 +41,9 @@ import { SpecService } from './spec/spec.service.ts';
     FeatureGuidelinesModule,
     GrillingModule,
     FeatureSuggestionsModule,
+    DecisionRequestsModule,
+    SpecModule,
+    BriefModule,
     ConversationsModule,
   ],
   controllers: [
@@ -51,11 +51,8 @@ import { SpecService } from './spec/spec.service.ts';
     AuthController,
     DevUsersController,
     FeaturesController,
-    DecisionRequestsController,
     DelegationsController,
     MyDelegationsController,
-    SpecController,
-    BriefController,
     AiSettingsController,
     SetupController,
     OrgController,
@@ -67,10 +64,7 @@ import { SpecService } from './spec/spec.service.ts';
     // Validates any @Body/@Query/@Param declared with `{ schema }` (Zod via Standard Schema, ADR 0004).
     { provide: APP_PIPE, useValue: new StandardSchemaValidationPipe() },
     AuthService,
-    DecisionRequestsService,
     DelegationsService,
-    SpecService,
-    BriefService,
     OrgService,
   ],
 })

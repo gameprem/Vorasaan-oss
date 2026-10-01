@@ -1,5 +1,6 @@
 import type { Prisma } from '@vorasaan/db';
 import {
+  type ActionCardView,
   type ConversationListItem,
   type ConversationMessageView,
   ConversationToolCall,
@@ -47,6 +48,11 @@ export function toConversationMessageView(m: MessageRow): ConversationMessageVie
 export function toConversationView(
   c: ConversationWithScope,
   messages: MessageRow[],
+  actionCards: ActionCardView[],
 ): ConversationView {
-  return { ...toConversationListItem(c), messages: messages.map(toConversationMessageView) };
+  return {
+    ...toConversationListItem(c),
+    messages: messages.map(toConversationMessageView),
+    actionCards,
+  };
 }

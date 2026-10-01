@@ -9,5 +9,6 @@ import { FeatureSuggestionsService } from './feature-suggestions.service.ts';
   imports: [InboxModule, FeatureGuidelinesModule],
   controllers: [FeatureSuggestionsController],
   providers: [FeatureSuggestionsService],
+  exports: [FeatureSuggestionsService],
 })
 export class FeatureSuggestionsModule {}

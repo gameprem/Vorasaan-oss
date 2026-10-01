@@ -192,8 +192,9 @@ export type ChatMessageForAi =
   | { role: 'TOOL'; content: string; toolCallId: string };
 
 /**
- * A tool the AI may call in a Conversation. Every tool only proposes or reads
- * (ADR 0008); the server runs it, never the model. Action Cards (0043) add them.
+ * A tool the AI may call in a Conversation. Every tool only drafts or reads
+ * (ADR 0008); the server runs it, never the model, and gives the AI its result
+ * as a TOOL message. Drafts become Action Cards (0043, `action-cards/chat-tools.ts`).
  */
 export type ChatTool = { name: string; description: string; inputSchema: z.ZodType };
 
@@ -222,7 +223,7 @@ export interface AiPort {
     summary: string;
     /** The messages after the summary, oldest first, ending with the owner's latest. */
     recentMessages: ChatMessageForAi[];
-    /** The tools offered on this turn; none yet (0043 adds them). */
+    /** The tools offered on this step; none on the last step of a turn. */
     tools: ChatTool[];
     signal?: AbortSignal;
   }): AsyncIterable<ChatChunk>;

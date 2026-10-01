@@ -15,6 +15,7 @@ const ORIGIN: Record<SpecProposalView['source'], string> = {
   DECISION: 'Drafted by AI from a Decision',
   MANUAL: 'Written by hand',
   REVERT: 'A revert',
+  CONVERSATION: 'Drafted by AI in a Conversation',
 };
 
 /** Review of one Spec Proposal: the diff against the Spec it was drafted from, then approve or reject. */

@@ -174,7 +174,12 @@ describe('Conversations', () => {
     const [input] = chatCalls();
     if (!input) throw new Error('expected a chat call');
     expect(input.scope.kind).toBe('FEATURE');
-    expect(input.tools).toEqual([]);
+    // Tools only draft or read (Action Cards, 0043); action-cards.api.test.ts covers them.
+    expect((input.tools as { name: string }[]).map((t) => t.name).sort()).toEqual([
+      'draftDecisionRequest',
+      'draftSpecProposal',
+      'searchContext',
+    ]);
     expect(input.summary).toBe('');
     expect(input.recentMessages).toEqual([
       { role: 'USER', content: 'How do we handle the provider checkout payments?' },
