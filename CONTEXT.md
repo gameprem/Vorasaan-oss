@@ -30,6 +30,14 @@ _Avoid_: Permission level
 A unit of product work owned by one Team, described by one Spec. It is epic-sized, and may link to one Jira Epic.
 _Avoid_: FeatureSpec, ticket, story
 
+**Platform**:
+A part of the product a Feature can ship on, such as Back-End, Front-End, Mobile or Flutter. Each Project has its own list, started from a template. A Feature names the Platforms it targets.
+_Avoid_: Tag, label, component, stack
+
+**Coverage**:
+For each Feature and each of its target Platforms, whether that Platform is covered or missing (for example no Spec section, nobody in the Team to ask, open Blockers, or no QA: no acceptance criteria or test cases, or nobody holding QA), using the checks that Platform has switched on.
+_Avoid_: Completeness score, progress
+
 **Role Owner**:
 One of the people responsible for a given Team Role on a specific Feature. A Feature may have several Role Owners for the same Team Role.
 _Avoid_: Assignee, owner
