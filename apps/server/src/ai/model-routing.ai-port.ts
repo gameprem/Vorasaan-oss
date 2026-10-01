@@ -16,7 +16,12 @@ export class ModelRoutingAiPort implements AiPort {
     private readonly choose: ModelChooser,
   ) {}
 
+  /**
+   * A caller that already chose the model (`options.model`, e.g. a Conversation's
+   * turn, which chooses once for all its steps and records it) keeps it.
+   */
   private async options(task: AiTask, options?: AiCallOptions): Promise<AiCallOptions> {
+    if (options?.model) return options;
     return { ...options, model: await this.choose(task, options?.approvedModelId) };
   }
 

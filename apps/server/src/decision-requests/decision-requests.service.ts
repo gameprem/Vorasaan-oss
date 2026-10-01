@@ -16,10 +16,17 @@ import type {
   PostRequestMessageInput,
   RaiseDecisionRequestInput,
   ReassignInput,
+  RecordedModel,
   SubmitDecisionRequestInput,
   TeamRole,
 } from '@vorasaan/shared';
-import { AI_PORT, AiOutputError, type AiPort, type DecisionForAi } from '../ai/ai.port.ts';
+import {
+  AI_PORT,
+  AiOutputError,
+  type AiPort,
+  type DecisionForAi,
+  type ModelChoice,
+} from '../ai/ai.port.ts';
 import { describeDecision } from '../ai/prompts.ts';
 import { activeDelegates } from '../delegations/active-delegations.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
@@ -58,7 +65,15 @@ export class DecisionRequestsService {
     private readonly foundation: ProjectFoundation,
   ) {}
 
-  async raise(user: User, input: RaiseDecisionRequestInput): Promise<DecisionRequestView> {
+  /**
+   * A DRAFT with AI Choices. `drafting` is set from a Conversation (ticket 0054): the
+   * Choices are drafted with its turn's model, which the request records.
+   */
+  async raise(
+    user: User,
+    input: RaiseDecisionRequestInput,
+    drafting?: { choice: ModelChoice; record: RecordedModel },
+  ): Promise<DecisionRequestView> {
     const raiserRole = await this.db.roleOwner.findFirst({
       where: { featureId: input.featureId, userId: user.id },
       orderBy: { role: 'asc' },
@@ -87,17 +102,20 @@ export class DecisionRequestsService {
         ),
       );
       try {
-        generated = await this.ai.generateChoices({
-          specMarkdown: spec?.text ?? '(This Feature has no Spec yet.)',
-          context: withoutBrief(context),
-          foundation,
-          request: {
-            kind: input.kind,
-            title: input.title,
-            description: input.description,
-            raiserRole: raiserRole.role,
+        generated = await this.ai.generateChoices(
+          {
+            specMarkdown: spec?.text ?? '(This Feature has no Spec yet.)',
+            context: withoutBrief(context),
+            foundation,
+            request: {
+              kind: input.kind,
+              title: input.title,
+              description: input.description,
+              raiserRole: raiserRole.role,
+            },
           },
-        });
+          drafting ? { model: drafting.choice } : undefined,
+        );
       } catch (error) {
         if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
         throw error;
@@ -115,6 +133,13 @@ export class DecisionRequestsService {
         suggestedRole: generated?.suggestedRole ?? null,
         // Provisional until the Raiser confirms it on submit.
         deciderRole: generated?.suggestedRole ?? 'PO',
+        ...(generated && drafting
+          ? {
+              choicesApprovedModelId: drafting.record.approvedModelId,
+              choicesModelDisplayName: drafting.record.displayName,
+              choicesModelName: drafting.record.modelId,
+            }
+          : {}),
         choices: {
           create: (generated?.choices ?? []).map((choice, position) => ({ ...choice, position })),
         },

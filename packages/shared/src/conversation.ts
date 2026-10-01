@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ActionCardView } from './action-card.ts';
+import { RecordedModel } from './ai-settings.ts';
 import { PersonRef } from './decision-request.ts';
 import {
   ConversationMessageRole,
@@ -42,15 +43,26 @@ const MessageContent = z
   .min(1, 'The message is empty')
   .max(MAX_CONVERSATION_MESSAGE_CHARS);
 
+/**
+ * The Approved Model to reply with, picked in the composer (ticket 0054). The
+ * Conversation keeps it for its next messages. It must be one of the
+ * Organization's Approved Models (422 otherwise).
+ */
+const PickedModel = Id.optional();
+
 /** `POST /conversations`: a new Conversation and its first message. */
 export const StartConversationInput = z.object({
   scope: ConversationScopeInput,
   content: MessageContent,
+  approvedModelId: PickedModel,
 });
 export type StartConversationInput = z.infer<typeof StartConversationInput>;
 
 /** `POST /conversations/:id/messages`. */
-export const SendConversationMessageInput = z.object({ content: MessageContent });
+export const SendConversationMessageInput = z.object({
+  content: MessageContent,
+  approvedModelId: PickedModel,
+});
 export type SendConversationMessageInput = z.infer<typeof SendConversationMessageInput>;
 
 /**
@@ -82,6 +94,13 @@ export const ConversationMessageView = z.object({
   toolCalls: z.array(ConversationToolCall).nullable(),
   /** TOOL: the call this result answers. */
   toolCallId: z.string().nullable(),
+  /** ASSISTANT: the model that wrote it (ticket 0054); null for the server's own messages. */
+  model: RecordedModel.nullable(),
+  /**
+   * ASSISTANT: set on the one reply after the Conversation's model was removed,
+   * saying which model it used instead.
+   */
+  modelNotice: z.string().nullable(),
   createdAt: Timestamp,
 });
 export type ConversationMessageView = z.infer<typeof ConversationMessageView>;
@@ -136,6 +155,12 @@ export const ConversationListItem = z.object({
   scope: ConversationScopeView,
   /** Set when this is a Grilling Conversation. */
   grilling: GrillingConversationRef.nullable(),
+  /**
+   * The Approved Model picked in this Conversation (ticket 0054); its next reply
+   * runs on it. Null until someone picks one, or after it was removed: the
+   * Conversation then runs on the chat default (`GET /ai/models`).
+   */
+  modelId: Id.nullable(),
   createdAt: Timestamp,
   /** When the last message was written. */
   updatedAt: Timestamp,

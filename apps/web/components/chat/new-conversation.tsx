@@ -1,6 +1,6 @@
 'use client';
 
-import type { ConversationScopeView } from '@vorasaan/shared';
+import type { AiModelsView, ConversationScopeView } from '@vorasaan/shared';
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { scopeKey } from '@/lib/scope-key';
@@ -55,6 +55,7 @@ export function NewConversation({
   initialScope,
   starters,
   chipsFor,
+  models,
 }: {
   me: { id: string; name: string };
   lang: Lang;
@@ -63,6 +64,8 @@ export function NewConversation({
   starters: Starter[];
   /** The chips of each scope, by `scopeKey`. */
   chipsFor: Record<string, string[]>;
+  /** The Approved Models for the composer's model menu. */
+  models: AiModelsView;
 }) {
   const pickerId = useId();
   const [scope, setScope] = useState<ConversationScopeView | null>(initialScope);
@@ -118,6 +121,7 @@ export function NewConversation({
       chips={chips}
       placeholder={copy.placeholder}
       context={picker}
+      models={models}
       sendDisabled={scope ? undefined : 'Pick a Project or Feature first.'}
       empty={(fill) => (
         <section className="hello" aria-labelledby={`${pickerId}-hello`}>

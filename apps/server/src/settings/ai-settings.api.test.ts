@@ -158,6 +158,7 @@ describe('AI providers and Approved Models', () => {
         { id: best.id, displayName: 'Best', note: null, isDefault: true },
         { id: fast.id, displayName: 'Local', note: 'No data leaves', isDefault: false },
       ],
+      chatDefaultId: best.id,
     });
     const raw = JSON.stringify(res.body);
     for (const secret of [ANTHROPIC_KEY, LOCAL_KEY, LOCAL_URL, '9876', '5555', 'localhost']) {

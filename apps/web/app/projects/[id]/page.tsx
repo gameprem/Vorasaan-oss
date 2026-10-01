@@ -22,6 +22,7 @@ import { ActionForm } from '@/components/action-form';
 import { AttachmentsPanel } from '@/components/attachments-panel';
 import { Notice, relativeTime } from '@/components/bits';
 import { BriefPanel } from '@/components/brief-panel';
+import { DraftedWith } from '@/components/drafted-with';
 import { GrillingSection } from '@/components/grilling-section';
 import { ProjectGuidelinesEditor } from '@/components/guidelines-editor';
 import { EffectiveGuidelinesList, Tag } from '@/components/guidelines-list';
@@ -252,6 +253,7 @@ async function HistoryTab({
                   {v.revertedFrom !== null && ` from v${v.revertedFrom}`}, approved by{' '}
                   {v.approvedBy.name} {relativeTime(v.createdAt)}
                 </span>
+                <DraftedWith model={v.draftedWith} />
               </span>
               <span className="flex flex-wrap items-start gap-2">
                 <Link

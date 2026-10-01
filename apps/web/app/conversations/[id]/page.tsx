@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { Chat } from '@/components/chat/chat';
 import { ApiError, api, currentUser } from '@/lib/api';
-import { chipsFor, contextLabel, loadDoc, placeholderFor } from '@/lib/chat-data';
+import { chipsFor, contextLabel, loadDoc, loadModels, placeholderFor } from '@/lib/chat-data';
 import { isId } from '@/lib/ids';
 
 async function load(id: string) {
@@ -31,7 +31,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   const [conversation, me] = await Promise.all([load(id), currentUser()]);
   if (!me) redirect('/login');
   const { scope, grilling } = conversation;
-  const doc = await loadDoc(scope);
+  const [doc, models] = await Promise.all([loadDoc(scope), loadModels()]);
 
   return (
     <Chat
@@ -44,6 +44,8 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
       chips={chipsFor(scope, grilling)}
       placeholder={placeholderFor(scope, grilling)}
       context={contextLabel(scope, doc, grilling)}
+      // A Grilling Conversation's questions come from the server: no model to pick.
+      models={grilling ? null : models}
     />
   );
 }

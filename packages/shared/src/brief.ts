@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RecordedModel } from './ai-settings.ts';
 import { PersonRef } from './decision-request.ts';
 import { BriefVersionSource, ProposalStatus } from './enums.ts';
 import { SpecDiff, SpecDiffQuery } from './spec.ts';
@@ -34,6 +35,8 @@ export const BriefVersionView = z.object({
   approvedBy: PersonRef,
   /** For a REVERT, the version whose Markdown it restored. */
   revertedFrom: z.int().positive().nullable(),
+  /** The model that drafted its proposal in a Conversation (ticket 0054); null otherwise. */
+  draftedWith: RecordedModel.nullable(),
   createdAt: Timestamp,
 });
 export type BriefVersionView = z.infer<typeof BriefVersionView>;
@@ -89,6 +92,8 @@ export const BriefProposalView = z.object({
   summary: z.string().nullable(),
   /** The Brief Version it became, once APPROVED. */
   resultVersion: z.int().positive().nullable(),
+  /** The model that drafted it in a Conversation (ticket 0054); null otherwise. */
+  draftedWith: RecordedModel.nullable(),
   createdAt: Timestamp,
 });
 export type BriefProposalView = z.infer<typeof BriefProposalView>;

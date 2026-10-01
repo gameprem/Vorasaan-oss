@@ -78,6 +78,15 @@ export function CaretIcon({ size = 12 }: IconProps) {
   );
 }
 
+/** Opens a menu below or above, like the composer's model menu. */
+export function ChevronDownIcon({ size = 12 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" aria-hidden>
+      <path d="m3 4.5 3 3 3-3" {...stroke} strokeWidth={1.5} />
+    </svg>
+  );
+}
+
 export function MenuIcon({ size = 20 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden>

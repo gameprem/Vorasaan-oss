@@ -12,9 +12,10 @@ import type {
   ActionCardView,
   ApproveActionCardInput,
   DeclineActionCardInput,
+  RecordedModel,
 } from '@vorasaan/shared';
 import type { z } from 'zod';
-import type { ChatTool, ChatToolCall } from '../ai/ai.port.ts';
+import type { ChatTool, ChatToolCall, ModelChoice } from '../ai/ai.port.ts';
 import { BriefService } from '../brief/brief.service.ts';
 import { projectAccess } from '../brief/brief-access.ts';
 import { DecisionRequestsService } from '../decision-requests/decision-requests.service.ts';
@@ -41,6 +42,12 @@ export type ToolScope = {
   project: { name: string };
   feature: { title: string } | null;
 };
+
+/**
+ * The model of the Conversation's turn (ticket 0054): what the drafts it makes are
+ * written with, and recorded as drafted with.
+ */
+export type DraftingModel = { choice: ModelChoice; record: RecordedModel };
 
 /** A tool's result for the AI (a JSON text) and the Action Cards it made. */
 export type ToolRun = { content: string; cards: ActionCardView[] };
@@ -93,21 +100,24 @@ export class ActionCardsService {
 
   /**
    * Runs one offered tool call for the Conversation's owner. `messageId` is the
-   * stored ASSISTANT message that called it; its cards point there. Never
-   * throws: a refusal or failure becomes the result the AI reads.
+   * stored ASSISTANT message that called it; its cards point there. `model` is the
+   * turn's model: a Spec or Brief Proposal records it, and a Decision Request's AI
+   * Choices are drafted with it and record it. Never throws: a refusal or failure
+   * becomes the result the AI reads.
    */
   async run(
     user: User,
     conversation: ToolScope,
     messageId: string,
     call: ChatToolCall,
+    model?: DraftingModel,
   ): Promise<ToolRun> {
     const tool = this.toolsFor(conversation).find((t) => t.name === call.name);
     if (!tool) return refusal(`There is no tool named "${call.name}" here`);
     const parsed = tool.inputSchema.safeParse(call.args ?? {});
     if (!parsed.success) return refusal(`Invalid arguments: ${describeIssues(parsed.error)}`);
     try {
-      const drafts = await this.execute(user, conversation, call.name, parsed.data);
+      const drafts = await this.execute(user, conversation, call.name, parsed.data, model);
       if (!Array.isArray(drafts)) return { content: JSON.stringify(drafts), cards: [] };
       const cards = await this.createCards(conversation.id, messageId, call.id, drafts);
       return {
@@ -133,6 +143,7 @@ export class ActionCardsService {
     scope: ToolScope,
     name: string,
     args: unknown,
+    model: DraftingModel | undefined,
   ): Promise<CardDraft[] | { ok: true; results: unknown[] }> {
     switch (name) {
       case 'searchContext': {
@@ -154,7 +165,7 @@ export class ActionCardsService {
       case 'draftDecisionRequest': {
         const input = args as z.infer<typeof DraftDecisionRequestArgs>;
         const featureId = requireFeature(scope);
-        const request = await this.decisionRequests.raise(user, { featureId, ...input });
+        const request = await this.decisionRequests.raise(user, { featureId, ...input }, model);
         return [
           {
             kind: 'DECISION_REQUEST',
@@ -167,7 +178,12 @@ export class ActionCardsService {
       case 'draftSpecProposal': {
         const input = args as z.infer<typeof DraftProposalArgs>;
         const featureId = requireFeature(scope);
-        const proposal = await this.spec.proposeFromConversation(user, featureId, input);
+        const proposal = await this.spec.proposeFromConversation(
+          user,
+          featureId,
+          input,
+          model?.record,
+        );
         return [
           {
             kind: 'SPEC_PROPOSAL',
@@ -179,7 +195,12 @@ export class ActionCardsService {
       }
       case 'draftBriefProposal': {
         const input = args as z.infer<typeof DraftProposalArgs>;
-        const proposal = await this.brief.proposeFromConversation(user, scope.projectId, input);
+        const proposal = await this.brief.proposeFromConversation(
+          user,
+          scope.projectId,
+          input,
+          model?.record,
+        );
         return [
           {
             kind: 'BRIEF_PROPOSAL',

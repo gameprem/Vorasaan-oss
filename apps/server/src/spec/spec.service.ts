@@ -11,12 +11,14 @@ import type { PrismaClient, User } from '@vorasaan/db';
 import {
   type DecisionLogEntry,
   diffLines,
+  type RecordedModel,
   type RevertSpecInput,
   type SpecDiff,
   type SpecProposalView,
   type SpecVersionView,
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort } from '../ai/ai.port.ts';
+import { fromRecordedModelColumns, toRecordedModelColumns } from '../ai/recorded-model.ts';
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
@@ -123,6 +125,7 @@ export class SpecService {
     user: User,
     featureId: string,
     input: { proposedMarkdown: string },
+    draftedWith?: RecordedModel,
   ): Promise<SpecProposalView> {
     await this.assertFeatureExists(featureId);
     await assertCanEditSpec(this.db, user, featureId);
@@ -144,6 +147,7 @@ export class SpecService {
         source: 'CONVERSATION',
         proposedMarkdown,
         approverId: user.id,
+        ...toRecordedModelColumns(draftedWith),
       },
       include: specProposalInclude,
     });
@@ -331,7 +335,16 @@ export class SpecService {
       where: { request: { featureId } },
       orderBy: { createdAt: 'asc' },
       include: {
-        request: { select: { id: true, title: true, kind: true } },
+        request: {
+          select: {
+            id: true,
+            title: true,
+            kind: true,
+            choicesApprovedModelId: true,
+            choicesModelDisplayName: true,
+            choicesModelName: true,
+          },
+        },
         decidedBy: person,
         onBehalfOf: person,
         choice: { select: { label: true, title: true } },
@@ -349,6 +362,11 @@ export class SpecService {
       customAnswer: d.customAnswer,
       rationale: d.rationale,
       specVersion: d.specProposal?.resultVersion?.version ?? null,
+      choicesDraftedWith: fromRecordedModelColumns({
+        approvedModelId: d.request.choicesApprovedModelId,
+        modelDisplayName: d.request.choicesModelDisplayName,
+        modelName: d.request.choicesModelName,
+      }),
       createdAt: d.createdAt.toISOString(),
     }));
   }

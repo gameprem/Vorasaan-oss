@@ -8,6 +8,7 @@ import {
   type GrillingConversationProgress,
 } from '@vorasaan/shared';
 import { z } from 'zod';
+import { fromRecordedModelColumns } from '../ai/recorded-model.ts';
 
 export const conversationInclude = {
   project: { select: { id: true, name: true } },
@@ -33,6 +34,7 @@ export function toConversationListItem(c: ConversationWithScope): ConversationLi
     grilling: c.grillingRound
       ? { id: c.grillingRound.grillingId, round: c.grillingRound.kind, role: c.grillingRound.role }
       : null,
+    modelId: c.modelId,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
@@ -46,6 +48,8 @@ export function toConversationMessageView(m: MessageRow): ConversationMessageVie
     content: m.content,
     toolCalls: toolCalls?.success ? toolCalls.data : null,
     toolCallId: m.toolCallId,
+    model: fromRecordedModelColumns(m),
+    modelNotice: m.modelNotice,
     createdAt: m.createdAt.toISOString(),
   };
 }

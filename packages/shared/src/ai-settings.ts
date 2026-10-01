@@ -171,5 +171,28 @@ export const AiModelView = z.object({
 });
 export type AiModelView = z.infer<typeof AiModelView>;
 
-export const AiModelsView = z.object({ models: z.array(AiModelView) });
+export const AiModelsView = z.object({
+  models: z.array(AiModelView),
+  /**
+   * The Approved Model a Conversation runs on until someone picks one in it (ticket
+   * 0054): the one set for chat in Settings, else the default. Null when there is no
+   * Approved Model, or when the server's VORASAAN_MODEL_CHAT overrides it.
+   */
+  chatDefaultId: z.string().nullable(),
+});
 export type AiModelsView = z.infer<typeof AiModelsView>;
+
+/**
+ * The model that wrote something, as it was then (ticket 0054): an AI reply in a
+ * Conversation, or a proposal drafted there. The name is a snapshot, so it still
+ * shows after the Approved Model is renamed or removed.
+ */
+export const RecordedModel = z.object({
+  /** The Approved Model; null when a `VORASAAN_MODEL_*` env var chose the model. */
+  approvedModelId: z.string().nullable(),
+  /** The Approved Model's display name then, e.g. "Fast"; null for an env model. */
+  displayName: z.string().nullable(),
+  /** The provider's model id then, or the env var's "provider/model". */
+  modelId: z.string(),
+});
+export type RecordedModel = z.infer<typeof RecordedModel>;

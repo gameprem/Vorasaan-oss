@@ -148,6 +148,7 @@ export function specVersions(featureId: string): SpecVersionView[] {
     summary: version === 2 ? 'Retry policy' : null,
     approvedBy: person(2, 'Pim'),
     revertedFrom: null,
+    draftedWith: null,
     createdAt: at,
   }));
 }
@@ -168,6 +169,7 @@ export function specProposal(overrides: Partial<SpecProposalView> = {}): SpecPro
     baseMarkdown: '# Async checkout\nPoll the provider.\nKeep receipts.\n',
     proposedMarkdown: '# Async checkout\nPoll every minute.\nKeep receipts.\nRetry twice.\n',
     decisionRequestId: id(301),
+    draftedWith: null,
     createdAt: at,
     ...overrides,
   };
@@ -185,6 +187,7 @@ export function briefProposal(overrides: Partial<BriefProposalView> = {}): Brief
     proposedMarkdown: '# Brief\nNew goal\n',
     summary: 'Sharper goal',
     resultVersion: null,
+    draftedWith: null,
     createdAt: at,
     ...overrides,
   };

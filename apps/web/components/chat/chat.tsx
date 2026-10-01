@@ -2,6 +2,7 @@
 
 import type {
   ActionCardView,
+  AiModelsView,
   ConversationMessageView,
   ConversationReplyFailed,
   ConversationScopeView,
@@ -28,6 +29,7 @@ import { ActionCard } from './action-card';
 import { Composer } from './composer';
 import { type ChatDoc, DocPanel, docName } from './doc-panel';
 import { Markdown } from './markdown';
+import { ModelMenu } from './model-menu';
 
 // A Conversation (ADR 0008, ticket 0046), read like Claude or Gemini: the AI's replies
 // stream in under the spark, without a bubble; the person's messages sit in a tinted
@@ -60,6 +62,8 @@ export type ChatProps = {
   empty?: (fill: (text: string) => void) => ReactNode;
   /** Why sending isn't possible yet, if it isn't. */
   sendDisabled?: string;
+  /** The Approved Models for the composer's model menu; null hides it (a Grilling Conversation). */
+  models: AiModelsView | null;
 };
 
 export function Chat({
@@ -72,6 +76,7 @@ export function Chat({
   context,
   empty,
   sendDisabled,
+  models,
 }: ChatProps) {
   const router = useRouter();
   const docId = useId();
@@ -85,6 +90,9 @@ export function Chat({
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState('');
+  /** The model picked in this Conversation (the server's), and one picked since, sent with the next message. */
+  const [savedModelId, setSavedModelId] = useState<string | null>(initial?.modelId ?? null);
+  const [pickedModelId, setPickedModelId] = useState<string | null>(null);
   const conversationId = useRef<string | null>(initial?.id ?? null);
   /** A new Conversation is being started: its id comes with the first event. */
   const starting = useRef(false);
@@ -97,6 +105,7 @@ export function Chat({
   if (initial !== seen) {
     setSeen(initial);
     if (initial) {
+      setSavedModelId(initial.modelId);
       setMessages((prev) => mergeMessages(initial.messages, prev));
       setCards((prev) => mergeCards(initial.actionCards, prev));
       const lastUser = initial.messages.findLast((m) => m.role === 'USER');
@@ -201,6 +210,14 @@ export function Chat({
     router.refresh();
   };
 
+  // The next reply's model: the one just picked, else the Conversation's (while it is still
+  // approved), else the chat default.
+  const approved = (id: string | null) =>
+    id !== null && (models?.models.some((m) => m.id === id) ?? false) ? id : null;
+  const currentModelId =
+    approved(pickedModelId) ?? approved(savedModelId) ?? models?.chatDefaultId ?? null;
+  const pick = approved(pickedModelId) ? { approvedModelId: pickedModelId } : {};
+
   const send = async (content: string) => {
     setError(null);
     setStatus('');
@@ -223,10 +240,13 @@ export function Chat({
             ? { kind: 'FEATURE', featureId: scope.feature.id }
             : { kind: 'PROJECT', projectId: scope.project.id },
         content,
+        ...pick,
       });
       starting.current = false;
       if (res.ok) {
         conversationId.current = res.data.id;
+        setSavedModelId(res.data.modelId);
+        setPickedModelId(null);
         setMessages(res.data.messages);
         setCards(res.data.actionCards);
         setDrafts([]);
@@ -254,10 +274,12 @@ export function Chat({
 
     const res = await postJson<ConversationTurnView>(
       `/api/conversations/${conversationId.current}/messages`,
-      { content },
+      { content, ...pick },
     );
     setSending(false);
     if (res.ok) {
+      setSavedModelId(res.data.conversation.modelId);
+      setPickedModelId(null);
       addMessages([res.data.message, ...res.data.steps, res.data.reply]);
       putCards(res.data.actionCards);
       setPending(null);
@@ -459,6 +481,15 @@ export function Chat({
             placeholder={placeholder}
             attachTo={attachOwner(scope)}
             context={context}
+            model={
+              models && (
+                <ModelMenu
+                  models={models.models}
+                  currentId={currentModelId}
+                  onPick={setPickedModelId}
+                />
+              )
+            }
             disabled={sendDisabled}
             inputRef={input}
           />
@@ -499,7 +530,8 @@ function AiMessage({
   grilling,
   streaming = false,
 }: {
-  message: Pick<ConversationMessageView, 'content' | 'toolCalls'>;
+  message: Pick<ConversationMessageView, 'content' | 'toolCalls'> &
+    Partial<Pick<ConversationMessageView, 'model' | 'modelNotice'>>;
   /** The first of the AI's messages in a turn carries the spark. */
   first: boolean;
   grilling: boolean;
@@ -507,6 +539,8 @@ function AiMessage({
 }) {
   const calls = message.toolCalls ?? [];
   const stoppedEmpty = !streaming && !message.content && calls.length === 0;
+  // The reply (not a step that called tools) names the model that wrote it.
+  const model = !streaming && calls.length === 0 ? (message.model ?? null) : null;
   return (
     <div className={first ? 'msg ai' : 'msg ai cont'}>
       {first && (
@@ -516,6 +550,7 @@ function AiMessage({
         </>
       )}
       {!first && <span className="sr-only">Vorasaan: </span>}
+      {message.modelNotice && <p className="model-notice">{message.modelNotice}</p>}
       {message.content && <Markdown>{message.content}</Markdown>}
       {stoppedEmpty && <p className="stopped">Stopped before replying.</p>}
       {streaming && <span className="caret-blink" aria-hidden />}
@@ -524,6 +559,12 @@ function AiMessage({
           {toolText(c.name, c.args)}
         </div>
       ))}
+      {model && (
+        <div className="by">
+          <span className="sr-only">Written with </span>
+          {model.displayName ?? model.modelId}
+        </div>
+      )}
     </div>
   );
 }
