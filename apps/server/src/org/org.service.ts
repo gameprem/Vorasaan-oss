@@ -40,6 +40,7 @@ import { specVersionInclude, toSpecVersionView } from '../spec/spec.view.ts';
 import { assertCanEditSpec } from '../spec/spec-access.ts';
 
 const INVITE_PREFIX = 'vsi_';
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type MembershipRow = {
   userId: string;
@@ -62,7 +63,6 @@ function groupMembers(rows: MembershipRow[]): TeamMemberView[] {
   }
   return [...byUser.values()];
 }
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Organization structure: Projects, Teams, members, Features, Role Owners and
