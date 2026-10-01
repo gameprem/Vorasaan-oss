@@ -223,7 +223,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 
 ### MVP polish (follow-ups from the MVP reviews)
 - [x] Any Organization member reads the Feature Guidelines (0038).
-- [ ] End-to-end browser tests in CI (0039).
+- [x] End-to-end browser tests in CI (0039).
 - [x] `GET /me/teams` for the Delegation and CLI pickers (0040).
 - [x] Hardening: SSE ends on a revoked token, Attachment file cleanup and the orphan sweep, TUI polish (0041).
 
