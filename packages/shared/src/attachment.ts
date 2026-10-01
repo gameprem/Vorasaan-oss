@@ -109,3 +109,16 @@ export const CreateRepoScanInput = z.object({
     .optional(),
 });
 export type CreateRepoScanInput = z.infer<typeof CreateRepoScanInput>;
+
+/**
+ * `POST /attachments/sweep-orphaned-files` (Admin only): deletes stored files whose
+ * Attachment no longer exists. Files younger than a grace period are kept, since an
+ * upload stores its file just before it creates its Attachment.
+ */
+export const AttachmentFileSweepResult = z.object({
+  /** Stored Attachment files looked at. */
+  checked: z.number().int().nonnegative(),
+  /** Of those, files deleted because no Attachment refers to them. */
+  removed: z.number().int().nonnegative(),
+});
+export type AttachmentFileSweepResult = z.infer<typeof AttachmentFileSweepResult>;

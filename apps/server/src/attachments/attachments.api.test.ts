@@ -1,18 +1,20 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@vorasaan/db';
 import { SEED, seed } from '@vorasaan/db/seed';
-import type { AttachmentView } from '@vorasaan/shared';
+import type { AttachmentFileSweepResult, AttachmentView } from '@vorasaan/shared';
 import { AiOutputError } from '../ai/ai.port.ts';
 import type { FakeAiPort } from '../ai/fake-ai.port.ts';
 import { DEV_USER_HEADER } from '../auth/identity.guard.ts';
+import { FILE_STORAGE, type FileStorage } from '../storage/file-storage.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 import { as } from '../test/http.ts';
 import { makePdf } from '../test/pdf.ts';
+import { AttachmentFilesService, ORPHAN_GRACE_MS } from './attachment-files.service.ts';
 import { TRUNCATION_MARKER } from './snapshot-text.ts';
 
 const { pim, beam } = SEED.users;
@@ -423,5 +425,101 @@ describe('Attachments API', () => {
     expect(await storedFiles()).toEqual([]);
     expect((await download(beam.id, created.body.id)).statusCode).toBe(404);
     expect((await asBeam<AttachmentView[]>('GET', featureUrl)).body).toEqual([]);
+  });
+
+  describe('no orphaned files', () => {
+    const projectUrl = `/projects/${SEED.projectId}/attachments`;
+    const projectFiles = () =>
+      readdir(join(storageDir, 'attachments', 'projects', SEED.projectId)).catch(() => []);
+    const storage = () => app.get<FileStorage>(FILE_STORAGE);
+    const sweep = (userId: string) =>
+      as(app, userId)<AttachmentFileSweepResult>('POST', '/attachments/sweep-orphaned-files');
+
+    /** Backdates a stored file so the sweep no longer treats it as a fresh upload. */
+    async function age(key: string, ms = ORPHAN_GRACE_MS + 60_000) {
+      const then = new Date(Date.now() - ms);
+      await utimes(join(storageDir, key), then, then);
+    }
+
+    test('deleting a Feature deletes its Attachment files, and only those', async () => {
+      const file = await upload(beam.id, [{ name: 'file', filename: 'a.md', data: bytes('a') }]);
+      const projectFile = await upload(
+        pim.id,
+        [{ name: 'file', filename: 'p.md', data: bytes('p') }],
+        projectUrl,
+      );
+      expect(file.status).toBe(201);
+      expect(projectFile.status).toBe(201);
+      expect(await storedFiles()).toEqual([file.body.id]);
+
+      await app.get(AttachmentFilesService).deleteFeature(SEED.featureId);
+
+      expect(await db.feature.findUnique({ where: { id: SEED.featureId } })).toBeNull();
+      expect(await db.attachment.findUnique({ where: { id: file.body.id } })).toBeNull();
+      expect(await storedFiles()).toEqual([]);
+      expect(await projectFiles()).toEqual([projectFile.body.id]);
+    });
+
+    test('deleting a Project deletes its own and its Features’ Attachment files', async () => {
+      const file = await upload(beam.id, [{ name: 'file', filename: 'a.md', data: bytes('a') }]);
+      const projectFile = await upload(
+        pim.id,
+        [{ name: 'file', filename: 'p.md', data: bytes('p') }],
+        projectUrl,
+      );
+      expect(await storedFiles()).toEqual([file.body.id]);
+      expect(await projectFiles()).toEqual([projectFile.body.id]);
+
+      await app.get(AttachmentFilesService).deleteProject(SEED.projectId);
+
+      expect(await db.project.findUnique({ where: { id: SEED.projectId } })).toBeNull();
+      expect(await storedFiles()).toEqual([]);
+      expect(await projectFiles()).toEqual([]);
+    });
+
+    test('files are kept when the database delete fails', async () => {
+      const file = await upload(beam.id, [{ name: 'file', filename: 'a.md', data: bytes('a') }]);
+      const unknown = '00000000-0000-4000-8000-00000000ffff';
+      await expect(app.get(AttachmentFilesService).deleteFeature(unknown)).rejects.toThrow();
+      expect(await storedFiles()).toEqual([file.body.id]);
+    });
+
+    test('the sweep removes a planted orphan and leaves live files alone', async () => {
+      const live = await upload(beam.id, [{ name: 'file', filename: 'a.md', data: bytes('a') }]);
+      const liveProject = await upload(
+        pim.id,
+        [{ name: 'file', filename: 'p.md', data: bytes('p') }],
+        projectUrl,
+      );
+      const orphan = `attachments/${SEED.featureId}/${crypto.randomUUID()}`;
+      const projectOrphan = `attachments/projects/${SEED.projectId}/${crypto.randomUUID()}`;
+      // An upload in progress: its file is stored before its Attachment row is created.
+      const fresh = `attachments/${SEED.featureId}/${crypto.randomUUID()}`;
+      for (const key of [orphan, projectOrphan, fresh]) {
+        await storage().put(key, bytes('orphan'), 'text/plain');
+      }
+      for (const key of [
+        orphan,
+        projectOrphan,
+        `attachments/${SEED.featureId}/${live.body.id}`,
+        `attachments/projects/${SEED.projectId}/${liveProject.body.id}`,
+      ]) {
+        await age(key);
+      }
+
+      expect((await sweep(beam.id)).status).toBe(403);
+
+      const swept = await sweep(pim.id);
+      expect(swept.status).toBe(200);
+      expect(swept.body).toEqual({ checked: 5, removed: 2 });
+      expect((await storedFiles()).sort()).toEqual(
+        [live.body.id, fresh.split('/').at(-1) as string].sort(),
+      );
+      expect(await projectFiles()).toEqual([liveProject.body.id]);
+      expect((await download(beam.id, live.body.id)).statusCode).toBe(200);
+
+      // Nothing left to remove the second time.
+      expect((await sweep(pim.id)).body).toEqual({ checked: 3, removed: 0 });
+    });
   });
 });

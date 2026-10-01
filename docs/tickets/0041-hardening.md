@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: []
 slice: mvp-polish
 ---
@@ -15,6 +15,6 @@ Close the small gaps the MVP reviews recorded.
 - **TUI polish:** the "retrying in Ns" counter counts down; after a live refresh the cursor stays on the same item (by id), not the same row number; stale ✔ messages clear on refresh.
 
 ## Acceptance criteria (test first)
-- [ ] Revoking a PAT ends its open `/events` stream within one heartbeat (server test).
-- [ ] Deleting a Feature with a file Attachment removes the file from storage; the sweep removes a planted orphan and leaves live files alone (server test).
-- [ ] TUI component tests for the countdown and cursor-by-id.
+- [x] Revoking a PAT ends its open `/events` stream within one heartbeat (server test).
+- [x] Deleting a Feature with a file Attachment removes the file from storage; the sweep removes a planted orphan and leaves live files alone (server test).
+- [x] TUI component tests for the countdown and cursor-by-id.

@@ -20,13 +20,16 @@ import {
 import type { User } from '@vorasaan/db';
 import {
   AddUrlAttachmentInput,
+  type AttachmentFileSweepResult,
   type AttachmentView,
   CreateRepoScanInput,
   UploadAttachmentFields,
 } from '@vorasaan/shared';
 import { z } from 'zod';
+import { AdminOnly } from '../auth/admin.guard.ts';
 import { CurrentUser } from '../auth/identity.guard.ts';
 import { attachmentLimits } from './attachment.config.ts';
+import { AttachmentFilesService } from './attachment-files.service.ts';
 import { type AttachmentOwner, AttachmentsService } from './attachments.service.ts';
 
 const uploadStream = FileStreamInterceptor('file', {
@@ -38,7 +41,10 @@ const uploadStream = FileStreamInterceptor('file', {
 
 @Controller()
 export class AttachmentsController {
-  constructor(private readonly attachments: AttachmentsService) {}
+  constructor(
+    private readonly attachments: AttachmentsService,
+    private readonly files: AttachmentFilesService,
+  ) {}
 
   @Get('features/:id/attachments')
   list(
@@ -134,6 +140,14 @@ export class AttachmentsController {
   @HttpCode(204)
   async remove(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.attachments.remove(user, id);
+  }
+
+  /** Admin only: deletes stored files whose Attachment no longer exists. */
+  @Post('attachments/sweep-orphaned-files')
+  @AdminOnly()
+  @HttpCode(200)
+  sweepOrphanedFiles(): Promise<AttachmentFileSweepResult> {
+    return this.files.sweepOrphans();
   }
 }
 

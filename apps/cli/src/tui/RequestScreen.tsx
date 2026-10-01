@@ -5,7 +5,7 @@ import { ROLE_LABEL } from '../commands/raise-flow.ts';
 import type { TuiApi } from './App.tsx';
 import { Confirm, Menu, ScrollText, TextInput } from './components.tsx';
 import { errorMessage, requestDetail } from './format.ts';
-import { type Remote, RemoteStatus, useRemote } from './remote.tsx';
+import { type Remote, RemoteStatus, useFlash, useRemote } from './remote.tsx';
 
 type Mode =
   | { kind: 'none' }
@@ -16,8 +16,6 @@ type Mode =
   | { kind: 'reassign'; candidates: PersonRef[] }
   | { kind: 'withdraw' }
   | { kind: 'sending'; what: string };
-
-type Flash = { tone: 'ok' | 'error'; text: string };
 
 const MESSAGE_PROMPT: Record<RequestMessageKind, { label: string; hint: string; done: string }> = {
   QUESTION: {
@@ -108,7 +106,7 @@ export function RequestScreen({
     `${tick}:${version}`,
   );
   const [mode, setMode] = useState<Mode>({ kind: 'none' });
-  const [flash, setFlash] = useState<Flash>();
+  const [flash, setFlash] = useFlash(state);
   const capturing = mode.kind !== 'none';
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { StorageModule } from '../storage/storage.module.ts';
+import { AttachmentFilesService } from './attachment-files.service.ts';
 import { AttachmentsController } from './attachments.controller.ts';
 import { AttachmentsService } from './attachments.service.ts';
 import {
@@ -16,6 +17,7 @@ import {
   controllers: [AttachmentsController],
   providers: [
     AttachmentsService,
+    AttachmentFilesService,
     FileSnapshotter,
     UrlSnapshotter,
     ConfluenceSnapshotter,
@@ -27,5 +29,6 @@ import {
       inject: [FileSnapshotter, UrlSnapshotter, ConfluenceSnapshotter, JiraSnapshotter],
     },
   ],
+  exports: [AttachmentFilesService],
 })
 export class AttachmentsModule {}

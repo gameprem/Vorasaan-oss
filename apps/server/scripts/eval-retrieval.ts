@@ -17,6 +17,7 @@ import type { PrismaClient } from '@vorasaan/db';
 import { SEED_SPEC_V1 } from '@vorasaan/db/seed';
 import { AI_PORT, type AiPort } from '../src/ai/ai.port.ts';
 import { AppModule } from '../src/app.module.ts';
+import { AttachmentFilesService } from '../src/attachments/attachment-files.service.ts';
 import { PRISMA } from '../src/prisma/prisma.module.ts';
 import {
   blockTokens,
@@ -144,6 +145,6 @@ try {
       `(${((performance.now() - started) / 1000).toFixed(1)}s)\n   ${draft.summary}\n\n${draft.proposedMarkdown}\n`,
   );
 } finally {
-  await db.project.delete({ where: { id: project.id } });
+  await app.get(AttachmentFilesService).deleteProject(project.id);
   await app.close();
 }

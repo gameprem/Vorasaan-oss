@@ -1,7 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, resolve, sep } from 'node:path';
-import { assertStorageKey, type FileStorage, StoredFileNotFoundError } from './file-storage.ts';
+import type { Dirent } from 'node:fs';
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve, sep } from 'node:path';
+import {
+  assertStorageKey,
+  type FileStorage,
+  type StoredFileInfo,
+  StoredFileNotFoundError,
+} from './file-storage.ts';
+
+// The temp file a write goes through before its rename (see `put`).
+const TEMP_FILE = /\.[0-9a-f-]{36}\.tmp$/;
 
 /** Stores files under one directory (a Docker volume in production). */
 export class LocalFileStorage implements FileStorage {
@@ -38,6 +47,39 @@ export class LocalFileStorage implements FileStorage {
 
   async delete(key: string): Promise<void> {
     await rm(this.pathFor(key), { force: true });
+  }
+
+  async *list(prefix: string): AsyncIterable<StoredFileInfo> {
+    // Walk the deepest directory the prefix names, keeping the keys that match the rest.
+    const slash = prefix.lastIndexOf('/');
+    const dirKey = slash >= 0 ? prefix.slice(0, slash) : '';
+    yield* this.walk(dirKey ? this.pathFor(dirKey) : this.root, dirKey, prefix);
+  }
+
+  private async *walk(dir: string, dirKey: string, prefix: string): AsyncIterable<StoredFileInfo> {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT' || code === 'ENOTDIR') return;
+      throw error;
+    }
+    for (const entry of entries) {
+      const key = dirKey ? `${dirKey}/${entry.name}` : entry.name;
+      if (!key.startsWith(prefix)) continue;
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        yield* this.walk(path, key, prefix);
+      } else if (entry.isFile() && !TEMP_FILE.test(entry.name)) {
+        try {
+          yield { key, lastModified: (await stat(path)).mtime };
+        } catch (error) {
+          // Deleted since the directory was read.
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+      }
+    }
   }
 
   private pathFor(key: string): string {
