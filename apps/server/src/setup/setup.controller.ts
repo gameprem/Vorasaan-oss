@@ -72,7 +72,7 @@ export class SetupController {
       { isolationLevel: 'Serializable' },
     );
 
-    await this.ai.save(body.ai, organizationId);
+    await this.ai.setupFirst(body.ai, organizationId);
     return this.auth.startSession(user);
   }
 

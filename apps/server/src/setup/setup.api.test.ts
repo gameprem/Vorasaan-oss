@@ -55,7 +55,7 @@ describe('First-boot setup', () => {
     expect(res.body.ok).toBe(true);
   });
 
-  test('setup creates the Organization, the Admin and the provider, and signs in', async () => {
+  test('setup creates the Organization, the Admin, the first provider and the default model, and signs in', async () => {
     const res = await call<LoginResult>('POST', '/setup', body);
     expect(res.status).toBe(201);
     expect(res.body.user).toMatchObject({ name: 'Nok', email: 'nok@acmebank.test' });
@@ -64,12 +64,24 @@ describe('First-boot setup', () => {
     expect(membership).toMatchObject({ role: 'ADMIN', organization: { name: 'Acme Bank' } });
 
     const ai = await call<AiSettingsView>('GET', '/settings/ai', undefined, res.body.token);
-    expect(ai.body).toMatchObject({
-      configured: true,
-      provider: 'OPENAI_COMPATIBLE',
-      baseUrl: 'http://localhost:20128/v1',
-      apiKeyHint: '…oken',
-    });
+    expect(ai.body.providers).toEqual([
+      {
+        id: expect.any(String),
+        kind: 'OPENAI_COMPATIBLE',
+        name: 'Custom endpoint',
+        baseUrl: 'http://localhost:20128/v1',
+        apiKeyHint: '…oken',
+        modelCount: 1,
+      },
+    ]);
+    expect(ai.body.models).toEqual([
+      expect.objectContaining({
+        providerId: ai.body.providers[0]?.id,
+        modelId: 'cc/claude-opus-5-5',
+        displayName: 'cc/claude-opus-5-5',
+        isDefault: true,
+      }),
+    ]);
 
     expect((await call<SetupStatus>('GET', '/setup/status')).body).toEqual({ needsSetup: false });
   });

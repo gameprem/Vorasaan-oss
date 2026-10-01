@@ -164,8 +164,12 @@ _Avoid_: Alert, inbox item
 A person's chat with the AI, scoped to a Project or a Feature. The AI reads that scope's context and can only propose; nothing changes until a person approves an Action Card.
 _Avoid_: Session, thread, chat room
 
+**AI Provider**:
+A service an Admin connects with its own key (Anthropic, OpenAI, or any OpenAI-compatible endpoint, such as a local model). An Organization may connect several. Approved Models run on them.
+_Avoid_: LLM integration, backend, vendor
+
 **Approved Model**:
-An AI model an Admin allows people to use, with a recognizable name (such as "Fast" or "Best") and the provider it runs on. One is the Organization default.
+An AI model an Admin allows people to use, with a recognizable name (such as "Fast" or "Best") and the provider it runs on. One is the Organization default. Each AI task (Choices, Spec Proposals, summaries, Grilling, Feature Suggestions, the fit check, chat) uses the Approved Model the Admin set for it, or the default.
 _Avoid_: Engine, LLM option, model preset
 
 **Action Card**:

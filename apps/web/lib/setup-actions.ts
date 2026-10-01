@@ -1,13 +1,6 @@
 'use server';
 
-import type {
-  AiSettingsInput,
-  AiSettingsView,
-  AiTestResult,
-  LoginResult,
-  SetupInput,
-} from '@vorasaan/shared';
-import { revalidatePath } from 'next/cache';
+import type { AiSettingsInput, AiTestResult, LoginResult, SetupInput } from '@vorasaan/shared';
 import { redirect } from 'next/navigation';
 import { ApiError, api } from './api';
 import { setSession } from './session';
@@ -44,22 +37,4 @@ export async function completeSetup(input: SetupInput): Promise<ActionResult> {
   }
   await setSession(result);
   redirect('/inbox?welcome=1');
-}
-
-export async function testAiSettings(input: AiSettingsInput): Promise<AiTestResult> {
-  try {
-    return await api<AiTestResult>('/settings/ai/test', { method: 'POST', body: input });
-  } catch (error) {
-    return { ok: false, message: errorOf(error), latencyMs: null };
-  }
-}
-
-export async function saveAiSettings(input: AiSettingsInput): Promise<ActionResult> {
-  try {
-    await api<AiSettingsView>('/settings/ai', { method: 'PUT', body: input });
-  } catch (error) {
-    return { error: errorOf(error) };
-  }
-  revalidatePath('/settings/ai');
-  return {};
 }

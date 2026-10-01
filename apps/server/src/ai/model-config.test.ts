@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { MastraAiPort } from './mastra-ai.port.ts';
-import { toMastraModel } from './model-config.ts';
+import { mastraModelOf, toMastraModel } from './model-config.ts';
 
 describe('toMastraModel', () => {
   test('Claude API', () => {
@@ -43,7 +43,55 @@ describe('toMastraModel', () => {
   });
 });
 
+describe('mastraModelOf', () => {
+  test("an Approved Model runs on its own provider's key and URL", () => {
+    expect(
+      mastraModelOf({
+        name: 'qwen',
+        provider: {
+          provider: 'OPENAI_COMPATIBLE',
+          model: 'qwen',
+          apiKey: 't',
+          baseUrl: 'http://x/v1',
+        },
+      }),
+    ).toEqual({ providerId: 'custom', modelId: 'qwen', url: 'http://x/v1', apiKey: 't' });
+  });
+
+  test('an env model without a connected provider stays a "provider/model" string', () => {
+    expect(mastraModelOf({ name: 'anthropic/claude-haiku-4-5', provider: null })).toBe(
+      'anthropic/claude-haiku-4-5',
+    );
+  });
+});
+
 describe('MastraAiPort', () => {
+  test('by default it refuses a call whose model was not chosen', async () => {
+    const port = new MastraAiPort();
+    await expect(
+      port.summarizeAttachment({ attachment: { title: 't', source: 'URL', text: 'x' } }),
+    ).rejects.toThrow('No model was chosen for the AI task "summarizeAttachment"');
+  });
+
+  test('the resolver gets the model chosen for the call', async () => {
+    const seen: unknown[] = [];
+    const port = new MastraAiPort(async (task, chosen) => {
+      seen.push([task, chosen?.approvedModelId]);
+      throw new Error('stop before any network call');
+    });
+    const model = {
+      source: 'APPROVED_MODEL' as const,
+      approvedModelId: 'm1',
+      integrationId: 'i1',
+      provider: null,
+      name: 'x',
+    };
+    await expect(
+      port.summarizeAttachment({ attachment: { title: 't', source: 'URL', text: 'x' } }, { model }),
+    ).rejects.toThrow('stop');
+    expect(seen).toEqual([['summarizeAttachment', 'm1']]);
+  });
+
   test('resolves the model on every call, so saved settings apply without restart', async () => {
     let calls = 0;
     const port = new MastraAiPort(async () => {

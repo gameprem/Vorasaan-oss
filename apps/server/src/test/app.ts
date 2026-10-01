@@ -1,8 +1,8 @@
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
-import { AI_PORT } from '../ai/ai.port.ts';
 import { AI_CONNECTION_TESTER, type AiConnectionTester } from '../ai/ai-settings.service.ts';
 import { FakeAiPort } from '../ai/fake-ai.port.ts';
+import { AI_ENGINE } from '../ai/mastra.module.ts';
 import { AppModule } from '../app.module.ts';
 import { EMBEDDING_PORT_FACTORY } from '../retrieval/embedding.port.ts';
 import { FakeEmbeddings } from '../retrieval/fake-embedding.port.ts';
@@ -31,7 +31,7 @@ export async function createTestApp(): Promise<TestApp> {
   const embeddings = new FakeEmbeddings();
   const connection: TestApp['connection'] = { tester: async () => {}, calls: 0 };
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-    .overrideProvider(AI_PORT)
+    .overrideProvider(AI_ENGINE)
     .useValue(ai)
     .overrideProvider(EMBEDDING_PORT_FACTORY)
     .useValue(embeddings.factory)

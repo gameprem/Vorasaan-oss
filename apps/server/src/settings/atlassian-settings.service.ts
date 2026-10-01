@@ -16,6 +16,7 @@ import {
 import { UrlFetchError } from '../attachments/fetch-url.ts';
 import { SecretBox } from '../crypto/secret-box.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { findSingleIntegration, saveSingleIntegration } from './single-integration.ts';
 
 type AtlassianUser = { displayName?: string; publicName?: string };
 
@@ -48,9 +49,7 @@ export class AtlassianSettingsService {
   private async integration() {
     const organizationId = await this.organizationId();
     if (!organizationId) return null;
-    return this.db.orgIntegration.findUnique({
-      where: { organizationId_provider: { organizationId, provider: 'ATLASSIAN' } },
-    });
+    return findSingleIntegration(this.db, organizationId, 'ATLASSIAN');
   }
 
   async view(): Promise<AtlassianSettingsView> {
@@ -128,11 +127,7 @@ export class AtlassianSettingsService {
       accountEmail: connection.email,
       secretEncrypted: this.secrets().encrypt(connection.apiToken),
     };
-    await this.db.orgIntegration.upsert({
-      where: { organizationId_provider: { organizationId, provider: 'ATLASSIAN' } },
-      update: data,
-      create: { organizationId, provider: 'ATLASSIAN', ...data },
-    });
+    await saveSingleIntegration(this.db, organizationId, 'ATLASSIAN', data);
     return this.view();
   }
 

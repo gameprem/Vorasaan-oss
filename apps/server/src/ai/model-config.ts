@@ -28,3 +28,11 @@ export function toMastraModel(p: ResolvedProvider): MastraModel {
       return { providerId: 'custom', modelId: p.model, url: p.baseUrl, apiKey: p.apiKey };
   }
 }
+
+/** The Mastra model for one call's chosen model (a `ModelChoice`). */
+export function mastraModelOf(choice: {
+  provider: ResolvedProvider | null;
+  name: string;
+}): MastraModel {
+  return choice.provider ? toMastraModel(choice.provider) : choice.name;
+}

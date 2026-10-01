@@ -89,7 +89,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                   Feature Guidelines
                 </Link>
                 <Link href="/settings/ai" className="text-ink-soft hover:text-ink">
-                  AI provider
+                  AI models
                 </Link>
                 <Link href="/settings/tokens" className="text-ink-soft hover:text-ink">
                   Access tokens
