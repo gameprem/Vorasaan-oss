@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: []
 slice: mvp-polish
 ---
@@ -14,5 +14,5 @@ Pages that need "my Teams and my Team Roles" load them in one request instead of
 - Settings → Delegations and the CLI Features/raise pickers use it.
 
 ## Acceptance criteria (test first, real Postgres)
-- [ ] Returns only the caller's Teams, with their roles and members; another user's Teams never appear.
-- [ ] Settings → Delegations makes one request for Teams instead of one per Team.
+- [x] Returns only the caller's Teams, with their roles and members; another user's Teams never appear.
+- [x] Settings → Delegations makes one request for Teams instead of one per Team.

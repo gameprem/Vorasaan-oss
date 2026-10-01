@@ -1,7 +1,10 @@
 import * as p from '@clack/prompts';
-import type { DecisionRequestView, TeamRole } from '@vorasaan/shared';
+import type { DecisionRequestView, FeatureSummaryView, TeamRole } from '@vorasaan/shared';
 import type { VorasaanApi } from '../api.ts';
 import {
+  type DeciderHints,
+  deciderHints,
+  deciderRoleHint,
   defaultDeciderRole,
   discardDraft,
   draftRequest,
@@ -28,14 +31,22 @@ const required = (label: string) => (value: string | undefined) =>
   value?.trim() ? undefined : `${label} is required`;
 
 export async function runRaise(
-  api: RaiseApi,
+  api: RaiseApi & Pick<VorasaanApi, 'feature'>,
   options: RaiseOptions,
   scope?: RepoScope,
 ): Promise<void> {
   p.intro('vorasaan raise');
   let draft: DecisionRequestView | undefined;
   try {
-    const featureId = options.featureId ?? (await pickFeature(api, scope?.projectId));
+    const picked = options.featureId ? undefined : await pickFeature(api, scope?.projectId);
+    const featureId = picked?.id ?? (options.featureId as string);
+    // Loaded the first time the Raiser changes the decider role.
+    let hints: DeciderHints | undefined;
+    const loadHints = async () => {
+      const teamId =
+        picked?.teamId ?? (await api.feature(featureId).catch(() => undefined))?.teamId;
+      return teamId ? deciderHints(api, teamId) : {};
+    };
     const kind =
       options.kind ??
       answered(
@@ -101,6 +112,8 @@ export async function runRaise(
           return;
         }
         if (action === 'role') {
+          hints ??= await loadHints();
+          const roleHints = hints;
           deciderRole = answered(
             await p.select({
               message: 'Who should decide?',
@@ -108,7 +121,7 @@ export async function runRaise(
               options: Object.entries(ROLE_LABEL).map(([value, label]) => ({
                 value: value as TeamRole,
                 label,
-                hint: value === draft?.suggestedRole ? 'suggested' : undefined,
+                hint: deciderRoleHint(value as TeamRole, draft, roleHints),
               })),
             }),
           );
@@ -160,7 +173,7 @@ export async function runRaise(
 async function pickFeature(api: Pick<VorasaanApi, 'listFeatures'>, projectId?: string) {
   const features = await featuresInScope(api, projectId);
   if (features.length === 0) throw new UsageError(noFeaturesMessage(projectId));
-  return answered(
+  const id = answered(
     await p.select<string>({
       message: 'Which Feature?',
       options: features.map((f) => ({
@@ -170,4 +183,5 @@ async function pickFeature(api: Pick<VorasaanApi, 'listFeatures'>, projectId?: s
       })),
     }),
   );
+  return features.find((f) => f.id === id) as FeatureSummaryView;
 }

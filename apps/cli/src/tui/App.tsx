@@ -37,6 +37,7 @@ export type TuiApi = Pick<
   | 'listFeatures'
   | 'feature'
   | 'team'
+  | 'myTeams'
   | 'specVersions'
   | 'decisionRequest'
   | 'raise'

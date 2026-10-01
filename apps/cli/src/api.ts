@@ -10,6 +10,7 @@ import type {
   FeatureView,
   InboxItem,
   MeView,
+  MyTeamView,
   NotificationList,
   NotificationView,
   PostRequestMessageInput,
@@ -136,6 +137,11 @@ export class VorasaanApi {
 
   team(id: string) {
     return this.request<TeamView>('GET', `/teams/${encodeURIComponent(id)}`);
+  }
+
+  /** My Teams, each with its members' Team Roles, in one request. */
+  myTeams() {
+    return this.request<MyTeamView[]>('GET', '/me/teams');
   }
 
   specProposal(id: string) {

@@ -58,6 +58,17 @@ export const TeamView = z.object({
 });
 export type TeamView = z.infer<typeof TeamView>;
 
+/** `GET /me/teams`: one of the signed-in user's Teams, with everyone's Team Roles in it. */
+export const MyTeamView = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  project: z.object({ id: z.uuid(), name: z.string() }),
+  /** The signed-in user's own Team Roles in this Team. */
+  myRoles: z.array(TeamRole),
+  members: z.array(TeamMemberView),
+});
+export type MyTeamView = z.infer<typeof MyTeamView>;
+
 /** Replaces a member's Team Roles; an empty list removes them from the Team. */
 export const SetTeamRolesInput = z.object({ roles: z.array(TeamRole) });
 export type SetTeamRolesInput = z.infer<typeof SetTeamRolesInput>;
