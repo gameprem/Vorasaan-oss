@@ -8,13 +8,19 @@
   },
   "scripts": {
     "dev": "bun src/index.ts",
-    "build": "bun build src/index.ts --compile --outfile dist/vorasaan",
+    "build": "bun scripts/build.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "bun test"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",
     "@vorasaan/shared": "workspace:*",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "ink": "^7.1.1",
+    "react": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "ink-testing-library": "^4.0.0"
   }
 }

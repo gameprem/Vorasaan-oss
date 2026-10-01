@@ -205,7 +205,7 @@ async function walk(root: string): Promise<string[]> {
   return files;
 }
 
-function isScannable(path: string): boolean {
+export function isScannable(path: string): boolean {
   if (!isSafeRelative(path)) return false;
   const segments = path.split('/');
   if (segments.slice(0, -1).some((s) => IGNORED_DIRS.has(s) || isSecretName(s))) return false;
@@ -235,7 +235,11 @@ async function withoutSymlinks(root: string, files: string[]): Promise<string[]>
 }
 
 /** Reads up to `maxBytes` of a regular file that really lives inside `root`. */
-async function readInside(root: string, rel: string, maxBytes: number): Promise<string | null> {
+export async function readInside(
+  root: string,
+  rel: string,
+  maxBytes: number,
+): Promise<string | null> {
   if (!isSafeRelative(rel)) return null;
   const path = join(root, rel);
   try {
@@ -618,7 +622,7 @@ async function readmes(root: string, files: string[], truncated: string[]): Prom
 type Section = { title: string; cap: number; body: string };
 
 /** Cuts text at a line boundary so it is at most `maxBytes` UTF-8 bytes. */
-function cutToBytes(text: string, maxBytes: number): string {
+export function cutToBytes(text: string, maxBytes: number): string {
   const lines = text.split('\n');
   const kept: string[] = [];
   let size = 0;

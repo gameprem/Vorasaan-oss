@@ -13,14 +13,14 @@ export class FeaturesController {
     private readonly atlassian: AtlassianSettingsService,
   ) {}
 
-  /** Features where the current user is a Role Owner (the CLI's Feature picker). */
+  /** Features where the current user is a Role Owner (the CLI's Feature picker and TUI). */
   @Get()
   async mine(@CurrentUser() user: User): Promise<FeatureSummaryView[]> {
     const features = await this.db.feature.findMany({
       where: { roleOwners: { some: { userId: user.id } } },
       orderBy: { title: 'asc' },
       include: {
-        team: { select: { name: true, project: { select: { name: true } } } },
+        team: { select: { name: true, project: { select: { id: true, name: true } } } },
         roleOwners: { where: { userId: user.id }, select: { role: true } },
       },
     });
@@ -29,6 +29,7 @@ export class FeaturesController {
       title: f.title,
       teamId: f.teamId,
       teamName: f.team.name,
+      projectId: f.team.project.id,
       projectName: f.team.project.name,
       myRoles: f.roleOwners.map((o) => o.role),
     }));
@@ -42,7 +43,7 @@ export class FeaturesController {
     const f = await this.db.feature.findUnique({
       where: { id },
       include: {
-        team: { select: { name: true, project: { select: { name: true } } } },
+        team: { select: { name: true, project: { select: { id: true, name: true } } } },
         roleOwners: { where: { userId: user.id }, select: { role: true } },
         _count: { select: { decisionRequests: OPEN_BLOCKERS } },
       },
@@ -53,6 +54,7 @@ export class FeaturesController {
       title: f.title,
       teamId: f.teamId,
       teamName: f.team.name,
+      projectId: f.team.project.id,
       projectName: f.team.project.name,
       myRoles: f.roleOwners.map((o) => o.role),
       jiraIssueKey: f.jiraIssueKey,

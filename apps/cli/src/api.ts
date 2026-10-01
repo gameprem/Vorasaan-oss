@@ -4,8 +4,13 @@ import type {
   CreateRepoScanInput,
   DecisionRequestView,
   FeatureSummaryView,
+  FeatureView,
+  InboxItem,
   MeView,
+  NotificationList,
+  ProjectView,
   RaiseDecisionRequestInput,
+  SpecVersionView,
   SubmitDecisionRequestInput,
 } from '@vorasaan/shared';
 import type { Credentials } from './config.ts';
@@ -43,12 +48,50 @@ export class VorasaanApi {
     this.fetch = config.fetch ?? fetch;
   }
 
+  /** The server this client talks to (never includes credentials). */
+  get baseUrl(): string {
+    return this.config.baseUrl;
+  }
+
   me() {
     return this.request<MeView>('GET', '/me');
   }
 
   listFeatures() {
     return this.request<FeatureSummaryView[]>('GET', '/features');
+  }
+
+  feature(id: string) {
+    return this.request<FeatureView>('GET', `/features/${encodeURIComponent(id)}`);
+  }
+
+  /** Newest first. */
+  specVersions(featureId: string) {
+    return this.request<SpecVersionView[]>(
+      'GET',
+      `/features/${encodeURIComponent(featureId)}/spec-versions`,
+    );
+  }
+
+  listProjects() {
+    return this.request<ProjectView[]>('GET', '/projects');
+  }
+
+  inbox() {
+    return this.request<InboxItem[]>('GET', '/inbox');
+  }
+
+  notifications() {
+    return this.request<NotificationList>('GET', '/notifications');
+  }
+
+  /** Decision Requests I raised. */
+  myRequests() {
+    return this.request<DecisionRequestView[]>('GET', '/decision-requests?raiser=me');
+  }
+
+  decisionRequest(id: string) {
+    return this.request<DecisionRequestView>('GET', `/decision-requests/${encodeURIComponent(id)}`);
   }
 
   raise(input: RaiseDecisionRequestInput) {
@@ -88,7 +131,18 @@ export class VorasaanApi {
       throw new ApiError(0, `Cannot reach the Vorasaan server at ${this.config.baseUrl}`);
     }
     const text = await res.text();
-    const parsed: unknown = text ? JSON.parse(text) : undefined;
+    let parsed: unknown;
+    try {
+      parsed = text ? JSON.parse(text) : undefined;
+    } catch {
+      // A proxy or a non-Vorasaan server answered: report it, never crash on the body.
+      throw new ApiError(
+        res.status,
+        res.ok
+          ? `Unexpected response from ${this.config.baseUrl}${path}`
+          : `Request failed with status ${res.status}`,
+      );
+    }
     if (!res.ok) throw new ApiError(res.status, readableMessage(res.status, parsed));
     return parsed as T;
   }

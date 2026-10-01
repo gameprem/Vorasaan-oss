@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0019]
 slice: mvp-cli
 ---
@@ -20,5 +20,5 @@ Running `vorasaan` opens a long-lived Ink TUI with the Inbox, My Requests and Fe
 - Scriptable subcommands keep working.
 
 ## Acceptance criteria
-- [ ] Component tests with `ink-testing-library` for tab switching, lists and the raise form.
-- [ ] Manually verified against a running server.
+- [x] Component tests with `ink-testing-library` for tab switching, lists and the raise form.
+- [x] Manually verified against a running server.

@@ -7,6 +7,8 @@ export const FeatureSummaryView = z.object({
   title: z.string(),
   teamId: z.uuid(),
   teamName: z.string(),
+  /** The Project the Feature's Team belongs to (the CLI scopes to a repo's bound Project). */
+  projectId: z.uuid(),
   projectName: z.string(),
   /** The Team Roles the current user owns on this Feature. */
   myRoles: z.array(TeamRole),
