@@ -110,8 +110,32 @@ export type ProjectFoundationForAi = {
   guidelines: GuidelineForAi[];
 };
 
-/** One answered Grilling question. `answer` is a person's own words: untrusted. */
-export type GrillingAnswerForAi = { round: GrillingRoundKind; question: string; answer: string };
+/** A follow-up the AI asked on a Grilling question, and the reply. Both untrusted. */
+export type GrillingFollowUpForAi = { question: string; answer: string };
+
+/**
+ * One answered Grilling question, with who answered it (and as which Team Role)
+ * and the follow-ups asked in their Grilling Conversation (ticket 0044), so the
+ * Brief draft keeps the attribution. `answer` and the follow-ups are people's
+ * own words, and the name is theirs: untrusted.
+ */
+export type GrillingAnswerForAi = {
+  round: GrillingRoundKind;
+  question: string;
+  answer: string;
+  answeredBy: { name: string; role: TeamRole } | null;
+  followUps: GrillingFollowUpForAi[];
+};
+
+/**
+ * Whether to ask one more follow-up on a Grilling question (ticket 0044): its
+ * text, or null to move on. The server asks at most MAX_GRILLING_FOLLOW_UPS,
+ * whatever this says.
+ */
+export const GrillingFollowUpDecision = z.object({
+  followUp: z.string().trim().max(2_000).nullable(),
+});
+export type GrillingFollowUpDecision = z.infer<typeof GrillingFollowUpDecision>;
 
 export type ProjectForAi = { name: string };
 
@@ -324,6 +348,26 @@ export interface AiPort {
     },
     options?: AiCallOptions,
   ): Promise<GrillingQuestionDrafts>;
+
+  /**
+   * In a Grilling Conversation (ticket 0044), after the person's answer to a
+   * question (and to any follow-ups so far): one more follow-up when the answer
+   * is thin, vague or contradicts itself, or null to move on.
+   */
+  grillingFollowUp(
+    input: {
+      project: ProjectForAi;
+      round: GrillingRoundKind;
+      role: TeamRole;
+      question: string;
+      answer: string;
+      /** The follow-ups asked so far, each with its reply. */
+      followUps: GrillingFollowUpForAi[];
+      /** How many more the server would still ask (at least 1). */
+      remaining: number;
+    },
+    options?: AiCallOptions,
+  ): Promise<GrillingFollowUpDecision>;
 
   /** The complete next Project Brief, from every Grilling answer and the Project context. */
   draftBriefFromGrilling(

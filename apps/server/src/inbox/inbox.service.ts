@@ -62,6 +62,7 @@ export class InboxService {
               rounds: {
                 where: { status: 'ASKING' },
                 select: {
+                  id: true,
                   kind: true,
                   role: true,
                   createdAt: true,
@@ -76,6 +77,18 @@ export class InboxService {
         include: { project },
       }),
     ]);
+
+    // My Grilling Conversation for each round asked of me (ticket 0044).
+    const grillingConversations = toGrill.length
+      ? await this.db.conversation.findMany({
+          where: {
+            ownerId: userId,
+            grillingRoundId: { in: toGrill.flatMap((g) => g.rounds.map((r) => r.id)) },
+          },
+          select: { id: true, grillingRoundId: true },
+        })
+      : [];
+    const conversationOf = new Map(grillingConversations.map((t) => [t.grillingRoundId, t.id]));
 
     const items: InboxItem[] = [
       ...toDecide.map(
@@ -128,6 +141,7 @@ export class InboxService {
               round: round.kind,
               role: round.role,
               unanswered: round._count.questions,
+              conversationId: conversationOf.get(round.id) ?? null,
             },
           },
         ];

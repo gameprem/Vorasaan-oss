@@ -110,7 +110,13 @@ export const inboxItems: InboxItem[] = [
     kind: 'ANSWER_GRILLING',
     project: { id: PROJECT_A, name: 'Mobile Banking' },
     since: at,
-    grilling: { id: id(501), round: 'TECHNICAL', role: 'BACKEND', unanswered: 3 },
+    grilling: {
+      id: id(501),
+      round: 'TECHNICAL',
+      role: 'BACKEND',
+      unanswered: 3,
+      conversationId: null,
+    },
   },
 ];
 

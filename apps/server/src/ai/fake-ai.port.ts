@@ -14,6 +14,8 @@ import type {
   FeatureForAi,
   FeatureSuggestionDrafts,
   GrillingAnswerForAi,
+  GrillingFollowUpDecision,
+  GrillingFollowUpForAi,
   GuidelineForAi,
   ModelChoice,
   ProjectForAi,
@@ -71,12 +73,32 @@ export function fakeChatReply(input: {
   return `About ${about}: you said "${latest.slice(0, 80)}". I read ${input.context.length} context blocks.`;
 }
 
+/** The fake asks a follow-up when the latest reply has fewer words than this. */
+export const FAKE_THIN_ANSWER_WORDS = 4;
+
+/** The fake's follow-up on a thin answer to `question`. */
+export function fakeFollowUp(question: string, asked: number): string {
+  return `Follow-up ${asked + 1}: can you say more about "${question}"?`;
+}
+
 /** Deterministic stand-in for tests. Records calls so tests can assert on them. */
 export class FakeAiPort implements AiPort {
   /** Every call, with the model it was asked to run on (null when none was chosen). */
   readonly calls: { method: keyof AiPort; input: unknown; model: ModelChoice | null }[] = [];
   /** Replies the next chat calls give, in order, instead of the default one. */
   readonly chatScript: ScriptedChatReply[] = [];
+
+  /**
+   * Decisions the next grillingFollowUp calls return, in order, instead of the
+   * default: a follow-up's text, null to move on, or an Error to throw.
+   */
+  readonly followUpScript: (string | null | Error)[] = [];
+
+  /** Queues follow-up decisions, e.g. "always ask one" to test the server's limit. */
+  scriptGrillingFollowUps(...decisions: (string | null | Error)[]): this {
+    this.followUpScript.push(...decisions);
+    return this;
+  }
 
   /** Queues replies for the next chat calls, e.g. a tool call or a failure mid-stream. */
   scriptChat(...replies: ScriptedChatReply[]): this {
@@ -209,6 +231,38 @@ export class FakeAiPort implements AiPort {
     };
   }
 
+  /**
+   * The next scripted decision, else a follow-up when the latest reply (the
+   * last follow-up's, or the answer) has fewer than FAKE_THIN_ANSWER_WORDS words.
+   */
+  async grillingFollowUp(
+    input: {
+      project: ProjectForAi;
+      round: GrillingRoundKind;
+      role: TeamRole;
+      question: string;
+      answer: string;
+      followUps: GrillingFollowUpForAi[];
+      remaining: number;
+    },
+    options?: AiCallOptions,
+  ): Promise<GrillingFollowUpDecision> {
+    this.calls.push({ method: 'grillingFollowUp', input, model: options?.model ?? null });
+    if (this.followUpScript.length) {
+      const scripted = this.followUpScript.shift() ?? null;
+      if (scripted instanceof Error) throw scripted;
+      return { followUp: scripted };
+    }
+    const latest = input.followUps.at(-1)?.answer ?? input.answer;
+    const words = latest.trim().split(/\s+/).filter(Boolean).length;
+    return {
+      followUp:
+        words < FAKE_THIN_ANSWER_WORDS
+          ? fakeFollowUp(input.question, input.followUps.length)
+          : null,
+    };
+  }
+
   async draftBriefFromGrilling(
     input: {
       project: ProjectForAi;
@@ -221,7 +275,13 @@ export class FakeAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     this.calls.push({ method: 'draftBriefFromGrilling', input, model: options?.model ?? null });
-    const answers = input.answers.map((a) => `- ${a.question} ${a.answer}`).join('\n');
+    const answers = input.answers
+      .map((a) => {
+        const by = a.answeredBy ? ` (${a.answeredBy.name}, ${a.answeredBy.role})` : '';
+        const more = a.followUps.map((f) => ` / ${f.question} ${f.answer}`).join('');
+        return `- ${a.question} ${a.answer}${more}${by}`;
+      })
+      .join('\n');
     return {
       proposedMarkdown: `# Project Brief\n\n${input.project.name}\n\n## From Grilling\n${answers}\n`,
       summary: `Drafted from ${input.answers.length} answers.`,

@@ -25,6 +25,37 @@ export const GRILLING_ROUNDS = [
 /** The most questions the AI may ask in one round. */
 export const MAX_GRILLING_QUESTIONS = 7;
 
+/**
+ * The most follow-ups the AI may ask on one question in a Grilling Conversation
+ * (ticket 0044). The server enforces it, whatever the AI says.
+ */
+export const MAX_GRILLING_FOLLOW_UPS = 2;
+
+/**
+ * What a person types in a Grilling Conversation to skip the question being
+ * asked (or to stop the follow-ups on it), in English or Thai. Matched on the
+ * whole message, ignoring case, spaces and a trailing full stop or "!".
+ */
+export const GRILLING_SKIP_WORDS = ['skip', 'pass', 'ข้าม', 'ข้ามไป', 'ข้ามข้อนี้', 'ผ่าน'] as const;
+
+/** Whether a message in a Grilling Conversation asks to skip. */
+export function isGrillingSkip(text: string): boolean {
+  const word = text
+    .trim()
+    .toLowerCase()
+    .replace(/[.!。]+$/u, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (GRILLING_SKIP_WORDS as readonly string[]).includes(word);
+}
+
+/** A follow-up the AI asked the answerer in their Grilling Conversation, and their reply. */
+export const GrillingFollowUp = z.object({
+  question: z.string(),
+  answer: z.string(),
+});
+export type GrillingFollowUp = z.infer<typeof GrillingFollowUp>;
+
 export const GrillingQuestionView = z.object({
   id: Id,
   position: z.int().nonnegative(),
@@ -32,6 +63,8 @@ export const GrillingQuestionView = z.object({
   answer: z.string().nullable(),
   answeredBy: PersonRef.nullable(),
   answeredAt: Timestamp.nullable(),
+  /** The follow-ups asked in the answerer's Grilling Conversation, oldest first; empty for none. */
+  followUps: z.array(GrillingFollowUp),
   /** Left unanswered because its round was skipped. */
   skipped: z.boolean(),
 });

@@ -164,6 +164,10 @@ _Avoid_: Alert, inbox item
 A person's chat with the AI, scoped to a Project or a Feature. The AI reads that scope's context and can only propose; nothing changes until a person approves an Action Card.
 _Avoid_: Session, thread, chat room
 
+**Grilling Conversation**:
+A person's own Conversation for one Grilling round, opened for each person holding its Team Role. The AI asks the round's questions there one at a time and may ask up to two follow-ups on each answer; a question someone else already answered isn't asked again.
+_Avoid_: Interview, Grilling thread
+
 **AI Provider**:
 A service an Admin connects with its own key (Anthropic, OpenAI, or any OpenAI-compatible endpoint, such as a local model). An Organization may connect several. Approved Models run on them.
 _Avoid_: LLM integration, backend, vendor

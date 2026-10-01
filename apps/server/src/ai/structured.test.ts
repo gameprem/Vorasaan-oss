@@ -9,6 +9,7 @@ import {
   FeatureFitDraft,
   FeatureSuggestionDrafts,
   GeneratedChoices,
+  GrillingFollowUpDecision,
   GrillingQuestionDrafts,
   SpecProposalDraft,
 } from './ai.port.ts';
@@ -76,6 +77,7 @@ describe('loadAiConfig', () => {
       summarizeAttachmentModel: 'anthropic/claude-opus-5-5',
       draftSpecFromAttachmentsModel: 'anthropic/claude-opus-5-5',
       grillingQuestionsModel: 'anthropic/claude-opus-5-5',
+      grillingFollowUpModel: 'anthropic/claude-opus-5-5',
       draftBriefFromGrillingModel: 'anthropic/claude-opus-5-5',
       suggestFeaturesModel: 'anthropic/claude-opus-5-5',
       draftSpecFromSuggestionModel: 'anthropic/claude-opus-5-5',
@@ -98,6 +100,7 @@ describe('loadAiConfig', () => {
       summarizeAttachmentModel: 'anthropic/claude-haiku-4-5',
       draftSpecFromAttachmentsModel: 'openai/some-model',
       grillingQuestionsModel: 'openai/some-model',
+      grillingFollowUpModel: 'openai/some-model',
       draftBriefFromGrillingModel: 'openai/some-model',
       suggestFeaturesModel: 'openai/some-model',
       draftSpecFromSuggestionModel: 'openai/some-model',
@@ -152,9 +155,35 @@ describe('FakeAiPort', () => {
       projectContext: [],
       guidelines: [],
       memory: { rounds: [] },
-      answers: [{ round: 'BUSINESS', question: 'Goals?', answer: 'Grow payments.' }],
+      answers: [
+        {
+          round: 'BUSINESS',
+          question: 'Goals?',
+          answer: 'Grow payments.',
+          answeredBy: { name: 'Olga', role: 'PO' },
+          followUps: [{ question: 'By how much?', answer: 'To 1.5M payers.' }],
+        },
+      ],
     });
     expect(BriefDraft.safeParse(brief).success).toBe(true);
+    expect(brief.proposedMarkdown).toContain('By how much? To 1.5M payers. (Olga, PO)');
+
+    const followUpInput = {
+      project: { name: 'Mobile Banking' },
+      round: 'BUSINESS' as const,
+      role: 'PO' as const,
+      question: 'Goals?',
+      followUps: [],
+      remaining: 2,
+    };
+    const thin = await ai.grillingFollowUp({ ...followUpInput, answer: 'Grow.' });
+    expect(GrillingFollowUpDecision.safeParse(thin).success).toBe(true);
+    expect(thin.followUp).toContain('Goals?');
+    const full = await ai.grillingFollowUp({
+      ...followUpInput,
+      answer: 'Grow monthly active payers to 1.5M by Q4.',
+    });
+    expect(full.followUp).toBeNull();
 
     const guidelines = [
       { ref: 'G1', title: 'Serves a KPI', description: '', kind: 'KPI' as const, required: true },

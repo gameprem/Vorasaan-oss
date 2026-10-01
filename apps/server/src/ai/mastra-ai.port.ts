@@ -22,6 +22,8 @@ import {
   FeatureSuggestionDrafts,
   GeneratedChoices,
   type GrillingAnswerForAi,
+  GrillingFollowUpDecision,
+  type GrillingFollowUpForAi,
   GrillingQuestionDrafts,
   type GuidelineForAi,
   type ModelChoice,
@@ -40,6 +42,7 @@ import {
   draftSpecFromSuggestionPrompt,
   draftSpecProposalPrompt,
   generateChoicesPrompt,
+  grillingFollowUpPrompt,
   grillingQuestionsPrompt,
   suggestFeaturesPrompt,
   summarizeAttachmentPrompt,
@@ -179,6 +182,26 @@ export class MastraAiPort implements AiPort {
       await this.resolveModel('grillingQuestions', options?.model),
     );
     return generateStructured(generate, 'grilling-questions', prompt, GrillingQuestionDrafts);
+  }
+
+  async grillingFollowUp(
+    input: {
+      project: ProjectForAi;
+      round: GrillingRoundKind;
+      role: TeamRole;
+      question: string;
+      answer: string;
+      followUps: GrillingFollowUpForAi[];
+      remaining: number;
+    },
+    options?: AiCallOptions,
+  ) {
+    const prompt = await grillingFollowUpPrompt(input);
+    const generate = agentGenerate(
+      'grilling-follow-up',
+      await this.resolveModel('grillingFollowUp', options?.model),
+    );
+    return generateStructured(generate, 'grilling-follow-up', prompt, GrillingFollowUpDecision);
   }
 
   async draftBriefFromGrilling(

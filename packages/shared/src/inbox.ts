@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ActionCardEvent } from './action-card.ts';
 import {
+  ConversationAppendedEvent,
   ConversationDeltaEvent,
   ConversationDoneEvent,
   ConversationFailedEvent,
@@ -85,6 +86,12 @@ export const InboxItem = z.discriminatedUnion('kind', [
       role: TeamRole,
       /** Questions of the round nobody has answered yet. */
       unanswered: z.int().positive(),
+      /**
+       * My Grilling Conversation for the round, where I answer them (ticket 0044).
+       * Null when I have none yet (I joined the Team after the round started, or
+       * deleted it): `POST /grillings/:id/conversation` opens one.
+       */
+      conversationId: Id.nullable(),
     }),
   }),
   /** Approve (or reject) a PENDING Brief Proposal where I'm the approver. */
@@ -161,6 +168,7 @@ export const ServerEvent = z.discriminatedUnion('event', [
   z.object({ event: z.literal('conversation.done'), data: ConversationDoneEvent }),
   z.object({ event: z.literal('conversation.failed'), data: ConversationFailedEvent }),
   z.object({ event: z.literal('conversation.step'), data: ConversationStepEvent }),
+  z.object({ event: z.literal('conversation.appended'), data: ConversationAppendedEvent }),
   z.object({ event: z.literal('conversation.actionCard.created'), data: ActionCardEvent }),
   z.object({ event: z.literal('conversation.actionCard.updated'), data: ActionCardEvent }),
 ]);

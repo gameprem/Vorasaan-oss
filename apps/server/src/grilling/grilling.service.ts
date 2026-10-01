@@ -12,6 +12,7 @@ import {
   type AnswerGrillingQuestionInput,
   BRIEF_TEMPLATE,
   GRILLING_ROUNDS,
+  type GrillingFollowUp,
   type GrillingView,
   MAX_GRILLING_QUESTIONS,
   type SkipGrillingRoundInput,
@@ -36,11 +37,13 @@ import {
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { awaitingGrillingsWhere } from './awaiting.ts';
 import {
+  followUpsOf,
   type GrillingRoundWithQuestions,
   type GrillingWithRelations,
   grillingInclude,
   toGrillingView,
 } from './grilling.view.ts';
+import { openGrillingConversations } from './grilling-conversation.ts';
 
 const LABEL: Record<GrillingRoundKind, string> = {
   BUSINESS: 'Business',
@@ -103,6 +106,8 @@ class StaleStateError extends Error {}
 @Injectable()
 export class GrillingService {
   private readonly logger = new Logger(GrillingService.name);
+  /** Told, after commit, which rounds changed (GrillingConversationsService keeps the Grilling Conversations in step). */
+  private readonly roundListeners: ((roundIds: string[]) => Promise<void>)[] = [];
 
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
@@ -177,6 +182,8 @@ export class GrillingService {
     id: string,
     questionId: string,
     input: AnswerGrillingQuestionInput,
+    /** The follow-ups asked in the answerer's Grilling Conversation, and their replies (0044). */
+    followUps: GrillingFollowUp[] = [],
   ): Promise<GrillingView> {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const g = await this.findOrThrow(id);
@@ -191,7 +198,7 @@ export class GrillingService {
       if (question.answeredAt)
         throw new ConflictException('Someone already answered this question');
 
-      const answer = { questionId, text: input.answer };
+      const answer = { questionId, text: input.answer, by: user.name, followUps };
       const completes = round.questions.every((q) => q.id === questionId || q.answeredAt);
       const plan = completes
         ? await this.advance(
@@ -225,7 +232,14 @@ export class GrillingService {
           await bump(tx, g.id);
           const written = await tx.grillingQuestion.updateMany({
             where: { id: questionId, answeredAt: null },
-            data: { answer: input.answer, answeredById: user.id, answeredAt: new Date() },
+            data: {
+              answer: input.answer,
+              answeredById: user.id,
+              answeredAt: new Date(),
+              followUps: followUps.length
+                ? (followUps as unknown as Prisma.InputJsonValue)
+                : undefined,
+            },
           });
           if (written.count !== 1) throw new StaleStateError();
           if (plan) {
@@ -242,6 +256,7 @@ export class GrillingService {
       }
       const roles = [round.role, plan?.asking?.role];
       await this.publish(g.projectId, roles, plan?.draft ? [g.startedById] : []);
+      await this.roundsChanged([round.id]);
       return this.get(user, id);
     }
     throw changedMeanwhile();
@@ -280,6 +295,7 @@ export class GrillingService {
       [round.role, plan.asking?.role],
       plan.draft ? [g.startedById] : [],
     );
+    await this.roundsChanged([round.id]);
     return this.get(user, id);
   }
 
@@ -310,6 +326,7 @@ export class GrillingService {
       }
     });
     await this.publish(g.projectId, [round?.role], [g.startedById]);
+    if (round) await this.roundsChanged([round.id]);
     return this.get(user, id);
   }
 
@@ -418,7 +435,7 @@ export class GrillingService {
     plan: Plan,
   ): Promise<void> {
     for (const round of plan.rounds) {
-      await tx.grillingRound.create({
+      const created = await tx.grillingRound.create({
         data: {
           grillingId: g.id,
           kind: round.kind,
@@ -430,7 +447,10 @@ export class GrillingService {
             create: round.questions.map((text, position) => ({ grillingId: g.id, position, text })),
           },
         },
+        include: { questions: { orderBy: { position: 'asc' } } },
       });
+      // Each holder of the round's Team Role gets their own Grilling Conversation (0044).
+      if (round.status === 'ASKING') await openGrillingConversations(tx, g, created);
     }
     if (!plan.draft) {
       await tx.grilling.update({
@@ -538,6 +558,26 @@ export class GrillingService {
     await this.notifications.publish(outbox);
   }
 
+  /**
+   * Registers a listener told, after commit, which rounds an answer, a skip or a
+   * cancel changed. GrillingConversationsService uses it to tell the other
+   * holders' Grilling Conversations.
+   */
+  onRoundsChanged(listener: (roundIds: string[]) => Promise<void>): void {
+    this.roundListeners.push(listener);
+  }
+
+  /** Runs the listeners; what they do is a courtesy, so a failure is logged, not thrown. */
+  private async roundsChanged(roundIds: string[]): Promise<void> {
+    for (const listener of this.roundListeners) {
+      try {
+        await listener(roundIds);
+      } catch (error) {
+        this.logger.error('Updating the Grilling Conversations failed', error as Error);
+      }
+    }
+  }
+
   // ─── Reads ─────────────────────────────────────────────────────────────────
 
   private async guidelinesFor(projectId: string): Promise<GuidelineForAi[]> {
@@ -584,16 +624,43 @@ function roundOrder(kind: GrillingRoundKind): number {
   return GRILLING_ROUNDS.findIndex((r) => r.kind === kind);
 }
 
-type PendingAnswer = { questionId: string; text: string };
+type PendingAnswer = {
+  questionId: string;
+  text: string;
+  /** The answerer's name. */
+  by: string;
+  followUps: GrillingFollowUp[];
+};
 
-/** Every answer so far, round by round, with `pending` (not saved yet) in its place. */
+/** A question's answer, who gave it and its follow-ups, with `pending` (not saved yet) in its place. */
+function answerOf(q: GrillingRoundWithQuestions['questions'][number], pending?: PendingAnswer) {
+  if (q.id === pending?.questionId) {
+    return { text: pending.text, by: pending.by, followUps: pending.followUps };
+  }
+  if (!q.answer) return null;
+  return { text: q.answer, by: q.answeredBy?.name ?? null, followUps: followUpsOf(q.followUps) };
+}
+
+/**
+ * Every answer so far, round by round, with who gave it (as the round's Team
+ * Role) and its follow-ups, so the Brief draft keeps the attribution (0044).
+ */
 function answersOf(g: GrillingWithRelations, pending?: PendingAnswer): GrillingAnswerForAi[] {
   return [...g.rounds]
     .sort((a, b) => roundOrder(a.kind) - roundOrder(b.kind))
     .flatMap((round) =>
-      round.questions.flatMap((q) => {
-        const answer = q.id === pending?.questionId ? pending.text : q.answer;
-        return answer ? [{ round: round.kind, question: q.text, answer }] : [];
+      round.questions.flatMap((q): GrillingAnswerForAi[] => {
+        const answer = answerOf(q, pending);
+        if (!answer) return [];
+        return [
+          {
+            round: round.kind,
+            question: q.text,
+            answer: answer.text,
+            answeredBy: answer.by ? { name: answer.by, role: round.role } : null,
+            followUps: answer.followUps,
+          },
+        ];
       }),
     );
 }
@@ -609,8 +676,10 @@ function roundSummary(
   pending?: PendingAnswer,
 ): string {
   const answered = round.questions.flatMap((q) => {
-    const answer = q.id === pending?.questionId ? pending.text : q.answer;
-    return answer ? [`Q: ${q.text} A: ${answer.replace(/\s+/g, ' ').trim()}`] : [];
+    const answer = answerOf(q, pending);
+    if (!answer) return [];
+    const more = answer.followUps.map((f) => ` Follow-up: ${f.question} A: ${f.answer}`).join('');
+    return [`Q: ${q.text} A: ${`${answer.text}${more}`.replace(/\s+/g, ' ').trim()}`];
   });
   const head = skipped
     ? `${LABEL[round.kind]} round (${round.role}), skipped by the starter after ${answered.length} of ${round.questions.length} answers`

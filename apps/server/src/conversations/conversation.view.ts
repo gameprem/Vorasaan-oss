@@ -5,12 +5,14 @@ import {
   type ConversationMessageView,
   ConversationToolCall,
   type ConversationView,
+  type GrillingConversationProgress,
 } from '@vorasaan/shared';
 import { z } from 'zod';
 
 export const conversationInclude = {
   project: { select: { id: true, name: true } },
   feature: { select: { id: true, title: true } },
+  grillingRound: { select: { grillingId: true, kind: true, role: true } },
 } satisfies Prisma.ConversationInclude;
 
 export type ConversationWithScope = Prisma.ConversationGetPayload<{
@@ -28,6 +30,9 @@ export function toConversationListItem(c: ConversationWithScope): ConversationLi
     scope: c.feature
       ? { kind: 'FEATURE', project: c.project, feature: c.feature }
       : { kind: 'PROJECT', project: c.project },
+    grilling: c.grillingRound
+      ? { id: c.grillingRound.grillingId, round: c.grillingRound.kind, role: c.grillingRound.role }
+      : null,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
@@ -49,10 +54,12 @@ export function toConversationView(
   c: ConversationWithScope,
   messages: MessageRow[],
   actionCards: ActionCardView[],
+  grillingProgress: GrillingConversationProgress | null = null,
 ): ConversationView {
   return {
     ...toConversationListItem(c),
     messages: messages.map(toConversationMessageView),
     actionCards,
+    grillingProgress,
   };
 }

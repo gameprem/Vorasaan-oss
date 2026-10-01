@@ -9,6 +9,7 @@ import type {
   DismissedSuggestionForAi,
   FeatureForAi,
   GrillingAnswerForAi,
+  GrillingFollowUpForAi,
   GuidelineForAi,
   ProjectForAi,
   ProjectFoundationForAi,
@@ -26,11 +27,12 @@ const KIND_MEANING = {
  * Neutralises anything in untrusted text that could open or close one of the
  * prompt's data blocks (<attachment>, <context>, <spec>, <brief>, <guidelines>,
  * <memory>, <answers>, <answer>, <decisions>, <dismissed>, <suggestions>, <suggestion>,
- * <feature>, <summary>, <message>), so retrieved content can't escape its fence in the prompt.
+ * <feature>, <summary>, <message>, <question>, <exchange>), so retrieved content can't escape
+ * its fence in the prompt.
  */
 export function fence(text: string): string {
   return text.replace(
-    /<(\s*\/?\s*(?:attachment|context|spec|brief|guidelines|memory|answers?|decisions|dismissed|suggestions?|feature|summary|messages?)\b)/gi,
+    /<(\s*\/?\s*(?:attachment|context|spec|brief|guidelines|memory|answers?|decisions|dismissed|suggestions?|feature|summary|messages?|questions?|exchange)\b)/gi,
     '‹$1',
   );
 }
@@ -191,15 +193,53 @@ function oneLineOf(text: string): string {
   return text.replace(/\s*[\r\n]+\s*/g, ' ').trim();
 }
 
-/** Every answered question as a fenced block; the answers are people's own words. */
+/** Follow-ups and their replies, as lines inside an <answer> or <exchange> block. */
+function renderFollowUps(followUps: GrillingFollowUpForAi[]): string {
+  return followUps
+    .map((f, i) => `Follow-up ${i + 1}: ${oneLineOf(f.question)}\nReply: ${f.answer}`)
+    .join('\n\n');
+}
+
+/**
+ * Every answered question as a fenced block, with who answered it (as which Team
+ * Role) and the follow-ups asked in their Grilling Conversation. The answers, the
+ * follow-ups and the names are untrusted.
+ */
 export function renderGrillingAnswers(answers: GrillingAnswerForAi[]): string {
   if (answers.length === 0) return '(No answers.)';
   return answers
-    .map(
-      (a, i) =>
-        `<answer index="${i + 1}" round="${a.round}" question="${attribute(a.question)}">\n${fence(a.answer)}\n</answer>`,
-    )
+    .map((a, i) => {
+      const by = a.answeredBy
+        ? ` by="${attribute(a.answeredBy.name)}" role="${a.answeredBy.role}"`
+        : '';
+      const followUps = a.followUps.length ? `\n\n${renderFollowUps(a.followUps)}` : '';
+      return `<answer index="${i + 1}" round="${a.round}"${by} question="${attribute(a.question)}">\n${fence(`${a.answer}${followUps}`)}\n</answer>`;
+    })
     .join('\n\n');
+}
+
+export function grillingFollowUpPrompt(input: {
+  project: ProjectForAi;
+  round: GrillingRoundKind;
+  role: TeamRole;
+  question: string;
+  answer: string;
+  followUps: GrillingFollowUpForAi[];
+  remaining: number;
+}) {
+  const followUps = input.followUps.length
+    ? renderFollowUps(input.followUps)
+    : '(No follow-up asked yet.)';
+  return renderSkill('grilling-follow-up', {
+    projectName: attribute(input.project.name),
+    round: input.round,
+    role: input.role,
+    roundFocus: ROUND_FOCUS[input.round],
+    question: fence(input.question),
+    answer: fence(input.answer),
+    followUps: fence(followUps),
+    remaining: String(input.remaining),
+  });
 }
 
 export function grillingQuestionsPrompt(input: {

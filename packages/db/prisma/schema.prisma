@@ -788,16 +788,18 @@ model Grilling {
 // One round of a Grilling, created when it is reached. At most one ASKING per
 // Grilling (partial unique index in the migration).
 model GrillingRound {
-  id          String              @id @default(uuid())
-  grillingId  String
-  kind        GrillingRoundKind
-  role        TeamRole // who answers: PO, DESIGNER or TECH_LEAD
-  status      GrillingRoundStatus
-  skipReason  GrillingSkipReason?
-  createdAt   DateTime            @default(now())
-  completedAt DateTime?
-  grilling    Grilling            @relation(fields: [grillingId], references: [id], onDelete: Cascade)
-  questions   GrillingQuestion[]
+  id            String              @id @default(uuid())
+  grillingId    String
+  kind          GrillingRoundKind
+  role          TeamRole // who answers: PO, DESIGNER or TECH_LEAD
+  status        GrillingRoundStatus
+  skipReason    GrillingSkipReason?
+  createdAt     DateTime            @default(now())
+  completedAt   DateTime?
+  grilling      Grilling            @relation(fields: [grillingId], references: [id], onDelete: Cascade)
+  questions     GrillingQuestion[]
+  // Each holder's own Grilling Conversation for this round (ticket 0044).
+  conversations Conversation[]
 
   @@unique([grillingId, kind])
   @@index([status, role])
@@ -813,6 +815,9 @@ model GrillingQuestion {
   answeredById String?
   answeredAt   DateTime?
   skipped      Boolean       @default(false) // left unanswered when its round was skipped
+  // The follow-ups the AI asked the answerer in their Grilling Conversation, and
+  // their replies, as [{ question, answer }] (ticket 0044). Null when answered without.
+  followUps    Json?
   createdAt    DateTime      @default(now())
   grilling     Grilling      @relation(fields: [grillingId], references: [id], onDelete: Cascade)
   round        GrillingRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
@@ -886,14 +891,22 @@ model Conversation {
   title             String
   summary           String                @default("")
   summarizedThrough Int                   @default(0) // messages with a lower position are in `summary`
+  // Set on a Grilling Conversation (ticket 0044): the round its owner answers here.
+  // One per person and round; always a Project Conversation.
+  grillingRoundId   String?
+  // Where a Grilling Conversation stands: the question being asked, the answer
+  // and follow-ups so far, the questions its owner skipped (GrillingThreadState).
+  grillingState     Json?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt // bumped by every message
   owner             User                  @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   project           Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   feature           Feature?              @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  grillingRound     GrillingRound?        @relation(fields: [grillingRoundId], references: [id], onDelete: Cascade)
   messages          ConversationMessage[]
   actionCards       ActionCard[]
 
+  @@unique([grillingRoundId, ownerId])
   @@index([ownerId, updatedAt])
   @@index([projectId])
   @@index([featureId])
