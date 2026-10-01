@@ -2,7 +2,11 @@ import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
 import type {
   AiPort,
   AttachmentForAi,
+  ChatChunk,
+  ChatMessageForAi,
+  ChatTool,
   ContextBlock,
+  ConversationScopeForAi,
   DecisionForAi,
   DismissedSuggestionForAi,
   FeatureFitDraft,
@@ -45,9 +49,71 @@ export const FAKE_GRILLING_TOPICS: Record<
   ],
 };
 
+/**
+ * One scripted chat reply: its chunks (text pieces and tool calls), streamed in
+ * order, then `error` thrown if given (a provider failing mid-reply).
+ */
+export type ScriptedChatReply = { chunks?: ChatChunk[]; error?: Error };
+
+/** The fake's default reply: it names the scope, echoes the latest message and counts the context. */
+export function fakeChatReply(input: {
+  scope: ConversationScopeForAi;
+  context: ContextBlock[];
+  recentMessages: ChatMessageForAi[];
+}): string {
+  const latest = input.recentMessages.findLast((m) => m.role === 'USER')?.content ?? '';
+  const about =
+    input.scope.kind === 'FEATURE'
+      ? `the Feature "${input.scope.feature.title}"`
+      : `the Project "${input.scope.project.name}"`;
+  return `About ${about}: you said "${latest.slice(0, 80)}". I read ${input.context.length} context blocks.`;
+}
+
 /** Deterministic stand-in for tests. Records calls so tests can assert on them. */
 export class FakeAiPort implements AiPort {
   readonly calls: { method: keyof AiPort; input: unknown }[] = [];
+  /** Replies the next chat calls give, in order, instead of the default one. */
+  readonly chatScript: ScriptedChatReply[] = [];
+
+  /** Queues replies for the next chat calls, e.g. a tool call or a failure mid-stream. */
+  scriptChat(...replies: ScriptedChatReply[]): this {
+    this.chatScript.push(...replies);
+    return this;
+  }
+
+  /** Streams the next scripted reply, or else `fakeChatReply` word by word. */
+  async *chat(input: {
+    scope: ConversationScopeForAi;
+    context: ContextBlock[];
+    foundation: ProjectFoundationForAi;
+    summary: string;
+    recentMessages: ChatMessageForAi[];
+    tools: ChatTool[];
+    signal?: AbortSignal;
+  }): AsyncIterable<ChatChunk> {
+    this.calls.push({ method: 'chat', input });
+    const scripted = this.chatScript.shift();
+    const chunks: ChatChunk[] = scripted
+      ? (scripted.chunks ?? [])
+      : (fakeChatReply(input).match(/\S+\s*/g) ?? []).map((delta) => ({ type: 'text', delta }));
+    for (const chunk of chunks) {
+      // A real stream yields between chunks; so does the fake, so listeners see each one.
+      await Promise.resolve();
+      yield chunk;
+    }
+    if (scripted?.error) throw scripted.error;
+  }
+
+  /** The old summary, then one line per folded message. */
+  async summarizeConversation(input: {
+    scope: ConversationScopeForAi;
+    summary: string;
+    messages: ChatMessageForAi[];
+  }) {
+    this.calls.push({ method: 'summarizeConversation', input });
+    const lines = input.messages.map((m) => `${m.role}: ${m.content.slice(0, 60)}`);
+    return { summary: [input.summary, ...lines].filter(Boolean).join('\n') };
+  }
 
   async generateChoices(input: {
     specMarkdown: string;

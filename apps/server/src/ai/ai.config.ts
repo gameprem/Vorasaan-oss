@@ -12,6 +12,8 @@ export type AiConfig = {
   suggestFeaturesModel: string;
   draftSpecFromSuggestionModel: string;
   checkFeatureFitModel: string;
+  chatModel: string;
+  summarizeConversationModel: string;
 };
 
 export function loadAiConfig(env: Record<string, string | undefined> = process.env): AiConfig {
@@ -26,5 +28,7 @@ export function loadAiConfig(env: Record<string, string | undefined> = process.e
     suggestFeaturesModel: env.VORASAAN_MODEL_SUGGEST_FEATURES ?? fallback,
     draftSpecFromSuggestionModel: env.VORASAAN_MODEL_DRAFT_SPEC_FROM_SUGGESTION ?? fallback,
     checkFeatureFitModel: env.VORASAAN_MODEL_CHECK_FEATURE_FIT ?? fallback,
+    chatModel: env.VORASAAN_MODEL_CHAT ?? fallback,
+    summarizeConversationModel: env.VORASAAN_MODEL_SUMMARIZE_CONVERSATION ?? fallback,
   };
 }

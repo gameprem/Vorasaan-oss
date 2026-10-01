@@ -9,6 +9,7 @@ import { DevUsersController } from './auth/dev-users.controller.ts';
 import { IdentityGuard } from './auth/identity.guard.ts';
 import { BriefController } from './brief/brief.controller.ts';
 import { BriefService } from './brief/brief.service.ts';
+import { ConversationsModule } from './conversations/conversations.module.ts';
 import { DecisionRequestsController } from './decision-requests/decision-requests.controller.ts';
 import { DecisionRequestsService } from './decision-requests/decision-requests.service.ts';
 import {
@@ -43,6 +44,7 @@ import { SpecService } from './spec/spec.service.ts';
     FeatureGuidelinesModule,
     GrillingModule,
     FeatureSuggestionsModule,
+    ConversationsModule,
   ],
   controllers: [
     HealthController,

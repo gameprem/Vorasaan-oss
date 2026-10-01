@@ -310,6 +310,8 @@ export function App({
     };
     const stop = live({
       onEvent: (event) => {
+        // A Conversation's streamed reply changes nothing the TUI shows.
+        if (event.event.startsWith('conversation.')) return;
         if (event.event === 'notification.created') {
           // Without the unread marker: the OS shows one plain line.
           const line = notificationLine(event.data.notification).replace(/^[•\s]+/, '');

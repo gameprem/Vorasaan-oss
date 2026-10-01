@@ -77,3 +77,6 @@ export type SuggestionLevel = z.infer<typeof SuggestionLevel>;
 
 export const FeatureStatus = z.enum(['DRAFT', 'IN_PROGRESS', 'DONE', 'ARCHIVED']);
 export type FeatureStatus = z.infer<typeof FeatureStatus>;
+
+export const ConversationMessageRole = z.enum(['USER', 'ASSISTANT', 'TOOL']);
+export type ConversationMessageRole = z.infer<typeof ConversationMessageRole>;

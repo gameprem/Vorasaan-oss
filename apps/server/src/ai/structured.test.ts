@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { loadAiConfig } from './ai.config.ts';
+import { DEFAULT_MODEL, loadAiConfig } from './ai.config.ts';
 import {
   AiOutputError,
   AttachmentSummary,
   BriefDraft,
+  type ChatChunk,
+  ConversationSummaryDraft,
   FeatureFitDraft,
   FeatureSuggestionDrafts,
   GeneratedChoices,
@@ -78,6 +80,8 @@ describe('loadAiConfig', () => {
       suggestFeaturesModel: 'anthropic/claude-opus-5-5',
       draftSpecFromSuggestionModel: 'anthropic/claude-opus-5-5',
       checkFeatureFitModel: 'anthropic/claude-opus-5-5',
+      chatModel: DEFAULT_MODEL,
+      summarizeConversationModel: DEFAULT_MODEL,
     });
   });
 
@@ -98,6 +102,8 @@ describe('loadAiConfig', () => {
       suggestFeaturesModel: 'openai/some-model',
       draftSpecFromSuggestionModel: 'openai/some-model',
       checkFeatureFitModel: 'openai/some-model',
+      chatModel: 'openai/some-model',
+      summarizeConversationModel: 'openai/some-model',
     });
   });
 });
@@ -185,5 +191,71 @@ describe('FakeAiPort', () => {
       guidelines,
     });
     expect(FeatureFitDraft.safeParse(fit).success).toBe(true);
+
+    const summary2 = await ai.summarizeConversation({
+      scope: { kind: 'PROJECT', project: { name: 'Mobile Banking' } },
+      summary: 'They want card controls.',
+      messages: [{ role: 'USER', content: 'And limits?' }],
+    });
+    expect(ConversationSummaryDraft.safeParse(summary2).success).toBe(true);
+    expect(summary2.summary).toBe('They want card controls.\nUSER: And limits?');
+  });
+
+  const chatInput = {
+    scope: {
+      kind: 'FEATURE',
+      project: { name: 'Mobile Banking' },
+      feature: { title: 'Card freeze', description: '' },
+    },
+    context: [],
+    foundation: { brief: null, guidelines: [] },
+    summary: '',
+    recentMessages: [{ role: 'USER', content: 'What is left to decide?' }],
+    tools: [],
+  } as const satisfies Parameters<FakeAiPort['chat']>[0];
+
+  async function collect(stream: AsyncIterable<ChatChunk>) {
+    const chunks: ChatChunk[] = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    return chunks;
+  }
+
+  test('chat streams the same reply for the same input, word by word', async () => {
+    const ai = new FakeAiPort();
+    const first = await collect(ai.chat(chatInput));
+    const second = await collect(ai.chat(chatInput));
+    expect(first).toEqual(second);
+    expect(first.length).toBeGreaterThan(3);
+    const text = first.map((c) => (c.type === 'text' ? c.delta : '')).join('');
+    expect(text).toBe(
+      'About the Feature "Card freeze": you said "What is left to decide?". I read 0 context blocks.',
+    );
+  });
+
+  test('chat can be scripted to call a tool, or to fail mid-reply', async () => {
+    const ai = new FakeAiPort();
+    const call = { id: 'call-1', name: 'draftSpecProposal', args: { summary: 'Add limits' } };
+    ai.scriptChat(
+      {
+        chunks: [
+          { type: 'text', delta: 'Drafting.' },
+          { type: 'tool-call', call },
+        ],
+      },
+      { chunks: [{ type: 'text', delta: 'Half a' }], error: new Error('provider down') },
+    );
+    expect(await collect(ai.chat(chatInput))).toEqual([
+      { type: 'text', delta: 'Drafting.' },
+      { type: 'tool-call', call },
+    ]);
+    const seen: ChatChunk[] = [];
+    await expect(
+      (async () => {
+        for await (const chunk of ai.chat(chatInput)) seen.push(chunk);
+      })(),
+    ).rejects.toThrow('provider down');
+    expect(seen).toEqual([{ type: 'text', delta: 'Half a' }]);
+    // The script is used up: back to the default reply.
+    expect((await collect(ai.chat(chatInput)))[0]).toEqual({ type: 'text', delta: 'About ' });
   });
 });
