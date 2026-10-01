@@ -77,12 +77,11 @@ describe('Feature Guidelines', () => {
     asMia = as(app, mia.id);
   });
 
-  test('only Admins read and replace the Organization default, in order, keeping ids', async () => {
+  test('only Admins replace the Organization default, in order, keeping ids', async () => {
     const empty = await asPim<OrgFeatureGuidelinesView>('GET', settings);
     expect(empty.status).toBe(200);
     expect(empty.body).toEqual({ organizationId: SEED.organizationId, criteria: [] });
 
-    expect((await asBeam('GET', settings)).status).toBe(403);
     expect((await asBeam('PUT', settings, { criteria: DEFAULTS })).status).toBe(403);
     expect((await asMia('PUT', settings, { criteria: DEFAULTS })).status).toBe(403);
 
@@ -111,6 +110,44 @@ describe('Feature Guidelines', () => {
     expect(next.body.criteria[2]?.id).toBe(conversion);
     expect(next.body.criteria[1]?.description).toBe('');
     expect(await db.guidelineCriterion.count({ where: { id: pdpa } })).toBe(0);
+  });
+
+  test('every member of the Organization reads the default, including what a Project hides', async () => {
+    const [conversion, pdpa, rollout] = await saveDefaults();
+    // The seeded Project hides PDPA; its POs still read that criterion's text.
+    const hide = await asPim('PUT', project, {
+      overrides: [{ action: 'DISABLE', overridesId: pdpa }],
+    });
+    expect(hide.status).toBe(200);
+
+    for (const asMember of [asBeam, asMia]) {
+      const res = await asMember<OrgFeatureGuidelinesView>('GET', settings);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        organizationId: SEED.organizationId,
+        criteria: [
+          { id: conversion, ...DEFAULTS[0] },
+          { id: pdpa, ...DEFAULTS[1] },
+          { id: rollout, ...DEFAULTS[2] },
+        ],
+      } as never);
+    }
+
+    // Someone outside the Organization reads nothing.
+    const outsider = await db.user.create({
+      data: { email: 'out@elsewhere.test', name: 'Out', passwordHash: 'x' },
+    });
+    expect((await as(app, outsider.id)('GET', settings)).status).toBe(403);
+  });
+
+  test('a non-Admin gets 403 on PUT and the default stays as it was', async () => {
+    const ids = await saveDefaults();
+    for (const asMember of [asBeam, asMia]) {
+      const res = await asMember('PUT', settings, { criteria: [] });
+      expect(res.status).toBe(403);
+    }
+    const after = await asMia<OrgFeatureGuidelinesView>('GET', settings);
+    expect(after.body.criteria.map((c) => c.id)).toEqual(ids);
   });
 
   test('the default list is validated; unknown ids are 422 and change nothing', async () => {

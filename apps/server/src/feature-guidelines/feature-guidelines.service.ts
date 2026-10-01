@@ -29,10 +29,14 @@ const ordered = [
 export class FeatureGuidelinesService {
   constructor(@InjectPrisma() private readonly db: PrismaClient) {}
 
-  // ─── Organization default (Admins) ──────────────────────────────────────
+  // ─── Organization default (everyone reads, Admins replace) ──────────────
 
+  /**
+   * Readable by every member of the Organization, so a PO adjusting a Project
+   * sees the text of the criteria it inherits, including ones it hides.
+   */
   async getDefault(user: User): Promise<OrgFeatureGuidelinesView> {
-    const organizationId = await this.adminOrganizationId(user);
+    const organizationId = await this.memberOrganizationId(user);
     return { organizationId, criteria: await this.defaults(this.db, organizationId) };
   }
 
@@ -188,6 +192,17 @@ export class FeatureGuidelinesService {
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────
+
+  /** The Organization the user is a member of; 403 for someone in none. */
+  private async memberOrganizationId(user: User): Promise<string> {
+    const membership = await this.db.orgMembership.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'asc' },
+      select: { organizationId: true },
+    });
+    if (!membership) throw new ForbiddenException('You are not in an Organization');
+    return membership.organizationId;
+  }
 
   /** The Organization the user is an Admin of; 403 for everyone else. */
   private async adminOrganizationId(user: User): Promise<string> {
