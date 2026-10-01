@@ -286,6 +286,21 @@ describe('Conversations', () => {
     expect(await db.conversationMessage.count()).toBe(0);
   });
 
+  test('someone removed from the Organization can no longer get replies in their old Conversation', async () => {
+    const mine = await startFeature(beam.id, 'What does the Spec say about retries?');
+    expect(mine.status).toBe(201);
+    const id = mine.body.id;
+    await db.orgMembership.delete({
+      where: { organizationId_userId: { organizationId: SEED.organizationId, userId: beam.id } },
+    });
+    const before = chatCalls().length;
+
+    expect((await send(beam.id, id, 'And the timeout?')).status).toBe(403);
+    expect((await asBeam()('POST', `/conversations/${id}/retry`)).status).toBe(403);
+    expect(chatCalls().length).toBe(before);
+    expect(await db.conversationMessage.count({ where: { conversationId: id } })).toBe(2);
+  });
+
   test('past N turns the summary is updated, and older turns are not sent again', async () => {
     const { maxRecentMessages, keepRecentMessages } = CONVERSATION_LIMITS;
     const started = await startFeature(pim.id, 'Turn 1');

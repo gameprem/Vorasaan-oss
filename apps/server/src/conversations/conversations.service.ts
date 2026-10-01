@@ -139,7 +139,7 @@ export class ConversationsService {
 
   /** The owner's next message, and the AI's reply to it. */
   async send(user: User, id: string, content: string): Promise<ConversationTurnView> {
-    await this.owned(user, id);
+    await this.ownedWithAccess(user, id);
     return this.exclusively(id, async () => {
       await this.db.$transaction(async (tx) => {
         const position = await nextPosition(tx, id);
@@ -154,7 +154,7 @@ export class ConversationsService {
 
   /** Asks the AI again for a reply to the last message, after a failed one. */
   async retry(user: User, id: string): Promise<ConversationTurnView> {
-    await this.owned(user, id);
+    await this.ownedWithAccess(user, id);
     return this.exclusively(id, async () => {
       const last = await this.db.conversationMessage.findFirst({
         where: { conversationId: id },
@@ -355,6 +355,16 @@ export class ConversationsService {
       include: conversationInclude,
     });
     if (!conversation) throw notFound();
+    return conversation;
+  }
+
+  /**
+   * The Conversation, if the user owns it and may still read its Project: a reply reads
+   * the Project's context, so someone who left the Organization gets 403, not answers.
+   */
+  private async ownedWithAccess(user: User, id: string): Promise<ConversationWithScope> {
+    const conversation = await this.owned(user, id);
+    await projectAccess(this.db, user, conversation.projectId);
     return conversation;
   }
 
