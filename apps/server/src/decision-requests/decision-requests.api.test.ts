@@ -58,6 +58,7 @@ describe('Decision Requests API: raise and submit', () => {
         title: 'Async checkout',
         teamId: SEED.teamId,
         teamName: 'Checkout',
+        projectId: SEED.projectId,
         projectName: 'Mobile Banking',
         myRoles: ['BACKEND'],
       },
@@ -66,7 +67,11 @@ describe('Decision Requests API: raise and submit', () => {
 
   test('GET /features/:id returns one Feature; unknown is 404', async () => {
     const res = await asPim<FeatureSummaryView>('GET', `/features/${SEED.featureId}`);
-    expect(res.body).toMatchObject({ title: 'Async checkout', myRoles: ['PO'] });
+    expect(res.body).toMatchObject({
+      title: 'Async checkout',
+      projectId: SEED.projectId,
+      myRoles: ['PO'],
+    });
     expect((await asPim('GET', `/features/${crypto.randomUUID()}`)).status).toBe(404);
   });
 

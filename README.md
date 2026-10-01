@@ -63,7 +63,7 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 | 📜 **Versioned Specs** | Markdown Specs with Confluence-style version history and AI-drafted diffs you approve. Revert is *(planned)*. |
 | 🗂️ **Decision Log** | Every decision is traceable: who decided, what the alternatives were, and which Spec version it produced. |
 | 📎 **One place for context** | Attach Confluence pages, Jira epics, files and URLs so the AI reasons over real context *(planned)*. |
-| 💻 **Terminal-native** | Raise from the `vorasaan` CLI with AI-drafted Choices you review first. A live TUI inbox with OS notifications is *(planned)*. |
+| 💻 **Terminal-native** | Raise from the `vorasaan` CLI with AI-drafted Choices you review first, and keep your Inbox, requests and Specs open in the `vorasaan` TUI. Live updates and OS notifications are *(planned)*. |
 | 🤝 **Agent handoff** | `vorasaan run --ai claude` hands your coding agent the approved Spec, not a guess *(planned)*. |
 | 🏠 **Self-hosted** | One `docker compose up`. Your data stays on your infrastructure. Bring your own model: Claude API, OpenAI API, or any OpenAI-compatible URL + token. |
 
@@ -105,7 +105,9 @@ In the web app, open **Access tokens** and create a token. Then:
 
 ```bash
 bun apps/cli/src/index.ts login --url http://localhost:4000   # paste the token
+bun apps/cli/src/index.ts init                                # bind this repo to a Project (.vorasaan/config.json)
 bun apps/cli/src/index.ts raise                               # pick a Feature, describe the blocker
+bun apps/cli/src/index.ts                                     # the TUI: Inbox, My Requests, Features (? for keys)
 ```
 
 A single-file binary is built with `bun run --filter @vorasaan/cli build` (`apps/cli/dist/vorasaan`).
