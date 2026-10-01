@@ -84,8 +84,11 @@ describe(`migration ${MIGRATION}`, () => {
 
   afterAll(async () => {
     await db?.$disconnect();
-    await withClient(admin.toString(), (c) => c.query(`DROP DATABASE IF EXISTS "${name}"`));
-  });
+    // FORCE ends connections still closing under a parallel run, so the drop doesn't wait on them.
+    await withClient(admin.toString(), (c) =>
+      c.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`),
+    );
+  }, 60_000);
 
   test('the default provider is the first provider, and its model the default Approved Model', async () => {
     const models = await db.approvedModel.findMany();
