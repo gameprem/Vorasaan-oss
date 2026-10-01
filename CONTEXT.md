@@ -71,7 +71,7 @@ A drafted change to a Project Brief (for example from Grilling), awaiting approv
 _Avoid_: Revision, change request, draft
 
 **Grilling**:
-Rounds of AI-asked questions to the people in a Project (business, then UX, then technical) whose answers the AI turns into a Project Brief proposal.
+Rounds of AI-asked questions to the people in a Project (business, then UX, then technical) whose answers the AI turns into a Project Brief proposal. Each person answers in their own Conversation, where the AI may ask follow-ups.
 _Avoid_: Interview, survey, questionnaire
 
 **Repo Scan**:
@@ -141,3 +141,13 @@ _Avoid_: Task, todo, notification
 **Notification**:
 An informational message a person only needs to read, such as a new Spec Version.
 _Avoid_: Alert, inbox item
+
+### Conversations
+
+**Conversation**:
+A person's chat with the AI, scoped to a Project or a Feature. The AI reads that scope's context and can only propose; nothing changes until a person approves an Action Card.
+_Avoid_: Session, thread, chat room
+
+**Action Card**:
+A proposal the AI makes inside a Conversation (a Decision Request draft, a Spec Proposal, a Brief Proposal, a Feature Suggestion), shown with the buttons to approve, edit or decline it.
+_Avoid_: Tool result, command, auto-action
