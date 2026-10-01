@@ -27,7 +27,7 @@ export function RoleOwnersEditor({
   const roles = [...new Set(team.members.flatMap((m) => m.roles))] as TeamRole[];
   if (roles.length === 0) {
     return (
-      <p className="text-ink-soft">
+      <p className="text-fg-soft">
         Give people Team Roles on the Team page first, then choose who owns each role here.
       </p>
     );
@@ -59,8 +59,10 @@ export function RoleOwnersEditor({
                   return (
                     <label
                       key={key}
-                      className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1 ${
-                        on ? 'border-jade bg-jade-wash text-jade' : 'border-rule text-ink-soft'
+                      className={`flex cursor-pointer items-center gap-2 rounded-full px-3 py-1 ${
+                        on
+                          ? 'bg-jade-wash text-jade'
+                          : 'bg-surface text-fg-soft hover:bg-surface-hi'
                       }`}
                     >
                       <input
@@ -99,7 +101,7 @@ export function RoleOwnersEditor({
           {pending ? 'Saving…' : 'Save Role Owners'}
         </button>
         {message && (
-          <p role="status" className={message.ok ? 'text-jade' : 'text-seal'}>
+          <p role="status" className={message.ok ? 'text-jade' : 'text-lacquer'}>
             {message.text}
           </p>
         )}

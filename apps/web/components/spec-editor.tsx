@@ -8,7 +8,7 @@ import { field, primaryButton, secondaryButton } from './ui';
 const BlockEditor = dynamic(() => import('./block-editor'), {
   ssr: false,
   loading: () => (
-    <p role="status" className="px-6 py-10 text-ink-soft">
+    <p role="status" className="px-6 py-10 text-fg-soft">
       Loading the editor…
     </p>
   ),
@@ -110,17 +110,14 @@ export function SpecEditor({
 
   return (
     <div>
-      <section
-        aria-label={`${noun} editor`}
-        className="min-h-60 rounded-xl border border-rule bg-sheet py-4"
-      >
+      <section aria-label={`${noun} editor`} className="min-h-60 rounded-card bg-rail py-4">
         <BlockEditor
           markdown={current ?? template}
           getMarkdown={getMarkdown}
           onChange={() => setError(undefined)}
         />
       </section>
-      <p className="mt-2 text-sm text-ink-soft">
+      <p className="mt-2 text-sm text-fg-soft">
         Type <kbd>/</kbd> for headings, lists, tables and code. The {noun} is saved as Markdown, so
         colors, underline and text alignment are not kept.
       </p>
@@ -134,7 +131,7 @@ export function SpecEditor({
         />
       </label>
       {error && (
-        <div role="alert" className="mt-3 text-seal">
+        <div role="alert" className="mt-3 text-lacquer">
           {error.message}{' '}
           {error.stale && (
             <button

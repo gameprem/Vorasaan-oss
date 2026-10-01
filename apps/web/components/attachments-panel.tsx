@@ -55,7 +55,7 @@ export function AttachmentsPanel({
   const others = attachments.filter((a) => a !== repoScan);
   return (
     <div className="max-w-4xl">
-      <p className="text-ink-soft">
+      <p className="text-fg-soft">
         {isProject
           ? 'Files and pages about the whole Project. The AI reads them as context for Grilling, Feature Suggestions and every Feature. '
           : 'Files and pages the AI reads as context. '}
@@ -71,17 +71,17 @@ export function AttachmentsPanel({
           <h2 id="repo-scan-heading" className="text-lg font-semibold">
             Repo Scan
           </h2>
-          <p className="mt-1 text-sm text-ink-soft">
+          <p className="mt-1 text-sm text-fg-soft">
             A summary of an existing codebase (README, dependencies, modules and routes, never whole
             source files). Run <code className="font-mono">vorasaan scan --project {owner.id}</code>{' '}
             in the repository to {repoScan ? 'replace it' : 'add one'}.
           </p>
           {repoScan ? (
-            <ul className="mt-3 divide-y divide-rule border-y border-rule">
+            <ul className="mt-3 rows">
               <AttachmentItem owner={owner} attachment={repoScan} canEdit={canEdit} />
             </ul>
           ) : (
-            <p className="mt-2 text-ink-soft">No Repo Scan yet.</p>
+            <p className="mt-2 text-fg-soft">No Repo Scan yet.</p>
           )}
         </section>
       )}
@@ -98,11 +98,11 @@ export function AttachmentsPanel({
         {others.length > 0 ? ` (${others.length})` : ''}
       </h2>
       {others.length === 0 ? (
-        <p className="mt-2 text-ink-soft">
+        <p className="mt-2 text-fg-soft">
           No Attachments yet. {canEdit ? 'Upload a file or add a link above.' : emptyHint}
         </p>
       ) : (
-        <ul className="mt-3 divide-y divide-rule border-y border-rule">
+        <ul className="mt-3 rows">
           {others.map((a) => (
             <AttachmentItem key={a.id} owner={owner} attachment={a} canEdit={canEdit} />
           ))}
@@ -118,9 +118,9 @@ function DraftFromAttachments({ featureId, enabled }: { featureId: string; enabl
     {},
   );
   return (
-    <form action={run} className="mt-6 rounded-xl border border-rule bg-sheet p-5">
+    <form action={run} className="mt-6 rounded-card bg-rail p-5">
       <p className="font-medium">Draft Spec from Attachments</p>
-      <p className="mt-1 text-sm text-ink-soft">
+      <p className="mt-1 text-sm text-fg-soft">
         The AI drafts a Spec Proposal from the Snapshots below. You review the change and approve it
         before it becomes a Spec Version.
       </p>
@@ -128,10 +128,10 @@ function DraftFromAttachments({ featureId, enabled }: { featureId: string; enabl
         {pending ? 'Drafting… (this can take a minute)' : 'Draft Spec from Attachments'}
       </button>
       {!enabled && (
-        <p className="mt-2 text-sm text-ink-soft">Add an Attachment with text to draft from.</p>
+        <p className="mt-2 text-sm text-fg-soft">Add an Attachment with text to draft from.</p>
       )}
       {state.error && (
-        <p role="alert" className="mt-2 text-seal">
+        <p role="alert" className="mt-2 text-lacquer">
           {state.error}
         </p>
       )}
@@ -185,7 +185,7 @@ function UploadForm({ owner }: { owner: AttachmentOwner }) {
   return (
     <form ref={form} action={upload} aria-label="Upload a file">
       <h3 className="font-medium">Upload a file</h3>
-      <p className="text-sm text-ink-soft">Markdown, text, PDF or an image.</p>
+      <p className="text-sm text-fg-soft">Markdown, text, PDF or an image.</p>
       <label className="mt-3 block">
         <span className="text-sm">File</span>
         <input name="file" type="file" required accept={ACCEPT} className={`${field} text-sm`} />
@@ -198,7 +198,7 @@ function UploadForm({ owner }: { owner: AttachmentOwner }) {
         {pending ? 'Uploading…' : 'Upload'}
       </button>
       {error && (
-        <p role="alert" className="mt-2 text-seal">
+        <p role="alert" className="mt-2 text-lacquer">
           {error}
         </p>
       )}
@@ -220,7 +220,7 @@ function LinkForm({ owner }: { owner: AttachmentOwner }) {
   return (
     <form ref={form} action={run} aria-label="Add a link">
       <h3 className="font-medium">Add a link</h3>
-      <p className="text-sm text-ink-soft">A public web page, a Confluence page or a Jira issue.</p>
+      <p className="text-sm text-fg-soft">A public web page, a Confluence page or a Jira issue.</p>
       <label className="mt-3 block">
         <span className="text-sm">Kind</span>
         <select
@@ -263,7 +263,7 @@ function LinkForm({ owner }: { owner: AttachmentOwner }) {
         {pending ? 'Capturing…' : 'Add'}
       </button>
       {state.error && (
-        <p role="alert" className="mt-2 text-seal">
+        <p role="alert" className="mt-2 text-lacquer">
           {state.error}
         </p>
       )}
@@ -296,7 +296,7 @@ function AttachmentItem({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium break-words">{a.title}</p>
-          <p className="mt-0.5 text-sm text-ink-soft">
+          <p className="mt-0.5 text-sm text-fg-soft">
             {SOURCE_LABEL[a.source]}, added by {a.addedBy.name} {relativeTime(a.createdAt)}
             {a.snapshotAt && `. Snapshot ${relativeTime(a.snapshotAt)}`}
           </p>
@@ -311,7 +311,7 @@ function AttachmentItem({
                 {a.url}
               </a>
             ) : (
-              <p className="mt-1 truncate text-sm text-ink-soft">{a.url}</p>
+              <p className="mt-1 truncate text-sm text-fg-soft">{a.url}</p>
             ))}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -345,7 +345,7 @@ function AttachmentItem({
       </div>
       {a.summary && (
         <p className="mt-3">
-          <span className="text-sm font-medium text-ink-soft">AI summary: </span>
+          <span className="text-sm font-medium text-fg-soft">AI summary: </span>
           {a.summary}
         </p>
       )}
@@ -353,15 +353,15 @@ function AttachmentItem({
         <details className="mt-3">
           <summary className="cursor-pointer text-sm font-medium">View Snapshot</summary>
           {/* Captured text is shown as text, never rendered as HTML or Markdown. */}
-          <pre className="mt-2 max-h-96 overflow-auto rounded-lg border border-rule bg-paper p-4 font-mono text-[13px] leading-6 whitespace-pre-wrap break-words">
+          <pre className="mt-2 max-h-96 overflow-auto rounded-tile bg-surface p-4 font-mono text-[13px] leading-6 whitespace-pre-wrap break-words">
             {a.snapshotText}
           </pre>
         </details>
       ) : (
-        <p className="mt-3 text-sm text-ink-soft">No text Snapshot (the AI can't read this one).</p>
+        <p className="mt-3 text-sm text-fg-soft">No text Snapshot (the AI can't read this one).</p>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-seal">
+        <p role="alert" className="mt-2 text-lacquer">
           {error}
         </p>
       )}

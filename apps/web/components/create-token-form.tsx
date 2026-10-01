@@ -17,18 +17,18 @@ export function CreateTokenForm({ activeIds }: { activeIds: string[] }) {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-ink px-5 py-2.5 font-medium text-sheet disabled:opacity-40"
+          className="rounded-full bg-ink px-5 py-2.5 font-semibold text-on-ink hover:opacity-90 disabled:opacity-40"
         >
           {pending ? 'Creating…' : 'Create token'}
         </button>
       </form>
       {state.error && (
-        <p role="alert" className="mt-3 text-seal">
+        <p role="alert" className="mt-3 text-lacquer">
           {state.error}
         </p>
       )}
       {state.created && activeIds.includes(state.created.id) && (
-        <div className="mt-6 rounded-xl border border-jade/40 bg-jade-wash p-4">
+        <div className="mt-6 rounded-card bg-jade-wash p-4">
           <p className="font-medium text-jade">
             Copy “{state.created.name}” now. You won't see it again.
           </p>
@@ -37,7 +37,7 @@ export function CreateTokenForm({ activeIds }: { activeIds: string[] }) {
             value={state.created.token}
             aria-label="New access token"
             onFocus={(e) => e.currentTarget.select()}
-            className="mt-2 w-full rounded-lg border border-rule bg-sheet px-3 py-2 font-mono text-sm text-ink"
+            className="mt-2 w-full rounded-tile bg-surface ring-1 ring-inset ring-line px-3 py-2 font-mono text-sm text-fg"
           />
         </div>
       )}

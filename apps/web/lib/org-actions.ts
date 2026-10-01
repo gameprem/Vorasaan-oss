@@ -80,7 +80,7 @@ export async function invite(_prev: InviteState, formData: FormData): Promise<In
       method: 'POST',
       body: { email: str(formData, 'email'), role: str(formData, 'role') || 'MEMBER' },
     });
-    revalidatePath('/members');
+    revalidatePath('/settings/members');
     return { ok: true, created };
   } catch (error) {
     if (error instanceof ApiError) return { error: error.message };
@@ -90,7 +90,7 @@ export async function invite(_prev: InviteState, formData: FormData): Promise<In
 
 export async function revokeInvitation(id: string) {
   await api(`/invitations/${id}`, { method: 'DELETE' });
-  revalidatePath('/members');
+  revalidatePath('/settings/members');
 }
 
 export async function acceptInvitation(token: string, _prev: FormState, formData: FormData) {

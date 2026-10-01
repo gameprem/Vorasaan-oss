@@ -67,7 +67,7 @@ export function GrillingSection({
 
   return (
     <div className="max-w-4xl">
-      <p className="text-ink-soft">
+      <p className="text-fg-soft">
         The AI asks the people in this Project what it can’t learn from the Brief, the Attachments
         and the Features: business questions for POs, then UX for Designers, then technical for Tech
         Leads. It turns the answers into a Brief Proposal that the person who started it approves.
@@ -78,7 +78,7 @@ export function GrillingSection({
       ))}
 
       {!g ? (
-        <p className="mt-8 text-ink-soft">
+        <p className="mt-8 text-fg-soft">
           No Grilling yet.
           {canEdit ? '' : ' The Project’s POs or an Admin start one.'}
         </p>
@@ -89,7 +89,7 @@ export function GrillingSection({
               {g.status === 'RUNNING' ? 'Current Grilling' : 'Latest Grilling'}:{' '}
               {STATUS_TEXT[g.status]}
             </h2>
-            <p className="text-sm text-ink-soft">
+            <p className="text-sm text-fg-soft">
               Started by {g.startedBy.name} {relativeTime(g.createdAt)}
             </p>
           </div>
@@ -110,13 +110,13 @@ export function GrillingSection({
                 <li
                   key={r.kind}
                   aria-current={current ? 'step' : undefined}
-                  className={`rounded-xl border p-4 ${current ? 'border-ink bg-sheet' : 'border-rule'}`}
+                  className={`rounded-card p-4 ${current ? 'bg-ink-wash text-fg' : 'bg-rail'}`}
                 >
                   <p className="font-medium">
                     {ROUND_LABEL[r.kind]}{' '}
-                    <span className="text-ink-soft">· {ROLE_LABEL[r.role]}</span>
+                    <span className="text-fg-soft">· {ROLE_LABEL[r.role]}</span>
                   </p>
-                  <p className="mt-1 text-sm text-ink-soft">{roundStatus(g, r)}</p>
+                  <p className="mt-1 text-sm text-fg-soft">{roundStatus(g, r)}</p>
                 </li>
               );
             })}
@@ -157,9 +157,9 @@ export function GrillingSection({
       )}
 
       {canEdit && !blocksStart && (
-        <div className="mt-8 rounded-xl border border-rule bg-sheet p-5">
+        <div className="mt-8 rounded-card bg-rail p-5">
           <p className="font-medium">{g ? 'Start a new Grilling' : 'Start a Grilling'}</p>
-          <p className="mt-1 text-sm text-ink-soft">
+          <p className="mt-1 text-sm text-fg-soft">
             The AI reads what the Project already has and asks only about the gaps. Rounds with
             nobody holding their Team Role are skipped.
           </p>
@@ -175,7 +175,7 @@ export function GrillingSection({
       )}
 
       {grillings.length > 1 && (
-        <p className="mt-6 text-sm text-ink-soft">
+        <p className="mt-6 text-sm text-fg-soft">
           {grillings.length - 1} earlier Grilling{grillings.length === 2 ? '' : 's'}. Approved ones
           are in the Brief’s{' '}
           <Link
@@ -193,7 +193,7 @@ export function GrillingSection({
 
 function QuestionList({ round }: { round: GrillingRoundView }) {
   return (
-    <ol className="mt-3 divide-y divide-rule border-y border-rule">
+    <ol className="mt-3 rows">
       {round.questions.map((q) => (
         <li key={q.id} className="py-3">
           <p className="font-medium">{q.text}</p>
@@ -201,14 +201,14 @@ function QuestionList({ round }: { round: GrillingRoundView }) {
             <>
               <p className="mt-1 whitespace-pre-wrap">{q.answer}</p>
               {q.answeredBy && (
-                <p className="mt-1 text-sm text-ink-soft">
+                <p className="mt-1 text-sm text-fg-soft">
                   {q.answeredBy.name}
                   {q.answeredAt && `, ${relativeTime(q.answeredAt)}`}
                 </p>
               )}
             </>
           ) : (
-            <p className="mt-1 text-sm text-ink-soft">
+            <p className="mt-1 text-sm text-fg-soft">
               {q.skipped ? 'Not answered (round skipped)' : 'Not answered'}
             </p>
           )}
@@ -234,21 +234,21 @@ function CurrentRound({
       <h3 id="current-round-heading" className="text-lg font-semibold">
         {ROUND_LABEL[round.kind]} round: questions for {role}s
       </h3>
-      <p className="mt-1 text-sm text-ink-soft">
+      <p className="mt-1 text-sm text-fg-soft">
         {g.canAnswer
           ? `Any ${role} in the Project answers each question once. ${open} left; the round ends when all are answered.`
           : `Waiting for a ${role} in one of the Project’s Teams to answer (${open} left).`}
       </p>
       <ol className="mt-4 space-y-5">
         {round.questions.map((q, i) => (
-          <li key={q.id} className="rounded-xl border border-rule bg-sheet p-4">
+          <li key={q.id} className="rounded-card bg-rail p-4">
             <p className="font-medium">
               {i + 1}. {q.text}
             </p>
             {q.answer ? (
               <>
                 <p className="mt-2 whitespace-pre-wrap">{q.answer}</p>
-                <p className="mt-1 text-sm text-ink-soft">
+                <p className="mt-1 text-sm text-fg-soft">
                   Answered by {q.answeredBy?.name ?? 'someone'}
                   {q.answeredAt && ` ${relativeTime(q.answeredAt)}`}
                 </p>
@@ -274,7 +274,7 @@ function CurrentRound({
                 </ActionForm>
               </div>
             ) : (
-              <p className="mt-2 text-sm text-ink-soft">Not answered yet.</p>
+              <p className="mt-2 text-sm text-fg-soft">Not answered yet.</p>
             )}
           </li>
         ))}
@@ -296,12 +296,12 @@ function BriefProposalReview({
     <section
       id="brief-proposal"
       aria-labelledby={`proposal-${proposal.id}`}
-      className="mt-8 rounded-xl border border-ink/20 bg-sheet p-5"
+      className="mt-8 rounded-card bg-ink-wash p-5"
     >
       <h2 id={`proposal-${proposal.id}`} className="text-lg font-semibold">
         Proposed Project Brief change
       </h2>
-      <p className="mt-1 text-sm text-ink-soft">
+      <p className="mt-1 text-sm text-fg-soft">
         {proposal.source === 'GRILLING' ? 'Drafted by AI from the Grilling answers' : 'Proposed'}{' '}
         {proposal.baseVersion ? `against Brief v${proposal.baseVersion}` : 'as the first Brief'},{' '}
         {relativeTime(proposal.createdAt)}. {proposal.approver.name} approves it.
@@ -318,7 +318,7 @@ function BriefProposalReview({
           note="Rejecting leaves the Project Brief as it is."
         />
       ) : (
-        <p className="mt-4 text-ink-soft">Waiting for {proposal.approver.name} to review it.</p>
+        <p className="mt-4 text-fg-soft">Waiting for {proposal.approver.name} to review it.</p>
       )}
     </section>
   );

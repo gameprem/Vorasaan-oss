@@ -30,7 +30,7 @@ export function RevertButton({
         {pending ? 'Reverting…' : `Revert to v${version}`}
       </button>
       {state.error && (
-        <p role="alert" className="mt-2 text-sm text-seal">
+        <p role="alert" className="mt-2 text-sm text-lacquer">
           {state.error}
           {state.stale && ' Reload the page to see the latest version.'}
         </p>

@@ -106,7 +106,7 @@ export function DraftReview({
         <h2 id="send-to" className="text-lg font-semibold">
           Who decides
         </h2>
-        <p className="mt-1 text-ink-soft">
+        <p className="mt-1 text-fg-soft">
           {request.suggestedRole
             ? `The AI suggests the ${ROLE_LABEL[request.suggestedRole]} decides. Confirm it or pick another Team Role.`
             : 'Pick the Team Role that should decide.'}
@@ -129,7 +129,7 @@ export function DraftReview({
         </label>
 
         {noCandidates ? (
-          <p role="alert" className="mt-4 text-seal">
+          <p role="alert" className="mt-4 text-lacquer">
             Nobody but you holds the {ROLE_LABEL[role]} role for this Feature. Pick another role, or
             ask the Team's PO to add one.
           </p>
@@ -176,7 +176,7 @@ export function DraftReview({
           <h2 id="choices" className="text-lg font-semibold">
             Choices
           </h2>
-          <p className="mt-1 text-ink-soft">
+          <p className="mt-1 text-fg-soft">
             Drafted by AI. Edit them, or add and remove Choices (two to four).
           </p>
           <ol ref={choiceList} className="mt-4 space-y-4">
@@ -186,7 +186,7 @@ export function DraftReview({
                 const id = `choice-${i}-${key}`;
                 return (
                   <div>
-                    <label htmlFor={id} className="text-sm text-ink-soft">
+                    <label htmlFor={id} className="text-sm text-fg-soft">
                       {text}
                     </label>
                     {multiline ? (
@@ -213,7 +213,7 @@ export function DraftReview({
               return (
                 // Choices have no stable id once edited; the position is their identity here.
                 // biome-ignore lint/suspicious/noArrayIndexKey: see above
-                <li key={i} data-choice={i} className="rounded-xl border border-rule bg-sheet p-5">
+                <li key={i} data-choice={i} className="rounded-card bg-rail p-5">
                   <fieldset>
                     <legend className="font-semibold">Choice {label}</legend>
                     <div className="mt-3 space-y-3">
@@ -230,7 +230,7 @@ export function DraftReview({
                     type="button"
                     onClick={() => removeChoice(i)}
                     disabled={choices.length <= MIN_CHOICES}
-                    className="mt-3 text-sm text-seal underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-ink-soft disabled:no-underline"
+                    className="mt-3 text-sm text-lacquer underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-fg-soft disabled:no-underline"
                   >
                     Remove Choice {label}
                   </button>
@@ -247,20 +247,20 @@ export function DraftReview({
             Add a Choice
           </button>
           {choices.length >= MAX_CHOICES && (
-            <p className="mt-2 text-sm text-ink-soft">
+            <p className="mt-2 text-sm text-fg-soft">
               Four Choices is the most a request can have.
             </p>
           )}
         </section>
       ) : (
-        <p className="text-ink-soft">
+        <p className="text-fg-soft">
           Asked as a plain-text Question. The Decider answers in their own words.
         </p>
       )}
 
       <div>
         {state.error && (
-          <p role="alert" className="mb-4 text-seal">
+          <p role="alert" className="mb-4 text-lacquer">
             {state.error}
           </p>
         )}

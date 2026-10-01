@@ -157,12 +157,12 @@ function SaveBar({
         <button type="button" disabled={pending} onClick={onSave} className={primaryButton}>
           {pending ? 'Saving…' : 'Save Feature Guidelines'}
         </button>
-        <span role="status" className="text-sm text-ink-soft">
+        <span role="status" className="text-sm text-fg-soft">
           {dirty ? 'Unsaved changes' : saved ? 'Saved' : ''}
         </span>
       </div>
       {error && (
-        <p role="alert" className="mt-2 text-seal">
+        <p role="alert" className="mt-2 text-lacquer">
           {error}
         </p>
       )}
@@ -202,13 +202,13 @@ export function OrgGuidelinesEditor({ criteria }: { criteria: GuidelineCriterion
   return (
     <div>
       {rows.length === 0 ? (
-        <p className="text-ink-soft">
+        <p className="text-fg-soft">
           No criteria yet. Add what every new Feature must serve or respect.
         </p>
       ) : (
         <ol className="space-y-4">
           {rows.map((row, i) => (
-            <li key={row.key} className="rounded-xl border border-rule bg-sheet p-4">
+            <li key={row.key} className="rounded-card bg-rail p-4">
               <fieldset>
                 <legend className="mb-3 flex w-full flex-wrap items-center justify-between gap-2">
                   <span className="font-medium">
@@ -243,7 +243,7 @@ export function OrgGuidelinesEditor({ criteria }: { criteria: GuidelineCriterion
       >
         Add a criterion
       </button>
-      <p className="mt-2 text-sm text-ink-soft">
+      <p className="mt-2 text-sm text-fg-soft">
         Removing a criterion also removes every Project’s edits of it.
       </p>
       <SaveBar pending={pending} error={error} saved={saved} dirty={dirty} onSave={save} />
@@ -334,18 +334,18 @@ export function ProjectGuidelinesEditor({
     <div>
       <h3 className="font-semibold">From the Organization</h3>
       {inherited.length === 0 ? (
-        <p className="mt-2 text-ink-soft">
+        <p className="mt-2 text-fg-soft">
           The Organization has no Feature Guidelines. An Admin sets them in Settings.
         </p>
       ) : (
         <ol className="mt-3 space-y-4">
           {inherited.map((c) => {
             return (
-              <li key={c.defaultId} className="rounded-xl border border-rule bg-sheet p-4">
+              <li key={c.defaultId} className="rounded-card bg-rail p-4">
                 <fieldset>
                   <legend className="font-medium">{c.original.title}</legend>
                   {c.original.description && c.mode !== 'EDIT' && (
-                    <p className="mt-1 text-sm text-ink-soft">{c.original.description}</p>
+                    <p className="mt-1 text-sm text-fg-soft">{c.original.description}</p>
                   )}
                   <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
                     {(
@@ -383,11 +383,11 @@ export function ProjectGuidelinesEditor({
 
       <h3 className="mt-8 font-semibold">Only in this Project</h3>
       {added.length === 0 ? (
-        <p className="mt-2 text-ink-soft">None yet.</p>
+        <p className="mt-2 text-fg-soft">None yet.</p>
       ) : (
         <ol className="mt-3 space-y-4">
           {added.map((row, i) => (
-            <li key={row.key} className="rounded-xl border border-rule bg-sheet p-4">
+            <li key={row.key} className="rounded-card bg-rail p-4">
               <fieldset>
                 <legend className="mb-3 font-medium">{row.title || 'New criterion'}</legend>
                 <CriterionFields

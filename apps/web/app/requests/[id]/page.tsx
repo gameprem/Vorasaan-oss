@@ -136,7 +136,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
 
   return (
     <article className="max-w-3xl">
-      <p className="text-sm text-ink-soft">
+      <p className="text-sm text-fg-soft">
         <Link
           href={`/features/${request.featureId}`}
           className="underline-offset-2 hover:underline"
@@ -146,10 +146,10 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <KindBadge kind={request.kind} />
-        <span className="text-sm text-ink-soft">{statusText(request.status)}</span>
+        <span className="text-sm text-fg-soft">{statusText(request.status)}</span>
       </div>
       <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">{request.title}</h1>
-      <p className="mt-2 text-sm text-ink-soft">
+      <p className="mt-2 text-sm text-fg-soft">
         Raised by {request.raiser.name} {relativeTime(request.submittedAt ?? request.createdAt)}
         {routing}.
       </p>
@@ -183,14 +183,11 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
         ))}
 
       {request.status === 'OPEN' && request.canClaim && (
-        <section
-          aria-labelledby="claim"
-          className="mt-8 rounded-xl border border-rule bg-sheet p-5"
-        >
+        <section aria-labelledby="claim" className="mt-8 rounded-card bg-rail p-5">
           <h2 id="claim" className="font-semibold">
             {request.decider ? `Routed to ${request.decider.name}` : 'Nobody has Claimed it yet'}
           </h2>
-          <p className="mt-1 mb-4 text-ink-soft">
+          <p className="mt-1 mb-4 text-fg-soft">
             {request.decider
               ? `You hold the ${roleLabel} Team Role, so you can Claim it and decide instead.`
               : `Claim it to become the Decider. The others stop seeing it in their Inbox.${canAct ? ' You can also decide or ask for more info directly.' : ''}`}
@@ -203,7 +200,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
         (canAct ? (
           <>
             <DecideForm requestId={request.id} choices={request.choices} />
-            <section aria-labelledby="more" className="mt-10 space-y-8 border-t border-rule pt-8">
+            <section aria-labelledby="more" className="mt-10 space-y-8 pt-8">
               <h2 id="more" className="text-lg font-semibold">
                 Not ready to decide?
               </h2>
@@ -248,7 +245,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
             Thread
           </h2>
           {request.messages.length === 0 ? (
-            <p className="mt-2 text-ink-soft">
+            <p className="mt-2 text-fg-soft">
               No messages yet. Questions, answers and notes between the Decider and the Raiser
               appear here.
             </p>
@@ -257,12 +254,12 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
               {request.messages.map((m) => (
                 <li
                   key={m.id}
-                  className={`rounded-xl border p-4 ${
-                    m.kind === 'QUESTION' ? 'border-seal/30 bg-seal-wash' : 'border-rule bg-sheet'
+                  className={`rounded-card p-4 ${
+                    m.kind === 'QUESTION' ? 'bg-saffron-wash' : 'bg-rail'
                   }`}
                 >
-                  <p className="text-sm text-ink-soft">
-                    <span className="font-medium text-ink">{m.author.name}</span>{' '}
+                  <p className="text-sm text-fg-soft">
+                    <span className="font-medium text-fg">{m.author.name}</span>{' '}
                     {MESSAGE_LABEL[m.kind]} {relativeTime(m.createdAt)}
                   </p>
                   <p className="mt-1 max-w-[68ch] whitespace-pre-line">{m.body}</p>
@@ -284,17 +281,17 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       )}
 
       {active && isRaiser && (
-        <div className="mt-10 border-t border-rule pt-6">
+        <div className="mt-10 pt-6">
           <WithdrawButton requestId={request.id} />
         </div>
       )}
 
       {request.decision && (
         <section className="mt-10">
-          <div className="relative rounded-xl border border-jade/40 bg-sheet p-5">
+          <div className="relative rounded-card bg-jade-wash p-5">
             <span
               aria-hidden
-              className="stamp absolute -top-3 right-4 rounded border-2 border-jade bg-sheet px-2 text-sm font-semibold text-jade"
+              className="stamp absolute -top-3 right-4 rounded-full bg-jade px-3 text-on-ink text-sm font-semibold"
             >
               Decided
             </span>
@@ -304,9 +301,9 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
                 : request.decision.customAnswer}
             </h2>
             {request.decision.rationale && (
-              <p className="mt-1 text-ink-soft">{request.decision.rationale}</p>
+              <p className="mt-1 text-fg-soft">{request.decision.rationale}</p>
             )}
-            <p className="mt-2 text-sm text-ink-soft">
+            <p className="mt-2 text-sm text-fg-soft">
               Decided by {request.decision.decidedBy.name}
               {request.decision.onBehalfOf && ` on behalf of ${request.decision.onBehalfOf.name}`}{' '}
               {relativeTime(request.decision.createdAt)}
@@ -324,7 +321,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
                 ? 'Approved Spec change'
                 : 'Rejected Spec change'}
           </h2>
-          <p className="mt-1 text-sm text-ink-soft">
+          <p className="mt-1 text-sm text-fg-soft">
             Drafted by AI from the Decision, against Spec v{proposal.baseVersion ?? 0}.
             {proposal.status === 'PENDING' && ` ${proposal.approver.name} approves it.`}
           </p>

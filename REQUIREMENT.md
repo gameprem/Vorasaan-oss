@@ -232,7 +232,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [x] Conversations and streamed AI replies (0042).
    - [x] Action Cards (0043).
    - [x] Grilling as per-person Conversations (0044).
-   - [ ] App shell with the Sidebar and the Settings modal (0045).
+   - [x] App shell with the Sidebar and the Settings modal (0045).
    - [ ] Chat view, Action Cards and the document panel (0046).
    - [ ] Grilling in the chat view (0047).
    - [ ] End-to-end tests for the chat UI (0048).

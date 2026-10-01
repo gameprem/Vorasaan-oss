@@ -11,6 +11,12 @@ test('the Inbox updates live, without a reload', async ({ as }) => {
   await inbox.goto('/inbox');
   await stream;
   await expect(inbox.getByText(title)).toHaveCount(0);
+  // The Sidebar's Inbox count: Inbox Items plus unread Notifications.
+  const inboxLink = inbox
+    .getByRole('complementary', { name: 'Sidebar' })
+    .getByRole('link', { name: /^Inbox/ });
+  const count = async () => Number((await inboxLink.locator('.count').textContent()) ?? 0);
+  const before = (await inboxLink.locator('.count').count()) > 0 ? await count() : 0;
   // Gone if the page reloads; a client-side refresh keeps it.
   await inbox.evaluate(() => {
     (window as { e2eNoReload?: boolean }).e2eNoReload = true;
@@ -32,5 +38,7 @@ test('the Inbox updates live, without a reload', async ({ as }) => {
   await expect(
     inbox.getByRole('region', { name: /Waiting for your decision/ }).getByText(title),
   ).toBeVisible({ timeout: 15_000 });
+  // So does the Sidebar's count: one more Inbox Item (and its Notification, if any).
+  await expect.poll(count).toBeGreaterThan(before);
   expect(await inbox.evaluate(() => (window as { e2eNoReload?: boolean }).e2eNoReload)).toBe(true);
 });

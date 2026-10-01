@@ -26,12 +26,12 @@ export function InviteForm({ origin }: { origin: string }) {
         </button>
       </form>
       {state.error && (
-        <p role="alert" className="mt-3 text-seal">
+        <p role="alert" className="mt-3 text-lacquer">
           {state.error}
         </p>
       )}
       {link && (
-        <div className="mt-5 rounded-xl border border-jade/40 bg-jade-wash p-4">
+        <div className="mt-5 rounded-card bg-jade-wash p-4">
           <p className="font-medium text-jade">
             Send this link to {state.created?.email}. It works once and expires in 7 days.
           </p>
@@ -40,7 +40,7 @@ export function InviteForm({ origin }: { origin: string }) {
             value={link}
             aria-label="Invite link"
             onFocus={(e) => e.currentTarget.select()}
-            className="mt-2 w-full rounded-lg border border-rule bg-sheet px-3 py-2 font-mono text-sm text-ink"
+            className="mt-2 w-full rounded-tile bg-surface ring-1 ring-inset ring-line px-3 py-2 font-mono text-sm text-fg"
           />
         </div>
       )}

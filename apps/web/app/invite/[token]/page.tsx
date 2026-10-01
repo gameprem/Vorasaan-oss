@@ -29,7 +29,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   return (
     <div className="mx-auto max-w-sm pt-8">
       <h1 className="text-2xl font-semibold tracking-tight">Join {invite.organizationName}</h1>
-      <p className="mt-1 text-ink-soft">You'll sign in as {invite.email}.</p>
+      <p className="mt-1 text-fg-soft">You'll sign in as {invite.email}.</p>
       <div className="mt-8">
         <ActionForm
           action={acceptInvitation.bind(null, token)}

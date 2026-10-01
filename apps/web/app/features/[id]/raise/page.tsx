@@ -24,7 +24,7 @@ export default async function RaisePage({ params }: { params: Promise<{ id: stri
 
   return (
     <section className="max-w-3xl">
-      <p className="text-sm text-ink-soft">
+      <p className="text-sm text-fg-soft">
         <Link href={`/features/${id}`} className="underline-offset-2 hover:underline">
           {feature.title}
         </Link>

@@ -14,7 +14,7 @@ export default async function LoginPage() {
   return (
     <div className="mx-auto max-w-sm pt-8">
       <h1 className="text-2xl font-semibold tracking-tight">Sign in to Vorasaan</h1>
-      <p className="mt-1 text-ink-soft">Decisions waiting for you are one step away.</p>
+      <p className="mt-1 text-fg-soft">Decisions waiting for you are one step away.</p>
       <LoginForm />
     </div>
   );

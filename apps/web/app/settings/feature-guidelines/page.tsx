@@ -27,8 +27,8 @@ export default async function FeatureGuidelinesSettingsPage() {
   }
   return (
     <section className="max-w-3xl">
-      <h1 className="text-2xl font-semibold tracking-tight">Feature Guidelines</h1>
-      <p className="mt-2 text-ink-soft">
+      <h2 className="text-[26px] font-semibold tracking-tight">Feature Guidelines</h2>
+      <p className="mt-2 text-fg-soft">
         The criteria a new Feature must meet for the business: KPIs it serves, constraints it
         respects and sections its Spec must have. Every Project starts from this list, in this
         order, and can edit, hide or add criteria on its Guidelines tab.
@@ -44,7 +44,7 @@ export default async function FeatureGuidelinesSettingsPage() {
             </Notice>
             <div className="mt-6">
               {guidelines.criteria.length === 0 ? (
-                <p className="text-ink-soft">The Organization has no Feature Guidelines yet.</p>
+                <p className="text-fg-soft">The Organization has no Feature Guidelines yet.</p>
               ) : (
                 <EffectiveGuidelinesList
                   showOrigin={false}

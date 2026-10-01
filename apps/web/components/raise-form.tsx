@@ -31,8 +31,8 @@ export function RaiseForm({ featureId }: { featureId: string }) {
           {KINDS.map((k) => (
             <label
               key={k.kind}
-              className={`flex cursor-pointer gap-3 rounded-lg border p-4 has-[:focus-visible]:outline-2 ${
-                kind === k.kind ? 'border-ink bg-sheet' : 'border-rule'
+              className={`flex cursor-pointer gap-3 rounded-card p-4 has-[:focus-visible]:outline-2 ${
+                kind === k.kind ? 'bg-ink-wash text-fg' : 'bg-rail'
               }`}
             >
               <input
@@ -45,7 +45,7 @@ export function RaiseForm({ featureId }: { featureId: string }) {
               />
               <span>
                 <span className="block font-medium">{k.title}</span>
-                <span className="block text-sm text-ink-soft">{k.hint}</span>
+                <span className="block text-sm text-fg-soft">{k.hint}</span>
               </span>
             </label>
           ))}
@@ -89,7 +89,7 @@ export function RaiseForm({ featureId }: { featureId: string }) {
           />
           <span>
             Ask as plain text, without Choices
-            <span className="block text-sm text-ink-soft">
+            <span className="block text-sm text-fg-soft">
               The Decider answers in their own words.
             </span>
           </span>
@@ -97,7 +97,7 @@ export function RaiseForm({ featureId }: { featureId: string }) {
       )}
 
       {state.error && (
-        <p role="alert" className="text-seal">
+        <p role="alert" className="text-lacquer">
           {state.error}
         </p>
       )}
@@ -105,7 +105,7 @@ export function RaiseForm({ featureId }: { featureId: string }) {
         <button type="submit" disabled={pending} className={primaryButton}>
           {pending ? (withChoices ? 'Drafting Choices…' : 'Saving…') : 'Continue to review'}
         </button>
-        <p className="mt-2 text-sm text-ink-soft">
+        <p className="mt-2 text-sm text-fg-soft">
           {withChoices
             ? 'The AI drafts two to four Choices and suggests who decides. You review them before anything is sent.'
             : 'You pick who decides before anything is sent.'}

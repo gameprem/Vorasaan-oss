@@ -28,10 +28,10 @@ export function TeamRolesEditor({
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-xl border border-rule bg-sheet">
+      <div className="overflow-x-auto rounded-card bg-rail">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-rule text-left text-ink-soft">
+            <tr className="border-b-2 border-bg text-left text-fg-soft">
               <th className="px-4 py-2 font-normal">Member</th>
               {TeamRole.options.map((role) => (
                 <th key={role} className="px-2 py-2 text-center font-normal">
@@ -42,10 +42,10 @@ export function TeamRolesEditor({
           </thead>
           <tbody>
             {team.members.map((m) => (
-              <tr key={m.userId} className="border-b border-rule last:border-0">
+              <tr key={m.userId} className="border-b-2 border-bg last:border-0">
                 <td className="px-4 py-2">
                   <span className="block font-medium">{m.name}</span>
-                  <span className="block text-ink-soft">{m.email}</span>
+                  <span className="block text-fg-soft">{m.email}</span>
                 </td>
                 {TeamRole.options.map((role) => {
                   const has = m.roles.includes(role);
@@ -72,7 +72,7 @@ export function TeamRolesEditor({
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-sm text-ink-soft">
+      <p className="mt-2 text-sm text-fg-soft">
         Unticking every role removes the person from the Team.
       </p>
 
@@ -102,7 +102,7 @@ export function TeamRolesEditor({
         </form>
       )}
       {error && (
-        <p role="alert" className="mt-3 text-seal">
+        <p role="alert" className="mt-3 text-lacquer">
           {error}
         </p>
       )}

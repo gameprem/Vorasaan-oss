@@ -32,7 +32,7 @@ export function ActionForm({
         </button>
       </div>
       {state.error && (
-        <p role="alert" className="mt-2 text-seal">
+        <p role="alert" className="mt-2 text-lacquer">
           {state.error}
         </p>
       )}
@@ -67,7 +67,7 @@ export function ActionButton({
         {pending ? pendingLabel : label}
       </button>
       {state.error && (
-        <p role="alert" className="mt-2 text-sm text-seal">
+        <p role="alert" className="mt-2 text-sm text-lacquer">
           {state.error}
         </p>
       )}

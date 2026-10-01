@@ -50,7 +50,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
 
   return (
     <section className="max-w-4xl">
-      <p className="text-sm text-ink-soft">
+      <p className="text-sm text-fg-soft">
         <Link href={`/projects/${team.project.id}`} className="hover:underline">
           {team.project.name}
         </Link>
@@ -59,9 +59,9 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
 
       <h2 className="mt-10 text-lg font-semibold">Features</h2>
       {team.features.length === 0 ? (
-        <p className="mt-2 text-ink-soft">No Features yet.</p>
+        <p className="mt-2 text-fg-soft">No Features yet.</p>
       ) : (
-        <ul className="mt-3 divide-y divide-rule border-y border-rule">
+        <ul className="mt-3 rows">
           {team.features.map((f) => (
             <li key={f.id} className="flex items-center justify-between gap-3">
               <Link
@@ -91,15 +91,13 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
         {team.canManage ? (
           <TeamRolesEditor team={team} orgMembers={members} />
         ) : team.members.length === 0 ? (
-          <p className="text-ink-soft">No members yet.</p>
+          <p className="text-fg-soft">No members yet.</p>
         ) : (
-          <ul className="divide-y divide-rule border-y border-rule">
+          <ul className="rows">
             {team.members.map((m) => (
               <li key={m.userId} className="flex justify-between py-3">
                 <span className="font-medium">{m.name}</span>
-                <span className="text-ink-soft">
-                  {m.roles.map((r) => ROLE_LABEL[r]).join(', ')}
-                </span>
+                <span className="text-fg-soft">{m.roles.map((r) => ROLE_LABEL[r]).join(', ')}</span>
               </li>
             ))}
           </ul>
@@ -107,7 +105,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <h2 className="mt-12 text-lg font-semibold">Delegations</h2>
-      <p className="mt-1 text-sm text-ink-soft">
+      <p className="mt-1 text-sm text-fg-soft">
         Who decides for whom while someone is away. Set your own in{' '}
         <Link href="/settings/delegations" className="underline underline-offset-2">
           Settings → Delegations

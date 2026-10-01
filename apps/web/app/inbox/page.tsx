@@ -113,7 +113,7 @@ function describe(item: InboxItem): {
 
 function Tag({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex rounded-full border border-rule px-2.5 py-0.5 text-sm text-ink-soft">
+    <span className="inline-flex rounded-full bg-surface font-semibold px-2.5 py-0.5 text-sm text-fg-soft">
       {children}
     </span>
   );
@@ -150,11 +150,11 @@ export default async function InboxPage({
         <div className="mb-8">
           <Notice>
             Vorasaan is ready. Next,{' '}
-            <Link href="/projects" className="text-ink underline underline-offset-2">
+            <Link href="/projects" className="text-fg underline underline-offset-2">
               create a Project
             </Link>{' '}
             and{' '}
-            <Link href="/members" className="text-ink underline underline-offset-2">
+            <Link href="/settings/members" className="text-fg underline underline-offset-2">
               invite your team
             </Link>
             .
@@ -169,7 +169,7 @@ export default async function InboxPage({
             const team = teamName(d.teamId);
             return (
               <Notice key={d.id}>
-                <span className="font-medium text-ink">{d.delegator.name}</span> is on leave until{' '}
+                <span className="font-medium text-fg">{d.delegator.name}</span> is on leave until{' '}
                 <LocalDate iso={d.endsAt} />; requests for their {ROLE_LABEL[d.role]} role
                 {team ? ` in Team ${team}` : ''} come to you.
               </Notice>
@@ -182,7 +182,7 @@ export default async function InboxPage({
         {!inbox.ok ? (
           <Notice tone="error">{inbox.message}</Notice>
         ) : inbox.value.length === 0 ? (
-          <p className="text-ink-soft">
+          <p className="text-fg-soft">
             Nothing needs you right now. Decision Requests to decide, questions to answer and
             Proposals to approve will show up here.
           </p>
@@ -193,9 +193,9 @@ export default async function InboxPage({
             return (
               <section key={kind} aria-labelledby={`inbox-${kind}`}>
                 <h2 id={`inbox-${kind}`} className="text-lg font-semibold">
-                  {heading} <span className="font-normal text-ink-soft">({items.length})</span>
+                  {heading} <span className="font-normal text-fg-soft">({items.length})</span>
                 </h2>
-                <ul className="mt-3 divide-y divide-rule border-y border-rule">
+                <ul className="mt-3 rows">
                   {items.map((item) => {
                     const d = describe(item);
                     return (
@@ -206,12 +206,12 @@ export default async function InboxPage({
                         >
                           <span className="shrink-0 sm:w-32">{d.badge}</span>
                           <span className="min-w-0 flex-1">
-                            <span className="block font-medium text-ink group-hover:underline">
+                            <span className="block font-medium text-fg group-hover:underline">
                               {d.title}
                             </span>
-                            <span className="block text-sm text-ink-soft">{d.meta}</span>
+                            <span className="block text-sm text-fg-soft">{d.meta}</span>
                           </span>
-                          <span className="shrink-0 text-sm text-ink-soft">
+                          <span className="shrink-0 text-sm text-fg-soft">
                             {relativeTime(item.since)}
                           </span>
                         </Link>
@@ -229,7 +229,7 @@ export default async function InboxPage({
             <h2 id="notifications-heading" className="text-lg font-semibold">
               Notifications
               {notifications.ok && notifications.value.unreadCount > 0 && (
-                <span className="font-normal text-ink-soft">
+                <span className="font-normal text-fg-soft">
                   {' '}
                   ({notifications.value.unreadCount} unread)
                 </span>
@@ -242,12 +242,12 @@ export default async function InboxPage({
               <Notice tone="error">{notifications.message}</Notice>
             </div>
           ) : notifications.value.notifications.length === 0 ? (
-            <p className="mt-3 text-ink-soft">
+            <p className="mt-3 text-fg-soft">
               No Notifications yet. You'll hear here when your requests are decided or a Spec
               changes.
             </p>
           ) : (
-            <ul className="mt-3 divide-y divide-rule border-y border-rule">
+            <ul className="mt-3 rows">
               {notifications.value.notifications.map((n) => {
                 const text = notificationText(n);
                 const href = notificationHref(n);
@@ -256,23 +256,23 @@ export default async function InboxPage({
                   <li key={n.id} className="flex items-start gap-3 py-3">
                     <span
                       aria-hidden
-                      className={`mt-2 size-2 shrink-0 rounded-full ${unread ? 'bg-seal' : 'bg-transparent'}`}
+                      className={`mt-2 size-2 shrink-0 rounded-full ${unread ? 'bg-lacquer' : 'bg-transparent'}`}
                     />
                     <span className="min-w-0 flex-1">
                       {unread && <span className="sr-only">Unread: </span>}
                       {href ? (
                         <Link
                           href={href}
-                          className={`hover:underline ${unread ? 'font-medium text-ink' : 'text-ink-soft'}`}
+                          className={`hover:underline ${unread ? 'font-medium text-fg' : 'text-fg-soft'}`}
                         >
                           {text}
                         </Link>
                       ) : (
-                        <span className={unread ? 'font-medium text-ink' : 'text-ink-soft'}>
+                        <span className={unread ? 'font-medium text-fg' : 'text-fg-soft'}>
                           {text}
                         </span>
                       )}
-                      <span className="block text-sm text-ink-soft">
+                      <span className="block text-sm text-fg-soft">
                         {relativeTime(n.createdAt)}
                       </span>
                     </span>

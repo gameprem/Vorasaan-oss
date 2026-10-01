@@ -3,12 +3,12 @@ import type { ReactNode } from 'react';
 
 export function KindBadge({ kind }: { kind: DecisionRequestKind }) {
   return kind === 'BLOCKER' ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-seal-wash px-2.5 py-0.5 text-sm font-medium text-seal">
-      <span aria-hidden className="size-1.5 rounded-full bg-seal" />
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-lacquer-wash px-2.5 py-0.5 text-sm font-medium text-lacquer">
+      <span aria-hidden className="size-1.5 rounded-full bg-lacquer" />
       Blocker
     </span>
   ) : (
-    <span className="inline-flex rounded-full border border-rule px-2.5 py-0.5 text-sm text-ink-soft">
+    <span className="inline-flex rounded-full bg-surface font-semibold px-2.5 py-0.5 text-sm text-fg-soft">
       Question
     </span>
   );
@@ -34,7 +34,7 @@ export function BlockedBadge({ openBlockers }: { openBlockers: number }) {
   return (
     <span
       title={count}
-      className="inline-flex items-center rounded-full bg-seal px-2.5 py-0.5 text-sm font-medium text-sheet"
+      className="inline-flex items-center rounded-full bg-lacquer px-2.5 py-0.5 text-sm font-medium text-on-ink"
     >
       Blocked<span className="sr-only"> by {count}</span>
     </span>
@@ -62,8 +62,8 @@ export function Notice({
       role={tone === 'error' ? 'alert' : 'status'}
       className={
         tone === 'error'
-          ? 'rounded-lg border border-seal/30 bg-seal-wash px-4 py-3 text-seal'
-          : 'rounded-lg border border-rule bg-sheet px-4 py-3 text-ink-soft'
+          ? 'rounded-card bg-lacquer-wash px-4 py-3 text-lacquer'
+          : 'rounded-card bg-rail px-4 py-3 text-fg-soft'
       }
     >
       {children}
