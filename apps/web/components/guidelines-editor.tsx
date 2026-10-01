@@ -1,7 +1,6 @@
 'use client';
 
 import type {
-  EffectiveGuidelineCriterion,
   GuidelineCriterionKind,
   GuidelineCriterionText,
   GuidelineCriterionView,
@@ -255,8 +254,8 @@ export function OrgGuidelinesEditor({ criteria }: { criteria: GuidelineCriterion
 type Inherited = {
   /** The Organization default criterion. */
   defaultId: string;
-  /** Its text, when the viewer can see it (null for a hidden one a non-Admin can't read). */
-  original: Text | null;
+  /** Its text in the Organization default. */
+  original: Text;
   mode: 'INHERIT' | 'EDIT' | 'DISABLE';
   edit: Text;
 };
@@ -264,15 +263,13 @@ type Inherited = {
 /** Project → Guidelines: edit or hide inherited criteria, and add the Project's own. */
 export function ProjectGuidelinesEditor({
   projectId,
-  effective,
   overrides,
   orgDefault,
 }: {
   projectId: string;
-  effective: EffectiveGuidelineCriterion[];
   overrides: ProjectGuidelineOverrideView[];
-  /** The Organization default, for Admins; null for POs, who see only what applies here. */
-  orgDefault: GuidelineCriterionView[] | null;
+  /** The Organization default, which every member reads, including criteria this Project hides. */
+  orgDefault: GuidelineCriterionView[];
 }) {
   const [inherited, setInherited] = useState<Inherited[]>(() => {
     const edits = new Map(
@@ -281,26 +278,14 @@ export function ProjectGuidelinesEditor({
     const hidden = new Set(
       overrides.flatMap((o) => (o.action === 'DISABLE' ? [o.overridesId] : [])),
     );
-    type Original = { defaultId: string; original: Text | null };
-    const originals: Original[] = orgDefault
-      ? orgDefault.map((c) => ({ defaultId: c.id, original: textOf(c) }))
-      : [
-          ...effective.flatMap((c): Original[] =>
-            c.origin === 'ORGANIZATION'
-              ? [{ defaultId: c.id, original: textOf(c) }]
-              : c.origin === 'PROJECT_EDIT' && c.overridesId
-                ? [{ defaultId: c.overridesId, original: null }]
-                : [],
-          ),
-          ...[...hidden].map((defaultId) => ({ defaultId, original: null })),
-        ];
-    return originals.map(({ defaultId, original }) => {
-      const edit = edits.get(defaultId);
+    return orgDefault.map((c) => {
+      const original = textOf(c);
+      const edit = edits.get(c.id);
       return {
-        defaultId,
+        defaultId: c.id,
         original,
-        mode: hidden.has(defaultId) ? 'DISABLE' : edit ? 'EDIT' : 'INHERIT',
-        edit: edit ?? original ?? blank(),
+        mode: hidden.has(c.id) ? 'DISABLE' : edit ? 'EDIT' : 'INHERIT',
+        edit: edit ?? original,
       };
     });
   });
@@ -355,13 +340,11 @@ export function ProjectGuidelinesEditor({
       ) : (
         <ol className="mt-3 space-y-4">
           {inherited.map((c) => {
-            const name = c.original?.title ?? (c.mode === 'EDIT' ? c.edit.title : null);
-            const label = name ?? 'An Organization criterion hidden in this Project';
             return (
               <li key={c.defaultId} className="rounded-xl border border-rule bg-sheet p-4">
                 <fieldset>
-                  <legend className="font-medium">{label}</legend>
-                  {c.original?.description && c.mode !== 'EDIT' && (
+                  <legend className="font-medium">{c.original.title}</legend>
+                  {c.original.description && c.mode !== 'EDIT' && (
                     <p className="mt-1 text-sm text-ink-soft">{c.original.description}</p>
                   )}
                   <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
