@@ -123,7 +123,7 @@ Follow-ups recorded during the MVP reviews.
 ## Chat-first Web UI (Post-MVP 1)
 
 After the MVP release, the web app becomes a chat app (ADR 0008):
-- A Sidebar holds the Inbox, Projects → Features, recent Conversations, and Settings.
+- A Sidebar holds the Inbox, Projects → Features, recent Conversations, and Settings, which opens as a full-screen modal with Back.
 - In a Conversation, the AI proposes through Action Cards that a person approves.
 - Grilling runs as per-person Conversations with follow-ups.
 

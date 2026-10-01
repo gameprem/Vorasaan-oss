@@ -5,6 +5,7 @@ The MVP web app is a set of forms and pages, one per workflow: raise a Decision 
 - The left Sidebar holds the Inbox with its unread count, Projects and their Features, recent Conversations, and Settings at the bottom.
 - The main area is a **Conversation** with the AI, scoped to a Project or a Feature.
 - The Spec or Project Brief opens in a side panel next to the chat.
+- Settings opens as a full-screen modal with a Back button that returns to where you were.
 
 ## The AI may only propose
 
