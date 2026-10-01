@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import type { PrismaClient } from '@vorasaan/db';
-import { SEED, seed } from '@vorasaan/db/seed';
+import { SEED, seed, seedFullTeam } from '@vorasaan/db/seed';
 import { createTestPrisma, prepareTestDatabase, truncateAll } from './database.ts';
 
 async function counts(db: PrismaClient) {
@@ -23,8 +23,9 @@ describe('seed', () => {
   beforeAll(async () => {
     await prepareTestDatabase();
     db = createTestPrisma();
-    await truncateAll(db);
   });
+
+  beforeEach(() => truncateAll(db));
 
   afterAll(() => db.$disconnect());
 
@@ -61,5 +62,50 @@ describe('seed', () => {
     });
     expect(spec.approvedById).toBe(SEED.users.pim.id);
     expect(spec.markdown).toContain('# Async checkout');
+  });
+
+  test('the full Team adds a second PO Role Owner, a Designer and a Tech Lead, idempotently', async () => {
+    await seed(db);
+    await seedFullTeam(db);
+    const first = await counts(db);
+    expect(first).toEqual({
+      organizations: 1,
+      users: 5,
+      orgMemberships: 5,
+      projects: 1,
+      teams: 1,
+      teamMemberships: 5,
+      features: 1,
+      roleOwners: 3,
+      specVersions: 1,
+    });
+
+    await seed(db);
+    await seedFullTeam(db);
+    expect(await counts(db)).toEqual(first);
+
+    const { pim, beam, mint, fern, oak } = SEED.users;
+    const owners = await db.roleOwner.findMany({
+      where: { featureId: SEED.featureId },
+      select: { userId: true, role: true },
+    });
+    expect(owners).toHaveLength(3);
+    expect(owners).toEqual(
+      expect.arrayContaining([
+        { userId: pim.id, role: 'PO' },
+        { userId: mint.id, role: 'PO' },
+        { userId: beam.id, role: 'BACKEND' },
+      ]),
+    );
+    const members = await db.teamMembership.findMany({
+      where: { teamId: SEED.teamId },
+      select: { userId: true, role: true },
+    });
+    expect(members).toEqual(
+      expect.arrayContaining([
+        { userId: fern.id, role: 'DESIGNER' },
+        { userId: oak.id, role: 'TECH_LEAD' },
+      ]),
+    );
   });
 });
