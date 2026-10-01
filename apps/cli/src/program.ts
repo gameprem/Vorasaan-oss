@@ -19,7 +19,7 @@ export type Actions = {
   scan: (options: ScanOptions, api: () => Promise<VorasaanApi>) => Promise<unknown>;
   init: (options: InitOptions, api: () => Promise<VorasaanApi>) => Promise<unknown>;
   /** `vorasaan` with no subcommand: the long-lived TUI. */
-  tui: (api: VorasaanApi) => Promise<void>;
+  tui: (api: VorasaanApi, options: { notify: boolean }) => Promise<void>;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,8 +35,11 @@ export function buildProgram(actions: Actions, env = process.env): Command {
     .name('vorasaan')
     .description('The open-source alignment engine for software teams')
     .version('0.0.0')
-    .action(async () => {
-      await actions.tui(await signedInApi(env));
+    .option('--no-notify', 'TUI: no OS desktop notifications (or "notify": false in the config)')
+    .action(async (flags: { notify?: boolean }) => {
+      const config = await loadConfig(env);
+      const api = new VorasaanApi({ baseUrl: config.apiUrl, credentials: config.credentials });
+      await actions.tui(api, { notify: flags.notify !== false && config.notify });
     });
 
   program

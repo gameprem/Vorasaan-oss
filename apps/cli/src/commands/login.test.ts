@@ -44,7 +44,11 @@ describe('vorasaan login / whoami / logout', () => {
     expect((await stat(configPath(env))).mode & 0o777).toBe(0o600);
 
     const config = await loadConfig(env);
-    expect(config).toEqual({ apiUrl: server.url.origin, credentials: { token: GOOD } });
+    expect(config).toEqual({
+      apiUrl: server.url.origin,
+      credentials: { token: GOOD },
+      notify: true,
+    });
     expect((await runWhoami(env)).email).toBe('beam@acme.test');
   });
 
@@ -62,7 +66,11 @@ describe('vorasaan login / whoami / logout', () => {
       VORASAAN_TOKEN: 'vsp_env',
       VORASAAN_API_URL: 'http://x',
     });
-    expect(overridden).toEqual({ apiUrl: 'http://x', credentials: { token: 'vsp_env' } });
+    expect(overridden).toEqual({
+      apiUrl: 'http://x',
+      credentials: { token: 'vsp_env' },
+      notify: true,
+    });
 
     await runLogout(env);
     await expect(loadConfig(env)).rejects.toThrow('vorasaan login');

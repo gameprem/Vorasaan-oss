@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: [0028, 0024]
 slice: mvp-cli
 ---
@@ -16,5 +16,5 @@ A Dev never has to leave the terminal: the TUI updates live, pops OS notificatio
 - `bun build --compile` produces a single binary; document it.
 
 ## Acceptance criteria
-- [ ] Tests for the SSE client's reconnect and for each action's API call.
-- [ ] Manually verified: a Decision made on the web shows up live in the TUI with an OS notification.
+- [x] Tests for the SSE client's reconnect and for each action's API call.
+- [x] Manually verified: a Decision made on the web shows up live in the TUI with an OS notification.

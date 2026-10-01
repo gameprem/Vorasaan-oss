@@ -1,4 +1,4 @@
-import type { SpecDiffLine } from '@vorasaan/shared';
+import type { SpecDiffLine } from './spec.ts';
 
 /**
  * Above this many LCS cells (after trimming the common head and tail) we skip
@@ -59,7 +59,7 @@ function lcsOps(a: string[], b: string[]): Op[] {
   return ops;
 }
 
-/** A line diff of two Spec Markdown texts, in reading order. */
+/** A line diff of two Markdown texts (Spec or Project Brief), in reading order. Shared so the server and the CLI render the same diff. */
 export function diffLines(from: string, to: string): SpecDiffLine[] {
   const a = toLines(from);
   const b = toLines(to);

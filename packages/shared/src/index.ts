@@ -5,6 +5,7 @@ export * from './auth.ts';
 export * from './brief.ts';
 export * from './decision-request.ts';
 export * from './delegation.ts';
+export * from './diff.ts';
 export * from './embeddings.ts';
 export * from './enums.ts';
 export * from './feature.ts';

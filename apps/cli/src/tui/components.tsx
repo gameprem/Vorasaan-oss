@@ -52,29 +52,51 @@ export function ListView({
   );
 }
 
-/** Scrollable text (a Spec, a Decision Request): ↑↓/j/k, PgUp/PgDn/space, g/G. */
-export function ScrollText({ lines, height }: { lines: string[]; height: number }) {
+/** A line of scrollable text, optionally colored (diff lines). */
+export type Line = string | { text: string; color?: string; dim?: boolean };
+
+/** Scrollable text (a Spec, a Decision Request, a diff): ↑↓/j/k, PgUp/PgDn/space, g/G. */
+export function ScrollText({
+  lines,
+  height,
+  active = true,
+}: {
+  lines: Line[];
+  height: number;
+  /** False while a form below it takes the keyboard. */
+  active?: boolean;
+}) {
   const [top, setTop] = useState(0);
   const maxTop = Math.max(0, lines.length - height);
   useEffect(() => {
     setTop((t) => Math.min(t, maxTop));
   }, [maxTop]);
-  useInput((input, key) => {
-    const move = (delta: number) => setTop((t) => Math.min(maxTop, Math.max(0, t + delta)));
-    if (key.downArrow || input === 'j') move(1);
-    else if (key.upArrow || input === 'k') move(-1);
-    else if (key.pageDown || input === ' ') move(height);
-    else if (key.pageUp || input === 'b') move(-height);
-    else if (input === 'g' || key.home) setTop(0);
-    else if (input === 'G' || key.end) setTop(maxTop);
-  });
+  useInput(
+    (input, key) => {
+      const move = (delta: number) => setTop((t) => Math.min(maxTop, Math.max(0, t + delta)));
+      if (key.downArrow || input === 'j') move(1);
+      else if (key.upArrow || input === 'k') move(-1);
+      else if (key.pageDown || input === ' ') move(height);
+      else if (key.pageUp || input === 'b') move(-height);
+      else if (input === 'g' || key.home) setTop(0);
+      else if (input === 'G' || key.end) setTop(maxTop);
+    },
+    { isActive: active },
+  );
   const shown = lines.slice(top, top + height);
   return (
     <Box flexDirection="column">
-      {shown.map((line, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: lines are positional
-        <Text key={top + i}>{line || ' '}</Text>
-      ))}
+      {shown.map((line, i) =>
+        typeof line === 'string' ? (
+          // biome-ignore lint/suspicious/noArrayIndexKey: lines are positional
+          <Text key={top + i}>{line || ' '}</Text>
+        ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: lines are positional
+          <Text key={top + i} color={line.color} dimColor={line.dim}>
+            {line.text || ' '}
+          </Text>
+        ),
+      )}
       {lines.length > height && (
         <Text dimColor>
           lines {top + 1}-{Math.min(lines.length, top + height)} of {lines.length} · ↑↓ j/k scroll ·
@@ -165,6 +187,27 @@ export function Menu<T>({
         </Text>
       ))}
     </Box>
+  );
+}
+
+/** A yes/no question for destructive actions: y confirms, anything else cancels. */
+export function Confirm({
+  question,
+  onYes,
+  onNo,
+}: {
+  question: string;
+  onYes: () => void;
+  onNo: () => void;
+}) {
+  useInput((input) => {
+    if (input === 'y' || input === 'Y') onYes();
+    else onNo();
+  });
+  return (
+    <Text color="yellow">
+      {question} <Text bold>y</Text>/N
+    </Text>
   );
 }
 

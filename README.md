@@ -63,7 +63,7 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 | 📜 **Versioned Specs** | Markdown Specs with Confluence-style version history and AI-drafted diffs you approve. Revert is *(planned)*. |
 | 🗂️ **Decision Log** | Every decision is traceable: who decided, what the alternatives were, and which Spec version it produced. |
 | 📎 **One place for context** | Attach Confluence pages, Jira epics, files and URLs so the AI reasons over real context *(planned)*. |
-| 💻 **Terminal-native** | Raise from the `vorasaan` CLI with AI-drafted Choices you review first, and keep your Inbox, requests and Specs open in the `vorasaan` TUI. Live updates and OS notifications are *(planned)*. |
+| 💻 **Terminal-native** | Raise from the `vorasaan` CLI with AI-drafted Choices you review first, and keep your Inbox, requests and Specs open in the `vorasaan` TUI: it updates live, pops OS notifications, and lets you decide, Claim, ask for info, withdraw and approve Spec Proposals without leaving the terminal. |
 | 🤝 **Agent handoff** | `vorasaan run --ai claude` hands your coding agent the approved Spec, not a guess *(planned)*. |
 | 🏠 **Self-hosted** | One `docker compose up`. Your data stays on your infrastructure. Bring your own model: Claude API, OpenAI API, or any OpenAI-compatible URL + token. |
 
@@ -110,7 +110,18 @@ bun apps/cli/src/index.ts raise                               # pick a Feature, 
 bun apps/cli/src/index.ts                                     # the TUI: Inbox, My Requests, Features (? for keys)
 ```
 
-A single-file binary is built with `bun run --filter @vorasaan/cli build` (`apps/cli/dist/vorasaan`).
+The TUI updates live over Server-Sent Events (`● live` in the header; it reconnects by itself after a server restart) and pops an OS notification for each new Inbox Item and Notification. Open a request to act on it: `d` decide (a Choice or your own words, with an optional rationale), `c` Claim, `s` reassign, `i` ask for info, `a` answer, `n` note, `w` withdraw. Open a Spec or Brief Proposal to read its diff and `a` approve or `x` reject it. In the Inbox, `m` / `M` mark Notifications read. Press `?` for every key.
+
+#### Single binary
+
+```bash
+bun run --filter @vorasaan/cli build      # writes apps/cli/dist/vorasaan (no Bun needed to run it)
+install -m 755 apps/cli/dist/vorasaan ~/.local/bin/vorasaan
+vorasaan login --url https://vorasaan.example.com
+vorasaan                                  # the TUI; vorasaan --no-notify for no OS notifications
+```
+
+The binary runs on the OS and CPU it was built on. The CLI keeps the server URL and your access token in `~/.config/vorasaan/config.json` (or `$XDG_CONFIG_HOME/vorasaan/config.json`, readable only by you); `VORASAAN_API_URL` and `VORASAAN_TOKEN` override it. Add `"notify": false` there to turn OS notifications off for good. Notifications use `osascript` on macOS, `notify-send` on Linux (from `libnotify`) and a PowerShell toast on Windows; where none is available the TUI simply runs without them.
 
 ### Development
 
@@ -169,7 +180,7 @@ The domain language (Feature, Spec, Decision Request, Decider, and so on) is def
 - [x] Monorepo foundation and database schema
 - [x] **Tracer bullet:** raise → AI Choices → decide → approved Spec version
 - [x] **Install & onboarding:** Docker install, setup wizard, provider choice, sign-in, invites, Projects/Teams/Features, CLI login
-- [ ] **MVP:** attachments, recipient choice + Claim, delegation, notifications, TUI
+- [x] **MVP:** attachments, recipient choice + Claim, delegation, notifications, TUI
 - [ ] `vorasaan run --ai claude`: hand the approved Spec to your coding agent
 - [ ] **Grilling workflow:** structured PO → Designer → Dev questioning that produces the first Spec
 - [ ] **Design flow revisions** with cascade impact analysis

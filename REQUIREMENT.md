@@ -217,9 +217,9 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 - [ ] Inbox, Delegation settings.
 
 ### Phase 4: MVP CLI
-- [ ] PAT login, optional `vorasaan init`.
-- [ ] Ink TUI: Inbox / My Requests / Features tabs, raise a Decision Request with repo context.
-- [ ] OS notifications.
+- [x] PAT login, optional `vorasaan init`.
+- [x] Ink TUI: Inbox / My Requests / Features tabs, raise a Decision Request with repo context.
+- [x] OS notifications.
 
 ### Post-MVP (in order)
 1. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything.

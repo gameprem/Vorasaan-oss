@@ -11,13 +11,13 @@ import {
   type BriefDiff,
   type BriefProposalView,
   type BriefVersionView,
+  diffLines,
   type ProjectBriefView,
   type RevertBriefInput,
   type WriteBriefInput,
 } from '@vorasaan/shared';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
-import { diffLines } from '../spec/diff.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import {
   briefProposalInclude,
