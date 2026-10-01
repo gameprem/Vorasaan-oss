@@ -10,8 +10,10 @@ import {
 } from '@nestjs/common';
 import type { Prisma, PrismaClient, User } from '@vorasaan/db';
 import {
+  GRILLING_ROUNDS,
   type GrillingConversationProgress,
   type GrillingFollowUp,
+  type GrillingNote,
   isGrillingSkip,
   MAX_GRILLING_FOLLOW_UPS,
   type ServerEvent,
@@ -28,6 +30,7 @@ import { ConversationLocks } from '../conversations/conversation-locks.ts';
 import { EventBus } from '../inbox/event-bus.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { GrillingService } from './grilling.service.ts';
+import { followUpsOf } from './grilling.view.ts';
 import {
   answeredElsewhere,
   ask,
@@ -36,6 +39,7 @@ import {
   type GrillingConversationState,
   isOpen,
   nextQuestion,
+  noteMessage,
   openGrillingConversations,
   recorded,
   skippedText,
@@ -179,10 +183,10 @@ export class GrillingConversationsService {
       .trim();
 
     let state = stateOf(conv.grillingState);
-    const lines: string[] = [];
+    const lines: GrillingNote[] = [];
 
     if (!isOpen(round, round.grilling)) {
-      return this.finish(user, conv, message, closed(state), closedText(round, round.grilling));
+      return this.finish(user, conv, message, closed(state), [closedText(round, round.grilling)]);
     }
 
     const wasIdle = !state.questionId;
@@ -207,10 +211,16 @@ export class GrillingConversationsService {
               ...state,
               followUps: [...state.followUps, { question: followUp, answer: null }],
             };
-            return this.finish(user, conv, message, next, followUp);
+            const note: GrillingNote = {
+              kind: 'FOLLOW_UP',
+              number: next.followUps.length,
+              text: followUp,
+            };
+            return this.finish(user, conv, message, next, [note]);
           }
         }
-        lines.push(await this.record(user, conv, question, state));
+        const outcome = await this.record(user, conv, question, state);
+        if (outcome) lines.push(outcome);
         state = asking(null, state.skipped);
       }
     }
@@ -220,7 +230,7 @@ export class GrillingConversationsService {
     const fresh = now.grillingRound ?? round;
     if (!isOpen(fresh, fresh.grilling)) {
       lines.push(closedText(fresh, fresh.grilling));
-      return this.finish(user, conv, message, closed(state), lines.join('\n\n'));
+      return this.finish(user, conv, message, closed(state), lines);
     }
     let next = nextQuestion(fresh.questions, state.skipped);
     if (!next && wasIdle) {
@@ -235,7 +245,7 @@ export class GrillingConversationsService {
       const open = fresh.questions.filter((q) => !q.answeredAt).length;
       lines.push(waiting(fresh.role, open));
     }
-    return this.finish(user, conv, message, state, lines.join('\n\n'));
+    return this.finish(user, conv, message, state, lines);
   }
 
   /** A Grilling Conversation's round and where each of its questions stands, for its view. */
@@ -244,7 +254,21 @@ export class GrillingConversationsService {
     const round = conv.grillingRound;
     if (!round) return null;
     const state = stateOf(conv.grillingState);
+    const reached = await this.db.grillingRound.findMany({
+      where: { grillingId: round.grilling.id },
+      select: { kind: true, status: true, questions: { select: { answeredAt: true } } },
+    });
     return {
+      rounds: GRILLING_ROUNDS.map(({ kind, role }) => {
+        const r = reached.find((x) => x.kind === kind);
+        return {
+          kind,
+          role,
+          status: r?.status ?? 'UPCOMING',
+          answered: r?.questions.filter((q) => q.answeredAt).length ?? 0,
+          total: r?.questions.length ?? 0,
+        };
+      }),
       grillingStatus: round.grilling.status,
       roundStatus: round.status,
       answered: round.questions.filter((q) => q.answeredAt).length,
@@ -262,6 +286,8 @@ export class GrillingConversationsService {
               : 'OPEN',
         answeredBy: q.answeredBy,
         answeredAt: q.answeredAt?.toISOString() ?? null,
+        answer: q.answeredAt ? q.answer : null,
+        followUps: q.answeredAt ? followUpsOf(q.followUps) : [],
         followUpsAsked: q.id === state.questionId && !q.answeredAt ? state.followUps.length : 0,
       })),
     };
@@ -290,7 +316,7 @@ export class GrillingConversationsService {
     const round = conv.grillingRound;
     if (!round) return;
     let state = stateOf(conv.grillingState);
-    const lines: string[] = [];
+    const lines: GrillingNote[] = [];
     if (!isOpen(round, round.grilling)) {
       if (state.closed) return;
       lines.push(closedText(round, round.grilling));
@@ -309,7 +335,7 @@ export class GrillingConversationsService {
           : waiting(round.role, round.questions.filter((q) => !q.answeredAt).length),
       );
     }
-    const saved = await this.save(conversationId, state, lines.join('\n\n'));
+    const saved = await this.save(conversationId, state, lines);
     this.emit(conv.ownerId, {
       event: 'conversation.appended',
       data: { conversationId, messages: [toConversationMessageView(saved.reply)] },
@@ -345,14 +371,14 @@ export class GrillingConversationsService {
 
   /**
    * Records the owner's answer and follow-ups on the question, through the same
-   * service as the Grilling API. Returns what to tell the owner.
+   * service as the Grilling API. Returns what to tell the owner, if anything.
    */
   private async record(
     user: User,
     conv: GrillingConv,
     question: AskedQuestion,
     state: GrillingConversationState,
-  ): Promise<string> {
+  ): Promise<GrillingNote | null> {
     const round = conv.grillingRound as AskedRound;
     try {
       await this.grilling.answer(
@@ -379,7 +405,7 @@ export class GrillingConversationsService {
       if (now?.answeredAt && now.answeredById !== user.id) {
         return answeredElsewhere(now, nameOf(now), true);
       }
-      return '';
+      return null;
     }
   }
 
@@ -389,13 +415,9 @@ export class GrillingConversationsService {
     conv: GrillingConv,
     message: MessageRow,
     state: GrillingConversationState,
-    content: string,
+    notes: GrillingNote[],
   ): Promise<GrillingTurn> {
-    const text = content
-      .split(/\n{2,}/)
-      .filter((line) => line.trim())
-      .join('\n\n');
-    const saved = await this.save(conv.id, state, text);
+    const saved = await this.save(conv.id, state, notes);
     this.emit(user.id, {
       event: 'conversation.done',
       data: { conversationId: conv.id, message: toConversationMessageView(saved.reply) },
@@ -403,7 +425,7 @@ export class GrillingConversationsService {
     return { conversation: saved.conversation, message, reply: saved.reply };
   }
 
-  private save(conversationId: string, state: GrillingConversationState, content: string) {
+  private save(conversationId: string, state: GrillingConversationState, notes: GrillingNote[]) {
     return this.db.$transaction(async (tx) => {
       const conversation = await tx.conversation.update({
         where: { id: conversationId },
@@ -419,7 +441,7 @@ export class GrillingConversationsService {
           conversationId,
           position: (_max.position ?? -1) + 1,
           role: 'ASSISTANT',
-          content,
+          ...noteMessage(notes),
         },
       });
       return { conversation, reply };

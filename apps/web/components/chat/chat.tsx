@@ -24,10 +24,13 @@ import {
 import { postJson } from '@/lib/chat-client';
 import { onConversationEvent } from '@/lib/conversation-events';
 import type { AttachmentOwner } from '@/lib/ids';
+import type { Lang } from '@/lib/lang';
 import { DocIcon, Spark } from '../icons';
 import { ActionCard } from './action-card';
 import { Composer } from './composer';
 import { type ChatDoc, DocPanel, docName } from './doc-panel';
+import { AnsweredByOthers, endsWithNotice, GrillingHeader, GrillingMessage } from './grilling';
+import { GRILLING_UI } from './grilling-copy';
 import { Markdown } from './markdown';
 import { ModelMenu } from './model-menu';
 
@@ -39,8 +42,6 @@ import { ModelMenu } from './model-menu';
 // The page renders what the server has; this keeps it live from the event stream
 // (`conversation.*`, handed on by LiveUpdates) and from each call's answer. A refresh of
 // the route (after an approval, say) brings new server data, which is merged in.
-
-const ROUND = { BUSINESS: 'Business', UX: 'UX', TECHNICAL: 'Technical' } as const;
 
 /** The text streamed so far for each reply being written, by its message id. */
 type Draft = { id: string; text: string };
@@ -64,6 +65,8 @@ export type ChatProps = {
   sendDisabled?: string;
   /** The Approved Models for the composer's model menu; null hides it (a Grilling Conversation). */
   models: AiModelsView | null;
+  /** The reader's language, for what the server wrote in a Grilling Conversation (0047). */
+  lang?: Lang;
 };
 
 export function Chat({
@@ -77,6 +80,7 @@ export function Chat({
   empty,
   sendDisabled,
   models,
+  lang = 'en',
 }: ChatProps) {
   const router = useRouter();
   const docId = useId();
@@ -153,8 +157,12 @@ export function Chat({
             break;
           }
           case 'conversation.step':
+            addMessages(e.data.messages);
+            break;
           case 'conversation.appended':
             addMessages(e.data.messages);
+            // A Grilling moved on: the round header and the answered questions follow.
+            router.refresh();
             break;
           case 'conversation.actionCard.created':
           case 'conversation.actionCard.updated':
@@ -162,7 +170,7 @@ export function Chat({
             break;
         }
       }),
-    [addMessages, putCards],
+    [addMessages, putCards, router],
   );
 
   const writing = drafts.length > 0;
@@ -283,6 +291,8 @@ export function Chat({
       addMessages([res.data.message, ...res.data.steps, res.data.reply]);
       putCards(res.data.actionCards);
       setPending(null);
+      // A Grilling Conversation's header and answered questions follow the answer.
+      if (res.data.conversation.grilling) router.refresh();
     } else if (res.status === 502) {
       replyFailed(res.message);
     } else {
@@ -351,6 +361,9 @@ export function Chat({
   const visible = messages.filter((m) => m.role !== 'TOOL');
   const nothingYet = visible.length === 0 && pending === null && drafts.length === 0;
   const grilling = initial?.grilling ?? null;
+  const progress = initial?.grillingProgress ?? null;
+  const asking = progress?.questions.some((q) => q.status === 'ASKING') ?? false;
+  const g = GRILLING_UI[lang];
 
   return (
     <div className="chat" data-doc={docChoice === null ? 'auto' : docOpen ? 'open' : 'closed'}>
@@ -371,7 +384,7 @@ export function Chat({
                 {grilling && (
                   <>
                     <span aria-hidden> › </span>
-                    <b>Grilling · {ROUND[grilling.round]} round</b>
+                    <b lang={lang}>{g.crumb(g.round[grilling.round])}</b>
                   </>
                 )}
               </>
@@ -405,6 +418,7 @@ export function Chat({
             atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
           }}
         >
+          {progress && <GrillingHeader progress={progress} lang={lang} />}
           {nothingYet && empty ? (
             empty(fill)
           ) : (
@@ -417,13 +431,20 @@ export function Chat({
               aria-busy={writing}
             >
               {visible.map((m, i) => {
-                const startsTurn = i === 0 || visible[i - 1]?.role !== 'ASSISTANT';
+                const prev = visible[i - 1];
+                const startsTurn =
+                  i === 0 || prev?.role !== 'ASSISTANT' || (prev ? endsWithNotice(prev) : false);
                 return (
                   <Fragment key={m.id}>
                     {m.role === 'USER' ? (
                       <UserMessage content={m.content} />
+                    ) : m.grillingNotes ? (
+                      <GrillingMessage notes={m.grillingNotes} first={startsTurn} lang={lang} />
                     ) : (
                       <AiMessage message={m} first={startsTurn} grilling={grilling !== null} />
+                    )}
+                    {i === 0 && progress && (
+                      <AnsweredByOthers questions={progress.questions} meId={me.id} lang={lang} />
                     )}
                     {(cardsByMessage.get(m.id) ?? []).map((card) => (
                       <ActionCard key={card.id} card={card} meId={me.id} onChange={onCardChange} />
@@ -462,8 +483,19 @@ export function Chat({
         </div>
 
         <div className="composer-wrap">
-          {chips.length > 0 && !busy && (
+          {(chips.length > 0 || asking) && !busy && (
             <div className="suggest">
+              {asking && (
+                // Sends the skip word: the server skips the question being asked (0044).
+                <button
+                  type="button"
+                  className="chip skip-chip"
+                  lang={lang}
+                  onClick={() => send(g.skipWord)}
+                >
+                  {g.skip}
+                </button>
+              )}
               {chips.map((c) => (
                 <button key={c} type="button" className="chip" onClick={() => fill(c)}>
                   {c}

@@ -24,7 +24,7 @@ import { EventBus } from '../inbox/event-bus.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { CONTEXT_BUDGET, ContextRetriever } from '../retrieval/context-retriever.ts';
 import { SpecService } from '../spec/spec.service.ts';
-import { type ActionCardRow, toActionCardView } from './action-card.view.ts';
+import { type ActionCardRow, briefProposalDetail, toActionCardView } from './action-card.view.ts';
 import {
   chatToolsFor,
   DEFAULT_CHAT_SUGGESTIONS,
@@ -341,26 +341,8 @@ export class ActionCardsService {
           version: proposal.resultVersion?.version ?? null,
         };
       }
-      case 'BRIEF_PROPOSAL': {
-        const proposal = await this.db.briefProposal.findUnique({
-          where: { id: card.targetId },
-          include: {
-            approver: person,
-            baseVersion: { select: { version: true, markdown: true } },
-            resultVersion: { select: { version: true } },
-          },
-        });
-        if (!proposal) return null;
-        return {
-          kind: 'BRIEF_PROPOSAL',
-          projectId: proposal.projectId,
-          approver: proposal.approver,
-          baseVersion: proposal.baseVersion?.version ?? null,
-          baseMarkdown: proposal.baseVersion?.markdown ?? '',
-          proposedMarkdown: proposal.proposedMarkdown,
-          version: proposal.resultVersion?.version ?? null,
-        };
-      }
+      case 'BRIEF_PROPOSAL':
+        return briefProposalDetail(this.db, card.targetId);
       case 'FEATURE_SUGGESTION': {
         const suggestion = await this.db.featureSuggestion.findUnique({
           where: { id: card.targetId },

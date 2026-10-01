@@ -954,6 +954,10 @@ model ConversationMessage {
   modelName        String?
   // ASSISTANT: on the one reply after the Conversation's model was removed, what it used instead.
   modelNotice      String?
+  // ASSISTANT, in a Grilling Conversation: what the server wrote, as Grilling Notes
+  // (ticket 0047, `GrillingNote` in @vorasaan/shared), so it can be shown in the
+  // reader's language. `content` holds the same in English.
+  grillingNotes    Json?
   createdAt        DateTime                @default(now())
   conversation     Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   actionCards      ActionCard[] // made by this ASSISTANT message's tool calls

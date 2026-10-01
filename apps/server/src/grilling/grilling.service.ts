@@ -17,6 +17,7 @@ import {
   MAX_GRILLING_QUESTIONS,
   type SkipGrillingRoundInput,
 } from '@vorasaan/shared';
+import { briefProposalDetail, toActionCardView } from '../action-cards/action-card.view.ts';
 import {
   AI_PORT,
   AiOutputError,
@@ -26,7 +27,9 @@ import {
 } from '../ai/ai.port.ts';
 import { emptyMemory, rememberRound, type WorkflowMemory } from '../ai/workflow-memory.ts';
 import { assertCanEditProject, type ProjectAccess, projectAccess } from '../brief/brief-access.ts';
+import { toConversationMessageView } from '../conversations/conversation.view.ts';
 import { FeatureGuidelinesService } from '../feature-guidelines/feature-guidelines.service.ts';
+import { EventBus } from '../inbox/event-bus.ts';
 import { NotificationsService, type Tx } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import {
@@ -43,7 +46,11 @@ import {
   grillingInclude,
   toGrillingView,
 } from './grilling.view.ts';
-import { openGrillingConversations } from './grilling-conversation.ts';
+import {
+  type BriefCardPlaced,
+  openGrillingConversations,
+  placeBriefProposal,
+} from './grilling-conversation.ts';
 
 const LABEL: Record<GrillingRoundKind, string> = {
   BUSINESS: 'Business',
@@ -115,6 +122,7 @@ export class GrillingService {
     private readonly retriever: ContextRetriever,
     private readonly guidelines: FeatureGuidelinesService,
     private readonly notifications: NotificationsService,
+    private readonly bus: EventBus,
   ) {}
 
   /** The Project's POs and Admins start one; at most one runs per Project. */
@@ -128,12 +136,13 @@ export class GrillingService {
     });
     const plan = await this.advance(project, emptyMemory(), [], 0);
     let id: string;
+    let placed: BriefCardPlaced | null = null;
     try {
       id = await this.db.$transaction(async (tx) => {
         const created = await tx.grilling.create({
           data: { projectId, startedById: user.id, memory: toJson(emptyMemory()) },
         });
-        await this.apply(tx, { ...created }, plan);
+        placed = await this.apply(tx, { ...created }, plan);
         return created.id;
       });
     } catch (error) {
@@ -142,6 +151,7 @@ export class GrillingService {
       throw error;
     }
     await this.publish(projectId, [plan.asking?.role], plan.draft ? [user.id] : []);
+    await this.announceBriefCard(placed);
     return this.get(user, id);
   }
 
@@ -208,8 +218,10 @@ export class GrillingService {
             nextIndex(round.kind),
           )
         : null;
+      let placed: BriefCardPlaced | null = null;
       try {
         await this.db.$transaction(async (tx) => {
+          placed = null;
           const locked = await lock(tx, g.id);
           if (plan) {
             // The plan was made from this exact state; anything since means redo it.
@@ -247,7 +259,7 @@ export class GrillingService {
               where: { id: round.id },
               data: { status: 'ANSWERED', completedAt: new Date() },
             });
-            await this.apply(tx, g, plan);
+            placed = await this.apply(tx, g, plan);
           }
         });
       } catch (error) {
@@ -256,6 +268,7 @@ export class GrillingService {
       }
       const roles = [round.role, plan?.asking?.role];
       await this.publish(g.projectId, roles, plan?.draft ? [g.startedById] : []);
+      await this.announceBriefCard(placed);
       await this.roundsChanged([round.id]);
       return this.get(user, id);
     }
@@ -279,6 +292,7 @@ export class GrillingService {
       answersOf(g),
       nextIndex(round.kind),
     );
+    let placed: BriefCardPlaced | null = null;
     await this.write(g, async (tx) => {
       await tx.grillingRound.update({
         where: { id: round.id },
@@ -288,13 +302,14 @@ export class GrillingService {
         where: { roundId: round.id, answeredAt: null },
         data: { skipped: true },
       });
-      await this.apply(tx, g, plan);
+      placed = await this.apply(tx, g, plan);
     });
     await this.publish(
       g.projectId,
       [round.role, plan.asking?.role],
       plan.draft ? [g.startedById] : [],
     );
+    await this.announceBriefCard(placed);
     await this.roundsChanged([round.id]);
     return this.get(user, id);
   }
@@ -428,12 +443,15 @@ export class GrillingService {
     };
   }
 
-  /** Writes a Plan inside the caller's transaction. */
+  /**
+   * Writes a Plan inside the caller's transaction. A drafted Brief Proposal is also
+   * put in the starter's Conversation as an Action Card (0047), returned to announce.
+   */
   private async apply(
     tx: Tx,
     g: { id: string; projectId: string; startedById: string },
     plan: Plan,
-  ): Promise<void> {
+  ): Promise<BriefCardPlaced | null> {
     for (const round of plan.rounds) {
       const created = await tx.grillingRound.create({
         data: {
@@ -457,7 +475,7 @@ export class GrillingService {
         where: { id: g.id },
         data: { currentRound: plan.asking?.kind ?? null, memory: toJson(plan.memory) },
       });
-      return;
+      return null;
     }
     const proposal = await tx.briefProposal.create({
       data: {
@@ -479,6 +497,34 @@ export class GrillingService {
         proposalId: proposal.id,
       },
     });
+    return placeBriefProposal(tx, g, proposal);
+  }
+
+  /** Tells the starter, after commit, about the Brief Proposal's message and Action Card. */
+  private async announceBriefCard(placed: BriefCardPlaced | null): Promise<void> {
+    if (!placed) return;
+    try {
+      const card = await this.db.actionCard.findUniqueOrThrow({ where: { id: placed.cardId } });
+      const message = await this.db.conversationMessage.findUniqueOrThrow({
+        where: { id: placed.messageId },
+      });
+      this.bus.emit(placed.ownerId, {
+        event: 'conversation.appended',
+        data: {
+          conversationId: card.conversationId,
+          messages: [toConversationMessageView(message)],
+        },
+      });
+      this.bus.emit(placed.ownerId, {
+        event: 'conversation.actionCard.created',
+        data: {
+          conversationId: card.conversationId,
+          card: toActionCardView(card, await briefProposalDetail(this.db, card.targetId)),
+        },
+      });
+    } catch (error) {
+      this.logger.error('Announcing the Brief Proposal card failed', error as Error);
+    }
   }
 
   /** Runs `change` in a transaction, as long as the Grilling is still as it was read. */
