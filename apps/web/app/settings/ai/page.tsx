@@ -1,10 +1,10 @@
 import type { AiSettingsView } from '@vorasaan/shared';
 import { unstable_rethrow } from 'next/navigation';
-import { AiSettingsForm } from '@/components/ai-settings-form';
+import { AiModelsSettings } from '@/components/ai-models-settings';
 import { Notice } from '@/components/bits';
 import { ApiError, api } from '@/lib/api';
 
-export const metadata = { title: 'AI provider' };
+export const metadata = { title: 'AI models' };
 
 export default async function AiSettingsPage() {
   let settings: AiSettingsView;
@@ -13,7 +13,7 @@ export default async function AiSettingsPage() {
   } catch (error) {
     unstable_rethrow(error);
     if (error instanceof ApiError && error.status === 403) {
-      return <Notice>Only an Organization Admin can change the AI provider.</Notice>;
+      return <Notice>Only an Organization Admin can change the AI models.</Notice>;
     }
     return (
       <Notice tone="error">
@@ -22,14 +22,14 @@ export default async function AiSettingsPage() {
     );
   }
   return (
-    <section className="max-w-xl">
-      <h1 className="text-2xl font-semibold tracking-tight">AI provider</h1>
+    <section className="max-w-3xl">
+      <h1 className="text-2xl font-semibold tracking-tight">AI models</h1>
       <p className="mt-2 text-ink-soft">
-        The model that drafts Choices and Spec changes for everyone in your organization. Changes
-        apply to the next request.
+        The AI providers your organization connects, the models people may use, and the model each
+        kind of AI work runs on.
       </p>
       <div className="mt-8">
-        <AiSettingsForm settings={settings} />
+        <AiModelsSettings settings={settings} />
       </div>
     </section>
   );

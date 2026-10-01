@@ -1,5 +1,6 @@
 import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
 import type {
+  AiCallOptions,
   AiPort,
   AttachmentForAi,
   ChatChunk,
@@ -14,6 +15,7 @@ import type {
   FeatureSuggestionDrafts,
   GrillingAnswerForAi,
   GuidelineForAi,
+  ModelChoice,
   ProjectForAi,
   ProjectFoundationForAi,
   RequestForAi,
@@ -71,7 +73,8 @@ export function fakeChatReply(input: {
 
 /** Deterministic stand-in for tests. Records calls so tests can assert on them. */
 export class FakeAiPort implements AiPort {
-  readonly calls: { method: keyof AiPort; input: unknown }[] = [];
+  /** Every call, with the model it was asked to run on (null when none was chosen). */
+  readonly calls: { method: keyof AiPort; input: unknown; model: ModelChoice | null }[] = [];
   /** Replies the next chat calls give, in order, instead of the default one. */
   readonly chatScript: ScriptedChatReply[] = [];
 
@@ -82,16 +85,19 @@ export class FakeAiPort implements AiPort {
   }
 
   /** Streams the next scripted reply, or else `fakeChatReply` word by word. */
-  async *chat(input: {
-    scope: ConversationScopeForAi;
-    context: ContextBlock[];
-    foundation: ProjectFoundationForAi;
-    summary: string;
-    recentMessages: ChatMessageForAi[];
-    tools: ChatTool[];
-    signal?: AbortSignal;
-  }): AsyncIterable<ChatChunk> {
-    this.calls.push({ method: 'chat', input });
+  async *chat(
+    input: {
+      scope: ConversationScopeForAi;
+      context: ContextBlock[];
+      foundation: ProjectFoundationForAi;
+      summary: string;
+      recentMessages: ChatMessageForAi[];
+      tools: ChatTool[];
+      signal?: AbortSignal;
+    },
+    options?: AiCallOptions,
+  ): AsyncIterable<ChatChunk> {
+    this.calls.push({ method: 'chat', input, model: options?.model ?? null });
     const scripted = this.chatScript.shift();
     const chunks: ChatChunk[] = scripted
       ? (scripted.chunks ?? [])
@@ -105,23 +111,29 @@ export class FakeAiPort implements AiPort {
   }
 
   /** The old summary, then one line per folded message. */
-  async summarizeConversation(input: {
-    scope: ConversationScopeForAi;
-    summary: string;
-    messages: ChatMessageForAi[];
-  }) {
-    this.calls.push({ method: 'summarizeConversation', input });
+  async summarizeConversation(
+    input: {
+      scope: ConversationScopeForAi;
+      summary: string;
+      messages: ChatMessageForAi[];
+    },
+    options?: AiCallOptions,
+  ) {
+    this.calls.push({ method: 'summarizeConversation', input, model: options?.model ?? null });
     const lines = input.messages.map((m) => `${m.role}: ${m.content.slice(0, 60)}`);
     return { summary: [input.summary, ...lines].filter(Boolean).join('\n') };
   }
 
-  async generateChoices(input: {
-    specMarkdown: string;
-    request: RequestForAi;
-    context: ContextBlock[];
-    foundation?: ProjectFoundationForAi;
-  }) {
-    this.calls.push({ method: 'generateChoices', input });
+  async generateChoices(
+    input: {
+      specMarkdown: string;
+      request: RequestForAi;
+      context: ContextBlock[];
+      foundation?: ProjectFoundationForAi;
+    },
+    options?: AiCallOptions,
+  ) {
+    this.calls.push({ method: 'generateChoices', input, model: options?.model ?? null });
     return {
       suggestedRole: 'PO' as const,
       choices: ['A', 'B', 'C'].map((label, i) => ({
@@ -135,32 +147,38 @@ export class FakeAiPort implements AiPort {
     };
   }
 
-  async draftSpecProposal(input: {
-    specMarkdown: string;
-    request: RequestForAi;
-    decision: DecisionForAi;
-    context: ContextBlock[];
-    foundation?: ProjectFoundationForAi;
-  }) {
-    this.calls.push({ method: 'draftSpecProposal', input });
+  async draftSpecProposal(
+    input: {
+      specMarkdown: string;
+      request: RequestForAi;
+      decision: DecisionForAi;
+      context: ContextBlock[];
+      foundation?: ProjectFoundationForAi;
+    },
+    options?: AiCallOptions,
+  ) {
+    this.calls.push({ method: 'draftSpecProposal', input, model: options?.model ?? null });
     return {
       proposedMarkdown: `${input.specMarkdown.trimEnd()}\n\n## Decisions\n- ${input.request.title}: ${describeDecision(input.decision).split('\n')[0]}\n`,
       summary: `Recorded the decision on "${input.request.title}".`,
     };
   }
 
-  async summarizeAttachment(input: { attachment: AttachmentForAi }) {
-    this.calls.push({ method: 'summarizeAttachment', input });
+  async summarizeAttachment(input: { attachment: AttachmentForAi }, options?: AiCallOptions) {
+    this.calls.push({ method: 'summarizeAttachment', input, model: options?.model ?? null });
     const firstLine = input.attachment.text.trim().split('\n')[0] ?? '';
     return { summary: `Summary of "${input.attachment.title}": ${firstLine.slice(0, 80)}` };
   }
 
-  async draftSpecFromAttachments(input: {
-    feature: FeatureForAi;
-    specMarkdown: string;
-    context: ContextBlock[];
-  }) {
-    this.calls.push({ method: 'draftSpecFromAttachments', input });
+  async draftSpecFromAttachments(
+    input: {
+      feature: FeatureForAi;
+      specMarkdown: string;
+      context: ContextBlock[];
+    },
+    options?: AiCallOptions,
+  ) {
+    this.calls.push({ method: 'draftSpecFromAttachments', input, model: options?.model ?? null });
     const titles = new Set(
       input.context.filter((b) => b.source.kind === 'ATTACHMENT').map((b) => b.source.title),
     );
@@ -171,15 +189,18 @@ export class FakeAiPort implements AiPort {
     };
   }
 
-  async grillingQuestions(input: {
-    project: ProjectForAi;
-    round: GrillingRoundKind;
-    role: TeamRole;
-    projectContext: ContextBlock[];
-    guidelines: GuidelineForAi[];
-    memory: WorkflowMemory;
-  }) {
-    this.calls.push({ method: 'grillingQuestions', input });
+  async grillingQuestions(
+    input: {
+      project: ProjectForAi;
+      round: GrillingRoundKind;
+      role: TeamRole;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+      memory: WorkflowMemory;
+    },
+    options?: AiCallOptions,
+  ) {
+    this.calls.push({ method: 'grillingQuestions', input, model: options?.model ?? null });
     const known = input.projectContext.map((b) => b.text.toLowerCase()).join('\n');
     return {
       questions: FAKE_GRILLING_TOPICS[input.round]
@@ -188,15 +209,18 @@ export class FakeAiPort implements AiPort {
     };
   }
 
-  async draftBriefFromGrilling(input: {
-    project: ProjectForAi;
-    briefMarkdown: string;
-    projectContext: ContextBlock[];
-    guidelines: GuidelineForAi[];
-    memory: WorkflowMemory;
-    answers: GrillingAnswerForAi[];
-  }) {
-    this.calls.push({ method: 'draftBriefFromGrilling', input });
+  async draftBriefFromGrilling(
+    input: {
+      project: ProjectForAi;
+      briefMarkdown: string;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+      memory: WorkflowMemory;
+      answers: GrillingAnswerForAi[];
+    },
+    options?: AiCallOptions,
+  ) {
+    this.calls.push({ method: 'draftBriefFromGrilling', input, model: options?.model ?? null });
     const answers = input.answers.map((a) => `- ${a.question} ${a.answer}`).join('\n');
     return {
       proposedMarkdown: `# Project Brief\n\n${input.project.name}\n\n## From Grilling\n${answers}\n`,
@@ -209,16 +233,19 @@ export class FakeAiPort implements AiPort {
    * pending or dismissed, each serving every Guideline, plus one unknown ref the
    * server must drop.
    */
-  async suggestFeatures(input: {
-    project: ProjectForAi;
-    count: number;
-    projectContext: ContextBlock[];
-    guidelines: GuidelineForAi[];
-    decisions: ContextBlock[];
-    dismissed: DismissedSuggestionForAi[];
-    pending: string[];
-  }): Promise<FeatureSuggestionDrafts> {
-    this.calls.push({ method: 'suggestFeatures', input });
+  async suggestFeatures(
+    input: {
+      project: ProjectForAi;
+      count: number;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+      decisions: ContextBlock[];
+      dismissed: DismissedSuggestionForAi[];
+      pending: string[];
+    },
+    options?: AiCallOptions,
+  ): Promise<FeatureSuggestionDrafts> {
+    this.calls.push({ method: 'suggestFeatures', input, model: options?.model ?? null });
     const taken = new Set([...input.pending, ...input.dismissed.map((d) => d.title)]);
     const suggestions: FeatureSuggestionDrafts['suggestions'] = [];
     for (let n = 1; suggestions.length < input.count; n++) {
@@ -236,13 +263,16 @@ export class FakeAiPort implements AiPort {
     return { suggestions };
   }
 
-  async draftSpecFromSuggestion(input: {
-    project: ProjectForAi;
-    suggestion: SuggestionForAi;
-    projectContext: ContextBlock[];
-    guidelines: GuidelineForAi[];
-  }) {
-    this.calls.push({ method: 'draftSpecFromSuggestion', input });
+  async draftSpecFromSuggestion(
+    input: {
+      project: ProjectForAi;
+      suggestion: SuggestionForAi;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+    },
+    options?: AiCallOptions,
+  ) {
+    this.calls.push({ method: 'draftSpecFromSuggestion', input, model: options?.model ?? null });
     return {
       proposedMarkdown: `# ${input.suggestion.title}\n\n${input.suggestion.rationale}\n\n## Business value\n${input.suggestion.businessValue}\n`,
       summary: `First Spec of "${input.suggestion.title}".`,
@@ -253,13 +283,16 @@ export class FakeAiPort implements AiPort {
    * MET when the description mentions the Guideline's title, else UNCLEAR with a
    * question; the last Guideline is left out (the server must fill it in).
    */
-  async checkFeatureFit(input: {
-    project: ProjectForAi;
-    feature: FeatureForAi;
-    projectContext: ContextBlock[];
-    guidelines: GuidelineForAi[];
-  }): Promise<FeatureFitDraft> {
-    this.calls.push({ method: 'checkFeatureFit', input });
+  async checkFeatureFit(
+    input: {
+      project: ProjectForAi;
+      feature: FeatureForAi;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<FeatureFitDraft> {
+    this.calls.push({ method: 'checkFeatureFit', input, model: options?.model ?? null });
     const text = `${input.feature.title}\n${input.feature.description}`.toLowerCase();
     return {
       results: input.guidelines.slice(0, -1).map((g) => {

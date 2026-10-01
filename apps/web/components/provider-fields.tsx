@@ -9,7 +9,7 @@ import {
 import { useState, useTransition } from 'react';
 import { inputClass } from './login-form';
 
-const PROVIDERS: { value: AiProvider; label: string; hint: string; keyLabel: string }[] = [
+export const PROVIDERS: { value: AiProvider; label: string; hint: string; keyLabel: string }[] = [
   {
     value: 'ANTHROPIC',
     label: 'Claude API',

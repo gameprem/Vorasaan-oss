@@ -7,6 +7,7 @@ import type {
 } from '@vorasaan/shared';
 import { SecretBox } from '../crypto/secret-box.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { findSingleIntegration, saveSingleIntegration } from '../settings/single-integration.ts';
 import {
   EMBEDDING_PORT_FACTORY,
   type EmbeddingConfig,
@@ -49,9 +50,7 @@ export class EmbeddingSettingsService {
   private async integration(organizationId?: string) {
     const orgId = organizationId ?? (await this.organizationId());
     if (!orgId) return null;
-    return this.db.orgIntegration.findUnique({
-      where: { organizationId_provider: { organizationId: orgId, provider: 'EMBEDDINGS' } },
-    });
+    return findSingleIntegration(this.db, orgId, 'EMBEDDINGS');
   }
 
   async view(): Promise<EmbeddingSettingsView> {
@@ -119,11 +118,7 @@ export class EmbeddingSettingsService {
       model: config.model,
       secretEncrypted: this.secrets().encrypt(config.apiKey),
     };
-    await this.db.orgIntegration.upsert({
-      where: { organizationId_provider: { organizationId, provider: 'EMBEDDINGS' } },
-      update: data,
-      create: { organizationId, provider: 'EMBEDDINGS', ...data },
-    });
+    await saveSingleIntegration(this.db, organizationId, 'EMBEDDINGS', data);
     return this.view();
   }
 

@@ -236,7 +236,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [ ] Chat view, Action Cards and the document panel (0046).
    - [ ] Grilling in the chat view (0047).
    - [ ] End-to-end tests for the chat UI (0048).
-   - [ ] Several AI providers and Approved Models chosen by an Admin, with a model per AI task (0053, [ADR 0010](./docs/adr/0010-approved-models-and-the-chat-picker.md)).
+   - [x] Several AI providers and Approved Models chosen by an Admin, with a model per AI task (0053, [ADR 0010](./docs/adr/0010-approved-models-and-the-chat-picker.md)).
    - [ ] A model picker in the chat: each Conversation remembers its model, and every reply records the model that wrote it (0054).
 2. **Decision speed** ([ADR 0011](./docs/adr/0011-response-windows-and-deciding-from-chat-apps.md)): every Decision Request has a Response Window (Blocker 4 working hours, Question 2 working days by default). Past it, it escalates: reminders, then the Delegate, then the Raiser and Tech Leads. Escalation never decides or reassigns by itself. Decision Lead Time is measured per Project. Recipients can link LINE, Slack or Teams and decide from a card there.
    - [ ] Response Windows and escalation (0055).

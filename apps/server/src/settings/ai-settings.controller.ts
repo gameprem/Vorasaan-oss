@@ -1,8 +1,26 @@
-import { Body, Controller, Get, HttpCode, Post, Put } from '@nestjs/common';
-import { AiSettingsInput } from '@vorasaan/shared';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+} from '@nestjs/common';
+import {
+  CreateAiProviderInput,
+  CreateApprovedModelInput,
+  SetAiTaskModelsInput,
+  UpdateAiProviderInput,
+  UpdateApprovedModelInput,
+} from '@vorasaan/shared';
 import { AiSettingsService } from '../ai/ai-settings.service.ts';
 import { AdminOnly } from '../auth/admin.guard.ts';
 
+/** Settings → AI models (ADR 0010): providers, Approved Models and the model per task. */
 @AdminOnly()
 @Controller('settings/ai')
 export class AiSettingsController {
@@ -13,15 +31,63 @@ export class AiSettingsController {
     return this.settings.view();
   }
 
-  @Put()
-  save(@Body({ schema: AiSettingsInput }) body: AiSettingsInput) {
-    return this.settings.save(body);
+  @Get('providers')
+  async providers() {
+    return { providers: (await this.settings.view()).providers };
   }
 
-  /** Checks a config with a tiny real call, without saving it. */
-  @Post('test')
+  @Post('providers')
+  createProvider(@Body({ schema: CreateAiProviderInput }) body: CreateAiProviderInput) {
+    return this.settings.createProvider(body);
+  }
+
+  @Patch('providers/:id')
+  updateProvider(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: UpdateAiProviderInput }) body: UpdateAiProviderInput,
+  ) {
+    return this.settings.updateProvider(id, body);
+  }
+
+  @Delete('providers/:id')
+  @HttpCode(204)
+  async deleteProvider(@Param('id', ParseUUIDPipe) id: string) {
+    await this.settings.deleteProvider(id);
+  }
+
+  @Get('models')
+  async models() {
+    return { models: (await this.settings.view()).models };
+  }
+
+  @Post('models')
+  createModel(@Body({ schema: CreateApprovedModelInput }) body: CreateApprovedModelInput) {
+    return this.settings.createModel(body);
+  }
+
+  @Patch('models/:id')
+  updateModel(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: UpdateApprovedModelInput }) body: UpdateApprovedModelInput,
+  ) {
+    return this.settings.updateModel(id, body);
+  }
+
+  @Delete('models/:id')
+  @HttpCode(204)
+  async deleteModel(@Param('id', ParseUUIDPipe) id: string) {
+    await this.settings.deleteModel(id);
+  }
+
+  /** Checks one Approved Model with a tiny real call. */
+  @Post('models/:id/test')
   @HttpCode(200)
-  test(@Body({ schema: AiSettingsInput }) body: AiSettingsInput) {
-    return this.settings.test(body);
+  testModel(@Param('id', ParseUUIDPipe) id: string) {
+    return this.settings.testModel(id);
+  }
+
+  @Put('tasks')
+  setTasks(@Body({ schema: SetAiTaskModelsInput }) body: SetAiTaskModelsInput) {
+    return this.settings.setTaskModels(body);
   }
 }

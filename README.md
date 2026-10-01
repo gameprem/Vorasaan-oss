@@ -83,7 +83,7 @@ docker compose up -d
 Open **http://localhost:3000**. The setup wizard walks you through:
 
 1. **Your organization**: its name, and your account as the first Admin.
-2. **AI provider**: Claude API, OpenAI API, or Custom URL + token. **Test connection** checks it before you continue.
+2. **AI provider**: Claude API, OpenAI API, or Custom URL + token. **Test connection** checks it before you continue. It becomes your first provider, and its model the default Approved Model; **Settings → AI models** adds more providers and models, and sets the model of each AI task.
 
 Then create a **Project** and a **Team**, **invite your team** with a link, create a **Feature**, choose its **Role Owners**, and write **Spec v1**.
 

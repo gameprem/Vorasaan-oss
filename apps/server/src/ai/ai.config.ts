@@ -1,34 +1,82 @@
-// Model per AI task, in Mastra's "provider/model" form. Changing a model is a
-// config change: set the env var. Anthropic models read ANTHROPIC_API_KEY.
+import type { AiTask as AiTaskKind } from '@vorasaan/shared';
+
+// The model of an AI call is normally an Approved Model chosen in Settings
+// (ADR 0010). Env vars still apply, in Mastra's "provider/model" form:
+// - VORASAAN_MODEL_<TASK> wins over Settings for that task when it is set;
+// - VORASAAN_MODEL (default anthropic/claude-opus-5-5) is used only while the
+//   Organization has no Approved Model (development, before setup).
 export const DEFAULT_MODEL = 'anthropic/claude-opus-5-5';
 
-export type AiConfig = {
-  generateChoicesModel: string;
-  draftSpecProposalModel: string;
-  summarizeAttachmentModel: string;
-  draftSpecFromAttachmentsModel: string;
-  grillingQuestionsModel: string;
-  draftBriefFromGrillingModel: string;
-  suggestFeaturesModel: string;
-  draftSpecFromSuggestionModel: string;
-  checkFeatureFitModel: string;
-  chatModel: string;
-  summarizeConversationModel: string;
+/** Each kind of AI call the server makes. */
+export type AiTask =
+  | 'generateChoices'
+  | 'draftSpecProposal'
+  | 'summarizeAttachment'
+  | 'draftSpecFromAttachments'
+  | 'grillingQuestions'
+  | 'draftBriefFromGrilling'
+  | 'suggestFeatures'
+  | 'draftSpecFromSuggestion'
+  | 'checkFeatureFit'
+  | 'chat'
+  | 'summarizeConversation';
+
+/** The Settings task each call belongs to, and the env var that overrides its model. */
+export const AI_TASKS: Record<AiTask, { kind: AiTaskKind; env: string }> = {
+  generateChoices: { kind: 'CHOICES', env: 'VORASAAN_MODEL_GENERATE_CHOICES' },
+  draftSpecProposal: { kind: 'SPEC_PROPOSAL', env: 'VORASAAN_MODEL_DRAFT_SPEC_PROPOSAL' },
+  summarizeAttachment: { kind: 'SUMMARIES', env: 'VORASAAN_MODEL_SUMMARIZE_ATTACHMENT' },
+  draftSpecFromAttachments: {
+    kind: 'SPEC_PROPOSAL',
+    env: 'VORASAAN_MODEL_DRAFT_SPEC_FROM_ATTACHMENTS',
+  },
+  grillingQuestions: { kind: 'GRILLING', env: 'VORASAAN_MODEL_GRILLING_QUESTIONS' },
+  draftBriefFromGrilling: { kind: 'GRILLING', env: 'VORASAAN_MODEL_DRAFT_BRIEF_FROM_GRILLING' },
+  suggestFeatures: { kind: 'FEATURE_SUGGESTIONS', env: 'VORASAAN_MODEL_SUGGEST_FEATURES' },
+  draftSpecFromSuggestion: {
+    kind: 'SPEC_PROPOSAL',
+    env: 'VORASAAN_MODEL_DRAFT_SPEC_FROM_SUGGESTION',
+  },
+  checkFeatureFit: { kind: 'FIT_CHECK', env: 'VORASAAN_MODEL_CHECK_FEATURE_FIT' },
+  chat: { kind: 'CHAT', env: 'VORASAAN_MODEL_CHAT' },
+  summarizeConversation: { kind: 'SUMMARIES', env: 'VORASAAN_MODEL_SUMMARIZE_CONVERSATION' },
 };
 
+/** The per-task env override, or undefined when it isn't set. */
+export function envModelOverride(
+  task: AiTask,
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  return env[AI_TASKS[task].env]?.trim() || undefined;
+}
+
+/** The env vars set for one Settings task (shown in Settings, since they win). */
+export function envOverridesFor(
+  kind: AiTaskKind,
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  return Object.values(AI_TASKS)
+    .filter((t) => t.kind === kind && env[t.env]?.trim())
+    .map((t) => t.env);
+}
+
+/** The model while no Approved Model exists. */
+export function envFallbackModel(env: Record<string, string | undefined> = process.env): string {
+  return env.VORASAAN_MODEL?.trim() || DEFAULT_MODEL;
+}
+
+export type AiConfig = Record<`${AiTask}Model`, string>;
+
+/**
+ * The model of every task from env alone, as the eval scripts run it (no
+ * database): VORASAAN_MODEL_<TASK>, else VORASAAN_MODEL, else the default.
+ */
 export function loadAiConfig(env: Record<string, string | undefined> = process.env): AiConfig {
   const fallback = env.VORASAAN_MODEL ?? DEFAULT_MODEL;
-  return {
-    generateChoicesModel: env.VORASAAN_MODEL_GENERATE_CHOICES ?? fallback,
-    draftSpecProposalModel: env.VORASAAN_MODEL_DRAFT_SPEC_PROPOSAL ?? fallback,
-    summarizeAttachmentModel: env.VORASAAN_MODEL_SUMMARIZE_ATTACHMENT ?? fallback,
-    draftSpecFromAttachmentsModel: env.VORASAAN_MODEL_DRAFT_SPEC_FROM_ATTACHMENTS ?? fallback,
-    grillingQuestionsModel: env.VORASAAN_MODEL_GRILLING_QUESTIONS ?? fallback,
-    draftBriefFromGrillingModel: env.VORASAAN_MODEL_DRAFT_BRIEF_FROM_GRILLING ?? fallback,
-    suggestFeaturesModel: env.VORASAAN_MODEL_SUGGEST_FEATURES ?? fallback,
-    draftSpecFromSuggestionModel: env.VORASAAN_MODEL_DRAFT_SPEC_FROM_SUGGESTION ?? fallback,
-    checkFeatureFitModel: env.VORASAAN_MODEL_CHECK_FEATURE_FIT ?? fallback,
-    chatModel: env.VORASAAN_MODEL_CHAT ?? fallback,
-    summarizeConversationModel: env.VORASAAN_MODEL_SUMMARIZE_CONVERSATION ?? fallback,
-  };
+  return Object.fromEntries(
+    (Object.keys(AI_TASKS) as AiTask[]).map((task) => [
+      `${task}Model`,
+      env[AI_TASKS[task].env] ?? fallback,
+    ]),
+  ) as AiConfig;
 }

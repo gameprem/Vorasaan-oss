@@ -2,7 +2,9 @@ import { Agent } from '@mastra/core/agent';
 import { createTool } from '@mastra/core/tools';
 import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
 import { z } from 'zod';
+import type { AiTask } from './ai.config.ts';
 import {
+  type AiCallOptions,
   type AiPort,
   type AttachmentForAi,
   AttachmentSummary,
@@ -22,13 +24,14 @@ import {
   type GrillingAnswerForAi,
   GrillingQuestionDrafts,
   type GuidelineForAi,
+  type ModelChoice,
   type ProjectForAi,
   type ProjectFoundationForAi,
   type RequestForAi,
   SpecProposalDraft,
   type SuggestionForAi,
 } from './ai.port.ts';
-import type { MastraModel } from './model-config.ts';
+import { type MastraModel, mastraModelOf } from './model-config.ts';
 import {
   chatPrompt,
   checkFeatureFitPrompt,
@@ -49,21 +52,18 @@ const INSTRUCTIONS =
   'You are Vorasaan, an assistant that helps software teams align on what to build. ' +
   'Follow the task instructions exactly and return only the requested structure.';
 
-export type AiTask =
-  | 'generateChoices'
-  | 'draftSpecProposal'
-  | 'summarizeAttachment'
-  | 'draftSpecFromAttachments'
-  | 'grillingQuestions'
-  | 'draftBriefFromGrilling'
-  | 'suggestFeatures'
-  | 'draftSpecFromSuggestion'
-  | 'checkFeatureFit'
-  | 'chat'
-  | 'summarizeConversation';
+export type { AiTask };
 
-/** Called on every request, so a provider saved in Settings applies immediately. */
-export type ModelResolver = (task: AiTask) => Promise<MastraModel>;
+/**
+ * The Mastra model for one call. `chosen` is the model the server picked for the
+ * call (`ModelRoutingAiPort`); the default uses it. Eval scripts pass their own.
+ */
+export type ModelResolver = (task: AiTask, chosen: ModelChoice | undefined) => Promise<MastraModel>;
+
+const useChosenModel: ModelResolver = async (task, chosen) => {
+  if (!chosen) throw new Error(`No model was chosen for the AI task "${task}"`);
+  return mastraModelOf(chosen);
+};
 
 type AgentModel = ConstructorParameters<typeof Agent>[0]['model'];
 
@@ -85,31 +85,40 @@ export function agentGenerate(task: string, model: MastraModel): StructuredGener
 
 // Mastra used as a library (ADR 0003): no Mastra server, no storage needed yet.
 export class MastraAiPort implements AiPort {
-  constructor(private readonly resolveModel: ModelResolver) {}
+  constructor(private readonly resolveModel: ModelResolver = useChosenModel) {}
 
-  async generateChoices(input: {
-    specMarkdown: string;
-    request: RequestForAi;
-    context: ContextBlock[];
-    foundation?: ProjectFoundationForAi;
-  }) {
+  async generateChoices(
+    input: {
+      specMarkdown: string;
+      request: RequestForAi;
+      context: ContextBlock[];
+      foundation?: ProjectFoundationForAi;
+    },
+    options?: AiCallOptions,
+  ) {
     const prompt = await generateChoicesPrompt(
       input.specMarkdown,
       input.request,
       input.context,
       input.foundation,
     );
-    const generate = agentGenerate('generate-choices', await this.resolveModel('generateChoices'));
+    const generate = agentGenerate(
+      'generate-choices',
+      await this.resolveModel('generateChoices', options?.model),
+    );
     return generateStructured(generate, 'generate-choices', prompt, GeneratedChoices);
   }
 
-  async draftSpecProposal(input: {
-    specMarkdown: string;
-    request: RequestForAi;
-    decision: DecisionForAi;
-    context: ContextBlock[];
-    foundation?: ProjectFoundationForAi;
-  }) {
+  async draftSpecProposal(
+    input: {
+      specMarkdown: string;
+      request: RequestForAi;
+      decision: DecisionForAi;
+      context: ContextBlock[];
+      foundation?: ProjectFoundationForAi;
+    },
+    options?: AiCallOptions,
+  ) {
     const prompt = await draftSpecProposalPrompt(
       input.specMarkdown,
       input.request,
@@ -119,25 +128,28 @@ export class MastraAiPort implements AiPort {
     );
     const generate = agentGenerate(
       'draft-spec-proposal',
-      await this.resolveModel('draftSpecProposal'),
+      await this.resolveModel('draftSpecProposal', options?.model),
     );
     return generateStructured(generate, 'draft-spec-proposal', prompt, SpecProposalDraft);
   }
 
-  async summarizeAttachment(input: { attachment: AttachmentForAi }) {
+  async summarizeAttachment(input: { attachment: AttachmentForAi }, options?: AiCallOptions) {
     const prompt = await summarizeAttachmentPrompt(input.attachment);
     const generate = agentGenerate(
       'summarize-attachment',
-      await this.resolveModel('summarizeAttachment'),
+      await this.resolveModel('summarizeAttachment', options?.model),
     );
     return generateStructured(generate, 'summarize-attachment', prompt, AttachmentSummary);
   }
 
-  async draftSpecFromAttachments(input: {
-    feature: FeatureForAi;
-    specMarkdown: string;
-    context: ContextBlock[];
-  }) {
+  async draftSpecFromAttachments(
+    input: {
+      feature: FeatureForAi;
+      specMarkdown: string;
+      context: ContextBlock[];
+    },
+    options?: AiCallOptions,
+  ) {
     const prompt = await draftSpecFromAttachmentsPrompt(
       input.feature,
       input.specMarkdown,
@@ -145,105 +157,132 @@ export class MastraAiPort implements AiPort {
     );
     const generate = agentGenerate(
       'draft-spec-from-attachments',
-      await this.resolveModel('draftSpecFromAttachments'),
+      await this.resolveModel('draftSpecFromAttachments', options?.model),
     );
     return generateStructured(generate, 'draft-spec-from-attachments', prompt, SpecProposalDraft);
   }
 
-  async grillingQuestions(input: {
-    project: ProjectForAi;
-    round: GrillingRoundKind;
-    role: TeamRole;
-    projectContext: ContextBlock[];
-    guidelines: GuidelineForAi[];
-    memory: WorkflowMemory;
-  }) {
+  async grillingQuestions(
+    input: {
+      project: ProjectForAi;
+      round: GrillingRoundKind;
+      role: TeamRole;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+      memory: WorkflowMemory;
+    },
+    options?: AiCallOptions,
+  ) {
     const prompt = await grillingQuestionsPrompt(input);
     const generate = agentGenerate(
       'grilling-questions',
-      await this.resolveModel('grillingQuestions'),
+      await this.resolveModel('grillingQuestions', options?.model),
     );
     return generateStructured(generate, 'grilling-questions', prompt, GrillingQuestionDrafts);
   }
 
-  async draftBriefFromGrilling(input: {
-    project: ProjectForAi;
-    briefMarkdown: string;
-    projectContext: ContextBlock[];
-    guidelines: GuidelineForAi[];
-    memory: WorkflowMemory;
-    answers: GrillingAnswerForAi[];
-  }) {
+  async draftBriefFromGrilling(
+    input: {
+      project: ProjectForAi;
+      briefMarkdown: string;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+      memory: WorkflowMemory;
+      answers: GrillingAnswerForAi[];
+    },
+    options?: AiCallOptions,
+  ) {
     const prompt = await draftBriefFromGrillingPrompt(input);
     const generate = agentGenerate(
       'draft-brief-from-grilling',
-      await this.resolveModel('draftBriefFromGrilling'),
+      await this.resolveModel('draftBriefFromGrilling', options?.model),
     );
     return generateStructured(generate, 'draft-brief-from-grilling', prompt, BriefDraft);
   }
 
-  async suggestFeatures(input: {
-    project: ProjectForAi;
-    count: number;
-    projectContext: ContextBlock[];
-    guidelines: GuidelineForAi[];
-    decisions: ContextBlock[];
-    dismissed: DismissedSuggestionForAi[];
-    pending: string[];
-  }) {
+  async suggestFeatures(
+    input: {
+      project: ProjectForAi;
+      count: number;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+      decisions: ContextBlock[];
+      dismissed: DismissedSuggestionForAi[];
+      pending: string[];
+    },
+    options?: AiCallOptions,
+  ) {
     const prompt = await suggestFeaturesPrompt(input);
-    const generate = agentGenerate('suggest-features', await this.resolveModel('suggestFeatures'));
+    const generate = agentGenerate(
+      'suggest-features',
+      await this.resolveModel('suggestFeatures', options?.model),
+    );
     return generateStructured(generate, 'suggest-features', prompt, FeatureSuggestionDrafts);
   }
 
-  async draftSpecFromSuggestion(input: {
-    project: ProjectForAi;
-    suggestion: SuggestionForAi;
-    projectContext: ContextBlock[];
-    guidelines: GuidelineForAi[];
-  }) {
+  async draftSpecFromSuggestion(
+    input: {
+      project: ProjectForAi;
+      suggestion: SuggestionForAi;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+    },
+    options?: AiCallOptions,
+  ) {
     const prompt = await draftSpecFromSuggestionPrompt(input);
     const generate = agentGenerate(
       'draft-spec-from-suggestion',
-      await this.resolveModel('draftSpecFromSuggestion'),
+      await this.resolveModel('draftSpecFromSuggestion', options?.model),
     );
     return generateStructured(generate, 'draft-spec-from-suggestion', prompt, SpecProposalDraft);
   }
 
-  async checkFeatureFit(input: {
-    project: ProjectForAi;
-    feature: FeatureForAi;
-    projectContext: ContextBlock[];
-    guidelines: GuidelineForAi[];
-  }) {
+  async checkFeatureFit(
+    input: {
+      project: ProjectForAi;
+      feature: FeatureForAi;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+    },
+    options?: AiCallOptions,
+  ) {
     const prompt = await checkFeatureFitPrompt(input);
-    const generate = agentGenerate('check-feature-fit', await this.resolveModel('checkFeatureFit'));
+    const generate = agentGenerate(
+      'check-feature-fit',
+      await this.resolveModel('checkFeatureFit', options?.model),
+    );
     return generateStructured(generate, 'check-feature-fit', prompt, FeatureFitDraft);
   }
 
-  async *chat(input: {
-    scope: ConversationScopeForAi;
-    context: ContextBlock[];
-    foundation: ProjectFoundationForAi;
-    summary: string;
-    recentMessages: ChatMessageForAi[];
-    tools: ChatTool[];
-    signal?: AbortSignal;
-  }): AsyncIterable<ChatChunk> {
+  async *chat(
+    input: {
+      scope: ConversationScopeForAi;
+      context: ContextBlock[];
+      foundation: ProjectFoundationForAi;
+      summary: string;
+      recentMessages: ChatMessageForAi[];
+      tools: ChatTool[];
+      signal?: AbortSignal;
+    },
+    options?: AiCallOptions,
+  ): AsyncIterable<ChatChunk> {
     const instructions = await chatPrompt(input);
-    const model = await this.resolveModel('chat');
+    const model = await this.resolveModel('chat', options?.model);
     yield* streamChat(model, instructions, input.recentMessages, input.tools, input.signal);
   }
 
-  async summarizeConversation(input: {
-    scope: ConversationScopeForAi;
-    summary: string;
-    messages: ChatMessageForAi[];
-  }) {
+  async summarizeConversation(
+    input: {
+      scope: ConversationScopeForAi;
+      summary: string;
+      messages: ChatMessageForAi[];
+    },
+    options?: AiCallOptions,
+  ) {
     const prompt = await summarizeConversationPrompt(input);
     const generate = agentGenerate(
       'summarize-conversation',
-      await this.resolveModel('summarizeConversation'),
+      await this.resolveModel('summarizeConversation', options?.model),
     );
     return generateStructured(generate, 'summarize-conversation', prompt, ConversationSummaryDraft);
   }

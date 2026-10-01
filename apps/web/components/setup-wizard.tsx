@@ -120,8 +120,9 @@ export function SetupWizard() {
         ) : (
           <>
             <p className="mb-6 text-ink-soft">
-              Vorasaan uses this model to draft Choices and Spec changes. You can change it later in
-              Settings.
+              Vorasaan uses this model to draft Choices and Spec changes. It becomes your first
+              provider and default Approved Model; you can add more providers and models later in
+              Settings → AI models.
             </p>
             <ProviderFields value={provider} onChange={setProvider} test={testAiDuringSetup} />
           </>

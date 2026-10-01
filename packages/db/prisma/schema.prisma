@@ -228,12 +228,14 @@ model Organization {
   name      String
   createdAt DateTime @default(now())
 
-  memberships  OrgMembership[]
-  invitations  Invitation[]
-  integrations OrgIntegration[]
-  projects     Project[]
-  chunks       ContentChunk[]
-  guidelines   GuidelineCriterion[]
+  memberships    OrgMembership[]
+  invitations    Invitation[]
+  integrations   OrgIntegration[]
+  approvedModels ApprovedModel[]
+  aiTaskModels   AiTaskModel[]
+  projects       Project[]
+  chunks         ContentChunk[]
+  guidelines     GuidelineCriterion[]
 }
 
 model OrgMembership {
@@ -264,21 +266,72 @@ model Invitation {
   @@index([organizationId, email])
 }
 
-// LLM provider and Atlassian credentials, set by an Admin in /setup or settings.
+// LLM providers, Atlassian and embeddings credentials, set by an Admin in /setup or settings.
 model OrgIntegration {
   id              String              @id @default(uuid())
   organizationId  String
   provider        IntegrationProvider
+  name            String? // LLM providers: the Admin's label, e.g. "Anthropic" or "Local 9Router"
   baseUrl         String?
   accountEmail    String? // Atlassian API tokens are paired with an email
-  model           String? // LLM providers: the model name, e.g. claude-opus-5-5
+  model           String? // EMBEDDINGS: the embedding model. LLM models are Approved Models.
   secretEncrypted String
-  isDefaultLlm    Boolean             @default(false)
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  approvedModels  ApprovedModel[]
 
-  @@unique([organizationId, provider])
+  // An Organization may connect several LLM providers (ADR 0010), but at most one
+  // ATLASSIAN and one EMBEDDINGS integration (partial unique index in the migration).
+  @@index([organizationId, provider])
+}
+
+// An AI model an Admin allows people to use (ADR 0010): a provider plus a model id,
+// with a name people recognize. Exactly one per Organization is the default
+// (at most one by a partial unique index in the migration; the service keeps one).
+model ApprovedModel {
+  id             String         @id @default(uuid())
+  organizationId String
+  integrationId  String // the LLM provider it runs on; a provider with models can't be deleted
+  modelId        String // the provider's model name, e.g. claude-opus-5-5
+  displayName    String // e.g. "Fast", "Best", "Local (no data leaves)"
+  note           String?
+  position       Int
+  isDefault      Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integration    OrgIntegration @relation(fields: [integrationId], references: [id], onDelete: NoAction)
+  taskModels     AiTaskModel[]
+
+  @@unique([organizationId, displayName])
+  @@index([organizationId, position])
+  @@index([integrationId])
+}
+
+// The AI tasks an Admin can set a model for. Each groups one or more AI calls.
+enum AiTaskKind {
+  CHOICES // a Decision Request's Choices
+  SPEC_PROPOSAL // Spec Proposals: after a Decision, from Attachments, from a Feature Suggestion
+  SUMMARIES // Attachment summaries and Conversation summaries
+  GRILLING // Grilling questions and the Brief Proposal drafted from the answers
+  FEATURE_SUGGESTIONS
+  FIT_CHECK // a new Feature against the Feature Guidelines
+  CHAT // Conversation replies
+}
+
+// The Approved Model an AI task uses. No row: the default Approved Model.
+// Removing the model removes the row, so the task falls back to the default.
+model AiTaskModel {
+  id              String        @id @default(uuid())
+  organizationId  String
+  task            AiTaskKind
+  approvedModelId String
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  approvedModel   ApprovedModel @relation(fields: [approvedModelId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, task])
+  @@index([approvedModelId])
 }
 
 // ─── Project / Team / Feature ───────────────────────────────────────────────

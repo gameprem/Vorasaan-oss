@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** The LLM providers an Admin can pick. */
+/** The kinds of LLM provider an Admin can connect. */
 export const AiProvider = z.enum(['ANTHROPIC', 'OPENAI', 'OPENAI_COMPATIBLE']);
 export type AiProvider = z.infer<typeof AiProvider>;
 
@@ -10,11 +10,22 @@ export const DEFAULT_MODELS: Record<AiProvider, string> = {
   OPENAI_COMPATIBLE: '',
 };
 
-const Model = z.string().trim().min(1, 'Enter a model name');
-const ApiKey = z.string().trim().min(1, 'Enter an API key');
+/** The name a provider gets when none is given (setup, and the migrated provider). */
+export const DEFAULT_PROVIDER_NAMES: Record<AiProvider, string> = {
+  ANTHROPIC: 'Anthropic',
+  OPENAI: 'OpenAI',
+  OPENAI_COMPATIBLE: 'Custom endpoint',
+};
+
+const Model = z.string().trim().min(1, 'Enter a model name').max(200);
+const ApiKey = z.string().trim().min(1, 'Enter an API key').max(4_000);
+const BaseUrl = z.url({ message: 'Enter the full URL, e.g. http://localhost:20128/v1' });
+const ProviderName = z.string().trim().min(1, 'Name the provider').max(100);
+const Id = z.uuid();
 
 /**
- * `apiKey` may be omitted when updating: the stored key is kept.
+ * One provider and its model, as the setup wizard asks for them: it becomes the
+ * first provider and the default Approved Model. `apiKey` is required at setup.
  * A custom endpoint needs its base URL, e.g. http://localhost:20128/v1 for 9Router.
  */
 export const AiSettingsInput = z.discriminatedUnion('provider', [
@@ -23,21 +34,11 @@ export const AiSettingsInput = z.discriminatedUnion('provider', [
   z.object({
     provider: z.literal('OPENAI_COMPATIBLE'),
     model: Model,
-    baseUrl: z.url({ message: 'Enter the full URL, e.g. http://localhost:20128/v1' }),
+    baseUrl: BaseUrl,
     apiKey: ApiKey.optional(),
   }),
 ]);
 export type AiSettingsInput = z.infer<typeof AiSettingsInput>;
-
-export const AiSettingsView = z.object({
-  configured: z.boolean(),
-  provider: AiProvider.nullable(),
-  model: z.string().nullable(),
-  baseUrl: z.string().nullable(),
-  /** Only the last four characters of the stored key, for recognition. */
-  apiKeyHint: z.string().nullable(),
-});
-export type AiSettingsView = z.infer<typeof AiSettingsView>;
 
 export const AiTestResult = z.object({
   ok: z.boolean(),
@@ -45,3 +46,130 @@ export const AiTestResult = z.object({
   latencyMs: z.number().nullable(),
 });
 export type AiTestResult = z.infer<typeof AiTestResult>;
+
+// ─── Providers (Admin) ──────────────────────────────────────────────────────
+
+/** Connects a provider. Several of the same kind are allowed (e.g. two endpoints). */
+export const CreateAiProviderInput = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('ANTHROPIC'), name: ProviderName, apiKey: ApiKey }),
+  z.object({ kind: z.literal('OPENAI'), name: ProviderName, apiKey: ApiKey }),
+  z.object({
+    kind: z.literal('OPENAI_COMPATIBLE'),
+    name: ProviderName,
+    baseUrl: BaseUrl,
+    apiKey: ApiKey,
+  }),
+]);
+export type CreateAiProviderInput = z.infer<typeof CreateAiProviderInput>;
+
+/** The kind can't change. A left-out key keeps the stored one; `baseUrl` is for custom endpoints. */
+export const UpdateAiProviderInput = z.object({
+  name: ProviderName.optional(),
+  baseUrl: BaseUrl.optional(),
+  apiKey: ApiKey.optional(),
+});
+export type UpdateAiProviderInput = z.infer<typeof UpdateAiProviderInput>;
+
+export const AiProviderView = z.object({
+  id: z.string(),
+  kind: AiProvider,
+  name: z.string(),
+  baseUrl: z.string().nullable(),
+  /** Only the last four characters of the stored key, for recognition. */
+  apiKeyHint: z.string(),
+  /** How many Approved Models run on it; a provider with models can't be removed. */
+  modelCount: z.number().int(),
+});
+export type AiProviderView = z.infer<typeof AiProviderView>;
+
+// ─── Approved Models (Admin) ────────────────────────────────────────────────
+
+const DisplayName = z.string().trim().min(1, 'Name the model, e.g. "Fast"').max(60);
+const Note = z.string().trim().max(300).nullable();
+
+/** The first Approved Model is the default; later ones only when `isDefault` is set. */
+export const CreateApprovedModelInput = z.object({
+  providerId: Id,
+  modelId: Model,
+  displayName: DisplayName,
+  note: Note.optional(),
+  isDefault: z.boolean().optional(),
+});
+export type CreateApprovedModelInput = z.infer<typeof CreateApprovedModelInput>;
+
+/**
+ * `isDefault: true` makes it the default. The default can't be unset directly:
+ * make another model the default instead.
+ */
+export const UpdateApprovedModelInput = z.object({
+  providerId: Id.optional(),
+  modelId: Model.optional(),
+  displayName: DisplayName.optional(),
+  note: Note.optional(),
+  isDefault: z.literal(true).optional(),
+});
+export type UpdateApprovedModelInput = z.infer<typeof UpdateApprovedModelInput>;
+
+export const ApprovedModelSettingsView = z.object({
+  id: z.string(),
+  providerId: z.string(),
+  providerName: z.string(),
+  providerKind: AiProvider,
+  modelId: z.string(),
+  displayName: z.string(),
+  note: z.string().nullable(),
+  position: z.number().int(),
+  isDefault: z.boolean(),
+});
+export type ApprovedModelSettingsView = z.infer<typeof ApprovedModelSettingsView>;
+
+// ─── Model per AI task (Admin) ──────────────────────────────────────────────
+
+/** The AI tasks an Admin sets a model for. Without one, a task uses the default. */
+export const AiTask = z.enum([
+  'CHOICES',
+  'SPEC_PROPOSAL',
+  'SUMMARIES',
+  'GRILLING',
+  'FEATURE_SUGGESTIONS',
+  'FIT_CHECK',
+  'CHAT',
+]);
+export type AiTask = z.infer<typeof AiTask>;
+
+/** The Approved Model for each task given; `null` (or leaving a task out) means the default. */
+export const SetAiTaskModelsInput = z.object({
+  tasks: z.partialRecord(AiTask, Id.nullable()),
+});
+export type SetAiTaskModelsInput = z.infer<typeof SetAiTaskModelsInput>;
+
+export const AiTaskModelView = z.object({
+  task: AiTask,
+  /** Null: the default Approved Model. */
+  approvedModelId: z.string().nullable(),
+  /** The VORASAAN_MODEL_* variables set on the server for this task; they win over Settings. */
+  envOverrides: z.array(z.string()),
+});
+export type AiTaskModelView = z.infer<typeof AiTaskModelView>;
+
+/** Settings → AI models. Never includes a key. */
+export const AiSettingsView = z.object({
+  providers: z.array(AiProviderView),
+  models: z.array(ApprovedModelSettingsView),
+  tasks: z.array(AiTaskModelView),
+});
+export type AiSettingsView = z.infer<typeof AiSettingsView>;
+
+// ─── For every member ───────────────────────────────────────────────────────
+
+/** An Approved Model as anyone in the Organization sees it: no provider, key or URL. */
+export const AiModelView = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  note: z.string().nullable(),
+  isDefault: z.boolean(),
+});
+export type AiModelView = z.infer<typeof AiModelView>;
+
+export const AiModelsView = z.object({ models: z.array(AiModelView) });
+export type AiModelsView = z.infer<typeof AiModelsView>;
