@@ -222,9 +222,10 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 - [x] OS notifications.
 
 ### Post-MVP (in order)
-1. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything.
-2. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec.
-3. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
-4. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.
-5. Browser-based `vorasaan login`.
-6. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.
+1. **Chat-first Web UI** ([ADR 0008](./docs/adr/0008-chat-first-web-ui.md)): a Sidebar (Inbox, Projects → Features, recent Conversations, Settings) and a Conversation with the AI per Project or Feature. The AI proposes through Action Cards that a person approves, and Grilling runs as per-person Conversations with follow-ups.
+2. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything.
+3. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec, as per-person Conversations (ADR 0008).
+4. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
+5. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.
+6. Browser-based `vorasaan login`.
+7. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.

@@ -119,3 +119,26 @@ Follow-ups recorded during the MVP reviews.
 | 0039 | [End-to-end browser tests in CI](./0039-e2e-in-ci.md) | none |
 | 0040 | [`GET /me/teams`](./0040-me-teams.md) | none |
 | 0041 | [Hardening follow-ups from the MVP reviews](./0041-hardening.md) | none |
+
+## Chat-first Web UI (Post-MVP 1)
+
+After the MVP release, the web app becomes a chat app (ADR 0008):
+- A Sidebar holds the Inbox, Projects → Features, recent Conversations, and Settings.
+- In a Conversation, the AI proposes through Action Cards that a person approves.
+- Grilling runs as per-person Conversations with follow-ups.
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0042 | [Conversations and streamed AI replies](./0042-conversations.md) | none |
+| 0043 | [Action Cards: the AI proposes from a Conversation](./0043-action-cards.md) | 0042 |
+| 0044 | [Grilling as per-person Conversations with follow-ups](./0044-grilling-in-conversations.md) | 0042 |
+| 0045 | [Web: app shell with the Sidebar](./0045-web-shell-sidebar.md) | 0042 |
+| 0046 | [Web: the chat view with Action Cards and a document panel](./0046-web-chat-view.md) | 0043, 0045 |
+| 0047 | [Web: Grilling in the chat view](./0047-web-grilling-chat.md) | 0044, 0046 |
+| 0048 | [End-to-end tests for the chat-first UI](./0048-chat-e2e.md) | 0039, 0046, 0047 |
+
+```
+0042 ─┬─ 0043 ─┐
+      ├─ 0045 ─┴─ 0046 ─┬─ 0047 ── 0048
+      └─ 0044 ──────────┘
+```
