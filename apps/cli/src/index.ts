@@ -28,10 +28,10 @@ try {
         confirm: confirmInTerminal,
         print: (text) => console.log(text),
       }),
-    tui: async (api) => {
+    tui: async (api, options) => {
       // Loaded lazily so the scriptable subcommands never pay for React and Ink.
       const { runTui } = await import('./tui/run.tsx');
-      await runTui(api, await currentRepo(process.cwd(), api.baseUrl));
+      await runTui(api, await currentRepo(process.cwd(), api.baseUrl), options);
     },
   }).parseAsync(process.argv);
 } catch (error) {

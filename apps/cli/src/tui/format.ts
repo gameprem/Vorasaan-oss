@@ -1,11 +1,13 @@
-import type {
-  DecisionRequestStatus,
-  DecisionRequestView,
-  InboxItem,
-  NotificationView,
+import {
+  type DecisionRequestStatus,
+  type DecisionRequestView,
+  diffLines,
+  type InboxItem,
+  type NotificationView,
 } from '@vorasaan/shared';
 import { ApiError } from '../api.ts';
 import { ROLE_LABEL } from '../commands/raise-flow.ts';
+import type { Line } from './components.tsx';
 
 /** One readable line for a failed request; the TUI shows it instead of crashing. */
 export function errorMessage(error: unknown): string {
@@ -42,23 +44,29 @@ export function inboxItemRequestId(item: InboxItem): string | undefined {
   return undefined;
 }
 
-/** What to show for an Inbox Item that has no Decision Request to open. */
-export function inboxItemDetail(item: InboxItem): string[] {
+/**
+ * Identifies an Inbox Item across reloads, to notice new ones. A request keeps its key
+ * when the item changes kind (Claim turns CLAIM into DECIDE), so acting never notifies.
+ */
+export function inboxItemKey(item: InboxItem): string {
+  if ('decisionRequest' in item) return `request:${item.decisionRequest.id}`;
   switch (item.kind) {
     case 'APPROVE_PROPOSAL':
-      return [
-        `A Spec Proposal (${item.specProposal.source.toLowerCase()}) on "${item.feature.title}" waits for your approval.`,
-        'Review and approve it in the web app.',
-      ];
+      return `spec-proposal:${item.specProposal.id}`;
+    case 'ANSWER_GRILLING':
+      return `grilling:${item.grilling.id}:${item.grilling.round}:${item.grilling.role}`;
+    case 'APPROVE_BRIEF_PROPOSAL':
+      return `brief-proposal:${item.briefProposal.id}`;
+  }
+}
+
+/** What to show for an Inbox Item that has no screen of its own (a Grilling). */
+export function inboxItemDetail(item: InboxItem): string[] {
+  switch (item.kind) {
     case 'ANSWER_GRILLING':
       return [
         `Grilling of "${item.project.name}": ${item.grilling.unanswered} question(s) of the ${item.grilling.round.toLowerCase()} round are asked to the ${ROLE_LABEL[item.grilling.role]}s.`,
         'Answer them in the web app.',
-      ];
-    case 'APPROVE_BRIEF_PROPOSAL':
-      return [
-        `A Brief Proposal (${item.briefProposal.source.toLowerCase()}) on "${item.project.name}" waits for your approval.`,
-        'Review and approve it in the web app.',
       ];
     default:
       return [inboxItemLine(item)];
@@ -131,8 +139,55 @@ export function requestDetail(r: DecisionRequestView): string[] {
     );
     if (r.decision.rationale) lines.push(`  ${r.decision.rationale}`);
   }
-  if (r.status === 'OPEN' || r.status === 'NEEDS_INFO') {
-    lines.push('', 'Decide, Claim or answer it in the web app.');
+  if (r.specProposal) {
+    lines.push(
+      '',
+      `Spec Proposal: ${r.specProposal.status.toLowerCase()} (p opens it with the diff)`,
+    );
   }
   return lines;
+}
+
+const CONTEXT = 3;
+
+/**
+ * A proposal's change as colored lines: "+" green, "-" red, unchanged dim, and long
+ * unchanged runs folded to CONTEXT lines around each change (like the web's diff).
+ */
+export function diffView(
+  base: string,
+  proposed: string,
+): { lines: Line[]; added: number; removed: number } {
+  const diff = diffLines(base, proposed);
+  const lines: Line[] = [];
+  let i = 0;
+  while (i < diff.length) {
+    const line = diff[i];
+    if (!line) break;
+    if (line.kind === 'ADDED') lines.push({ text: `+ ${line.text}`, color: 'green' });
+    else if (line.kind === 'REMOVED') lines.push({ text: `- ${line.text}`, color: 'red' });
+    if (line.kind !== 'UNCHANGED') {
+      i++;
+      continue;
+    }
+    let end = i;
+    while (end < diff.length && diff[end]?.kind === 'UNCHANGED') end++;
+    const run = diff.slice(i, end).map((l) => ({ text: `  ${l.text}`, dim: true }));
+    const head = i === 0 ? [] : run.slice(0, CONTEXT);
+    const tail = end === diff.length ? [] : run.slice(-CONTEXT);
+    if (run.length <= head.length + tail.length + 1) lines.push(...run);
+    else {
+      lines.push(
+        ...head,
+        { text: `  ⋯ ${run.length - head.length - tail.length} unchanged lines`, color: 'cyan' },
+        ...tail,
+      );
+    }
+    i = end;
+  }
+  return {
+    lines,
+    added: diff.filter((l) => l.kind === 'ADDED').length,
+    removed: diff.filter((l) => l.kind === 'REMOVED').length,
+  };
 }

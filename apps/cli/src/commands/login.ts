@@ -56,7 +56,8 @@ export async function runLogin(
     }
     throw error;
   }
-  await writeStoredConfig({ apiUrl, token }, env);
+  // Keep other settings (e.g. "notify": false) across sign-ins.
+  await writeStoredConfig({ ...stored, apiUrl, token }, env);
   console.log(`Signed in as ${me.name} (${me.email}). Saved to ${configPath(env)}`);
   return me;
 }

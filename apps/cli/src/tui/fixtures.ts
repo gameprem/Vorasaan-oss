@@ -1,19 +1,23 @@
 import type {
+  BriefProposalView,
   DecisionRequestView,
   FeatureSummaryView,
   InboxItem,
   NotificationList,
   RaiseDecisionRequestInput,
+  SpecProposalView,
   SpecVersionView,
   SubmitDecisionRequestInput,
+  TeamView,
 } from '@vorasaan/shared';
+import { ApiError } from '../api.ts';
 import type { TuiApi } from './App.tsx';
 
 /** Test data and an in-memory fake of the server, so TUI tests never touch the network. */
 
 export const PROJECT_A = '00000000-0000-4000-8000-00000000000a';
 export const PROJECT_B = '00000000-0000-4000-8000-00000000000b';
-const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+export const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const at = '2026-09-30T10:00:00.000Z';
 const person = (n: number, name: string) => ({ id: id(n), name });
 
@@ -141,38 +145,121 @@ export function specVersions(featureId: string): SpecVersionView[] {
   }));
 }
 
+export const ME = person(1, 'Beam');
+export const SPEC_PROPOSAL_ID = id(801);
+export const BRIEF_PROPOSAL_ID = id(802);
+export const TEAM_ID = id(201);
+
+export function specProposal(overrides: Partial<SpecProposalView> = {}): SpecProposalView {
+  return {
+    id: SPEC_PROPOSAL_ID,
+    featureId: id(101),
+    source: 'DECISION',
+    status: 'PENDING',
+    approver: person(1, 'Beam'),
+    baseVersion: 2,
+    baseMarkdown: '# Async checkout\nPoll the provider.\nKeep receipts.\n',
+    proposedMarkdown: '# Async checkout\nPoll every minute.\nKeep receipts.\nRetry twice.\n',
+    decisionRequestId: id(301),
+    createdAt: at,
+    ...overrides,
+  };
+}
+
+export function briefProposal(overrides: Partial<BriefProposalView> = {}): BriefProposalView {
+  return {
+    id: BRIEF_PROPOSAL_ID,
+    projectId: PROJECT_A,
+    source: 'GRILLING',
+    status: 'PENDING',
+    approver: person(1, 'Beam'),
+    baseVersion: 1,
+    baseMarkdown: '# Brief\nOld goal\n',
+    proposedMarkdown: '# Brief\nNew goal\n',
+    summary: 'Sharper goal',
+    resultVersion: null,
+    createdAt: at,
+    ...overrides,
+  };
+}
+
+export const team: TeamView = {
+  id: TEAM_ID,
+  name: 'Checkout',
+  project: { id: PROJECT_A, name: 'Mobile Banking' },
+  members: [
+    { userId: id(1), name: 'Beam', email: 'beam@acme.test', roles: ['BACKEND'] },
+    { userId: id(2), name: 'Pim', email: 'pim@acme.test', roles: ['PO'] },
+    { userId: id(5), name: 'Nok', email: 'nok@acme.test', roles: ['PO', 'QA'] },
+  ],
+  features: [],
+  canManage: false,
+};
+
 export type FakeCalls = {
   raised: RaiseDecisionRequestInput[];
   submitted: { id: string; input: SubmitDecisionRequestInput }[];
   withdrawn: string[];
   loads: string[];
+  /** Every action: method name and its arguments. */
+  actions: { name: string; args: unknown[] }[];
+};
+
+export type FakeOptions = {
+  fail?: (keyof TuiApi)[];
+  /** Reject the named method like the server would (status and message). */
+  reject?: Partial<Record<keyof TuiApi, { status: number; message: string }>>;
+  myRequests?: DecisionRequestView[];
+  /** What GET /decision-requests/:id returns, by id (else a default OPEN request). */
+  requests?: Record<string, DecisionRequestView>;
+  inbox?: InboxItem[];
+  notifications?: NotificationList;
+  specProposal?: SpecProposalView;
+  briefProposal?: BriefProposalView;
 };
 
 /** A fake TuiApi; `fail` makes the named method reject like an unreachable server. */
-export function fakeApi(
-  options: { fail?: (keyof TuiApi)[]; myRequests?: DecisionRequestView[] } = {},
-): { api: TuiApi; calls: FakeCalls } {
-  const calls: FakeCalls = { raised: [], submitted: [], withdrawn: [], loads: [] };
+export function fakeApi(options: FakeOptions = {}): { api: TuiApi; calls: FakeCalls } {
+  const calls: FakeCalls = { raised: [], submitted: [], withdrawn: [], loads: [], actions: [] };
   const guard = async <T>(name: keyof TuiApi, value: () => T): Promise<T> => {
     calls.loads.push(name);
     if (options.fail?.includes(name)) {
       throw new Error('Cannot reach the Vorasaan server at http://api.test');
     }
+    const rejection = options.reject?.[name];
+    if (rejection) throw new ApiError(rejection.status, rejection.message);
     return value();
   };
+  const action = <T>(name: keyof TuiApi, args: unknown[], value: () => T) =>
+    guard(name, () => {
+      calls.actions.push({ name, args });
+      return value();
+    });
   const api: TuiApi = {
-    inbox: () => guard('inbox', () => inboxItems),
-    notifications: () => guard('notifications', () => notifications),
+    me: () => guard('me', () => ({ ...ME, email: 'beam@acme.test', isAdmin: false })),
+    inbox: () => guard('inbox', () => options.inbox ?? inboxItems),
+    notifications: () => guard('notifications', () => options.notifications ?? notifications),
     myRequests: () => guard('myRequests', () => options.myRequests ?? [request()]),
     listFeatures: () => guard('listFeatures', () => features),
+    feature: (featureId) =>
+      guard('feature', () => ({
+        ...(features.find((f) => f.id === featureId) ?? (features[0] as FeatureSummaryView)),
+        jiraIssueKey: null,
+        jiraIssueUrl: null,
+        openBlockers: 0,
+      })),
+    team: () => guard('team', () => team),
     specVersions: (featureId) => guard('specVersions', () => specVersions(featureId)),
     decisionRequest: (requestId) =>
-      guard('decisionRequest', () =>
-        request(
-          requestId === id(302)
-            ? { id: requestId, title: 'Which retry policy?', kind: 'QUESTION' }
-            : { id: requestId },
-        ),
+      guard(
+        'decisionRequest',
+        () =>
+          options.requests?.[requestId] ??
+          request(
+            requestId === id(302)
+              ? { id: requestId, title: 'Which retry policy?', kind: 'QUESTION' }
+              : { id: requestId },
+          ),
       ),
     raise: (input) =>
       guard('raise', () => {
@@ -195,8 +282,32 @@ export function fakeApi(
     withdraw: (requestId) =>
       guard('withdraw', () => {
         calls.withdrawn.push(requestId);
+        calls.actions.push({ name: 'withdraw', args: [requestId] });
         return request({ id: requestId, status: 'WITHDRAWN' });
       }),
+    claim: (requestId) => action('claim', [requestId], () => request({ id: requestId })),
+    reassign: (requestId, userId) =>
+      action('reassign', [requestId, userId], () => request({ id: requestId })),
+    postMessage: (requestId, input) =>
+      action('postMessage', [requestId, input], () => request({ id: requestId })),
+    decide: (requestId, input) =>
+      action('decide', [requestId, input], () => ({
+        request: request({ id: requestId, status: 'DECIDED' }),
+        proposal: specProposal(),
+      })),
+    specProposal: () => guard('specProposal', () => options.specProposal ?? specProposal()),
+    approveSpecProposal: (proposalId) => action('approveSpecProposal', [proposalId], () => ({})),
+    rejectSpecProposal: (proposalId) => action('rejectSpecProposal', [proposalId], () => ({})),
+    briefProposal: () => guard('briefProposal', () => options.briefProposal ?? briefProposal()),
+    approveBriefProposal: (proposalId) => action('approveBriefProposal', [proposalId], () => ({})),
+    rejectBriefProposal: (proposalId) => action('rejectBriefProposal', [proposalId], () => ({})),
+    markNotificationRead: (notificationId) =>
+      action('markNotificationRead', [notificationId], () => {
+        const n = notifications.notifications[0];
+        if (!n) throw new Error('no notification');
+        return { ...n, readAt: at };
+      }),
+    markAllNotificationsRead: () => action('markAllNotificationsRead', [], () => ({ updated: 1 })),
   };
   return { api, calls };
 }

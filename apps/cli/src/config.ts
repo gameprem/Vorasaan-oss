@@ -6,10 +6,11 @@ export const DEFAULT_API_URL = 'http://localhost:4000';
 
 /** Who the CLI acts as: an access token (normal), or a dev user id (VORASAAN_DEV_AUTH servers). */
 export type Credentials = { token: string } | { devUserId: string };
-export type CliConfig = { apiUrl: string; credentials: Credentials };
+export type CliConfig = { apiUrl: string; credentials: Credentials; notify: boolean };
 
 type Env = Record<string, string | undefined>;
-type StoredConfig = { apiUrl?: string; token?: string };
+/** `notify: false` turns the TUI's OS notifications off, like `--no-notify`. */
+type StoredConfig = { apiUrl?: string; token?: string; notify?: boolean };
 
 export class ConfigError extends Error {}
 
@@ -45,7 +46,8 @@ export async function loadConfig(env: Env = process.env): Promise<CliConfig> {
   const stored = await readStoredConfig(env);
   const apiUrl = env.VORASAAN_API_URL || stored.apiUrl || DEFAULT_API_URL;
   const token = env.VORASAAN_TOKEN || stored.token;
-  if (token) return { apiUrl, credentials: { token } };
-  if (env.VORASAAN_USER) return { apiUrl, credentials: { devUserId: env.VORASAAN_USER } };
+  const notify = stored.notify !== false;
+  if (token) return { apiUrl, credentials: { token }, notify };
+  if (env.VORASAAN_USER) return { apiUrl, credentials: { devUserId: env.VORASAAN_USER }, notify };
   throw new ConfigError('You are not signed in. Run `vorasaan login` first.');
 }

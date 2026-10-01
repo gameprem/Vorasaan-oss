@@ -59,9 +59,9 @@ describe('vorasaan TUI', () => {
     await press(stdin, KEY.enter);
     await waitFor(frame, 'Which retry policy?');
     await waitFor(frame, 'A. Poll every minute');
-    expect(frame()).not.toContain('Decide, Claim or answer it in the web app.');
+    expect(frame()).not.toContain('risk: High');
     await press(stdin, ' ');
-    await waitFor(frame, 'Decide, Claim or answer it in the web app.');
+    await waitFor(frame, 'risk: High');
 
     await press(stdin, KEY.escape);
     await waitFor(frame, 'Inbox Items (2)');

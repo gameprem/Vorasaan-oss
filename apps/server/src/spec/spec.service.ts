@@ -8,12 +8,13 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { PrismaClient, User } from '@vorasaan/db';
-import type {
-  DecisionLogEntry,
-  RevertSpecInput,
-  SpecDiff,
-  SpecProposalView,
-  SpecVersionView,
+import {
+  type DecisionLogEntry,
+  diffLines,
+  type RevertSpecInput,
+  type SpecDiff,
+  type SpecProposalView,
+  type SpecVersionView,
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort } from '../ai/ai.port.ts';
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
@@ -25,7 +26,6 @@ import {
   splitFeatureSpec,
 } from '../retrieval/context-retriever.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
-import { diffLines } from './diff.ts';
 import { normalizeMarkdown } from './markdown.ts';
 import {
   type SpecProposalWithRelations,

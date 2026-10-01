@@ -3,44 +3,66 @@ import type {
   FeatureSummaryView,
   InboxItem,
   NotificationList,
+  ServerEvent,
   SpecVersionView,
 } from '@vorasaan/shared';
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import type { VorasaanApi } from '../api.ts';
 import type { RepoScope } from '../commands/raise-flow.ts';
+import type { LiveStatus } from '../events.ts';
+import type { Notifier } from '../notify.ts';
 import { ListView, type Row, ScrollText } from './components.tsx';
 import {
   errorMessage,
   inboxItemDetail,
+  inboxItemKey,
   inboxItemLine,
   inboxItemRequestId,
   notificationLine,
-  requestDetail,
   requestLine,
 } from './format.ts';
+import { type ProposalKind, ProposalScreen } from './ProposalScreen.tsx';
 import { RaiseForm } from './RaiseForm.tsx';
+import { RequestScreen } from './RequestScreen.tsx';
+import { type Remote, RemoteStatus, useRemote } from './remote.tsx';
 
 /** What the TUI needs from the server; tests pass a fake. */
 export type TuiApi = Pick<
   VorasaanApi,
+  | 'me'
   | 'inbox'
   | 'notifications'
   | 'myRequests'
   | 'listFeatures'
+  | 'feature'
+  | 'team'
   | 'specVersions'
   | 'decisionRequest'
   | 'raise'
   | 'submit'
   | 'withdraw'
+  | 'claim'
+  | 'reassign'
+  | 'postMessage'
+  | 'decide'
+  | 'specProposal'
+  | 'approveSpecProposal'
+  | 'rejectSpecProposal'
+  | 'briefProposal'
+  | 'approveBriefProposal'
+  | 'rejectBriefProposal'
+  | 'markNotificationRead'
+  | 'markAllNotificationsRead'
 >;
 
 export type TuiRepo = RepoScope & { notice?: string };
 
-type Remote<T> =
-  | { status: 'loading' }
-  | { status: 'ok'; data: T }
-  | { status: 'error'; message: string };
+/** Starts the live event stream; returns a function that stops it. Tests pass a fake. */
+export type LiveFeed = (handlers: {
+  onEvent: (event: ServerEvent) => void;
+  onStatus: (status: LiveStatus) => void;
+}) => () => void;
 
 type InboxData = { items: InboxItem[]; notifications: NotificationList };
 
@@ -49,7 +71,8 @@ type Tab = 0 | 1 | 2;
 
 type View =
   | { kind: 'list' }
-  | { kind: 'request'; id: string }
+  | { kind: 'request'; id: string; actHint?: boolean }
+  | { kind: 'proposal'; proposal: ProposalKind; id: string; title?: string }
   | { kind: 'spec'; feature: { id: string; title: string } }
   | { kind: 'text'; title: string; lines: string[] }
   | { kind: 'raise' };
@@ -59,51 +82,21 @@ export const HELP_LINE =
 
 const FULL_HELP = [
   'Tab / Shift-Tab or 1 2 3  switch tabs (refreshes the tab)',
-  '↑ ↓ or j k                move; in a Spec or request: scroll (space/b page, g/G ends)',
+  '↑ ↓ or j k                move; in a Spec, request or diff: scroll (space/b page, g/G ends)',
   'Enter                     open the selected item · Esc  back to the list',
   'r                         raise a Blocker or Question with context from this repository',
   'R                         refresh · a  (Features) all Projects / only the bound Project',
+  'm / M                     (Inbox) mark the Notification read / all Notifications read',
+  'In a request              d decide · c Claim · i ask for info · s reassign · a answer',
+  '                          n note · w withdraw · p open its Spec Proposal',
+  'In a proposal             a approve · x reject (asks first)',
   'q or Ctrl-C               quit',
 ];
 
-/** Loads once per `key` (e.g. the id being shown); a failure becomes a message. */
-function useRemote<T>(load: () => Promise<T>, key: string): Remote<T> {
-  const [state, setState] = useState<Remote<T>>({ status: 'loading' });
-  const loadRef = useRef(load);
-  loadRef.current = load;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reload exactly when the key changes
-  useEffect(() => {
-    let live = true;
-    setState({ status: 'loading' });
-    loadRef.current().then(
-      (data) => live && setState({ status: 'ok', data }),
-      (error) => live && setState({ status: 'error', message: errorMessage(error) }),
-    );
-    return () => {
-      live = false;
-    };
-  }, [key]);
-  return state;
-}
-
-function RemoteStatus({ state }: { state: Remote<unknown> }) {
-  if (state.status === 'loading') return <Text dimColor>Loading…</Text>;
-  if (state.status === 'error') {
-    return <Text color="red">✖ {state.message} (R to retry)</Text>;
-  }
-  return null;
-}
-
-function RequestScreen({ api, id, height }: { api: TuiApi; id: string; height: number }) {
-  const state = useRemote<DecisionRequestView>(() => api.decisionRequest(id), id);
-  if (state.status !== 'ok') return <RemoteStatus state={state} />;
-  return (
-    <Box flexDirection="column">
-      <Text bold>{state.data.title}</Text>
-      <ScrollText lines={requestDetail(state.data)} height={height} />
-    </Box>
-  );
-}
+/** Live events arrive in bursts (one action touches several people): refresh once. */
+const LIVE_DEBOUNCE_MS = 300;
+/** More new Inbox Items than this at once become a single OS notification. */
+const MAX_NOTIFICATIONS = 3;
 
 /** The latest Spec Version of a Feature, scrollable. */
 export function SpecScreen({
@@ -144,15 +137,40 @@ export function SpecScreen({
   );
 }
 
+function LiveIndicator({ status }: { status: LiveStatus | undefined }) {
+  if (!status) return null;
+  switch (status.state) {
+    case 'connecting':
+      return <Text dimColor> ◌ connecting…</Text>;
+    case 'live':
+      return <Text color="green"> ● live</Text>;
+    case 'offline':
+      return (
+        <Text color="yellow">
+          {' '}
+          ○ offline · retrying in {Math.max(1, Math.round(status.retryInMs / 1000))}s
+        </Text>
+      );
+    case 'stopped':
+      return <Text color="red"> ✖ live updates off</Text>;
+  }
+}
+
 export function App({
   api,
   repo,
   height: fixedHeight,
+  live,
+  notifier,
 }: {
   api: TuiApi;
   repo: TuiRepo;
   /** Rows for lists and text; defaults to the terminal height. */
   height?: number;
+  /** Live updates over `GET /events`; without it the TUI refreshes on keys only. */
+  live?: LiveFeed;
+  /** OS notifications for new Inbox Items and Notifications. */
+  notifier?: Pick<Notifier, 'notify' | 'disabledReason'>;
 }) {
   const { exit } = useApp();
   const { rows } = useWindowSize();
@@ -166,24 +184,53 @@ export function App({
   const [inbox, setInbox] = useState<Remote<InboxData>>({ status: 'loading' });
   const [requests, setRequests] = useState<Remote<DecisionRequestView[]>>({ status: 'loading' });
   const [features, setFeatures] = useState<Remote<FeatureSummaryView[]>>({ status: 'loading' });
+  const [meId, setMeId] = useState<string>();
+  const [liveStatus, setLiveStatus] = useState<LiveStatus>();
+  /** Bumped by live events and actions: open screens reload quietly. */
+  const [tick, setTick] = useState(0);
+  /** A form inside a screen has the keyboard: global keys (q, r, Tab…) are off. */
+  const [capture, setCapture] = useState(false);
+  const [flash, setFlash] = useState<{ tone: 'ok' | 'error'; text: string }>();
+
+  // Inbox Items seen so far; undefined until the first load, which never notifies.
+  const seenItems = useRef<Set<string> | undefined>(undefined);
+  const notifierRef = useRef(notifier);
+  notifierRef.current = notifier;
 
   // Every load settles into state; a failed request becomes a message, never a crash.
+  // A quiet load (live refresh) keeps the list on screen until the new one arrives.
   const load = useCallback(
-    (which: Tab) => {
-      const settle = <T,>(set: (r: Remote<T>) => void, promise: Promise<T>) => {
-        set({ status: 'loading' });
+    (which: Tab, quiet = false) => {
+      const settle = <T,>(
+        set: (update: (r: Remote<T>) => Remote<T>) => void,
+        promise: Promise<T>,
+      ) => {
+        if (!quiet) set(() => ({ status: 'loading' }));
         promise.then(
-          (data) => set({ status: 'ok', data }),
-          (error) => set({ status: 'error', message: errorMessage(error) }),
+          (data) => set(() => ({ status: 'ok', data })),
+          (error) =>
+            set((r) =>
+              quiet && r.status === 'ok' ? r : { status: 'error', message: errorMessage(error) },
+            ),
         );
       };
       if (which === 0) {
         settle(
           setInbox,
-          Promise.all([api.inbox(), api.notifications()]).then(([items, notifications]) => ({
-            items,
-            notifications,
-          })),
+          Promise.all([api.inbox(), api.notifications()]).then(([items, notifications]) => {
+            const seen = seenItems.current;
+            const fresh = seen ? items.filter((item) => !seen.has(inboxItemKey(item))) : [];
+            // A burst (e.g. back online after a while) becomes one notification, not a flood.
+            if (fresh.length > MAX_NOTIFICATIONS) {
+              notifierRef.current?.notify('Vorasaan: needs you', `${fresh.length} new Inbox Items`);
+            } else {
+              for (const item of fresh) {
+                notifierRef.current?.notify('Vorasaan: needs you', inboxItemLine(item));
+              }
+            }
+            seenItems.current = new Set(items.map(inboxItemKey));
+            return { items, notifications };
+          }),
         );
       } else if (which === 1) settle(setRequests, api.myRequests());
       else settle(setFeatures, api.listFeatures());
@@ -194,6 +241,57 @@ export function App({
   useEffect(() => {
     load(tab);
   }, [tab, load]);
+
+  useEffect(() => {
+    api.me().then(
+      (me) => setMeId(me.id),
+      () => {},
+    );
+  }, [api]);
+
+  // Something changed on the server or here: refresh the Inbox (it drives the OS
+  // notifications), the tab on screen and any open request or proposal, quietly.
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const refreshAll = useCallback(() => {
+    load(0, true);
+    if (tabRef.current !== 0) load(tabRef.current, true);
+    setTick((t) => t + 1);
+  }, [load]);
+
+  useEffect(() => {
+    if (!live) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let wasLive = false;
+    const later = () => {
+      clearTimeout(timer);
+      timer = setTimeout(refreshAll, LIVE_DEBOUNCE_MS);
+    };
+    const stop = live({
+      onEvent: (event) => {
+        if (event.event === 'notification.created') {
+          // Without the unread marker: the OS shows one plain line.
+          const line = notificationLine(event.data.notification).replace(/^[•\s]+/, '');
+          notifierRef.current?.notify('Vorasaan', line);
+        }
+        later();
+      },
+      onStatus: (status) => {
+        setLiveStatus(status);
+        // Events may have been missed while offline: catch up on reconnect.
+        if (status.state === 'live') {
+          if (wasLive) later();
+          wasLive = true;
+        }
+      },
+    });
+    return () => {
+      clearTimeout(timer);
+      stop();
+    };
+  }, [live, refreshAll]);
+
+  const onCapture = useCallback((on: boolean) => setCapture(on), []);
 
   const bound = repo.projectId;
   const featureList =
@@ -245,10 +343,33 @@ export function App({
       if (current < items.length) {
         const item = items[current];
         if (!item) return;
+        if (item.kind === 'APPROVE_PROPOSAL') {
+          setView({
+            kind: 'proposal',
+            proposal: 'spec',
+            id: item.specProposal.id,
+            title: item.feature.title,
+          });
+          return;
+        }
+        if (item.kind === 'APPROVE_BRIEF_PROPOSAL') {
+          setView({
+            kind: 'proposal',
+            proposal: 'brief',
+            id: item.briefProposal.id,
+            title: item.project.name,
+          });
+          return;
+        }
         const requestId = inboxItemRequestId(item);
         setView(
           requestId
-            ? { kind: 'request', id: requestId }
+            ? {
+                kind: 'request',
+                id: requestId,
+                // A Delegate decides for someone else: the request names them, not me.
+                actHint: item.kind === 'DECIDE' && item.decisionRequest.onBehalfOf !== null,
+              }
             : { kind: 'text', title: inboxItemLine(item), lines: inboxItemDetail(item) },
         );
         return;
@@ -268,6 +389,20 @@ export function App({
     }
   };
 
+  const markRead = (all: boolean) => {
+    if (inbox.status !== 'ok') return;
+    const n = inbox.data.notifications.notifications[current - inbox.data.items.length];
+    if (!all && !n) return;
+    setFlash(undefined);
+    (all ? api.markAllNotificationsRead() : api.markNotificationRead(n?.id ?? '')).then(
+      () => {
+        setFlash({ tone: 'ok', text: all ? 'All Notifications marked read.' : 'Marked read.' });
+        load(0, true);
+      },
+      (error) => setFlash({ tone: 'error', text: errorMessage(error) }),
+    );
+  };
+
   useInput(
     (input, key) => {
       if (input === 'q') return exit();
@@ -279,7 +414,9 @@ export function App({
       }
       if (key.escape) return setView({ kind: 'list' });
       if (view.kind !== 'list') return;
+      setFlash(undefined);
       if (input === 'R') return load(tab);
+      if (tab === 0 && (input === 'm' || input === 'M')) return markRead(input === 'M');
       if (input === 'a' && tab === 2 && bound) {
         setShowAll((v) => !v);
         setSelected((s) => [s[0], s[1], 0]);
@@ -296,7 +433,7 @@ export function App({
       else if (key.upArrow || input === 'k') move(-1);
       else if (key.return) open();
     },
-    { isActive: view.kind !== 'raise' },
+    { isActive: view.kind !== 'raise' && !capture },
   );
 
   let body: ReactNode;
@@ -313,7 +450,34 @@ export function App({
       />
     );
   } else if (view.kind === 'request') {
-    body = <RequestScreen api={api} id={view.id} height={height} />;
+    body = (
+      <RequestScreen
+        key={view.id}
+        api={api}
+        id={view.id}
+        height={height}
+        meId={meId}
+        actHint={view.actHint}
+        tick={tick}
+        onCapture={onCapture}
+        onChanged={refreshAll}
+        onOpenProposal={(id) => setView({ kind: 'proposal', proposal: 'spec', id })}
+      />
+    );
+  } else if (view.kind === 'proposal') {
+    body = (
+      <ProposalScreen
+        key={`${view.proposal}:${view.id}`}
+        api={api}
+        kind={view.proposal}
+        id={view.id}
+        title={view.title}
+        height={height}
+        tick={tick}
+        onCapture={onCapture}
+        onChanged={refreshAll}
+      />
+    );
   } else if (view.kind === 'spec') {
     body = <SpecScreen api={api} feature={view.feature} height={height} />;
   } else if (view.kind === 'text') {
@@ -334,6 +498,9 @@ export function App({
         )}
         {inbox.status === 'ok' && (
           <ListView rows={inboxRows} selected={current} height={height} empty="No Notifications." />
+        )}
+        {inbox.status === 'ok' && inbox.data.notifications.unreadCount > 0 && (
+          <Text dimColor>m mark the selected Notification read · M mark all read</Text>
         )}
       </Box>
     );
@@ -388,8 +555,15 @@ export function App({
             {i + 1} {name}{' '}
           </Text>
         ))}
+        <LiveIndicator status={liveStatus} />
       </Box>
       {repo.notice && <Text color="yellow">{repo.notice}</Text>}
+      {liveStatus?.state === 'stopped' && <Text color="red">{liveStatus.reason}</Text>}
+      {flash && (
+        <Text color={flash.tone === 'ok' ? 'green' : 'red'}>
+          {flash.tone === 'ok' ? '✔' : '✖'} {flash.text}
+        </Text>
+      )}
       <Box flexDirection="column" marginY={1}>
         {body}
       </Box>
@@ -400,6 +574,11 @@ export function App({
               {line}
             </Text>
           ))}
+          {notifier && (
+            <Text dimColor>
+              {notifier.disabledReason ?? 'OS notifications are on (--no-notify turns them off)'}
+            </Text>
+          )}
         </Box>
       ) : (
         <Text dimColor>{HELP_LINE}</Text>
