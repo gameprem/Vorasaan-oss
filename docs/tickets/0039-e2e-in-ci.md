@@ -19,5 +19,5 @@ The main web flows are checked automatically on every PR, instead of by hand in 
 - A CI job that starts Postgres (pgvector), the server and the web app, runs the tests, and uploads the Playwright report on failure. Uses the Playwright browsers the job installs; no secrets.
 
 ## Acceptance criteria
-- [ ] The four flows pass in CI on a PR.
+- [x] The four flows pass in CI on a PR (#55, e2e job in about 2 minutes).
 - [x] Breaking one of them (e.g. hiding the Claim button) turns the job red. (Checked locally: with the Claim form hidden, the flow fails at "Claim it".)
