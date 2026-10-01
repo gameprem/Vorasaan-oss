@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import { ActionCardView } from './action-card.ts';
-import { ConversationMessageRole } from './enums.ts';
+import { PersonRef } from './decision-request.ts';
+import {
+  ConversationMessageRole,
+  GrillingRoundKind,
+  GrillingRoundStatus,
+  GrillingStatus,
+  TeamRole,
+} from './enums.ts';
 
 const Id = z.uuid();
 const Timestamp = z.iso.datetime();
@@ -79,11 +86,56 @@ export const ConversationMessageView = z.object({
 });
 export type ConversationMessageView = z.infer<typeof ConversationMessageView>;
 
+/**
+ * Set on a Grilling Conversation (ticket 0044): the Grilling and the round its
+ * owner answers there, as a holder of `role`. Its scope is always the Project.
+ */
+export const GrillingConversationRef = z.object({
+  /** The Grilling. */
+  id: Id,
+  round: GrillingRoundKind,
+  role: TeamRole,
+});
+export type GrillingConversationRef = z.infer<typeof GrillingConversationRef>;
+
+/**
+ * A question of the round, as the owner of a Grilling Conversation sees it:
+ * - ANSWERED: someone holding the role answered it (here, in their own
+ *   Conversation, or through the Grilling API); `answeredBy` says who;
+ * - ASKING: the question this Conversation is asking now;
+ * - OPEN: not answered yet, and not asked here yet;
+ * - SKIPPED: the owner skipped it here (someone else may still answer it), or
+ *   the round was skipped before anyone did.
+ */
+export const GrillingConversationQuestion = z.object({
+  id: Id,
+  position: z.int().nonnegative(),
+  text: z.string(),
+  status: z.enum(['ANSWERED', 'ASKING', 'OPEN', 'SKIPPED']),
+  answeredBy: PersonRef.nullable(),
+  answeredAt: Timestamp.nullable(),
+  /** ASKING: the follow-ups asked on it so far. */
+  followUpsAsked: z.int().nonnegative(),
+});
+export type GrillingConversationQuestion = z.infer<typeof GrillingConversationQuestion>;
+
+/** A Grilling Conversation's round and its progress, e.g. "3 of 5 answered". */
+export const GrillingConversationProgress = z.object({
+  grillingStatus: GrillingStatus,
+  roundStatus: GrillingRoundStatus,
+  answered: z.int().nonnegative(),
+  total: z.int().nonnegative(),
+  questions: z.array(GrillingConversationQuestion),
+});
+export type GrillingConversationProgress = z.infer<typeof GrillingConversationProgress>;
+
 /** A Conversation in a list, without its messages. */
 export const ConversationListItem = z.object({
   id: Id,
   title: z.string(),
   scope: ConversationScopeView,
+  /** Set when this is a Grilling Conversation. */
+  grilling: GrillingConversationRef.nullable(),
   createdAt: Timestamp,
   /** When the last message was written. */
   updatedAt: Timestamp,
@@ -98,6 +150,8 @@ export const ConversationView = ConversationListItem.extend({
   messages: z.array(ConversationMessageView),
   /** Each is linked to the message that made it (`messageId`). */
   actionCards: z.array(ActionCardView),
+  /** A Grilling Conversation's round and where each question stands; null otherwise. */
+  grillingProgress: GrillingConversationProgress.nullable(),
 });
 export type ConversationView = z.infer<typeof ConversationView>;
 
@@ -170,3 +224,14 @@ export const ConversationFailedEvent = z.object({
   message: z.string(),
 });
 export type ConversationFailedEvent = z.infer<typeof ConversationFailedEvent>;
+
+/**
+ * The server added messages to a Conversation outside a reply: in a Grilling
+ * Conversation, when someone else answered the question it was asking, or its
+ * round ended (ticket 0044). Each is stored.
+ */
+export const ConversationAppendedEvent = z.object({
+  conversationId: Id,
+  messages: z.array(ConversationMessageView),
+});
+export type ConversationAppendedEvent = z.infer<typeof ConversationAppendedEvent>;

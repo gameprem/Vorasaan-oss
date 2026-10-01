@@ -3,7 +3,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient, TeamRole } from '@vorasaan/db';
 import { SEED, seed } from '@vorasaan/db/seed';
 import type { BriefVersionView, GrillingView, InboxItem, ServerEvent } from '@vorasaan/shared';
-import { AiOutputError, type ContextBlock } from '../ai/ai.port.ts';
+import { AiOutputError, type ContextBlock, type GrillingAnswerForAi } from '../ai/ai.port.ts';
 import { FAKE_GRILLING_TOPICS, type FakeAiPort } from '../ai/fake-ai.port.ts';
 import type { WorkflowMemory } from '../ai/workflow-memory.ts';
 import { EventBus } from '../inbox/event-bus.ts';
@@ -24,7 +24,7 @@ type DraftInput = {
   briefMarkdown: string;
   projectContext: ContextBlock[];
   memory: WorkflowMemory;
-  answers: { round: string; question: string; answer: string }[];
+  answers: GrillingAnswerForAi[];
 };
 
 describe('Grilling', () => {
@@ -153,7 +153,14 @@ describe('Grilling', () => {
       expect.objectContaining({
         kind: 'ANSWER_GRILLING',
         project: { id: wealth.id, name: 'Wealth' },
-        grilling: { id: started.body.id, round: 'BUSINESS', role: 'PO', unanswered: 4 },
+        grilling: {
+          id: started.body.id,
+          round: 'BUSINESS',
+          role: 'PO',
+          unanswered: 4,
+          // Her Grilling Conversation for the round (0044).
+          conversationId: expect.any(String),
+        },
       }),
     ]);
     const awaiting = await asUser(olga)<GrillingView[]>('GET', '/grillings?awaiting=me');
@@ -336,6 +343,8 @@ describe('Grilling', () => {
         round: 'BUSINESS',
         question: 'What is deliberately out of scope (non-goals)?',
         answer: 'Answer to "What is deliberately out of scope (non-goals)?"',
+        answeredBy: { name: 'Pim', role: 'PO' },
+        followUps: [],
       },
     ]);
     expect(draft?.memory.rounds.map((r) => r.summary)).toEqual([

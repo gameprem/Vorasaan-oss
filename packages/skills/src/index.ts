@@ -7,6 +7,7 @@ export const SKILLS = [
   'summarize-attachment',
   'draft-spec-from-attachments',
   'grilling-questions',
+  'grilling-follow-up',
   'draft-brief-from-grilling',
   'suggest-features',
   'draft-spec-from-suggestion',

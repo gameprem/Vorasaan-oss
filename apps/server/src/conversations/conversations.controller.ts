@@ -70,3 +70,18 @@ export class ConversationsController {
     await this.conversations.delete(user, id);
   }
 }
+
+/** Grilling Conversations (ticket 0044): each holder of a round's Team Role answers in their own. */
+@Controller('grillings')
+export class GrillingConversationsController {
+  constructor(private readonly conversations: ConversationsService) {}
+
+  /**
+   * My Grilling Conversation for the round being asked, opened if I have none
+   * yet. Only holders of the round's Team Role (403); 409 once it isn't running.
+   */
+  @Post(':id/conversation')
+  open(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.conversations.openGrilling(user, id);
+  }
+}

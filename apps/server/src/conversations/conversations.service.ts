@@ -1,12 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import {
-  BadGatewayException,
-  ConflictException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma, PrismaClient, User } from '@vorasaan/db';
 import {
   type ActionCardView,
@@ -34,6 +27,10 @@ import { clipForAi } from '../attachments/attachment-context.ts';
 import { projectAccess } from '../brief/brief-access.ts';
 import { FeatureGuidelinesService } from '../feature-guidelines/feature-guidelines.service.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
+import {
+  GrillingConversationsService,
+  type GrillingTurn,
+} from '../grilling/grilling-conversations.service.ts';
 import { EventBus } from '../inbox/event-bus.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import {
@@ -48,6 +45,8 @@ import {
   toConversationMessageView,
   toConversationView,
 } from './conversation.view.ts';
+import { conversationNotFound as notFound, replyFailed } from './conversation-errors.ts';
+import { ConversationLocks } from './conversation-locks.ts';
 
 /** How much of a Conversation the AI gets on each turn, besides its retrieved context (ADR 0007). */
 export const CONVERSATION_LIMITS = {
@@ -99,11 +98,14 @@ type Turn = {
  *
  * One reply is written at a time per Conversation; this process holds the lock,
  * as it holds the event bus (one server process per Organization).
+ *
+ * A Grilling Conversation (0044) is answered here too, but its turns go to
+ * GrillingConversationsService: the server asks the round's questions and the
+ * AI only decides on follow-ups.
  */
 @Injectable()
 export class ConversationsService {
   private readonly logger = new Logger(ConversationsService.name);
-  private readonly replying = new Set<string>();
 
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
@@ -113,6 +115,8 @@ export class ConversationsService {
     private readonly guidelines: FeatureGuidelinesService,
     private readonly bus: EventBus,
     private readonly cards: ActionCardsService,
+    private readonly locks: ConversationLocks,
+    private readonly grilling: GrillingConversationsService,
   ) {}
 
   /** Anyone in the scope's Organization starts one; the AI replies to the first message. */
@@ -155,13 +159,20 @@ export class ConversationsService {
       orderBy: { position: 'asc' },
     });
     const actionCards = await this.cards.forConversation(user, id);
-    return toConversationView(conversation, messages, actionCards);
+    const progress = conversation.grillingRoundId ? await this.grilling.progress(id) : null;
+    return toConversationView(conversation, messages, actionCards, progress);
+  }
+
+  /** `POST /grillings/:id/conversation`: my Grilling Conversation for the round being asked. */
+  async openGrilling(user: User, grillingId: string): Promise<ConversationView> {
+    return this.get(user, await this.grilling.open(user, grillingId));
   }
 
   /** The owner's next message, and the AI's reply to it. */
   async send(user: User, id: string, content: string): Promise<ConversationTurnView> {
-    await this.ownedWithAccess(user, id);
+    const conversation = await this.ownedWithAccess(user, id);
     return this.exclusively(id, async () => {
+      if (conversation.grillingRoundId) await this.grilling.assertCanWrite(user, id);
       await this.db.$transaction(async (tx) => {
         const position = await nextPosition(tx, id);
         await tx.conversationMessage.create({
@@ -169,7 +180,7 @@ export class ConversationsService {
         });
         await tx.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
       });
-      return toTurnView(await this.reply(user, id));
+      return toTurnView(await this.turn(user, conversation, id));
     });
   }
 
@@ -179,7 +190,7 @@ export class ConversationsService {
    * goes on from its results.
    */
   async retry(user: User, id: string): Promise<ConversationTurnView> {
-    await this.ownedWithAccess(user, id);
+    const conversation = await this.ownedWithAccess(user, id);
     return this.exclusively(id, async () => {
       const last = await this.db.conversationMessage.findFirst({
         where: { conversationId: id },
@@ -189,7 +200,8 @@ export class ConversationsService {
       if (last?.role !== 'USER' && last?.role !== 'TOOL') {
         throw new ConflictException('Nothing to retry: the last message already has its reply');
       }
-      return toTurnView(await this.reply(user, id));
+      if (conversation.grillingRoundId) await this.grilling.assertCanWrite(user, id);
+      return toTurnView(await this.turn(user, conversation, id));
     });
   }
 
@@ -199,6 +211,19 @@ export class ConversationsService {
   }
 
   // ─── A turn ────────────────────────────────────────────────────────────────
+
+  /** A Grilling Conversation's turn, or else the AI's reply. */
+  private async turn(user: User, conversation: ConversationWithScope, id: string): Promise<Turn> {
+    if (!conversation.grillingRoundId) return this.reply(user, id);
+    const turn: GrillingTurn = await this.grilling.reply(user, id);
+    return {
+      conversation: toConversationListItem(turn.conversation),
+      message: turn.message,
+      steps: [],
+      reply: turn.reply,
+      actionCards: [],
+    };
+  }
 
   /**
    * Replies to the trailing message: folds old messages into the summary if
@@ -467,31 +492,9 @@ export class ConversationsService {
   }
 
   /** Runs `work` while no other reply is being written in this Conversation. */
-  private async exclusively<T>(id: string, work: () => Promise<T>): Promise<T> {
-    if (this.replying.has(id)) {
-      throw new ConflictException('A reply is still being written in this Conversation');
-    }
-    this.replying.add(id);
-    try {
-      return await work();
-    } finally {
-      this.replying.delete(id);
-    }
+  private exclusively<T>(id: string, work: () => Promise<T>): Promise<T> {
+    return this.locks.exclusively(id, work);
   }
-}
-
-function notFound() {
-  return new NotFoundException('Conversation not found');
-}
-
-/** A 502 that tells a client which Conversation to retry in (ConversationReplyFailed). */
-function replyFailed(conversationId: string, message: string) {
-  return new BadGatewayException({
-    statusCode: 502,
-    error: 'Bad Gateway',
-    message,
-    conversationId,
-  });
 }
 
 /** The first line of the first message, shortened. */

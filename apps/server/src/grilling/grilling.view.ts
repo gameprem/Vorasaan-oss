@@ -1,5 +1,6 @@
 import type { Prisma } from '@vorasaan/db';
-import { GRILLING_ROUNDS, type GrillingView } from '@vorasaan/shared';
+import { GRILLING_ROUNDS, GrillingFollowUp, type GrillingView } from '@vorasaan/shared';
+import { z } from 'zod';
 
 const person = { select: { id: true, name: true } } as const;
 
@@ -15,6 +16,15 @@ export const grillingInclude = {
 
 export type GrillingWithRelations = Prisma.GrillingGetPayload<{ include: typeof grillingInclude }>;
 export type GrillingRoundWithQuestions = GrillingWithRelations['rounds'][number];
+
+const StoredFollowUps = z.array(GrillingFollowUp);
+
+/** A question's stored follow-ups (ticket 0044); none when unset or unreadable. */
+export function followUpsOf(value: Prisma.JsonValue | null): GrillingFollowUp[] {
+  if (value === null) return [];
+  const parsed = StoredFollowUps.safeParse(value);
+  return parsed.success ? parsed.data : [];
+}
 
 /** What the viewer may do, worked out by the service. */
 export type GrillingPermissions = { canAnswer: boolean; canManage: boolean };
@@ -43,6 +53,7 @@ export function toGrillingView(g: GrillingWithRelations, can: GrillingPermission
           answer: q.answer,
           answeredBy: q.answeredBy,
           answeredAt: q.answeredAt?.toISOString() ?? null,
+          followUps: followUpsOf(q.followUps),
           skipped: q.skipped,
         })),
       };

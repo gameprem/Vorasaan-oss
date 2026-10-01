@@ -74,6 +74,13 @@ export class ModelRoutingAiPort implements AiPort {
     return this.engine.grillingQuestions(input, await this.options('grillingQuestions', options));
   }
 
+  async grillingFollowUp(
+    input: Parameters<AiPort['grillingFollowUp']>[0],
+    options?: AiCallOptions,
+  ) {
+    return this.engine.grillingFollowUp(input, await this.options('grillingFollowUp', options));
+  }
+
   async draftBriefFromGrilling(
     input: Parameters<AiPort['draftBriefFromGrilling']>[0],
     options?: AiCallOptions,

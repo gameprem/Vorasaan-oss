@@ -14,6 +14,7 @@ export type AiTask =
   | 'summarizeAttachment'
   | 'draftSpecFromAttachments'
   | 'grillingQuestions'
+  | 'grillingFollowUp'
   | 'draftBriefFromGrilling'
   | 'suggestFeatures'
   | 'draftSpecFromSuggestion'
@@ -31,6 +32,7 @@ export const AI_TASKS: Record<AiTask, { kind: AiTaskKind; env: string }> = {
     env: 'VORASAAN_MODEL_DRAFT_SPEC_FROM_ATTACHMENTS',
   },
   grillingQuestions: { kind: 'GRILLING', env: 'VORASAAN_MODEL_GRILLING_QUESTIONS' },
+  grillingFollowUp: { kind: 'GRILLING', env: 'VORASAAN_MODEL_GRILLING_FOLLOW_UP' },
   draftBriefFromGrilling: { kind: 'GRILLING', env: 'VORASAAN_MODEL_DRAFT_BRIEF_FROM_GRILLING' },
   suggestFeatures: { kind: 'FEATURE_SUGGESTIONS', env: 'VORASAAN_MODEL_SUGGEST_FEATURES' },
   draftSpecFromSuggestion: {
