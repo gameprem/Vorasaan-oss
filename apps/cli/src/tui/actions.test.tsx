@@ -370,6 +370,23 @@ describe('Notifications and live updates', () => {
     expect(ui.notified).toEqual([['Vorasaan: needs you', '5 new Inbox Items']]);
   });
 
+  test("a Conversation's streamed reply doesn't refresh anything", async () => {
+    const feed = fakeLive();
+    const ui = open({}, { live: feed.live });
+    await waitFor(ui.frame, 'Inbox Items (5)');
+    const before = ui.calls.loads.length;
+    const conversationId = id(700);
+    const messageId = id(701);
+    feed.emit({ event: 'conversation.delta', data: { conversationId, messageId, delta: 'Hi' } });
+    feed.emit({
+      event: 'conversation.failed',
+      data: { conversationId, messageId, message: 'The AI failed' },
+    });
+    await settle(400);
+    expect(ui.calls.loads.length).toBe(before);
+    expect(ui.notified).toEqual([]);
+  });
+
   test('"retrying in Ns" counts down while offline', async () => {
     const feed = fakeLive();
     const ui = open({}, { live: feed.live });

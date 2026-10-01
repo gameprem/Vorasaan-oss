@@ -26,6 +26,10 @@ export const CONTEXT_BUDGET = {
   featureSuggestions: 12_000,
   /** The Feature Guidelines fit check of a Feature about to be created. */
   featureFit: 6_000,
+  /** Each turn of a Feature Conversation: as much as a Decision Request's AI tasks get. */
+  conversationFeature: 6_000,
+  /** Each turn of a Project Conversation: as much as Grilling and Feature Suggestions get. */
+  conversationProject: 12_000,
 } as const;
 
 /** What a block's tag and attributes (kind, id, title...) cost in the prompt, roughly. */

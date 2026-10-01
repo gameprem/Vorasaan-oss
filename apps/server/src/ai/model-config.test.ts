@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { z } from 'zod';
 import { MastraAiPort } from './mastra-ai.port.ts';
 import { toMastraModel } from './model-config.ts';
 
@@ -58,5 +59,41 @@ describe('MastraAiPort', () => {
       'stop',
     );
     expect(calls).toBe(2);
+  });
+
+  const chatInput = {
+    scope: { kind: 'PROJECT' as const, project: { name: 'Mobile Banking' } },
+    context: [],
+    foundation: { brief: null, guidelines: [] },
+    summary: '',
+    recentMessages: [{ role: 'USER' as const, content: 'Hi' }],
+    tools: [],
+  };
+
+  async function drain(stream: AsyncIterable<unknown>) {
+    for await (const _ of stream) {
+      // Only the error matters.
+    }
+  }
+
+  test('a chat reply resolves the chat model when it starts streaming', async () => {
+    const tasks: string[] = [];
+    const port = new MastraAiPort(async (task) => {
+      tasks.push(task);
+      throw new Error('stop before any network call');
+    });
+    await expect(drain(port.chat(chatInput))).rejects.toThrow('stop');
+    await expect(
+      port.summarizeConversation({ scope: chatInput.scope, summary: '', messages: [] }),
+    ).rejects.toThrow('stop');
+    expect(tasks).toEqual(['chat', 'summarizeConversation']);
+  });
+
+  test('chat refuses tools until Action Cards wire them up, rather than dropping them', async () => {
+    const port = new MastraAiPort(async () => 'anthropic/never-called');
+    const tool = { name: 'searchContext', description: 'd', inputSchema: z.object({}) };
+    await expect(drain(port.chat({ ...chatInput, tools: [tool] }))).rejects.toThrow(
+      'not supported',
+    );
   });
 });

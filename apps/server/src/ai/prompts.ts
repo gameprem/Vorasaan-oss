@@ -2,7 +2,9 @@ import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
 import { renderSkill } from '@vorasaan/skills';
 import type {
   AttachmentForAi,
+  ChatMessageForAi,
   ContextBlock,
+  ConversationScopeForAi,
   DecisionForAi,
   DismissedSuggestionForAi,
   FeatureForAi,
@@ -24,11 +26,11 @@ const KIND_MEANING = {
  * Neutralises anything in untrusted text that could open or close one of the
  * prompt's data blocks (<attachment>, <context>, <spec>, <brief>, <guidelines>,
  * <memory>, <answers>, <answer>, <decisions>, <dismissed>, <suggestions>, <suggestion>,
- * <feature>), so retrieved content can't escape its fence in the prompt.
+ * <feature>, <summary>, <message>), so retrieved content can't escape its fence in the prompt.
  */
 export function fence(text: string): string {
   return text.replace(
-    /<(\s*\/?\s*(?:attachment|context|spec|brief|guidelines|memory|answers?|decisions|dismissed|suggestions?|feature)\b)/gi,
+    /<(\s*\/?\s*(?:attachment|context|spec|brief|guidelines|memory|answers?|decisions|dismissed|suggestions?|feature|summary|messages?)\b)/gi,
     '‹$1',
   );
 }
@@ -309,5 +311,52 @@ export function checkFeatureFitPrompt(input: {
     feature: fence(feature),
     context: renderContext(input.projectContext, { projectLevel: true }),
     guidelines: renderGuidelines(input.guidelines),
+  });
+}
+
+/** What a Conversation is about, for the prompt's first line. Names are untrusted. */
+export function describeConversationScope(scope: ConversationScopeForAi): string {
+  const project = `the Project "${attribute(scope.project.name)}"`;
+  if (scope.kind === 'PROJECT') return project;
+  return `the Feature "${attribute(scope.feature.title)}" of ${project}`;
+}
+
+/** The instructions of a Conversation's reply; the recent messages follow as the chat itself. */
+export function chatPrompt(input: {
+  scope: ConversationScopeForAi;
+  context: ContextBlock[];
+  foundation: ProjectFoundationForAi;
+  summary: string;
+}) {
+  return renderSkill('chat', {
+    scope: describeConversationScope(input.scope),
+    scopeKind: input.scope.kind === 'FEATURE' ? 'Feature' : 'Project',
+    brief: renderBrief(input.foundation.brief),
+    guidelines: renderGuidelines(input.foundation.guidelines),
+    context: renderContext(input.context, { projectLevel: input.scope.kind === 'PROJECT' }),
+    summary: input.summary.trim() ? fence(input.summary) : '(Nothing earlier.)',
+  });
+}
+
+/** Conversation messages as fenced, numbered blocks; every one is untrusted. */
+export function renderConversationMessages(messages: ChatMessageForAi[]): string {
+  if (messages.length === 0) return '(No messages.)';
+  return messages
+    .map((m, i) => {
+      const from = m.role === 'USER' ? 'person' : m.role === 'ASSISTANT' ? 'assistant' : 'tool';
+      return `<message index="${i + 1}" from="${from}">\n${fence(m.content)}\n</message>`;
+    })
+    .join('\n\n');
+}
+
+export function summarizeConversationPrompt(input: {
+  scope: ConversationScopeForAi;
+  summary: string;
+  messages: ChatMessageForAi[];
+}) {
+  return renderSkill('summarize-conversation', {
+    scope: describeConversationScope(input.scope),
+    summary: input.summary.trim() ? fence(input.summary) : '(Empty: this is the first fold.)',
+    messages: renderConversationMessages(input.messages),
   });
 }

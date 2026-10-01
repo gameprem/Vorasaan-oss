@@ -11,6 +11,8 @@ export const SKILLS = [
   'suggest-features',
   'draft-spec-from-suggestion',
   'check-feature-fit',
+  'chat',
+  'summarize-conversation',
 ] as const;
 export type SkillName = (typeof SKILLS)[number];
 

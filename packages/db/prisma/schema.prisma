@@ -185,6 +185,8 @@ model User {
   featureSuggestionsGenerated FeatureSuggestion[] @relation("FeatureSuggestionGeneratedBy")
   featureSuggestionsDecided   FeatureSuggestion[] @relation("FeatureSuggestionDecidedBy")
 
+  conversations Conversation[] @relation("ConversationOwner")
+
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
   delegationsCreated  Delegation[] @relation("DelegationCreatedBy")
@@ -295,6 +297,7 @@ model Project {
   guidelines     GuidelineCriterion[]
   grillings      Grilling[]
   suggestions    FeatureSuggestion[]
+  conversations  Conversation[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -367,6 +370,7 @@ model Feature {
   notifications    Notification[]
   chunks           ContentChunk[]
   suggestion       FeatureSuggestion? // the Feature Suggestion it was accepted from, if any
+  conversations    Conversation[]
 
   @@index([teamId])
   @@index([jiraIssueKey])
@@ -805,4 +809,54 @@ model FeatureSuggestion {
   decidedBy          User?                   @relation("FeatureSuggestionDecidedBy", fields: [decidedById], references: [id])
 
   @@index([projectId, status, createdAt])
+}
+
+// ─── Conversations (ADR 0008, ticket 0042) ────────────────────────────────────
+
+enum ConversationMessageRole {
+  USER // what the owner wrote
+  ASSISTANT // the AI's reply, stored once its stream completed
+  TOOL // a tool's result for the AI's next step (Action Cards, ticket 0043)
+}
+
+// A person's chat with the AI about a Project, or about one of its Features
+// (featureId set; projectId is then the Feature's Project). Only its owner reads
+// it. Each turn the AI gets `summary` (the messages before `summarizedThrough`,
+// folded together) plus the messages from it on, never the whole history (ADR 0007).
+model Conversation {
+  id                String                @id @default(uuid())
+  ownerId           String
+  projectId         String
+  featureId         String?
+  title             String
+  summary           String                @default("")
+  summarizedThrough Int                   @default(0) // messages with a lower position are in `summary`
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt // bumped by every message
+  owner             User                  @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  project           Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  feature           Feature?              @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  messages          ConversationMessage[]
+
+  @@index([ownerId, updatedAt])
+  @@index([projectId])
+  @@index([featureId])
+}
+
+// One message of a Conversation, numbered from 0 in the order written.
+// `toolCalls` (ASSISTANT) holds the tools the AI called, as [{ id, name, args }];
+// `toolCallId` (TOOL) names the call a result answers. Action Cards (0043) point
+// at the message that made them.
+model ConversationMessage {
+  id             String                  @id @default(uuid())
+  conversationId String
+  position       Int
+  role           ConversationMessageRole
+  content        String
+  toolCalls      Json?
+  toolCallId     String?
+  createdAt      DateTime                @default(now())
+  conversation   Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, position])
 }

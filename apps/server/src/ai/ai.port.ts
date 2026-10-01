@@ -173,7 +173,67 @@ export const FeatureFitDraft = z.object({
 });
 export type FeatureFitDraft = z.infer<typeof FeatureFitDraft>;
 
+/** What a Conversation (ticket 0042) is about, as the AI sees it. Titles are untrusted. */
+export type ConversationScopeForAi =
+  | { kind: 'PROJECT'; project: ProjectForAi }
+  | { kind: 'FEATURE'; project: ProjectForAi; feature: FeatureForAi };
+
+/** A tool the AI called, as stored on its message. `args` came from the AI: untrusted. */
+export type ChatToolCall = { id: string; name: string; args: unknown };
+
+/**
+ * One message of a Conversation as AI input. USER content is the owner's own words;
+ * ASSISTANT content (and its tool calls) is earlier AI output; TOOL is a tool's
+ * result for the call `toolCallId`. All of it is untrusted data.
+ */
+export type ChatMessageForAi =
+  | { role: 'USER'; content: string }
+  | { role: 'ASSISTANT'; content: string; toolCalls?: ChatToolCall[] }
+  | { role: 'TOOL'; content: string; toolCallId: string };
+
+/**
+ * A tool the AI may call in a Conversation. Every tool only proposes or reads
+ * (ADR 0008); the server runs it, never the model. Action Cards (0043) add them.
+ */
+export type ChatTool = { name: string; description: string; inputSchema: z.ZodType };
+
+/** What a chat reply streams: pieces of its text, and the tools it calls. */
+export type ChatChunk = { type: 'text'; delta: string } | { type: 'tool-call'; call: ChatToolCall };
+
+export const ConversationSummaryDraft = z.object({
+  summary: z.string().trim().min(1),
+});
+export type ConversationSummaryDraft = z.infer<typeof ConversationSummaryDraft>;
+
 export interface AiPort {
+  /**
+   * The AI's reply in a Conversation (ticket 0042), streamed as it is written.
+   * It gets the scope's retrieved context, the summary of earlier turns and only
+   * the most recent messages (ADR 0007), never the whole history. Iterating
+   * throws when the provider fails; `signal` stops the reply.
+   */
+  chat(input: {
+    scope: ConversationScopeForAi;
+    /** Retrieved context: ContextRetriever.forFeature or forProject. */
+    context: ContextBlock[];
+    /** The Project Brief (Feature scope) and the effective Guidelines. */
+    foundation: ProjectFoundationForAi;
+    /** Earlier turns folded together; empty before the first fold. */
+    summary: string;
+    /** The messages after the summary, oldest first, ending with the owner's latest. */
+    recentMessages: ChatMessageForAi[];
+    /** The tools offered on this turn; none yet (0043 adds them). */
+    tools: ChatTool[];
+    signal?: AbortSignal;
+  }): AsyncIterable<ChatChunk>;
+
+  /** The Conversation's summary with `messages` (the oldest not yet in it) folded in. */
+  summarizeConversation(input: {
+    scope: ConversationScopeForAi;
+    summary: string;
+    messages: ChatMessageForAi[];
+  }): Promise<ConversationSummaryDraft>;
+
   generateChoices(input: {
     specMarkdown: string;
     request: RequestForAi;

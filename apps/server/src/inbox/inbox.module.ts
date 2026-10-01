@@ -10,6 +10,6 @@ import { NotificationsService } from './notifications.service.ts';
 @Module({
   controllers: [InboxController, EventsController],
   providers: [EventBus, InboxService, NotificationsService, AuthService],
-  exports: [NotificationsService],
+  exports: [NotificationsService, EventBus],
 })
 export class InboxModule {}

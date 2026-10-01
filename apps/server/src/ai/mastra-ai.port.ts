@@ -6,7 +6,12 @@ import {
   type AttachmentForAi,
   AttachmentSummary,
   BriefDraft,
+  type ChatChunk,
+  type ChatMessageForAi,
+  type ChatTool,
   type ContextBlock,
+  type ConversationScopeForAi,
+  ConversationSummaryDraft,
   type DecisionForAi,
   type DismissedSuggestionForAi,
   FeatureFitDraft,
@@ -24,6 +29,7 @@ import {
 } from './ai.port.ts';
 import type { MastraModel } from './model-config.ts';
 import {
+  chatPrompt,
   checkFeatureFitPrompt,
   draftBriefFromGrillingPrompt,
   draftSpecFromAttachmentsPrompt,
@@ -33,6 +39,7 @@ import {
   grillingQuestionsPrompt,
   suggestFeaturesPrompt,
   summarizeAttachmentPrompt,
+  summarizeConversationPrompt,
 } from './prompts.ts';
 import { generateStructured, type StructuredGenerate } from './structured.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
@@ -50,7 +57,9 @@ export type AiTask =
   | 'draftBriefFromGrilling'
   | 'suggestFeatures'
   | 'draftSpecFromSuggestion'
-  | 'checkFeatureFit';
+  | 'checkFeatureFit'
+  | 'chat'
+  | 'summarizeConversation';
 
 /** Called on every request, so a provider saved in Settings applies immediately. */
 export type ModelResolver = (task: AiTask) => Promise<MastraModel>;
@@ -209,6 +218,81 @@ export class MastraAiPort implements AiPort {
     const prompt = await checkFeatureFitPrompt(input);
     const generate = agentGenerate('check-feature-fit', await this.resolveModel('checkFeatureFit'));
     return generateStructured(generate, 'check-feature-fit', prompt, FeatureFitDraft);
+  }
+
+  async *chat(input: {
+    scope: ConversationScopeForAi;
+    context: ContextBlock[];
+    foundation: ProjectFoundationForAi;
+    summary: string;
+    recentMessages: ChatMessageForAi[];
+    tools: ChatTool[];
+    signal?: AbortSignal;
+  }): AsyncIterable<ChatChunk> {
+    if (input.tools.length) {
+      // Tools arrive with Action Cards (0043); never silently drop one before then.
+      throw new Error('Chat tools are not supported yet');
+    }
+    const instructions = await chatPrompt(input);
+    const model = await this.resolveModel('chat');
+    yield* streamChat(model, instructions, input.recentMessages, input.signal);
+  }
+
+  async summarizeConversation(input: {
+    scope: ConversationScopeForAi;
+    summary: string;
+    messages: ChatMessageForAi[];
+  }) {
+    const prompt = await summarizeConversationPrompt(input);
+    const generate = agentGenerate(
+      'summarize-conversation',
+      await this.resolveModel('summarizeConversation'),
+    );
+    return generateStructured(generate, 'summarize-conversation', prompt, ConversationSummaryDraft);
+  }
+}
+
+/** The recent messages as the chat itself. Tool calls and results reach the AI from 0043 on. */
+function toAgentMessages(messages: ChatMessageForAi[]) {
+  return messages.map((m) => {
+    if (m.role === 'USER') return { role: 'user' as const, content: m.content };
+    if (m.role === 'ASSISTANT') return { role: 'assistant' as const, content: m.content };
+    return {
+      role: 'user' as const,
+      content: `(Result of tool call ${m.toolCallId})\n${m.content}`,
+    };
+  });
+}
+
+/** A Conversation reply: plain text streamed as written, one model step, no server-side tools. */
+async function* streamChat(
+  model: MastraModel,
+  instructions: string,
+  messages: ChatMessageForAi[],
+  signal: AbortSignal | undefined,
+): AsyncIterable<ChatChunk> {
+  const agent = new Agent({ id: 'chat', name: 'chat', instructions, model: model as AgentModel });
+  const output = await agent.stream(toAgentMessages(messages), {
+    maxSteps: 1,
+    ...(signal ? { abortSignal: signal } : {}),
+  });
+  for await (const chunk of output.fullStream) {
+    if (chunk.type === 'text-delta') {
+      if (chunk.payload.text) yield { type: 'text', delta: chunk.payload.text };
+    } else if (chunk.type === 'tool-call') {
+      yield {
+        type: 'tool-call',
+        call: {
+          id: chunk.payload.toolCallId,
+          name: chunk.payload.toolName,
+          args: chunk.payload.args ?? {},
+        },
+      };
+    } else if (chunk.type === 'error') {
+      throw chunk.payload.error instanceof Error
+        ? chunk.payload.error
+        : new Error(`The chat stream failed: ${String(chunk.payload.error)}`);
+    }
   }
 }
 

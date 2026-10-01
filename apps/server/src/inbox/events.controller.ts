@@ -10,7 +10,9 @@ type RawReply = { hijack(): void; raw: ServerResponse };
 
 /**
  * `GET /events`: a Server-Sent Events stream of `inbox.changed` and
- * `notification.created` for the signed-in user.
+ * `notification.created` for the signed-in user, and of `conversation.delta`,
+ * `conversation.done` and `conversation.failed` while the AI replies in one of
+ * their own Conversations.
  *
  * It uses the API's normal auth (IdentityGuard): `Authorization: Bearer` with a session
  * token or a personal access token (the CLI). A browser EventSource cannot set headers,
