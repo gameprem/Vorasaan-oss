@@ -423,6 +423,8 @@ async function* streamChat(
     ...(signal ? { abortSignal: signal } : {}),
   });
   for await (const chunk of output.fullStream) {
+    // Stopped (ticket 0046): end here, whatever the provider still sends.
+    if (signal?.aborted) return;
     if (chunk.type === 'text-delta') {
       if (chunk.payload.text) yield { type: 'text', delta: chunk.payload.text };
     } else if (chunk.type === 'tool-call') {

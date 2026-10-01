@@ -14,17 +14,27 @@ test('the Sidebar reaches every page, and Ctrl+K starts a new Conversation', asy
   await sidebar.getByRole('link', { name: 'Projects', exact: true }).click();
   await expect(page).toHaveURL(/\/projects$/);
 
-  // A Project expands to its Features.
+  // A Project opens its latest Conversation, or a new one there, and expands to its Features.
   await sidebar.getByRole('link', { name: 'Mobile Banking', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/projects/${SEED.projectId}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/conversations/(new\\?project=${SEED.projectId}|[0-9a-f-]{36})$`),
+  );
   const features = sidebar.getByRole('button', { name: 'Hide the Features of Mobile Banking' });
   await expect(features).toHaveAttribute('aria-expanded', 'true');
   await sidebar.getByRole('link', { name: /^Async checkout/ }).click();
-  await expect(page).toHaveURL(new RegExp(`${featurePath}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/conversations/(new\\?feature=${SEED.featureId}|[0-9a-f-]{36})$`),
+  );
   await expect(sidebar.getByRole('link', { name: /^Async checkout/ })).toHaveAttribute(
     'aria-current',
     'page',
   );
+  // The Feature's own page is a link away, in the header.
+  await page
+    .getByRole('navigation', { name: 'Where this Conversation belongs' })
+    .getByRole('link', { name: 'Async checkout' })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`${featurePath}$`));
 
   await sidebar.getByRole('link', { name: /^Inbox/ }).click();
   await expect(page).toHaveURL(/\/inbox$/);

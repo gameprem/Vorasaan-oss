@@ -8,6 +8,7 @@ export const metadata = { title: 'Sign in' };
 export default async function LoginPage() {
   const { needsSetup } = await api<SetupStatus>('/setup/status', {
     redirectOnUnauthorized: false,
+    anonymous: true,
   });
   if (needsSetup) redirect('/setup');
   if (await currentUser()) redirect('/inbox');

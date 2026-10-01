@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { ActionCardKind, PrismaClient, User } from '@vorasaan/db';
 import type {
+  ActionCardDetail,
   ActionCardView,
   ApproveActionCardInput,
   DeclineActionCardInput,
@@ -220,7 +221,7 @@ export class ActionCardsService {
         }),
       ),
     );
-    return rows.map(toActionCardView);
+    return this.views(rows);
   }
 
   // ─── Reading ──────────────────────────────────────────────────────────────
@@ -239,7 +240,7 @@ export class ActionCardsService {
     for (const row of rows) {
       if (row.status === 'PROPOSED' && (await this.isStale(row))) stale.push(row.id);
     }
-    if (!stale.length) return rows.map(toActionCardView);
+    if (!stale.length) return this.views(rows);
     await this.db.actionCard.updateMany({
       where: { id: { in: stale }, status: 'PROPOSED' },
       data: { status: 'STALE', reviewedAt: new Date() },
@@ -249,9 +250,112 @@ export class ActionCardsService {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
     for (const card of updated) {
-      if (stale.includes(card.id)) this.announce(owner, card);
+      if (stale.includes(card.id)) await this.announce(owner, card);
     }
-    return updated.map(toActionCardView);
+    return this.views(updated);
+  }
+
+  /** Cards as views, each with what it proposes read from its target. */
+  private views(rows: ActionCardRow[]): Promise<ActionCardView[]> {
+    return Promise.all(rows.map((row) => this.view(row)));
+  }
+
+  private async view(row: ActionCardRow): Promise<ActionCardView> {
+    return toActionCardView(row, await this.detail(row));
+  }
+
+  /** What the card proposes, as its target stands now; null once the target is gone. */
+  private async detail(card: ActionCardRow): Promise<ActionCardDetail | null> {
+    const person = { select: { id: true, name: true } } as const;
+    switch (card.kind) {
+      case 'DECISION_REQUEST': {
+        const request = await this.db.decisionRequest.findUnique({
+          where: { id: card.targetId },
+          include: {
+            feature: { select: { teamId: true } },
+            choices: { orderBy: { position: 'asc' } },
+          },
+        });
+        if (!request) return null;
+        return {
+          kind: 'DECISION_REQUEST',
+          requestKind: request.kind,
+          description: request.description,
+          deciderRole: request.deciderRole,
+          recipients: await this.decisionRequests.candidates(
+            {
+              featureId: request.featureId,
+              teamId: request.feature.teamId,
+              raiserId: request.raiserId,
+            },
+            request.deciderRole,
+          ),
+          choices: request.choices.map((c) => ({
+            label: c.label,
+            title: c.title,
+            description: c.description,
+            impactScope: c.impactScope,
+            impactTime: c.impactTime,
+            impactRisk: c.impactRisk,
+          })),
+        };
+      }
+      case 'SPEC_PROPOSAL': {
+        const proposal = await this.db.specProposal.findUnique({
+          where: { id: card.targetId },
+          include: {
+            approver: person,
+            baseVersion: { select: { version: true, markdown: true } },
+            resultVersion: { select: { version: true } },
+          },
+        });
+        if (!proposal) return null;
+        return {
+          kind: 'SPEC_PROPOSAL',
+          featureId: proposal.featureId,
+          approver: proposal.approver,
+          baseVersion: proposal.baseVersion?.version ?? null,
+          baseMarkdown: proposal.baseVersion?.markdown ?? '',
+          proposedMarkdown: proposal.proposedMarkdown,
+          version: proposal.resultVersion?.version ?? null,
+        };
+      }
+      case 'BRIEF_PROPOSAL': {
+        const proposal = await this.db.briefProposal.findUnique({
+          where: { id: card.targetId },
+          include: {
+            approver: person,
+            baseVersion: { select: { version: true, markdown: true } },
+            resultVersion: { select: { version: true } },
+          },
+        });
+        if (!proposal) return null;
+        return {
+          kind: 'BRIEF_PROPOSAL',
+          projectId: proposal.projectId,
+          approver: proposal.approver,
+          baseVersion: proposal.baseVersion?.version ?? null,
+          baseMarkdown: proposal.baseVersion?.markdown ?? '',
+          proposedMarkdown: proposal.proposedMarkdown,
+          version: proposal.resultVersion?.version ?? null,
+        };
+      }
+      case 'FEATURE_SUGGESTION': {
+        const suggestion = await this.db.featureSuggestion.findUnique({
+          where: { id: card.targetId },
+        });
+        if (!suggestion) return null;
+        return {
+          kind: 'FEATURE_SUGGESTION',
+          rationale: suggestion.rationale,
+          businessValue: suggestion.businessValue,
+          effort: suggestion.effort,
+          risk: suggestion.risk,
+          dismissReason: suggestion.dismissReason,
+          featureId: suggestion.featureId,
+        };
+      }
+    }
   }
 
   // ─── Approving and declining ──────────────────────────────────────────────
@@ -361,7 +465,7 @@ export class ActionCardsService {
         }
         throw error;
       }
-      return toActionCardView(await this.mark(user, card, outcome));
+      return this.view(await this.mark(user, card, outcome));
     } finally {
       this.acting.delete(id);
     }
@@ -377,14 +481,14 @@ export class ActionCardsService {
       data: { status, reviewedAt: new Date() },
     });
     const updated = await this.db.actionCard.findUniqueOrThrow({ where: { id: card.id } });
-    this.announce(owner, updated);
+    await this.announce(owner, updated);
     return updated;
   }
 
-  private announce(owner: User, card: ActionCardRow) {
+  private async announce(owner: User, card: ActionCardRow) {
     this.bus.emit(owner.id, {
       event: 'conversation.actionCard.updated',
-      data: { conversationId: card.conversationId, card: toActionCardView(card) },
+      data: { conversationId: card.conversationId, card: await this.view(card) },
     });
   }
 

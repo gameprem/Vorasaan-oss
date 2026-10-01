@@ -51,6 +51,8 @@ export const TeamView = z.object({
       status: z.string(),
       /** Blockers that are OPEN or NEEDS_INFO; the Feature is Blocked while > 0. */
       openBlockers: z.int().nonnegative(),
+      /** The latest Spec Version's number; 0 while the Feature has no Spec. */
+      specVersion: z.int().nonnegative(),
     }),
   ),
   /** Whether the current user may manage members and Features here. */

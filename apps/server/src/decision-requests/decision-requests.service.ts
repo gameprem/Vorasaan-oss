@@ -17,6 +17,7 @@ import type {
   RaiseDecisionRequestInput,
   ReassignInput,
   SubmitDecisionRequestInput,
+  TeamRole,
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort, type DecisionForAi } from '../ai/ai.port.ts';
 import { describeDecision } from '../ai/prompts.ts';
@@ -483,21 +484,16 @@ export class DecisionRequestsService {
     at: Date,
   ): Promise<{ userId: string; onBehalfOfId: string | null }[]> {
     const role = input.deciderRole;
-    const others = { not: request.raiserId };
-    let candidates = (
-      await this.db.roleOwner.findMany({
-        where: { featureId: request.featureId, role, userId: others },
-        select: { userId: true },
-      })
-    ).map((o) => o.userId);
-    if (!candidates.length) {
-      candidates = (
-        await this.db.teamMembership.findMany({
-          where: { teamId: request.feature.teamId, role, userId: others },
-          select: { userId: true },
-        })
-      ).map((m) => m.userId);
-    }
+    const candidates = (
+      await this.candidates(
+        {
+          featureId: request.featureId,
+          teamId: request.feature.teamId,
+          raiserId: request.raiserId,
+        },
+        role,
+      )
+    ).map((p) => p.id);
     if (!candidates.length) {
       throw new UnprocessableEntityException(
         `Nobody but the Raiser holds the ${role} Team Role for this Feature`,
@@ -528,6 +524,31 @@ export class DecisionRequestsService {
       }
     }
     return [...onBehalfOf].map(([userId, onBehalfOfId]) => ({ userId, onBehalfOfId }));
+  }
+
+  /**
+   * Who may receive a request as `role`: the Feature's Role Owners for it or, when
+   * it has none, the Team members holding it. Never the Raiser. Before any
+   * Delegation applies (see chooseRecipients).
+   */
+  async candidates(
+    request: { featureId: string; teamId: string; raiserId: string },
+    role: TeamRole,
+  ): Promise<{ id: string; name: string }[]> {
+    const others = { not: request.raiserId };
+    const select = { user: { select: { id: true, name: true } } } as const;
+    const owners = await this.db.roleOwner.findMany({
+      where: { featureId: request.featureId, role, userId: others },
+      select,
+      orderBy: { user: { name: 'asc' } },
+    });
+    if (owners.length) return owners.map((o) => o.user);
+    const members = await this.db.teamMembership.findMany({
+      where: { teamId: request.teamId, role, userId: others },
+      select,
+      orderBy: { user: { name: 'asc' } },
+    });
+    return members.map((m) => m.user);
   }
 
   private async viewer(user: User): Promise<Viewer> {

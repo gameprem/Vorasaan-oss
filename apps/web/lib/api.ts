@@ -27,6 +27,12 @@ type ApiOptions = {
   body?: unknown;
   /** Send the visitor to /login on 401 (default). Off for the layout and login itself. */
   redirectOnUnauthorized?: boolean;
+  /**
+   * Call a public route without the visitor's identity. A stale dev identity cookie (a
+   * user the database no longer has) makes the API refuse even its public routes, so
+   * the sign-in page and the dev user switcher must not send it.
+   */
+  anonymous?: boolean;
 };
 
 /** The headers that identify the visitor to the API; empty when nobody is signed in. Server-only. */
@@ -41,7 +47,7 @@ export async function authHeaders(): Promise<Record<string, string>> {
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
   // Read cookies outside the try: during prerendering, cookies() throws Next's
   // "dynamic usage" signal, which must propagate rather than become a network error.
-  const auth = await authHeaders();
+  const auth = options.anonymous ? {} : await authHeaders();
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {

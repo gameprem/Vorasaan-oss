@@ -167,7 +167,8 @@ export class OrgService {
             id: true,
             title: true,
             status: true,
-            _count: { select: { decisionRequests: OPEN_BLOCKERS } },
+            // Spec Versions are numbered 1, 2, 3…, so their count is the latest number.
+            _count: { select: { decisionRequests: OPEN_BLOCKERS, specVersions: true } },
           },
         },
       },
@@ -182,6 +183,7 @@ export class OrgService {
       features: team.features.map(({ _count, ...f }) => ({
         ...f,
         openBlockers: _count.decisionRequests,
+        specVersion: _count.specVersions,
       })),
       canManage: await this.canManageTeam(user.id, teamId),
     };

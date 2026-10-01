@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import type { SidebarData } from '@/lib/sidebar';
 import {
@@ -22,6 +22,12 @@ import {
 
 export const SIDEBAR_COOKIE = 'vorasaan-sidebar';
 export const NEW_CONVERSATION_HREF = '/conversations/new';
+
+/** A Project or Feature in the Sidebar opens its latest Conversation, or a new one there. */
+export const openConversationHref = (scope: { project: string } | { feature: string }) =>
+  'feature' in scope
+    ? `/conversations/open?feature=${scope.feature}`
+    : `/conversations/open?project=${scope.project}`;
 /** The Settings modal sends focus back here when it closes. */
 export const SETTINGS_BUTTON_ID = 'settings-button';
 
@@ -43,6 +49,11 @@ export function Shell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  // A Conversation fills the stage. Settings opened over one (an intercepted /settings/...
+  // URL) leaves it as it was, so its scroll position and draft survive.
+  const [chat, setChat] = useState(isChatPath(pathname));
+  const overSettings = pathname === '/settings' || pathname.startsWith('/settings/');
+  if (!overSettings && chat !== isChatPath(pathname)) setChat(isChatPath(pathname));
   const [collapsed, setCollapsed] = useState(initiallyCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -104,7 +115,8 @@ export function Shell({
       <a href="#main" className="skip-link">
         Skip to the main area
       </a>
-      <div className="app" data-collapsed={collapsed}>
+      {/* A Conversation fills the stage: its thread scrolls, its composer stays put. */}
+      <div className="app" data-collapsed={collapsed} data-chat={chat}>
         <aside
           ref={sidebar}
           id="sidebar"
@@ -145,12 +157,16 @@ export function Shell({
             <b>Vorasaan</b>
           </header>
           <main id="main" tabIndex={-1}>
-            <div className="mx-auto w-full max-w-5xl">{children}</div>
+            <div className={chat ? 'chat-frame' : 'mx-auto w-full max-w-5xl'}>{children}</div>
           </main>
         </div>
       </div>
     </>
   );
+}
+
+function isChatPath(pathname: string) {
+  return pathname.startsWith('/conversations/');
 }
 
 /** "⌘K" on a Mac, "Ctrl K" elsewhere; known only in the browser. */
@@ -266,7 +282,7 @@ function Sidebar({
           </Link>
         </div>
 
-        <Projects projects={data.projects} pathname={pathname} current={current} />
+        <Projects projects={data.projects} recent={data.recent} pathname={pathname} />
 
         <div className="group collapsible">
           <h2>Recent conversations</h2>
@@ -313,21 +329,57 @@ function Sidebar({
   );
 }
 
+/**
+ * The Project or Feature the page is about: its page, one of its Conversations (when the
+ * Sidebar knows it from the recent ones), or a new Conversation started there.
+ */
+function useActiveScope(
+  projects: SidebarData['projects'],
+  recent: SidebarData['recent'],
+  pathname: string,
+): { projectId: string; featureId: string | null } | null {
+  const search = useSearchParams();
+  const segments = pathname.split('/');
+  const [, section, id] = segments;
+  if (section === 'features' && id) {
+    const project = projects.find((p) => p.features.some((f) => f.id === id));
+    return project ? { projectId: project.id, featureId: id } : null;
+  }
+  if (section === 'projects' && id) return { projectId: id, featureId: null };
+  if (section === 'conversations' && id === 'new') {
+    const feature = search.get('feature');
+    const project = search.get('project');
+    if (feature) {
+      const owner = projects.find((p) => p.features.some((f) => f.id === feature));
+      return owner ? { projectId: owner.id, featureId: feature } : null;
+    }
+    return project ? { projectId: project, featureId: null } : null;
+  }
+  if (section === 'conversations' && id) {
+    const conversation = recent.find((c) => c.id === id);
+    return conversation
+      ? { projectId: conversation.projectId, featureId: conversation.featureId }
+      : null;
+  }
+  return null;
+}
+
 function Projects({
   projects,
+  recent,
   pathname,
-  current,
 }: {
   projects: SidebarData['projects'];
+  recent: SidebarData['recent'];
   pathname: string;
-  current: (href: string) => 'page' | undefined;
 }) {
+  const active = useActiveScope(projects, recent, pathname);
+  const current = (projectId: string, featureId: string | null) =>
+    active?.projectId === projectId && active.featureId === featureId
+      ? ('page' as const)
+      : undefined;
   // The Project you are in starts expanded; the rest stay as you left them.
-  const activeProject = projects.find(
-    (p) =>
-      pathname.startsWith(`/projects/${p.id}`) ||
-      p.features.some((f) => pathname.startsWith(`/features/${f.id}`)),
-  )?.id;
+  const activeProject = active?.projectId;
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(activeProject ? [activeProject] : []),
   );
@@ -370,9 +422,11 @@ function Projects({
                   <CaretIcon />
                 </button>
                 <Link
-                  href={`/projects/${p.id}`}
+                  href={openConversationHref({ project: p.id })}
+                  prefetch={false}
                   className="item"
-                  aria-current={current(`/projects/${p.id}`)}
+                  aria-current={current(p.id, null)}
+                  title={`Chat about ${p.name}`}
                 >
                   <span className="label">{p.name}</span>
                 </Link>
@@ -384,9 +438,10 @@ function Projects({
                   p.features.map((f) => (
                     <Link
                       key={f.id}
-                      href={`/features/${f.id}`}
+                      href={openConversationHref({ feature: f.id })}
+                      prefetch={false}
                       className="item"
-                      aria-current={current(`/features/${f.id}`)}
+                      aria-current={current(p.id, f.id)}
                     >
                       <span className={`dot${f.openBlockers > 0 ? ' blocker' : ''}`} aria-hidden />
                       <span className="label">{f.title}</span>

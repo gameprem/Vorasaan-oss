@@ -1,6 +1,7 @@
 import { Module, StandardSchemaValidationPipe } from '@nestjs/common';
 import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { AiModelsController } from './ai/ai-models.controller.ts';
+import { DevFakeAiController } from './ai/dev-fake-ai.controller.ts';
 import { MastraModule } from './ai/mastra.module.ts';
 import { AttachmentsModule } from './attachments/attachments.module.ts';
 import { AdminGuard } from './auth/admin.guard.ts';
@@ -51,6 +52,7 @@ import { SpecModule } from './spec/spec.module.ts';
     HealthController,
     AuthController,
     DevUsersController,
+    DevFakeAiController,
     FeaturesController,
     DelegationsController,
     MyDelegationsController,

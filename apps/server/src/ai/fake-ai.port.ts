@@ -56,8 +56,23 @@ export const FAKE_GRILLING_TOPICS: Record<
 /**
  * One scripted chat reply: its chunks (text pieces and tool calls), streamed in
  * order, then `error` thrown if given (a provider failing mid-reply).
+ * `chunkDelayMs` waits before each chunk, so a test can stop a reply mid-stream.
  */
-export type ScriptedChatReply = { chunks?: ChatChunk[]; error?: Error };
+export type ScriptedChatReply = { chunks?: ChatChunk[]; error?: Error; chunkDelayMs?: number };
+
+/** Waits `ms`, or less when `signal` aborts first. */
+function pause(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+  });
+}
 
 /** The fake's default reply: it names the scope, echoes the latest message and counts the context. */
 export function fakeChatReply(input: {
@@ -126,7 +141,10 @@ export class FakeAiPort implements AiPort {
       : (fakeChatReply(input).match(/\S+\s*/g) ?? []).map((delta) => ({ type: 'text', delta }));
     for (const chunk of chunks) {
       // A real stream yields between chunks; so does the fake, so listeners see each one.
-      await Promise.resolve();
+      if (scripted?.chunkDelayMs) await pause(scripted.chunkDelayMs, input.signal);
+      else await Promise.resolve();
+      // Like a provider's stream, a stopped reply ends with an AbortError.
+      if (input.signal?.aborted) throw new DOMException('The reply was stopped', 'AbortError');
       yield chunk;
     }
     if (scripted?.error) throw scripted.error;

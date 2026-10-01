@@ -104,6 +104,47 @@ export function CloseIcon({ size = 20 }: IconProps) {
   );
 }
 
+/** Send a message: an arrow up. */
+export function SendIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" {...stroke} strokeWidth={1.7} />
+    </svg>
+  );
+}
+
+/** Stop the reply being written. */
+export function StopIcon({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" aria-hidden>
+      <rect x="2" y="2" width="10" height="10" rx="2.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** A document: the Spec or the Project Brief. */
+export function DocIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M4 1.8h5.2L12.5 5v9.2H4V1.8Z" {...stroke} strokeWidth={1.3} />
+      <path d="M9 1.8V5h3.5M6 8.2h4.5M6 10.8h4.5" {...stroke} strokeWidth={1.3} />
+    </svg>
+  );
+}
+
+/** Opens a full page. */
+export function ExternalIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"
+        {...stroke}
+        strokeWidth={1.3}
+      />
+    </svg>
+  );
+}
+
 export function BackIcon({ size = 16 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>

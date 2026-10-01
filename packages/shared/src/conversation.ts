@@ -174,6 +174,14 @@ export const ConversationTurnView = z.object({
 export type ConversationTurnView = z.infer<typeof ConversationTurnView>;
 
 /**
+ * `POST /conversations/:id/stop` (ticket 0046): the reply being written there is
+ * stopped. What it had written so far is kept as the reply, and the call that
+ * asked for it answers as usual. 409 when no reply is being written.
+ */
+export const StopConversationResult = z.object({ stopped: z.literal(true) });
+export type StopConversationResult = z.infer<typeof StopConversationResult>;
+
+/**
  * The 502 body when the AI fails mid-reply. Nothing of the reply is stored; the
  * person's message is, so `POST /conversations/:id/retry` asks again.
  * `conversationId` lets a client that just started the Conversation find it.

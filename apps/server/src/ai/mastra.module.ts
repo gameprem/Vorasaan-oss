@@ -47,6 +47,6 @@ export const AI_ENGINE = Symbol('AI_ENGINE');
         ),
     },
   ],
-  exports: [AI_PORT, AiSettingsService],
+  exports: [AI_PORT, AI_ENGINE, AiSettingsService],
 })
 export class MastraModule {}

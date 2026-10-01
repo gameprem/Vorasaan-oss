@@ -12,6 +12,7 @@ import {
   type ListConversationsQuery,
   MAX_CONVERSATION_TITLE_CHARS,
   type ServerEvent,
+  type StopConversationResult,
 } from '@vorasaan/shared';
 import { ActionCardsService } from '../action-cards/action-cards.service.ts';
 import {
@@ -106,6 +107,8 @@ type Turn = {
 @Injectable()
 export class ConversationsService {
   private readonly logger = new Logger(ConversationsService.name);
+  /** The replies being written in this process, by Conversation, so `stop` can end one. */
+  private readonly replying = new Map<string, AbortController>();
 
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
@@ -205,6 +208,23 @@ export class ConversationsService {
     });
   }
 
+  /**
+   * Stops the reply being written in the owner's Conversation (ticket 0046).
+   * The text written so far is kept as the reply, and tool calls it had not
+   * finished are dropped; the request that asked for the reply answers as usual.
+   * 409 when nothing is being written (a Grilling Conversation's turns are
+   * written by the server, so they are never stopped).
+   */
+  async stop(user: User, id: string): Promise<StopConversationResult> {
+    await this.owned(user, id);
+    const reply = this.replying.get(id);
+    if (!reply || reply.signal.aborted) {
+      throw new ConflictException('No reply is being written in this Conversation');
+    }
+    reply.abort();
+    return { stopped: true };
+  }
+
   async delete(user: User, id: string): Promise<void> {
     const { count } = await this.db.conversation.deleteMany({ where: { id, ownerId: user.id } });
     if (!count) throw notFound();
@@ -233,6 +253,17 @@ export class ConversationsService {
    * holding the Conversation's lock.
    */
   private async reply(user: User, id: string): Promise<Turn> {
+    const stop = new AbortController();
+    this.replying.set(id, stop);
+    try {
+      return await this.replyUntil(user, id, stop.signal);
+    } finally {
+      this.replying.delete(id);
+    }
+  }
+
+  /** The reply, until `stopped` aborts: then what was written so far is the reply. */
+  private async replyUntil(user: User, id: string, stopped: AbortSignal): Promise<Turn> {
     const conversation = await this.db.conversation.findUniqueOrThrow({
       where: { id },
       include: {
@@ -274,6 +305,7 @@ export class ConversationsService {
           summary,
           recentMessages: [...recentMessages],
           tools: offered,
+          signal: stopped,
         });
         for await (const chunk of stream) {
           if (chunk.type === 'text') {
@@ -294,6 +326,8 @@ export class ConversationsService {
           }
         }
       } catch (error) {
+        if (stopped.aborted)
+          return this.finish(user, id, replyId, text, message, steps, actionCards);
         this.logger.error('A Conversation reply failed', error as Error);
         const reason = 'The AI failed while replying, so no reply was saved. Try again.';
         emit({
@@ -303,19 +337,9 @@ export class ConversationsService {
         throw replyFailed(id, reason);
       }
 
-      if (!toolCalls.length) {
-        const saved = await this.store(id, { id: replyId, role: 'ASSISTANT', content: text });
-        emit({
-          event: 'conversation.done',
-          data: { conversationId: id, message: toConversationMessageView(saved.message) },
-        });
-        return {
-          conversation: toConversationListItem(saved.conversation),
-          message,
-          steps,
-          reply: saved.message,
-          actionCards,
-        };
+      // Stopped, or nothing more to do: the text is the reply. A stopped step's calls never run.
+      if (!toolCalls.length || stopped.aborted) {
+        return this.finish(user, id, replyId, text, message, steps, actionCards);
       }
 
       // A round of tool calls: store the calls, then run each and store its result.
@@ -351,6 +375,30 @@ export class ConversationsService {
       actionCards.push(...made);
       recentMessages.push(toChatMessage(step.message), ...results.map(toChatMessage));
     }
+  }
+
+  /** Stores the turn's final reply and tells the owner it is done. */
+  private async finish(
+    user: User,
+    id: string,
+    replyId: string,
+    text: string,
+    message: MessageRow,
+    steps: MessageRow[],
+    actionCards: ActionCardView[],
+  ): Promise<Turn> {
+    const saved = await this.store(id, { id: replyId, role: 'ASSISTANT', content: text });
+    this.bus.emit(user.id, {
+      event: 'conversation.done',
+      data: { conversationId: id, message: toConversationMessageView(saved.message) },
+    });
+    return {
+      conversation: toConversationListItem(saved.conversation),
+      message,
+      steps,
+      reply: saved.message,
+      actionCards,
+    };
   }
 
   /** Appends a message to the Conversation, which counts as activity. */
