@@ -37,7 +37,7 @@ export type OrgFeatureGuidelinesInput = z.infer<typeof OrgFeatureGuidelinesInput
 export const GuidelineCriterionView = GuidelineCriterionText.extend({ id: Id });
 export type GuidelineCriterionView = z.infer<typeof GuidelineCriterionView>;
 
-/** `GET /settings/feature-guidelines`, in order. */
+/** `GET /settings/feature-guidelines`, in order (every member of the Organization reads it). */
 export const OrgFeatureGuidelinesView = z.object({
   organizationId: Id,
   criteria: z.array(GuidelineCriterionView),

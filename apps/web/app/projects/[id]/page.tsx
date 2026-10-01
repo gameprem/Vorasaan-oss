@@ -163,9 +163,7 @@ export default async function ProjectPage({
         {tab === 'grilling' && (
           <GrillingTab projectId={id} meId={me?.id ?? null} canEdit={canEdit} />
         )}
-        {tab === 'guidelines' && (
-          <GuidelinesTab projectId={id} canEdit={canEdit} isAdmin={Boolean(me?.isAdmin)} />
-        )}
+        {tab === 'guidelines' && <GuidelinesTab projectId={id} canEdit={canEdit} />}
         {tab === 'suggestions' && (
           <SuggestionsTab projectId={id} project={project} canEdit={canEdit} />
         )}
@@ -339,15 +337,7 @@ async function GrillingTab({
   );
 }
 
-async function GuidelinesTab({
-  projectId,
-  canEdit,
-  isAdmin,
-}: {
-  projectId: string;
-  canEdit: boolean;
-  isAdmin: boolean;
-}) {
+async function GuidelinesTab({ projectId, canEdit }: { projectId: string; canEdit: boolean }) {
   const [effective, overrides, orgDefault] = await Promise.all([
     load(() =>
       api<EffectiveFeatureGuidelinesView>(`/projects/${projectId}/feature-guidelines/effective`),
@@ -355,8 +345,9 @@ async function GuidelinesTab({
     canEdit
       ? load(() => api<ProjectFeatureGuidelinesView>(`/projects/${projectId}/feature-guidelines`))
       : null,
-    // Only Admins read the Organization default; it names criteria this Project hides.
-    isAdmin ? load(() => api<OrgFeatureGuidelinesView>('/settings/feature-guidelines')) : null,
+    // The Organization default, readable by every member: the editor shows each inherited
+    // criterion's text, including ones this Project hides.
+    canEdit ? load(() => api<OrgFeatureGuidelinesView>('/settings/feature-guidelines')) : null,
   ]);
   if (!effective.data) return <Notice tone="error">{effective.error}</Notice>;
 
@@ -364,18 +355,11 @@ async function GuidelinesTab({
     <div className="max-w-4xl">
       <p className="text-ink-soft">
         What a new Feature in this Project must serve or respect. The AI checks Feature Suggestions
-        and new Features against them. They come from the Organization’s Feature Guidelines
-        {isAdmin && (
-          <>
-            {' '}
-            (
-            <Link href="/settings/feature-guidelines" className="underline underline-offset-2">
-              Settings → Feature Guidelines
-            </Link>
-            )
-          </>
-        )}
-        , adjusted for this Project.
+        and new Features against them. They come from the Organization’s Feature Guidelines (
+        <Link href="/settings/feature-guidelines" className="underline underline-offset-2">
+          Settings → Feature Guidelines
+        </Link>
+        ), adjusted for this Project.
       </p>
 
       <h2 className="mt-8 text-lg font-semibold">In effect</h2>
@@ -396,15 +380,14 @@ async function GuidelinesTab({
             Edit or hide a criterion inherited from the Organization, or add one only this Project
             has. Saving replaces all of this Project’s adjustments at once.
           </p>
-          {overrides.data ? (
+          {overrides.data && orgDefault?.data ? (
             <ProjectGuidelinesEditor
               projectId={projectId}
-              effective={effective.data.criteria}
               overrides={overrides.data.overrides}
-              orgDefault={orgDefault?.data?.criteria ?? null}
+              orgDefault={orgDefault.data.criteria}
             />
           ) : (
-            <Notice tone="error">{overrides.error}</Notice>
+            <Notice tone="error">{overrides.error ?? orgDefault?.error}</Notice>
           )}
         </section>
       )}

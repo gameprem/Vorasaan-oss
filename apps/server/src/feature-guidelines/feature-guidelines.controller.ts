@@ -8,7 +8,7 @@ import { FeatureGuidelinesService } from './feature-guidelines.service.ts';
 export class FeatureGuidelinesController {
   constructor(private readonly guidelines: FeatureGuidelinesService) {}
 
-  /** The Organization default (Admins). */
+  /** The Organization default: every member reads it; only Admins replace it. */
   @Get('settings/feature-guidelines')
   getDefault(@CurrentUser() user: User) {
     return this.guidelines.getDefault(user);
