@@ -9,7 +9,8 @@
   - Jade: approved, decided, written into the record.
   - Lacquer (the red of a seal): Blockers, removed lines.
   - Saffron: waiting on a person (the Inbox count, pending).
-  The AI's spark runs ink → jade: a proposal on its way to approval.
+  The mark is a person's tongs holding the AI's flame (ember) over the grill.
+  The greeting's gradient still runs ink → jade: a proposal on its way to approval.
 
   The tokens keep the mockup's names; `@theme inline` turns them into utilities
   (bg-rail, text-fg-soft, bg-ink, text-on-ink, rounded-card, shadow-card ...).
@@ -31,6 +32,7 @@
   --lacquer: #b8321f;
   --lacquer-wash: #fbe5e0;
   --saffron: #b26a00;
+  --ember: #e0642a;
   --saffron-wash: #fdf0d9;
   --spark-a: #3346c8;
   --spark-b: #12a17c;
@@ -63,6 +65,7 @@
     --lacquer: #ff8a74;
     --lacquer-wash: #3d1e19;
     --saffron: #f2b54f;
+    --ember: #ff9b62;
     --saffron-wash: #3a2c12;
     --spark-a: #8f9eff;
     --spark-b: #4fd1a8;
@@ -88,6 +91,7 @@
   --lacquer: #ff8a74;
   --lacquer-wash: #3d1e19;
   --saffron: #f2b54f;
+  --ember: #ff9b62;
   --saffron-wash: #3a2c12;
   --spark-a: #8f9eff;
   --spark-b: #4fd1a8;
