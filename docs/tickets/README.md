@@ -154,7 +154,18 @@ After the MVP release, the web app becomes a chat app (ADR 0008):
       └─ 0044 ──────────┘
 ```
 
-## Platforms and Coverage (Post-MVP 2)
+## Decision speed (Post-MVP 2)
+
+No Decision Request waits silently: Response Windows with escalation, Decision Lead Time, and deciding straight from LINE, Slack or Teams (ADR 0011).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0055 | [Response Windows and escalation](./0055-response-windows.md) | none |
+| 0056 | [Decision Lead Time](./0056-decision-lead-time.md) | 0055 |
+| 0057 | [Link a LINE, Slack or Teams account](./0057-chat-app-accounts.md) | none |
+| 0058 | [Decide from LINE, Slack and Teams](./0058-decide-from-chat-apps.md) | 0057 |
+
+## Platforms and Coverage (Post-MVP 3)
 
 Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anything a team adds). Features target them, and Coverage shows which are covered or missing and why (ADR 0009).
 

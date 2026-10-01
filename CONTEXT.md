@@ -142,6 +142,14 @@ _Avoid_: Audit log, changelog
 
 ### Attention
 
+**Response Window**:
+How long a Decision Request may wait for a decision before it escalates: reminders first, then the Delegate, then the Raiser and Tech Leads. It never changes who decides.
+_Avoid_: SLA, deadline, timeout
+
+**Decision Lead Time**:
+How long a Decision Request took from being sent to being decided, and how long it waited at each person.
+_Avoid_: Cycle time, turnaround
+
 **Inbox Item**:
 Something a person must act on (decide a Decision Request, answer a request for more info, approve a Spec Proposal). It disappears when the action is done.
 _Avoid_: Task, todo, notification
