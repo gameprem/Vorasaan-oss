@@ -1,4 +1,4 @@
-import type { DelegationView, ProjectView, TeamView } from '@vorasaan/shared';
+import type { DelegationView, MyTeamView } from '@vorasaan/shared';
 import { redirect, unstable_rethrow } from 'next/navigation';
 import { Notice } from '@/components/bits';
 import { DelegationForm, type DelegationTeam } from '@/components/delegation-form';
@@ -15,21 +15,18 @@ export default async function DelegationsPage() {
   let received: DelegationView[];
   let teams: DelegationTeam[];
   try {
-    let projects: ProjectView[];
-    [given, received, projects] = await Promise.all([
+    let mine: MyTeamView[];
+    [given, received, mine] = await Promise.all([
       api<DelegationView[]>('/me/delegations?as=delegator'),
       api<DelegationView[]>('/me/delegations?as=delegate'),
-      api<ProjectView[]>('/projects'),
+      api<MyTeamView[]>('/me/teams'),
     ]);
-    const all = await Promise.all(
-      projects.flatMap((p) =>
-        p.teams.map(async (t) => {
-          const { members } = await api<TeamView>(`/teams/${t.id}`);
-          return { id: t.id, name: t.name, members, projectName: p.name };
-        }),
-      ),
-    );
-    teams = all.filter((t) => t.members.some((m) => m.userId === me.id));
+    teams = mine.map((t) => ({
+      id: t.id,
+      name: t.name,
+      members: t.members,
+      projectName: t.project.name,
+    }));
   } catch (error) {
     unstable_rethrow(error);
     return (

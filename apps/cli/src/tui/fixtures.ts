@@ -3,6 +3,7 @@ import type {
   DecisionRequestView,
   FeatureSummaryView,
   InboxItem,
+  MyTeamView,
   NotificationList,
   RaiseDecisionRequestInput,
   SpecProposalView,
@@ -196,6 +197,17 @@ export const team: TeamView = {
   canManage: false,
 };
 
+/** GET /me/teams for Beam: the Checkout Team. */
+export const myTeams: MyTeamView[] = [
+  {
+    id: team.id,
+    name: team.name,
+    project: team.project,
+    myRoles: ['BACKEND'],
+    members: team.members,
+  },
+];
+
 export type FakeCalls = {
   raised: RaiseDecisionRequestInput[];
   submitted: { id: string; input: SubmitDecisionRequestInput }[];
@@ -249,6 +261,7 @@ export function fakeApi(options: FakeOptions = {}): { api: TuiApi; calls: FakeCa
         openBlockers: 0,
       })),
     team: () => guard('team', () => team),
+    myTeams: () => guard('myTeams', () => myTeams),
     specVersions: (featureId) => guard('specVersions', () => specVersions(featureId)),
     decisionRequest: (requestId) =>
       guard(

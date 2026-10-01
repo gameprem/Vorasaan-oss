@@ -7,6 +7,9 @@ import type {
 import { Box, Text, useInput } from 'ink';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
+  type DeciderHints,
+  deciderHints,
+  deciderRoleHint,
   defaultDeciderRole,
   discardDraft,
   draftRequest,
@@ -76,6 +79,7 @@ export function RaiseForm({
   const [draft, setDraft] = useState<DecisionRequestView>();
   const [skipped, setSkipped] = useState<string[]>([]);
   const [role, setRole] = useState<TeamRole>('PO');
+  const [hints, setHints] = useState<DeciderHints>({});
 
   // Withdraw a draft that was never sent, also when the TUI quits mid-form.
   const draftRef = useRef<DecisionRequestView | undefined>(undefined);
@@ -119,20 +123,25 @@ export function RaiseForm({
 
   const createDraft = async (files: string[]) => {
     if (!featureId) return;
+    const teamId = features.find((f) => f.id === featureId)?.teamId;
     setStep('drafting');
     try {
-      const result = await draftRequest(
-        api,
-        {
-          featureId,
-          kind: kind.kind,
-          title,
-          description,
-          withChoices: kind.withChoices,
-          context: { diff, files },
-        },
-        scope,
-      );
+      const [result, loadedHints] = await Promise.all([
+        draftRequest(
+          api,
+          {
+            featureId,
+            kind: kind.kind,
+            title,
+            description,
+            withChoices: kind.withChoices,
+            context: { diff, files },
+          },
+          scope,
+        ),
+        teamId ? deciderHints(api, teamId) : Promise.resolve({}),
+      ]);
+      setHints(loadedHints);
       draftRef.current = result.draft;
       setDraft(result.draft);
       setSkipped(result.skipped);
@@ -306,7 +315,7 @@ export function RaiseForm({
           options={Object.entries(ROLE_LABEL).map(([value, label]) => ({
             value: value as TeamRole,
             label,
-            hint: value === draft?.suggestedRole ? 'suggested' : undefined,
+            hint: deciderRoleHint(value as TeamRole, draft, hints),
           }))}
           onPick={(value) => {
             setRole(value);

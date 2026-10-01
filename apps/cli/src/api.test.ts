@@ -124,6 +124,7 @@ describe('VorasaanApi actions and the event stream', () => {
     await api.decide(R, { customAnswer: 'Neither' });
     await api.withdraw(R);
     await api.team(U);
+    await api.myTeams();
     await api.specProposal(U);
     await api.approveSpecProposal(U);
     await api.rejectSpecProposal(U);
@@ -140,6 +141,7 @@ describe('VorasaanApi actions and the event stream', () => {
       `POST /decision-requests/${R}/decision`,
       `POST /decision-requests/${R}/withdraw`,
       `GET /teams/${U}`,
+      'GET /me/teams',
       `GET /spec-proposals/${U}`,
       `POST /spec-proposals/${U}/approve`,
       `POST /spec-proposals/${U}/reject`,

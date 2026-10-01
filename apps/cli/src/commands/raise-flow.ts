@@ -24,7 +24,10 @@ export const ROLE_LABEL: Record<TeamRole, string> = {
   QA: 'QA',
 };
 
-export type RaiseApi = Pick<VorasaanApi, 'listFeatures' | 'raise' | 'submit' | 'withdraw'>;
+export type RaiseApi = Pick<
+  VorasaanApi,
+  'listFeatures' | 'raise' | 'submit' | 'withdraw' | 'me' | 'myTeams'
+>;
 
 /** Where the Raiser is: the repository root and, when `vorasaan init` bound it, its Project. */
 export type RepoScope = { root: string; cwd?: string; projectId?: string };
@@ -92,6 +95,45 @@ export function formatChoices(choices: ChoiceDraft[]): string {
         `${c.label}. ${c.title}\n   ${c.description}\n   scope: ${c.impactScope}\n   time:  ${c.impactTime}\n   risk:  ${c.impactRisk}`,
     )
     .join('\n\n');
+}
+
+/** Per Team Role: who else in the Team holds it, as a hint for the decider role picker. */
+export type DeciderHints = Partial<Record<TeamRole, string>>;
+
+/**
+ * Who could decide, for each Team Role, in the Feature's Team: the other members holding
+ * it (the Raiser is never a Recipient). Loaded with one GET /me/teams; the hints are a
+ * nicety, so they are empty when that fails or the Team is not one of mine.
+ */
+export async function deciderHints(
+  api: Pick<VorasaanApi, 'me' | 'myTeams'>,
+  teamId: string,
+): Promise<DeciderHints> {
+  try {
+    const [me, teams] = await Promise.all([api.me(), api.myTeams()]);
+    const team = teams.find((t) => t.id === teamId);
+    if (!team) return {};
+    const hints: DeciderHints = {};
+    for (const role of Object.keys(ROLE_LABEL) as TeamRole[]) {
+      const names = team.members
+        .filter((m) => m.userId !== me.id && m.roles.includes(role))
+        .map((m) => m.name);
+      hints[role] = names.length ? names.join(', ') : 'nobody else in the Team';
+    }
+    return hints;
+  } catch {
+    return {};
+  }
+}
+
+/** The hint shown next to a Team Role in the decider role picker. */
+export function deciderRoleHint(
+  role: TeamRole,
+  draft: DecisionRequestView | undefined,
+  hints: DeciderHints,
+): string | undefined {
+  const parts = [role === draft?.suggestedRole ? 'suggested' : undefined, hints[role]];
+  return parts.filter(Boolean).join(' · ') || undefined;
 }
 
 export function defaultDeciderRole(draft: DecisionRequestView, override?: TeamRole): TeamRole {

@@ -52,6 +52,11 @@ export class OrgController {
     return this.org.createTeam(projectId, body.name);
   }
 
+  @Get('me/teams')
+  myTeams(@CurrentUser() user: User) {
+    return this.org.listMyTeams(user);
+  }
+
   @Get('teams/:id')
   team(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
     return this.org.getTeam(user, id);

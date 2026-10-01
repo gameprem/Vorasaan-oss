@@ -16,12 +16,14 @@ import type {
   InvitationPreview,
   InvitationView,
   LoginResult,
+  MyTeamView,
   OrgMemberView,
   ProjectView,
   RoleOwnerView,
   SetRoleOwnersInput,
   SetTeamRolesInput,
   SpecVersionView,
+  TeamMemberView,
   TeamRole,
   TeamView,
   UpdateFeatureInput,
@@ -39,6 +41,28 @@ import { assertCanEditSpec } from '../spec/spec-access.ts';
 
 const INVITE_PREFIX = 'vsi_';
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+type MembershipRow = {
+  userId: string;
+  role: TeamRole;
+  user: { name: string; email: string };
+};
+
+/** One entry per person, with all their Team Roles, in first-joined order. */
+function groupMembers(rows: MembershipRow[]): TeamMemberView[] {
+  const byUser = new Map<string, TeamMemberView>();
+  for (const m of rows) {
+    const entry = byUser.get(m.userId) ?? {
+      userId: m.userId,
+      name: m.user.name,
+      email: m.user.email,
+      roles: [],
+    };
+    entry.roles.push(m.role);
+    byUser.set(m.userId, entry);
+  }
+  return [...byUser.values()];
+}
 
 /**
  * Organization structure: Projects, Teams, members, Features, Role Owners and
@@ -150,28 +174,42 @@ export class OrgService {
     });
     if (!team) throw new NotFoundException('Team not found');
 
-    const byUser = new Map<string, TeamView['members'][number]>();
-    for (const m of team.members) {
-      const entry = byUser.get(m.userId) ?? {
-        userId: m.userId,
-        name: m.user.name,
-        email: m.user.email,
-        roles: [],
-      };
-      entry.roles.push(m.role);
-      byUser.set(m.userId, entry);
-    }
     return {
       id: team.id,
       name: team.name,
       project: team.project,
-      members: [...byUser.values()],
+      members: groupMembers(team.members),
       features: team.features.map(({ _count, ...f }) => ({
         ...f,
         openBlockers: _count.decisionRequests,
       })),
       canManage: await this.canManageTeam(user.id, teamId),
     };
+  }
+
+  /** The Teams the user holds a Team Role in, by Project then Team name, in one query. */
+  async listMyTeams(user: User): Promise<MyTeamView[]> {
+    const teams = await this.db.team.findMany({
+      where: { members: { some: { userId: user.id } } },
+      orderBy: [{ project: { name: 'asc' } }, { name: 'asc' }],
+      include: {
+        project: { select: { id: true, name: true } },
+        members: {
+          include: { user: { select: { id: true, name: true, email: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+    return teams.map((team) => {
+      const members = groupMembers(team.members);
+      return {
+        id: team.id,
+        name: team.name,
+        project: team.project,
+        myRoles: members.find((m) => m.userId === user.id)?.roles ?? [],
+        members,
+      };
+    });
   }
 
   async setTeamRoles(user: User, teamId: string, userId: string, input: SetTeamRolesInput) {

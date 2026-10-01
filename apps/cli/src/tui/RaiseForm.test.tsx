@@ -75,6 +75,12 @@ describe('raise form (r)', () => {
 
     await press(stdin, DOWN, ENTER); // Change the decider role
     expect(frame()).toContain('Who should decide?');
+    // Who holds each Team Role in the Feature's Team, from one GET /me/teams.
+    expect(frame()).toContain('PO (Pim, Nok)');
+    expect(frame()).toContain('Backend (nobody else in the Team)');
+    expect(frame()).toContain('Tech Lead (suggested · nobody else in the Team)');
+    expect(calls.loads.filter((name) => name === 'myTeams')).toHaveLength(1);
+    expect(calls.loads).not.toContain('team');
     await press(stdin, 'k', 'k', 'k', ENTER); // TECH_LEAD -> PO
     expect(frame()).toContain('Send to the PO?');
     await press(stdin, ENTER);
@@ -87,6 +93,25 @@ describe('raise form (r)', () => {
     expect(calls.withdrawn).toEqual([]);
     await press(stdin, ENTER);
     expect(frame()).toContain('Bound to the Project');
+  });
+
+  test('the decider role picker still works when the Teams cannot load', async () => {
+    const fake = fakeApi({ fail: ['myTeams'] });
+    const ui = render(
+      <App api={fake.api} repo={{ root: dir, cwd: dir, projectId: PROJECT_A }} height={30} />,
+    );
+    const frame = () => ui.lastFrame() ?? '';
+    await settle();
+    await press(ui.stdin, 'r');
+    await waitFor(frame, 'Which Feature?');
+    await press(ui.stdin, ENTER, ENTER, 'T', ENTER, 'D', ENTER, ENTER, ENTER);
+    await waitFor(frame, 'Send to the');
+    await press(ui.stdin, DOWN, ENTER);
+    expect(frame()).toContain('Who should decide?');
+    expect(frame()).toContain('Tech Lead (suggested)');
+    expect(frame()).not.toContain('nobody');
+    await press(ui.stdin, 'k', 'k', 'k', ENTER);
+    expect(frame()).toContain('Send to the PO?');
   });
 
   test('Esc after drafting withdraws the draft and returns to the tab', async () => {
