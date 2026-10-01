@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- Design mockup for ADR 0008 (chat-first Web UI). Static: fake data, no API calls. Open this file in a browser. -->
+<!-- Design mockup for ADR 0008 (chat-first Web UI) and ADR 0010 (model picker). Static: fake data, no API calls. Open this file in a browser. -->
 <title>Vorasaan Chat Mockup</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -170,7 +170,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* Composer */
 .composer-wrap { padding: 8px 24px calc(10px + env(safe-area-inset-bottom, 0px)); }
-.composer { max-width: 780px; margin: 0 auto; background: var(--surface); border-radius: var(--r-l); padding: 14px 12px 10px 22px; display: grid; gap: 6px; }
+.composer { position: relative; max-width: 780px; margin: 0 auto; background: var(--surface); border-radius: var(--r-l); padding: 14px 12px 10px 22px; display: grid; gap: 6px; }
 .composer:focus-within { background: var(--surface-hi); }
 .composer textarea { width: 100%; border: 0; resize: none; background: transparent; color: var(--fg); font: inherit; font-size: 16px; min-height: 28px; outline: none; }
 .composer textarea::placeholder { color: var(--fg-faint); }
@@ -181,6 +181,20 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .send { margin-left: auto; width: 40px; height: 40px; border-radius: 50%; background: var(--ink); color: var(--on-ink); display: grid; place-items: center; flex: none; }
 .suggest { max-width: 780px; margin: 0 auto 10px; display: flex; flex-wrap: wrap; gap: 8px; }
 .disclaimer { max-width: 780px; margin: 8px auto 0; text-align: center; font-size: 12px; color: var(--fg-faint); }
+
+.model { position: relative; }
+.model-btn { display: inline-flex; align-items: center; gap: 6px; font: 600 13px/1 var(--font); padding: 8px 12px; border-radius: 999px; color: var(--fg); }
+.model-btn:hover, .model-btn[aria-expanded="true"] { background: var(--bg); }
+.model-menu { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 20; width: 280px; background: var(--bg); border-radius: var(--r-m); box-shadow: var(--shadow); padding: 6px; display: grid; gap: 2px; }
+.model-menu[hidden] { display: none; }
+.model-menu .h { font-size: 12px; color: var(--fg-faint); padding: 8px 12px 4px; }
+.opt { display: grid; grid-template-columns: minmax(0, 1fr) 18px; align-items: center; gap: 2px 8px; text-align: left; padding: 10px 12px; border-radius: 14px; }
+.opt:hover, .opt:focus-visible { background: var(--surface); }
+.opt b { font-weight: 600; font-size: 14px; }
+.opt small { grid-column: 1; color: var(--fg-soft); font-size: 12px; }
+.opt .tick { grid-row: 1 / span 2; grid-column: 2; color: var(--ink); visibility: hidden; }
+.opt[aria-checked="true"] .tick { visibility: visible; }
+.by { font-size: 12px; color: var(--fg-faint); }
 
 /* Spec sheet */
 .doc { width: 420px; padding: 12px 12px 12px 0; display: flex; min-height: 0; background: var(--bg); }
@@ -249,6 +263,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   .settings-pane { padding: 12px 16px 32px; }
   .settings-top { padding: 10px 16px; }
   .settings-top .url, .mock-note, .disclaimer { display: none; }
+  .model { position: static; }
+  .model-menu { left: 8px; right: 8px; width: auto; }
+  .composer-row .scope { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -326,6 +343,15 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
         <textarea id="msg" rows="1" aria-label="Message" placeholder="Ask about this Feature, or tell the AI what to draft…"></textarea>
         <div class="composer-row">
           <button class="chip" type="button">+ Attachment</button>
+          <div class="model">
+            <button class="model-btn" id="modelBtn" type="button" aria-haspopup="menu" aria-expanded="false"><span id="modelName">Best</span><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <div class="model-menu" id="modelMenu" role="menu" hidden>
+              <div class="h">Models your Admin approved</div>
+              <button class="opt" role="menuitemradio" aria-checked="false" type="button" data-model="Fast"><b>Fast</b><small>Quick answers and summaries</small><span class="tick">✓</span></button>
+              <button class="opt" role="menuitemradio" aria-checked="true" type="button" data-model="Best"><b>Best</b><small>Specs, Choices and hard calls · default</small><span class="tick">✓</span></button>
+              <button class="opt" role="menuitemradio" aria-checked="false" type="button" data-model="Local"><b>Local</b><small>Runs on your server, no data leaves</small><span class="tick">✓</span></button>
+            </div>
+          </div>
           <span class="scope" id="scope">Context: Async checkout · Spec v1 · 4 Decisions · 2 Attachments</span>
           <button class="send" type="submit" aria-label="Send">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -383,6 +409,7 @@ const featureThread = `
     <svg class="spark" aria-hidden="true"><use href="#spark"/></svg><div class="who">Vorasaan</div>
     <div class="tool">Read Spec v1, 4 Decisions and the PagerDuty Attachment</div>
     <p>Spec v1 ยังไม่ได้บอกว่าตะกร้าควรเป็นอย่างไรเมื่อจ่ายเงินไม่สำเร็จ และใน Decision Log ก็ยังไม่มีเรื่องนี้ ผมร่าง Blocker ไว้ให้แล้ว ตรวจ Choices ก่อนส่งได้เลย</p>
+    <div class="by">Best</div>
   </div>
   <div class="card" id="drCard">
     <div class="card-head"><span class="kind">Decision Request draft</span><span class="pill blocker">● Blocker</span><span class="pill state" id="drState">Draft</span></div>
@@ -402,6 +429,7 @@ const featureThread = `
   <div class="msg ai">
     <svg class="spark" aria-hidden="true"><use href="#spark"/></svg><div class="who">Vorasaan</div>
     <p>ร่าง Spec Proposal จาก Decision นี้แล้ว มีบรรทัดที่เพิ่ม 2 บรรทัด และไม่มีบรรทัดที่ลบ Pim เป็นคน Approve</p>
+    <div class="by">Best</div>
   </div>
   <div class="card" id="spCard">
     <div class="card-head"><span class="kind">Spec Proposal</span><span class="meta">against Spec v1</span><span class="pill state" id="spState">Proposed</span></div>
@@ -518,7 +546,7 @@ const sections = {
   members: { label: 'Members', url: '/settings/members', title: 'Members', intro: 'People in the Organization and their Org Role. Team Roles are set per Team.', rows: [['Pim', 'pim@acme.test', 'Admin'], ['Beam', 'beam@acme.test', 'Member'], ['Nok', 'nok@acme.test', 'Member'], ['Dana', 'dana@acme.test', 'Member']] },
   delegations: { label: 'Delegations', url: '/settings/delegations', title: 'Delegations', intro: 'While you are away, a Delegate decides in your place. Decisions record that they acted on your behalf.', rows: [['Nok decides for you as PO', 'Checkout · 3 to 10 Oct', 'Active']] },
   guidelines: { label: 'Feature Guidelines', url: '/settings/feature-guidelines', title: 'Feature Guidelines', intro: 'What every new Feature must serve or respect. Each Project can adjust them on its Guidelines tab.', rows: [['Moves conversion', 'Checkout conversion +2%', 'KPI'], ['PDPA compliant', 'No personal data leaves Thailand without consent', 'Constraint']] },
-  ai: { label: 'AI provider', url: '/settings/ai', title: 'AI provider', intro: 'The model the AI uses for Choices, Specs, Grilling and chat, and the embeddings model for retrieval.', rows: [['Anthropic', 'Key ends in …4f2a', 'Connected'], ['Embeddings', 'OpenAI-compatible endpoint', 'Connected']] },
+  ai: { label: 'AI models', url: '/settings/ai', title: 'AI models', intro: 'Connect providers, then approve the models people can pick in chat. One is the default; each AI task can use its own.', rows: [['Best · claude-opus-5-5', 'Anthropic · default · Spec Proposals, Choices', 'Approved'], ['Fast · claude-haiku-4-5', 'Anthropic · summaries', 'Approved'], ['Local · llama-4-70b', 'OpenAI-compatible · http://gpu-box:8000/v1', 'Approved'], ['Embeddings', 'OpenAI-compatible endpoint', 'Connected']] },
   tokens: { label: 'Access tokens', url: '/settings/tokens', title: 'Access tokens', intro: 'Tokens for the CLI and integrations. Revoke one and its sessions close at once.', rows: [['MacBook CLI', 'Last used 5 minutes ago', 'Active'], ['CI bot', 'Last used yesterday', 'Active']] },
 };
 let lastFocus = null;
@@ -534,7 +562,7 @@ function renderSettings(key) {
   $('#settingsNav').innerHTML = Object.entries(sections).map(([k, v]) => `<button class="item" type="button" data-sec="${k}" ${k === key ? 'aria-current="page"' : ''}><span class="label">${v.label}</span></button>`).join('');
   $('#settingsNav').querySelectorAll('[data-sec]').forEach((b) => b.addEventListener('click', () => renderSettings(b.dataset.sec)));
   $('#settingsUrl').textContent = s.url;
-  $('#settingsPane').innerHTML = `<h2>${s.title}</h2><p>${s.intro}</p><div class="rows">${s.rows.map(([a, b, c]) => `<div class="row"><div class="grow">${a}<small>${b}</small></div><span class="tag${/Active|Connected/.test(c) ? ' ok' : ''}">${c}</span></div>`).join('')}</div>`;
+  $('#settingsPane').innerHTML = `<h2>${s.title}</h2><p>${s.intro}</p><div class="rows">${s.rows.map(([a, b, c]) => `<div class="row"><div class="grow">${a}<small>${b}</small></div><span class="tag${/Active|Connected|Approved/.test(c) ? ' ok' : ''}">${c}</span></div>`).join('')}</div>`;
 }
 $('#settingsBtn').addEventListener('click', () => openSettings());
 $('#backBtn').addEventListener('click', closeSettings);
@@ -546,6 +574,23 @@ document.addEventListener('keydown', (e) => {
     else if (!e.shiftKey && document.activeElement === f.at(-1)) { e.preventDefault(); f[0].focus(); }
   }
 });
+
+
+// Model picker
+const modelBtn = $('#modelBtn'), modelMenu = $('#modelMenu');
+function closeModels() { modelMenu.hidden = true; modelBtn.setAttribute('aria-expanded', 'false'); }
+modelBtn.addEventListener('click', () => { const open = modelMenu.hidden; modelMenu.hidden = !open; modelBtn.setAttribute('aria-expanded', String(open)); if (open) modelMenu.querySelector('[aria-checked="true"]').focus(); });
+modelMenu.querySelectorAll('.opt').forEach((o) => o.addEventListener('click', () => {
+  modelMenu.querySelectorAll('.opt').forEach((x) => x.setAttribute('aria-checked', 'false'));
+  o.setAttribute('aria-checked', 'true'); $('#modelName').textContent = o.dataset.model; closeModels(); modelBtn.focus();
+}));
+modelMenu.addEventListener('keydown', (e) => {
+  const opts = [...modelMenu.querySelectorAll('.opt')], i = opts.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown') { e.preventDefault(); opts[(i + 1) % opts.length].focus(); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); opts[(i - 1 + opts.length) % opts.length].focus(); }
+  if (e.key === 'Escape') { e.stopPropagation(); closeModels(); modelBtn.focus(); }
+});
+document.addEventListener('click', (e) => { if (!e.target.closest('.model')) closeModels(); });
 
 if (matchMedia('(max-width: 1180px)').matches) $('#docBtn').setAttribute('aria-pressed', 'false');
 if (location.hash === '#settings') openSettings();

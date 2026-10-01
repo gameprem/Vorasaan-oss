@@ -20,7 +20,7 @@
 | LLM | Defaults to Anthropic directly via `ANTHROPIC_API_KEY`, entered in `/setup`. 9Router (or any OpenAI-compatible endpoint) is optional. |
 | Spec format | **Markdown is canonical** ([ADR 0002](./docs/adr/0002-markdown-is-the-canonical-spec-format.md)). BlockNote converts to and from Markdown when editing. |
 | File storage | Attachment files go through a `FileStorage` interface. The default is local disk (a Docker volume); any S3-compatible bucket (S3, MinIO, R2) is enabled by setting `FILE_STORAGE_DRIVER=s3` and `S3_*` env vars. |
-| Default model | `claude-opus-5-5` for every workflow. Each workflow can name its own model so they can be split later. Admins can change it. |
+| Default model | `claude-opus-5-5` for every workflow. Each workflow can name its own model so they can be split later. Admins can change it. After the MVP, Admins connect several providers and approve a list of models; people pick one per Conversation ([ADR 0010](./docs/adr/0010-approved-models-and-the-chat-picker.md)). |
 | AI context | **Retrieval, not everything** ([ADR 0007](./docs/adr/0007-retrieval-with-pgvector.md)). Content is chunked and embedded into Postgres with pgvector. A workflow gets its Feature's own context first, then the most relevant chunks from the Project, within a token budget. Embeddings go through an `EmbeddingPort`; the default is any OpenAI-compatible endpoint set by an Admin. |
 
 ---
@@ -236,6 +236,8 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [ ] Chat view, Action Cards and the document panel (0046).
    - [ ] Grilling in the chat view (0047).
    - [ ] End-to-end tests for the chat UI (0048).
+   - [ ] Several AI providers and Approved Models chosen by an Admin, with a model per AI task (0053, [ADR 0010](./docs/adr/0010-approved-models-and-the-chat-picker.md)).
+   - [ ] A model picker in the chat: each Conversation remembers its model, and every reply records the model that wrote it (0054).
 2. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why (Spec section, someone to ask, open Blockers, QA ready), using the checks each Platform switches on. The AI fills or asks about the gaps.
    - [ ] Platforms per Project, targeted by Features (0050).
    - [ ] Coverage per Platform, used by the AI (0051).

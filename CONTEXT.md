@@ -156,6 +156,10 @@ _Avoid_: Alert, inbox item
 A person's chat with the AI, scoped to a Project or a Feature. The AI reads that scope's context and can only propose; nothing changes until a person approves an Action Card.
 _Avoid_: Session, thread, chat room
 
+**Approved Model**:
+An AI model an Admin allows people to use, with a recognizable name (such as "Fast" or "Best") and the provider it runs on. One is the Organization default.
+_Avoid_: Engine, LLM option, model preset
+
 **Action Card**:
 A proposal the AI makes inside a Conversation (a Decision Request draft, a Spec Proposal, a Brief Proposal, a Feature Suggestion), shown with the buttons to approve, edit or decline it.
 _Avoid_: Tool result, command, auto-action
