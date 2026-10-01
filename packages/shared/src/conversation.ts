@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ActionCardView } from './action-card.ts';
 import { ConversationMessageRole } from './enums.ts';
 
 const Id = z.uuid();
@@ -92,9 +93,11 @@ export type ConversationListItem = z.infer<typeof ConversationListItem>;
 export const ConversationList = z.object({ conversations: z.array(ConversationListItem) });
 export type ConversationList = z.infer<typeof ConversationList>;
 
-/** A Conversation with all its messages, oldest first. */
+/** A Conversation with all its messages and Action Cards, oldest first. */
 export const ConversationView = ConversationListItem.extend({
   messages: z.array(ConversationMessageView),
+  /** Each is linked to the message that made it (`messageId`). */
+  actionCards: z.array(ActionCardView),
 });
 export type ConversationView = z.infer<typeof ConversationView>;
 
@@ -105,7 +108,14 @@ export type ConversationView = z.infer<typeof ConversationView>;
 export const ConversationTurnView = z.object({
   conversation: ConversationListItem,
   message: ConversationMessageView,
+  /**
+   * What the AI wrote before its reply in this turn, oldest first: each message
+   * that called tools, followed by the TOOL messages with their results.
+   */
+  steps: z.array(ConversationMessageView),
   reply: ConversationMessageView,
+  /** The Action Cards this turn's tool calls made. */
+  actionCards: z.array(ActionCardView),
 });
 export type ConversationTurnView = z.infer<typeof ConversationTurnView>;
 
@@ -139,7 +149,21 @@ export const ConversationDoneEvent = z.object({
 });
 export type ConversationDoneEvent = z.infer<typeof ConversationDoneEvent>;
 
-/** The AI failed mid-reply: drop the streamed text; nothing of it was stored. */
+/**
+ * The AI called tools: its message (the text streamed so far, and the calls)
+ * and the TOOL messages with each call's result are stored. The reply goes on
+ * with new `conversation.delta`s under a new `messageId`.
+ */
+export const ConversationStepEvent = z.object({
+  conversationId: Id,
+  messages: z.array(ConversationMessageView),
+});
+export type ConversationStepEvent = z.infer<typeof ConversationStepEvent>;
+
+/**
+ * The AI failed mid-reply: drop the text streamed under `messageId`; it wasn't
+ * stored. Steps already announced by `conversation.step` stay.
+ */
 export const ConversationFailedEvent = z.object({
   conversationId: Id,
   messageId: Id,

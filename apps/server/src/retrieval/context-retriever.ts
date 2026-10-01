@@ -30,6 +30,8 @@ export const CONTEXT_BUDGET = {
   conversationFeature: 6_000,
   /** Each turn of a Project Conversation: as much as Grilling and Feature Suggestions get. */
   conversationProject: 12_000,
+  /** One `searchContext` tool call in a Conversation (Action Cards, 0043): a focused extra read. */
+  searchContext: 3_000,
 } as const;
 
 /** What a block's tag and attributes (kind, id, title...) cost in the prompt, roughly. */

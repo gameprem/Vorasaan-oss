@@ -53,6 +53,7 @@ const SOURCE_TEXT: Record<BriefVersionView['source'], string> = {
   MANUAL: 'Edited by hand',
   GRILLING: 'From a Grilling',
   REVERT: 'Reverted',
+  CONVERSATION: 'Drafted in a Conversation',
 };
 
 const LEVEL_TEXT: Record<SuggestionLevel, string> = {

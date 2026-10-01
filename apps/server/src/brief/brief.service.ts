@@ -16,6 +16,7 @@ import {
   type RevertBriefInput,
   type WriteBriefInput,
 } from '@vorasaan/shared';
+import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
@@ -44,6 +45,7 @@ export class BriefService {
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
     private readonly indexing: IndexingService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async current(user: User, projectId: string): Promise<ProjectBriefView> {
@@ -141,6 +143,44 @@ export class BriefService {
       include: briefProposalInclude,
     });
     return proposals.map(toBriefProposalView);
+  }
+
+  /**
+   * A Brief Proposal the AI drafted in a Conversation (an Action Card, ticket
+   * 0043), for the drafting PO or Admin to approve. Only someone who may edit
+   * the Brief drafts one; nothing changes until it is approved.
+   */
+  async proposeFromConversation(
+    user: User,
+    projectId: string,
+    input: { proposedMarkdown: string; summary: string },
+  ): Promise<BriefProposalView> {
+    await assertCanEditProject(this.db, user, projectId);
+    const base = await this.db.briefVersion.findFirst({
+      where: { projectId },
+      orderBy: { version: 'desc' },
+      select: { id: true, markdown: true },
+    });
+    const proposedMarkdown = normalizeMarkdown(input.proposedMarkdown);
+    if (base && base.markdown === proposedMarkdown) {
+      throw new UnprocessableEntityException(
+        'The draft is the same as the current Project Brief, so there is nothing to propose',
+      );
+    }
+    const proposal = await this.db.briefProposal.create({
+      data: {
+        projectId,
+        baseVersionId: base?.id ?? null,
+        source: 'CONVERSATION',
+        proposedMarkdown,
+        summary: input.summary,
+        approverId: user.id,
+      },
+      include: briefProposalInclude,
+    });
+    // It waits in the drafter's Inbox too.
+    await this.notifications.publish(this.notifications.outbox().inboxChanged(user.id));
+    return toBriefProposalView(proposal);
   }
 
   async getProposal(user: User, id: string): Promise<BriefProposalView> {

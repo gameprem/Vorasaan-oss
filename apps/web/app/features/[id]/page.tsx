@@ -36,6 +36,7 @@ const SOURCE_TEXT: Record<SpecVersionView['source'], string> = {
   AI_SUMMARY: 'Drafted from Attachments',
   DECISION: 'From a Decision',
   REVERT: 'Reverted',
+  CONVERSATION: 'Drafted in a Conversation',
 };
 
 /** Loads what only one tab needs; an error there is shown in the tab, not as the whole page. */

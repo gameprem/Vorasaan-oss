@@ -230,7 +230,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 ### Post-MVP (in order)
 1. **Chat-first Web UI** ([ADR 0008](./docs/adr/0008-chat-first-web-ui.md)): a Sidebar (Inbox, Projects → Features, recent Conversations, and Settings, which opens as a full-screen modal with Back) and a Conversation with the AI per Project or Feature. The AI proposes through Action Cards that a person approves, and Grilling runs as per-person Conversations with follow-ups. It looks like Gemini, with the palette from ADR 0008 (mockup: `docs/design/chat-web-ui-mockup.html`).
    - [x] Conversations and streamed AI replies (0042).
-   - [ ] Action Cards (0043).
+   - [x] Action Cards (0043).
    - [ ] Grilling as per-person Conversations (0044).
    - [ ] App shell with the Sidebar and the Settings modal (0045).
    - [ ] Chat view, Action Cards and the document panel (0046).

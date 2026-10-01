@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma, PrismaClient, User } from '@vorasaan/db';
 import {
+  type ActionCardView,
   type ConversationList,
   type ConversationListItem,
   type ConversationMessageView,
@@ -19,11 +20,11 @@ import {
   MAX_CONVERSATION_TITLE_CHARS,
   type ServerEvent,
 } from '@vorasaan/shared';
+import { ActionCardsService } from '../action-cards/action-cards.service.ts';
 import {
   AI_PORT,
   type AiPort,
   type ChatMessageForAi,
-  type ChatTool,
   type ChatToolCall,
   type ContextBlock,
   type ConversationScopeForAi,
@@ -58,10 +59,22 @@ export const CONVERSATION_LIMITS = {
   maxSummaryChars: 4_000,
 } as const;
 
+/**
+ * The most rounds of tool calls in one turn (Action Cards, 0043). After them the
+ * AI is asked once more without tools, so it must answer in words.
+ */
+export const MAX_TOOL_ROUNDS = 4;
+
 const LIST_LIMIT = { recent: 10, all: 50 } as const;
 
 type MessageRow = Prisma.ConversationMessageGetPayload<object>;
-type Turn = { conversation: ConversationListItem; message: MessageRow; reply: MessageRow };
+type Turn = {
+  conversation: ConversationListItem;
+  message: MessageRow;
+  steps: MessageRow[];
+  reply: MessageRow;
+  actionCards: ActionCardView[];
+};
 
 /**
  * Conversations (ADR 0008, ticket 0042): a person's chat with the AI about a
@@ -78,6 +91,12 @@ type Turn = { conversation: ConversationListItem; message: MessageRow; reply: Me
  * earlier turns and only the messages after it. Past `maxRecentMessages` the
  * oldest of those are folded into the summary first.
  *
+ * The AI may call tools (Action Cards, 0043). Each round that calls tools is
+ * stored as it completes: the ASSISTANT message with its calls, then one TOOL
+ * message per call with its result, announced with `conversation.step` (and
+ * `conversation.actionCard.created` for each card). The AI then gets those
+ * results and goes on, for at most `MAX_TOOL_ROUNDS` rounds per turn.
+ *
  * One reply is written at a time per Conversation; this process holds the lock,
  * as it holds the event bus (one server process per Organization).
  */
@@ -93,6 +112,7 @@ export class ConversationsService {
     private readonly foundation: ProjectFoundation,
     private readonly guidelines: FeatureGuidelinesService,
     private readonly bus: EventBus,
+    private readonly cards: ActionCardsService,
   ) {}
 
   /** Anyone in the scope's Organization starts one; the AI replies to the first message. */
@@ -134,7 +154,8 @@ export class ConversationsService {
       where: { conversationId: id },
       orderBy: { position: 'asc' },
     });
-    return toConversationView(conversation, messages);
+    const actionCards = await this.cards.forConversation(user, id);
+    return toConversationView(conversation, messages, actionCards);
   }
 
   /** The owner's next message, and the AI's reply to it. */
@@ -152,7 +173,11 @@ export class ConversationsService {
     });
   }
 
-  /** Asks the AI again for a reply to the last message, after a failed one. */
+  /**
+   * Asks the AI again for a reply to the last message, after a failed one. When
+   * the failure came after a round of tool calls, that round stays and the AI
+   * goes on from its results.
+   */
   async retry(user: User, id: string): Promise<ConversationTurnView> {
     await this.ownedWithAccess(user, id);
     return this.exclusively(id, async () => {
@@ -161,7 +186,7 @@ export class ConversationsService {
         orderBy: { position: 'desc' },
         select: { role: true },
       });
-      if (last?.role !== 'USER') {
+      if (last?.role !== 'USER' && last?.role !== 'TOOL') {
         throw new ConflictException('Nothing to retry: the last message already has its reply');
       }
       return toTurnView(await this.reply(user, id));
@@ -177,8 +202,10 @@ export class ConversationsService {
 
   /**
    * Replies to the trailing message: folds old messages into the summary if
-   * needed, retrieves the scope's context, streams the AI's reply to the owner,
-   * and stores it once complete. Call only while holding the Conversation's lock.
+   * needed, retrieves the scope's context, then streams the AI's reply to the
+   * owner. Each round of tool calls is run and stored, and the AI goes on with
+   * the results; the final reply is stored once complete. Call only while
+   * holding the Conversation's lock.
    */
   private async reply(user: User, id: string): Promise<Turn> {
     const conversation = await this.db.conversation.findUniqueOrThrow({
@@ -192,78 +219,131 @@ export class ConversationsService {
       where: { conversationId: id, position: { gte: conversation.summarizedThrough } },
       orderBy: { position: 'asc' },
     });
-    const message = rows.at(-1);
-    if (!message) throw new Error(`Conversation ${id} has no message to reply to`);
+    if (!rows.length) throw new Error(`Conversation ${id} has no message to reply to`);
+    // The person's message this turn answers (a retry may follow a tool round).
+    const message = await this.db.conversationMessage.findFirstOrThrow({
+      where: { conversationId: id, role: 'USER' },
+      orderBy: { position: 'desc' },
+    });
     const scope = scopeForAi(conversation);
     const { summary, recent } = await this.fold(conversation, scope, rows);
     const { context, foundation } = await this.contextFor(conversation, recent);
 
-    // Tools arrive with Action Cards (0043); a call to a tool not offered is dropped.
-    const tools: ChatTool[] = [];
-    const replyId = randomUUID();
+    const tools = this.cards.toolsFor(conversation);
+    const recentMessages = recent.map(toChatMessage);
+    const steps: MessageRow[] = [];
+    const actionCards: ActionCardView[] = [];
     const emit = (event: ServerEvent) => this.bus.emit(user.id, event);
-    let text = '';
-    const toolCalls: ChatToolCall[] = [];
-    try {
-      const stream = this.ai.chat({
-        scope,
-        context,
-        foundation,
-        summary,
-        recentMessages: recent.map(toChatMessage),
-        tools,
-      });
-      for await (const chunk of stream) {
-        if (chunk.type === 'text') {
-          if (!chunk.delta) continue;
-          text += chunk.delta;
-          emit({
-            event: 'conversation.delta',
-            data: { conversationId: id, messageId: replyId, delta: chunk.delta },
-          });
-        } else if (tools.some((t) => t.name === chunk.call.name)) {
-          toolCalls.push(chunk.call);
-        } else {
-          this.logger.warn(`Dropped a call to the tool "${chunk.call.name}", which wasn't offered`);
-        }
-      }
-    } catch (error) {
-      this.logger.error('A Conversation reply failed', error as Error);
-      const reason = 'The AI failed while replying, so no reply was saved. Try again.';
-      emit({
-        event: 'conversation.failed',
-        data: { conversationId: id, messageId: replyId, message: reason },
-      });
-      throw replyFailed(id, reason);
-    }
 
-    const saved = await this.db.$transaction(async (tx) => {
-      const updated = await tx.conversation.update({
+    for (let round = 0; ; round++) {
+      // Past the last tool round the AI gets no tools, so it must answer in words.
+      const offered = round < MAX_TOOL_ROUNDS ? tools : [];
+      const replyId = randomUUID();
+      let text = '';
+      const toolCalls: ChatToolCall[] = [];
+      try {
+        const stream = this.ai.chat({
+          scope,
+          context,
+          foundation,
+          summary,
+          recentMessages: [...recentMessages],
+          tools: offered,
+        });
+        for await (const chunk of stream) {
+          if (chunk.type === 'text') {
+            if (!chunk.delta) continue;
+            text += chunk.delta;
+            emit({
+              event: 'conversation.delta',
+              data: { conversationId: id, messageId: replyId, delta: chunk.delta },
+            });
+          } else if (!offered.some((t) => t.name === chunk.call.name)) {
+            this.logger.warn(
+              `Dropped a call to the tool "${chunk.call.name}", which wasn't offered`,
+            );
+          } else if (toolCalls.some((c) => c.id === chunk.call.id)) {
+            this.logger.warn(`Dropped a second tool call with the id "${chunk.call.id}"`);
+          } else {
+            toolCalls.push(chunk.call);
+          }
+        }
+      } catch (error) {
+        this.logger.error('A Conversation reply failed', error as Error);
+        const reason = 'The AI failed while replying, so no reply was saved. Try again.';
+        emit({
+          event: 'conversation.failed',
+          data: { conversationId: id, messageId: replyId, message: reason },
+        });
+        throw replyFailed(id, reason);
+      }
+
+      if (!toolCalls.length) {
+        const saved = await this.store(id, { id: replyId, role: 'ASSISTANT', content: text });
+        emit({
+          event: 'conversation.done',
+          data: { conversationId: id, message: toConversationMessageView(saved.message) },
+        });
+        return {
+          conversation: toConversationListItem(saved.conversation),
+          message,
+          steps,
+          reply: saved.message,
+          actionCards,
+        };
+      }
+
+      // A round of tool calls: store the calls, then run each and store its result.
+      const step = await this.store(id, {
+        id: replyId,
+        role: 'ASSISTANT',
+        content: text,
+        toolCalls: toolCalls as Prisma.InputJsonValue,
+      });
+      const results: MessageRow[] = [];
+      const made: ActionCardView[] = [];
+      for (const call of toolCalls) {
+        const run = await this.cards.run(user, conversation, step.message.id, call);
+        const result = await this.store(id, {
+          role: 'TOOL',
+          content: run.content,
+          toolCallId: call.id,
+        });
+        results.push(result.message);
+        made.push(...run.cards);
+      }
+      emit({
+        event: 'conversation.step',
+        data: {
+          conversationId: id,
+          messages: [step.message, ...results].map(toConversationMessageView),
+        },
+      });
+      for (const card of made) {
+        emit({ event: 'conversation.actionCard.created', data: { conversationId: id, card } });
+      }
+      steps.push(step.message, ...results);
+      actionCards.push(...made);
+      recentMessages.push(toChatMessage(step.message), ...results.map(toChatMessage));
+    }
+  }
+
+  /** Appends a message to the Conversation, which counts as activity. */
+  private store(
+    id: string,
+    data: Omit<Prisma.ConversationMessageUncheckedCreateInput, 'conversationId' | 'position'>,
+  ) {
+    return this.db.$transaction(async (tx) => {
+      const conversation = await tx.conversation.update({
         where: { id },
         data: { updatedAt: new Date() },
         include: conversationInclude,
       });
-      const reply = await tx.conversationMessage.create({
-        data: {
-          id: replyId,
-          conversationId: id,
-          position: await nextPosition(tx, id),
-          role: 'ASSISTANT',
-          content: text,
-          ...(toolCalls.length ? { toolCalls: toolCalls as Prisma.InputJsonValue } : {}),
-        },
+      const message = await tx.conversationMessage.create({
+        data: { ...data, conversationId: id, position: await nextPosition(tx, id) },
       });
-      return { conversation: updated, reply };
+      return { conversation, message };
     });
-    emit({
-      event: 'conversation.done',
-      data: { conversationId: id, message: toConversationMessageView(saved.reply) },
-    });
-    return {
-      conversation: toConversationListItem(saved.conversation),
-      message,
-      reply: saved.reply,
-    };
   }
 
   /**
@@ -313,11 +393,11 @@ export class ConversationsService {
     conversation: { projectId: string; featureId: string | null },
     recent: MessageRow[],
   ): Promise<{ context: ContextBlock[]; foundation: ProjectFoundationForAi }> {
+    // The person's newest messages, before any tool round of the turn being replied to.
     const trailing: string[] = [];
-    for (const m of [...recent].reverse()) {
-      if (m.role !== 'USER') break;
-      trailing.unshift(m.content);
-    }
+    let i = recent.length - 1;
+    while (i >= 0 && recent[i]?.role !== 'USER') i--;
+    for (; i >= 0 && recent[i]?.role === 'USER'; i--) trailing.unshift(recent[i]?.content ?? '');
     const query = trailing.join('\n\n');
     if (conversation.featureId) {
       const { foundation, contextBudget } = await this.foundation.forFeature(
@@ -456,6 +536,8 @@ function toTurnView(turn: Turn): ConversationTurnView {
   return {
     conversation: turn.conversation,
     message: toConversationMessageView(turn.message) satisfies ConversationMessageView,
+    steps: turn.steps.map(toConversationMessageView),
     reply: toConversationMessageView(turn.reply),
+    actionCards: turn.actionCards,
   };
 }

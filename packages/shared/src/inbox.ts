@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { ActionCardEvent } from './action-card.ts';
 import {
   ConversationDeltaEvent,
   ConversationDoneEvent,
   ConversationFailedEvent,
+  ConversationStepEvent,
 } from './conversation.ts';
 import { PersonRef } from './decision-request.ts';
 import {
@@ -149,7 +151,8 @@ export type NotificationCreatedEvent = z.infer<typeof NotificationCreatedEvent>;
 
 /**
  * One SSE message: its `event:` name and its JSON `data:` payload. The
- * `conversation.*` events stream a Conversation's reply to its owner only.
+ * `conversation.*` events stream a Conversation's reply, and its Action Cards,
+ * to its owner only.
  */
 export const ServerEvent = z.discriminatedUnion('event', [
   z.object({ event: z.literal('inbox.changed'), data: InboxChangedEvent }),
@@ -157,6 +160,9 @@ export const ServerEvent = z.discriminatedUnion('event', [
   z.object({ event: z.literal('conversation.delta'), data: ConversationDeltaEvent }),
   z.object({ event: z.literal('conversation.done'), data: ConversationDoneEvent }),
   z.object({ event: z.literal('conversation.failed'), data: ConversationFailedEvent }),
+  z.object({ event: z.literal('conversation.step'), data: ConversationStepEvent }),
+  z.object({ event: z.literal('conversation.actionCard.created'), data: ActionCardEvent }),
+  z.object({ event: z.literal('conversation.actionCard.updated'), data: ActionCardEvent }),
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;
 export type ServerEventName = ServerEvent['event'];

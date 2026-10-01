@@ -59,12 +59,14 @@ enum SpecVersionSource {
   AI_SUMMARY // AI draft from Attachments, approved by a human
   DECISION // AI draft after a Decision, approved by the Decider
   REVERT // rolled back to an earlier version
+  CONVERSATION // AI draft from a Conversation's Action Card, approved by a human
 }
 
 enum BriefVersionSource {
   MANUAL // edited by hand
   GRILLING // AI draft from Grilling answers, approved by a human
   REVERT // rolled back to an earlier version
+  CONVERSATION // AI draft from a Conversation's Action Card, approved by a human
 }
 
 enum GuidelineCriterionKind {
@@ -837,6 +839,7 @@ model Conversation {
   project           Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   feature           Feature?              @relation(fields: [featureId], references: [id], onDelete: Cascade)
   messages          ConversationMessage[]
+  actionCards       ActionCard[]
 
   @@index([ownerId, updatedAt])
   @@index([projectId])
@@ -857,6 +860,43 @@ model ConversationMessage {
   toolCallId     String?
   createdAt      DateTime                @default(now())
   conversation   Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  actionCards    ActionCard[] // made by this ASSISTANT message's tool calls
 
   @@unique([conversationId, position])
+}
+
+// ─── Action Cards (ADR 0008, ticket 0043) ───────────────────────────────────
+
+enum ActionCardKind {
+  DECISION_REQUEST // a DRAFT Decision Request; approving sends it
+  SPEC_PROPOSAL // a PENDING Spec Proposal; approving makes the next Spec Version
+  BRIEF_PROPOSAL // a PENDING Brief Proposal; approving makes the next Brief Version
+  FEATURE_SUGGESTION // a PENDING Feature Suggestion; approving accepts it
+}
+
+enum ActionCardStatus {
+  PROPOSED // waiting for the Conversation's owner
+  APPROVED // approved through the target's own service
+  DECLINED // withdrawn, rejected or dismissed through the target's own service
+  STALE // the target changed elsewhere, so the card can no longer be acted on
+}
+
+model ActionCard {
+  id             String              @id @default(uuid())
+  conversationId String
+  messageId      String // the ASSISTANT message whose tool call made it
+  toolCallId     String
+  kind           ActionCardKind
+  targetId       String // the Decision Request, Spec Proposal, Brief Proposal or Feature Suggestion
+  status         ActionCardStatus    @default(PROPOSED)
+  title          String
+  summary        String?
+  reviewedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        ConversationMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([kind, targetId])
+  @@index([conversationId, createdAt])
+  @@index([messageId])
 }
