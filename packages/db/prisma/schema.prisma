@@ -303,6 +303,7 @@ model ApprovedModel {
   organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   integration    OrgIntegration @relation(fields: [integrationId], references: [id], onDelete: NoAction)
   taskModels     AiTaskModel[]
+  conversations  Conversation[] // picked in them (ticket 0054)
 
   @@unique([organizationId, displayName])
   @@index([organizationId, position])
@@ -505,6 +506,12 @@ model SpecProposal {
   approverId       String // the Decider for DECISION, the requesting PO for AI_SUMMARY
   decisionId       String?           @unique
   reviewedAt       DateTime?
+  // The model that drafted it in a Conversation (ticket 0054), as it was then: the
+  // Approved Model (a plain id, so the record outlives it), its display name and
+  // the provider's model id (or the env "provider/model"). Null when drafted elsewhere.
+  approvedModelId  String?
+  modelDisplayName String?
+  modelName        String?
   createdAt        DateTime          @default(now())
   feature          Feature           @relation(fields: [featureId], references: [id], onDelete: Cascade)
   baseVersion      SpecVersion?      @relation("ProposalBase", fields: [baseVersionId], references: [id])
@@ -552,6 +559,12 @@ model BriefProposal {
   status           ProposalStatus     @default(PENDING)
   approverId       String
   reviewedAt       DateTime?
+  // The model that drafted it in a Conversation (ticket 0054), as it was then: the
+  // Approved Model (a plain id, so the record outlives it), its display name and
+  // the provider's model id (or the env "provider/model"). Null when drafted elsewhere.
+  approvedModelId  String?
+  modelDisplayName String?
+  modelName        String?
   createdAt        DateTime           @default(now())
   project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   baseVersion      BriefVersion?      @relation("BriefProposalBase", fields: [baseVersionId], references: [id])
@@ -570,24 +583,29 @@ model BriefProposal {
 //   OPEN + deciderId null + I'm a recipient     -> claim / decide
 //   NEEDS_INFO + raiserId = me                  -> answer
 model DecisionRequest {
-  id            String                @id @default(uuid())
-  featureId     String
-  kind          DecisionRequestKind
-  withChoices   Boolean               @default(true) // false: plain-text Question
-  raiserId      String
-  title         String
-  description   String
-  suggestedRole TeamRole? // AI suggestion
-  deciderRole   TeamRole // confirmed by the Raiser
-  deciderId     String? // null until Claimed when sent to several recipients
-  status        DecisionRequestStatus @default(DRAFT)
-  submittedAt   DateTime?
-  closedAt      DateTime?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  feature       Feature               @relation(fields: [featureId], references: [id], onDelete: Cascade)
-  raiser        User                  @relation("RequestRaiser", fields: [raiserId], references: [id])
-  decider       User?                 @relation("RequestDecider", fields: [deciderId], references: [id])
+  id                      String                @id @default(uuid())
+  featureId               String
+  kind                    DecisionRequestKind
+  withChoices             Boolean               @default(true) // false: plain-text Question
+  raiserId                String
+  title                   String
+  description             String
+  suggestedRole           TeamRole? // AI suggestion
+  deciderRole             TeamRole // confirmed by the Raiser
+  deciderId               String? // null until Claimed when sent to several recipients
+  status                  DecisionRequestStatus @default(DRAFT)
+  submittedAt             DateTime?
+  closedAt                DateTime?
+  // The model that drafted its AI Choices in a Conversation (ticket 0054), as it
+  // was then (see SpecProposal). Null when raised elsewhere.
+  choicesApprovedModelId  String?
+  choicesModelDisplayName String?
+  choicesModelName        String?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  feature                 Feature               @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  raiser                  User                  @relation("RequestRaiser", fields: [raiserId], references: [id])
+  decider                 User?                 @relation("RequestDecider", fields: [deciderId], references: [id])
 
   recipients    RequestRecipient[]
   contexts      RequestContext[]
@@ -897,17 +915,22 @@ model Conversation {
   // Where a Grilling Conversation stands: the question being asked, the answer
   // and follow-ups so far, the questions its owner skipped (GrillingThreadState).
   grillingState     Json?
+  // The Approved Model picked in it (ticket 0054), kept for its next messages.
+  // Null until someone picks one, or once it is removed: then the chat default.
+  modelId           String?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt // bumped by every message
   owner             User                  @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   project           Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   feature           Feature?              @relation(fields: [featureId], references: [id], onDelete: Cascade)
   grillingRound     GrillingRound?        @relation(fields: [grillingRoundId], references: [id], onDelete: Cascade)
+  model             ApprovedModel?        @relation(fields: [modelId], references: [id], onDelete: SetNull)
   messages          ConversationMessage[]
   actionCards       ActionCard[]
 
   @@unique([grillingRoundId, ownerId])
   @@index([ownerId, updatedAt])
+  @@index([modelId])
   @@index([projectId])
   @@index([featureId])
 }
@@ -917,16 +940,23 @@ model Conversation {
 // `toolCallId` (TOOL) names the call a result answers. Action Cards (0043) point
 // at the message that made them.
 model ConversationMessage {
-  id             String                  @id @default(uuid())
-  conversationId String
-  position       Int
-  role           ConversationMessageRole
-  content        String
-  toolCalls      Json?
-  toolCallId     String?
-  createdAt      DateTime                @default(now())
-  conversation   Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  actionCards    ActionCard[] // made by this ASSISTANT message's tool calls
+  id               String                  @id @default(uuid())
+  conversationId   String
+  position         Int
+  role             ConversationMessageRole
+  content          String
+  toolCalls        Json?
+  toolCallId       String?
+  // ASSISTANT: the model that wrote it (ticket 0054), as it was then (see
+  // SpecProposal). Null for the server's own messages (Grilling questions).
+  approvedModelId  String?
+  modelDisplayName String?
+  modelName        String?
+  // ASSISTANT: on the one reply after the Conversation's model was removed, what it used instead.
+  modelNotice      String?
+  createdAt        DateTime                @default(now())
+  conversation     Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  actionCards      ActionCard[] // made by this ASSISTANT message's tool calls
 
   @@unique([conversationId, position])
 }

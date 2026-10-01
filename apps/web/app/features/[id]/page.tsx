@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { AttachmentsPanel } from '@/components/attachments-panel';
 import { BlockedBadge, KindBadge, Notice, relativeTime } from '@/components/bits';
+import { DraftedWith } from '@/components/drafted-with';
 import { RevertButton } from '@/components/revert-button';
 import { RoleOwnersEditor } from '@/components/role-owners-editor';
 import { VersionDiff } from '@/components/spec-diff';
@@ -233,6 +234,7 @@ export default async function FeaturePage({
                           {v.revertedFrom !== null && ` from v${v.revertedFrom}`}, approved by{' '}
                           {v.approvedBy.name} {relativeTime(v.createdAt)}
                         </span>
+                        <DraftedWith model={v.draftedWith} />
                       </span>
                       <span className="flex flex-wrap items-start gap-2">
                         <Link
@@ -300,6 +302,7 @@ export default async function FeaturePage({
                       : entry.customAnswer}
                   </p>
                   {entry.rationale && <p className="mt-1 text-fg-soft">{entry.rationale}</p>}
+                  <DraftedWith model={entry.choicesDraftedWith} what="Choices" />
                   <p className="mt-2 text-sm text-fg-soft">
                     Decided by {entry.decidedBy.name}
                     {entry.onBehalfOf && ` on behalf of ${entry.onBehalfOf.name}`}{' '}

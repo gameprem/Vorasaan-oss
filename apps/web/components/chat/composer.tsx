@@ -22,6 +22,7 @@ export function Composer({
   placeholder,
   attachTo,
   context,
+  model,
   disabled,
   inputRef,
 }: {
@@ -37,6 +38,8 @@ export function Composer({
   attachTo: AttachmentOwner | null;
   /** What the AI reads here, or the scope picker on a new Conversation. */
   context: ReactNode;
+  /** The model menu (ticket 0054), between Attachment and the context. */
+  model?: ReactNode;
   /** Why sending isn't possible yet (no scope picked), if it isn't. */
   disabled?: string;
   inputRef: Ref<HTMLTextAreaElement>;
@@ -95,7 +98,7 @@ export function Composer({
       </span>
       <div className="composer-row">
         {attachTo && <AttachButton owner={attachTo} />}
-        {/* The model picker (ticket 0054) goes here, between Attachment and the context. */}
+        {model}
         <span className="scope">{context}</span>
         {replying ? (
           <button

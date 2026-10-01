@@ -223,6 +223,17 @@ describe('Grilling Conversations (0044)', () => {
     });
   });
 
+  test('a Grilling Conversation has no model to pick: picking one is a 422 and stores nothing', async () => {
+    await start();
+    const conv = await conversationOf(olga);
+    const res = await asUser(olga)('POST', `/conversations/${conv.id}/messages`, {
+      content: FULL(1),
+      approvedModelId: '00000000-0000-4000-8000-000000000000',
+    });
+    expect(res.status).toBe(422);
+    expect((await read(olga, conv.id)).messages).toHaveLength(1);
+  });
+
   test(`at most ${MAX_GRILLING_FOLLOW_UPS} follow-ups per question, whatever the AI says`, async () => {
     const g = await start();
     const conv = await conversationOf(olga);

@@ -253,7 +253,9 @@ export type ModelChoice = {
  * - `approvedModelId`: the caller picks the model (the chat picker, 0054). An
  *   unknown one falls back to the task's model.
  * - `model`: the resolved model, filled in by `ModelRoutingAiPort` before the call
- *   reaches the provider adapter (or the fake).
+ *   reaches the provider adapter (or the fake). A caller that chose it already
+ *   (`AiSettingsService.chooseModel`) passes it, and it is kept as is: a
+ *   Conversation's turn chooses once, so all its steps run on one model (0054).
  */
 export type AiCallOptions = { approvedModelId?: string; model?: ModelChoice };
 

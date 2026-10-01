@@ -1,4 +1,5 @@
 import type {
+  AiModelsView,
   ConversationScopeView,
   GrillingConversationRef,
   ProjectBriefView,
@@ -38,6 +39,15 @@ export async function loadDoc(scope: ConversationScopeView): Promise<ChatDoc | n
     };
   } catch {
     return null;
+  }
+}
+
+/** The Approved Models for the composer's model menu (ticket 0054); none when they can't be read. */
+export async function loadModels(): Promise<AiModelsView> {
+  try {
+    return await api<AiModelsView>('/ai/models');
+  } catch {
+    return { models: [], chatDefaultId: null };
   }
 }
 

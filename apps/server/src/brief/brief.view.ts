@@ -1,11 +1,16 @@
 import type { Prisma } from '@vorasaan/db';
 import type { BriefProposalView, BriefVersionView } from '@vorasaan/shared';
+import { fromRecordedModelColumns } from '../ai/recorded-model.ts';
 
 const person = { select: { id: true, name: true } } as const;
+const draftedWith = {
+  select: { approvedModelId: true, modelDisplayName: true, modelName: true },
+} as const;
 
 export const briefVersionInclude = {
   approvedBy: person,
   revertedFrom: { select: { version: true } },
+  proposal: draftedWith,
 } satisfies Prisma.BriefVersionInclude;
 
 export type BriefVersionWithRelations = Prisma.BriefVersionGetPayload<{
@@ -22,6 +27,7 @@ export function toBriefVersionView(v: BriefVersionWithRelations): BriefVersionVi
     summary: v.summary,
     approvedBy: v.approvedBy,
     revertedFrom: v.revertedFrom?.version ?? null,
+    draftedWith: fromRecordedModelColumns(v.proposal),
     createdAt: v.createdAt.toISOString(),
   };
 }
@@ -48,6 +54,7 @@ export function toBriefProposalView(p: BriefProposalWithRelations): BriefProposa
     proposedMarkdown: p.proposedMarkdown,
     summary: p.summary,
     resultVersion: p.resultVersion?.version ?? null,
+    draftedWith: fromRecordedModelColumns(p),
     createdAt: p.createdAt.toISOString(),
   };
 }

@@ -1,5 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import type { Prisma, PrismaClient, User } from '@vorasaan/db';
 import {
   type ActionCardView,
@@ -11,6 +18,7 @@ import {
   type ConversationView,
   type ListConversationsQuery,
   MAX_CONVERSATION_TITLE_CHARS,
+  type RecordedModel,
   type ServerEvent,
   type StopConversationResult,
 } from '@vorasaan/shared';
@@ -22,8 +30,15 @@ import {
   type ChatToolCall,
   type ContextBlock,
   type ConversationScopeForAi,
+  type ModelChoice,
   type ProjectFoundationForAi,
 } from '../ai/ai.port.ts';
+import { AiSettingsService } from '../ai/ai-settings.service.ts';
+import {
+  fromRecordedModelColumns,
+  modelLabel,
+  toRecordedModelColumns,
+} from '../ai/recorded-model.ts';
 import { clipForAi } from '../attachments/attachment-context.ts';
 import { projectAccess } from '../brief/brief-access.ts';
 import { FeatureGuidelinesService } from '../feature-guidelines/feature-guidelines.service.ts';
@@ -68,6 +83,8 @@ export const MAX_TOOL_ROUNDS = 4;
 const LIST_LIMIT = { recent: 10, all: 50 } as const;
 
 type MessageRow = Prisma.ConversationMessageGetPayload<object>;
+/** The model a turn runs on, chosen once before its first step, and what is recorded of it. */
+type TurnModel = { choice: ModelChoice; record: RecordedModel; notice: string | null };
 type Turn = {
   conversation: ConversationListItem;
   message: MessageRow;
@@ -103,6 +120,12 @@ type Turn = {
  * A Grilling Conversation (0044) is answered here too, but its turns go to
  * GrillingConversationsService: the server asks the round's questions and the
  * AI only decides on follow-ups.
+ *
+ * The model (ticket 0054, ADR 0010): a turn runs on the Approved Model picked in
+ * the Conversation (`modelId`), else the chat default. It is chosen once, before
+ * the turn's first step, so a reply never switches model midway, and every
+ * ASSISTANT message records it. A Conversation whose model was removed falls back
+ * on its next turn, and that reply carries a notice.
  */
 @Injectable()
 export class ConversationsService {
@@ -120,17 +143,24 @@ export class ConversationsService {
     private readonly cards: ActionCardsService,
     private readonly locks: ConversationLocks,
     private readonly grilling: GrillingConversationsService,
+    private readonly models: AiSettingsService,
   ) {}
 
   /** Anyone in the scope's Organization starts one; the AI replies to the first message. */
   async start(
     user: User,
-    input: { scope: ConversationScopeInput; content: string },
+    input: { scope: ConversationScopeInput; content: string; approvedModelId?: string },
   ): Promise<ConversationView> {
     const scope = await this.resolveScope(user, input.scope);
+    if (input.approvedModelId) await this.models.assertPickable(input.approvedModelId);
     const id = await this.db.$transaction(async (tx) => {
       const created = await tx.conversation.create({
-        data: { ownerId: user.id, ...scope, title: titleOf(input.content) },
+        data: {
+          ownerId: user.id,
+          ...scope,
+          title: titleOf(input.content),
+          modelId: input.approvedModelId ?? null,
+        },
       });
       await tx.conversationMessage.create({
         data: { conversationId: created.id, position: 0, role: 'USER', content: input.content },
@@ -171,9 +201,25 @@ export class ConversationsService {
     return this.get(user, await this.grilling.open(user, grillingId));
   }
 
-  /** The owner's next message, and the AI's reply to it. */
-  async send(user: User, id: string, content: string): Promise<ConversationTurnView> {
+  /**
+   * The owner's next message, and the AI's reply to it. `approvedModelId` picks the
+   * model for this reply and the next ones (422 unless it is an Approved Model).
+   */
+  async send(
+    user: User,
+    id: string,
+    content: string,
+    approvedModelId?: string,
+  ): Promise<ConversationTurnView> {
     const conversation = await this.ownedWithAccess(user, id);
+    if (approvedModelId) {
+      if (conversation.grillingRoundId) {
+        throw new UnprocessableEntityException(
+          "A Grilling Conversation's questions come from the server, so it has no model to pick",
+        );
+      }
+      await this.models.assertPickable(approvedModelId);
+    }
     return this.exclusively(id, async () => {
       if (conversation.grillingRoundId) await this.grilling.assertCanWrite(user, id);
       await this.db.$transaction(async (tx) => {
@@ -181,7 +227,10 @@ export class ConversationsService {
         await tx.conversationMessage.create({
           data: { conversationId: id, position, role: 'USER', content },
         });
-        await tx.conversation.update({ where: { id }, data: { updatedAt: new Date() } });
+        await tx.conversation.update({
+          where: { id },
+          data: { updatedAt: new Date(), ...(approvedModelId ? { modelId: approvedModelId } : {}) },
+        });
       });
       return toTurnView(await this.turn(user, conversation, id));
     });
@@ -284,6 +333,8 @@ export class ConversationsService {
     const scope = scopeForAi(conversation);
     const { summary, recent } = await this.fold(conversation, scope, rows);
     const { context, foundation } = await this.contextFor(conversation, recent);
+    const model = await this.modelFor(conversation);
+    const recordedModel = toRecordedModelColumns(model.record);
 
     const tools = this.cards.toolsFor(conversation);
     const recentMessages = recent.map(toChatMessage);
@@ -298,15 +349,18 @@ export class ConversationsService {
       let text = '';
       const toolCalls: ChatToolCall[] = [];
       try {
-        const stream = this.ai.chat({
-          scope,
-          context,
-          foundation,
-          summary,
-          recentMessages: [...recentMessages],
-          tools: offered,
-          signal: stopped,
-        });
+        const stream = this.ai.chat(
+          {
+            scope,
+            context,
+            foundation,
+            summary,
+            recentMessages: [...recentMessages],
+            tools: offered,
+            signal: stopped,
+          },
+          { model: model.choice },
+        );
         for await (const chunk of stream) {
           if (chunk.type === 'text') {
             if (!chunk.delta) continue;
@@ -327,7 +381,7 @@ export class ConversationsService {
         }
       } catch (error) {
         if (stopped.aborted)
-          return this.finish(user, id, replyId, text, message, steps, actionCards);
+          return this.finish(user, id, replyId, text, message, steps, actionCards, model);
         this.logger.error('A Conversation reply failed', error as Error);
         const reason = 'The AI failed while replying, so no reply was saved. Try again.';
         emit({
@@ -339,7 +393,7 @@ export class ConversationsService {
 
       // Stopped, or nothing more to do: the text is the reply. A stopped step's calls never run.
       if (!toolCalls.length || stopped.aborted) {
-        return this.finish(user, id, replyId, text, message, steps, actionCards);
+        return this.finish(user, id, replyId, text, message, steps, actionCards, model);
       }
 
       // A round of tool calls: store the calls, then run each and store its result.
@@ -348,11 +402,12 @@ export class ConversationsService {
         role: 'ASSISTANT',
         content: text,
         toolCalls: toolCalls as Prisma.InputJsonValue,
+        ...recordedModel,
       });
       const results: MessageRow[] = [];
       const made: ActionCardView[] = [];
       for (const call of toolCalls) {
-        const run = await this.cards.run(user, conversation, step.message.id, call);
+        const run = await this.cards.run(user, conversation, step.message.id, call, model);
         const result = await this.store(id, {
           role: 'TOOL',
           content: run.content,
@@ -386,8 +441,15 @@ export class ConversationsService {
     message: MessageRow,
     steps: MessageRow[],
     actionCards: ActionCardView[],
+    model: TurnModel,
   ): Promise<Turn> {
-    const saved = await this.store(id, { id: replyId, role: 'ASSISTANT', content: text });
+    const saved = await this.store(id, {
+      id: replyId,
+      role: 'ASSISTANT',
+      content: text,
+      ...toRecordedModelColumns(model.record),
+      modelNotice: model.notice,
+    });
     this.bus.emit(user.id, {
       event: 'conversation.done',
       data: { conversationId: id, message: toConversationMessageView(saved.message) },
@@ -417,6 +479,36 @@ export class ConversationsService {
       });
       return { conversation, message };
     });
+  }
+
+  /**
+   * The model of this turn: the one picked in the Conversation, else the chat
+   * default (precedence as in AiSettingsService.chooseModel). When the model the
+   * Conversation last ran on was removed, and nobody picked another since, the
+   * reply says which one it used instead. Removing a model clears `modelId`, so the
+   * last reply's record tells what was there; once a reply records the fallback,
+   * the notice isn't given again.
+   */
+  private async modelFor(conversation: { id: string; modelId: string | null }): Promise<TurnModel> {
+    const choice = await this.models.chooseModel('chat', conversation.modelId ?? undefined);
+    const record = await this.models.record(choice);
+    let notice: string | null = null;
+    if (!conversation.modelId) {
+      const last = await this.db.conversationMessage.findFirst({
+        where: { conversationId: conversation.id, role: 'ASSISTANT', modelName: { not: null } },
+        orderBy: { position: 'desc' },
+        select: { approvedModelId: true, modelDisplayName: true, modelName: true },
+      });
+      const before = fromRecordedModelColumns(last);
+      if (
+        before?.approvedModelId &&
+        before.approvedModelId !== choice.approvedModelId &&
+        !(await this.models.exists(before.approvedModelId))
+      ) {
+        notice = `${modelLabel(before)} was removed, so this reply used ${modelLabel(record)}.`;
+      }
+    }
+    return { choice, record, notice };
   }
 
   /**

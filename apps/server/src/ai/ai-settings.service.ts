@@ -18,6 +18,7 @@ import {
   type CreateAiProviderInput,
   type CreateApprovedModelInput,
   DEFAULT_PROVIDER_NAMES,
+  type RecordedModel,
   type SetAiTaskModelsInput,
   type UpdateAiProviderInput,
   type UpdateApprovedModelInput,
@@ -134,13 +135,61 @@ export class AiSettingsService {
   /** What every member may see: names and notes only, never a provider, key or URL. */
   async publicModels(): Promise<AiModelsView> {
     const organizationId = await this.organizationId();
-    if (!organizationId) return { models: [] };
-    const models = await this.db.approvedModel.findMany({
-      where: { organizationId },
-      select: { id: true, displayName: true, note: true, isDefault: true },
-      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-    });
-    return { models };
+    if (!organizationId) return { models: [], chatDefaultId: null };
+    const [models, chat] = await Promise.all([
+      this.db.approvedModel.findMany({
+        where: { organizationId },
+        select: { id: true, displayName: true, note: true, isDefault: true },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+      }),
+      this.db.aiTaskModel.findUnique({
+        where: { organizationId_task: { organizationId, task: 'CHAT' } },
+        select: { approvedModelId: true },
+      }),
+    ]);
+    // What a Conversation with no picked model runs on (chooseModel without a pick).
+    const chatDefaultId = envModelOverride('chat')
+      ? null
+      : (chat?.approvedModelId ?? models.find((m) => m.isDefault)?.id ?? null);
+    return { models, chatDefaultId };
+  }
+
+  // ─── The chat picker (ticket 0054) ──────────────────────────────────────────
+
+  /** A model picked in the chat: 422 unless it is one of the Organization's Approved Models. */
+  async assertPickable(approvedModelId: string): Promise<void> {
+    const organizationId = await this.organizationId();
+    const found = organizationId
+      ? await this.db.approvedModel.count({ where: { id: approvedModelId, organizationId } })
+      : 0;
+    if (!found) {
+      throw new UnprocessableEntityException(
+        'That model is not one of the Approved Models. Pick another one.',
+      );
+    }
+  }
+
+  /** Whether the Approved Model still exists. */
+  async exists(approvedModelId: string): Promise<boolean> {
+    return (await this.db.approvedModel.count({ where: { id: approvedModelId } })) > 0;
+  }
+
+  /**
+   * What to record for a chosen model: the Approved Model with its display name as
+   * it is now, or the env model's "provider/model". Never the key.
+   */
+  async record(choice: ModelChoice): Promise<RecordedModel> {
+    const approved = choice.approvedModelId
+      ? await this.db.approvedModel.findUnique({
+          where: { id: choice.approvedModelId },
+          select: { displayName: true },
+        })
+      : null;
+    return {
+      approvedModelId: choice.approvedModelId,
+      displayName: approved?.displayName ?? null,
+      modelId: choice.name,
+    };
   }
 
   // ─── Providers ────────────────────────────────────────────────────────────

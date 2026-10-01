@@ -13,9 +13,11 @@ import {
   type BriefVersionView,
   diffLines,
   type ProjectBriefView,
+  type RecordedModel,
   type RevertBriefInput,
   type WriteBriefInput,
 } from '@vorasaan/shared';
+import { toRecordedModelColumns } from '../ai/recorded-model.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
@@ -154,6 +156,7 @@ export class BriefService {
     user: User,
     projectId: string,
     input: { proposedMarkdown: string; summary: string },
+    draftedWith?: RecordedModel,
   ): Promise<BriefProposalView> {
     await assertCanEditProject(this.db, user, projectId);
     const base = await this.db.briefVersion.findFirst({
@@ -175,6 +178,7 @@ export class BriefService {
         proposedMarkdown,
         summary: input.summary,
         approverId: user.id,
+        ...toRecordedModelColumns(draftedWith),
       },
       include: briefProposalInclude,
     });

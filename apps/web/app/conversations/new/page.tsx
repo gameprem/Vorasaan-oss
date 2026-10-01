@@ -9,7 +9,7 @@ import {
 } from '@/components/chat/new-conversation';
 import { ROUND_LABEL } from '@/components/ui';
 import { api, currentUser } from '@/lib/api';
-import { chipsFor } from '@/lib/chat-data';
+import { chipsFor, loadModels } from '@/lib/chat-data';
 import { isId } from '@/lib/ids';
 import { scopeKey } from '@/lib/scope-key';
 import { loadSidebar, type SidebarProject } from '@/lib/sidebar';
@@ -195,10 +195,11 @@ export default async function NewConversationPage({
   if (!me) redirect('/login');
   const { feature, project } = await searchParams;
   const lang = preferredLanguage((await headers()).get('accept-language'));
-  const [sidebar, inbox, myFeatures] = await Promise.all([
+  const [sidebar, inbox, myFeatures, models] = await Promise.all([
     loadSidebar(),
     api<InboxItem[]>('/inbox').catch(() => []),
     api<FeatureSummaryView[]>('/features').catch(() => []),
+    loadModels(),
   ]);
   const options = scopeOptions(sidebar.projects);
   const wanted = isId(feature) ? `f:${feature}` : isId(project) ? `p:${project}` : null;
@@ -215,6 +216,7 @@ export default async function NewConversationPage({
       initialScope={initialScope}
       starters={startersFrom(lang, inbox, myFeatures, sidebar.projects)}
       chipsFor={chips}
+      models={models}
     />
   );
 }

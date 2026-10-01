@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RecordedModel } from './ai-settings.ts';
 import { DecisionRequestView, PersonRef } from './decision-request.ts';
 import { DecisionRequestKind, ProposalStatus, SpecVersionSource } from './enums.ts';
 
@@ -15,6 +16,8 @@ export const SpecVersionView = z.object({
   approvedBy: PersonRef,
   /** For a REVERT, the version whose Markdown it restored. */
   revertedFrom: z.int().positive().nullable(),
+  /** The model that drafted its proposal in a Conversation (ticket 0054); null otherwise. */
+  draftedWith: RecordedModel.nullable(),
   createdAt: Timestamp,
 });
 export type SpecVersionView = z.infer<typeof SpecVersionView>;
@@ -66,6 +69,8 @@ export const SpecProposalView = z.object({
   baseMarkdown: z.string(),
   proposedMarkdown: z.string(),
   decisionRequestId: Id.nullable(),
+  /** The model that drafted it in a Conversation (ticket 0054); null otherwise. */
+  draftedWith: RecordedModel.nullable(),
   createdAt: Timestamp,
 });
 export type SpecProposalView = z.infer<typeof SpecProposalView>;
@@ -83,6 +88,8 @@ export const DecisionLogEntry = z.object({
   rationale: z.string().nullable(),
   /** The Spec Version this Decision produced, if its proposal was approved. */
   specVersion: z.int().positive().nullable(),
+  /** The model that drafted the request's AI Choices in a Conversation (ticket 0054); null otherwise. */
+  choicesDraftedWith: RecordedModel.nullable(),
   createdAt: Timestamp,
 });
 export type DecisionLogEntry = z.infer<typeof DecisionLogEntry>;
