@@ -7,7 +7,7 @@ import type {
   SpecVersionView,
 } from '@vorasaan/shared';
 import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { VorasaanApi } from '../api.ts';
 import type { RepoScope } from '../commands/raise-flow.ts';
 import type { LiveStatus } from '../events.ts';
@@ -25,7 +25,7 @@ import {
 import { type ProposalKind, ProposalScreen } from './ProposalScreen.tsx';
 import { RaiseForm } from './RaiseForm.tsx';
 import { RequestScreen } from './RequestScreen.tsx';
-import { type Remote, RemoteStatus, useRemote } from './remote.tsx';
+import { type Remote, RemoteStatus, useFlash, useRemote } from './remote.tsx';
 
 /** What the TUI needs from the server; tests pass a fake. */
 export type TuiApi = Pick<
@@ -99,6 +99,25 @@ const LIVE_DEBOUNCE_MS = 300;
 /** More new Inbox Items than this at once become a single OS notification. */
 const MAX_NOTIFICATIONS = 3;
 
+/** A list's selection: the row's key, and its index for when that row goes away. */
+type Cursor = { index: number; key?: string };
+
+/** The selected row: the one with the cursor's key, else the row at its index. */
+function cursorRow(cursor: Cursor, rows: readonly Row[]): number {
+  const byKey = cursor.key === undefined ? -1 : rows.findIndex((r) => r.key === cursor.key);
+  return byKey >= 0 ? byKey : Math.min(cursor.index, Math.max(0, rows.length - 1));
+}
+
+/** Suffixes repeats (`a`, `a#2`), so every row has its own key. */
+function uniqueKeys(keys: string[]): string[] {
+  const seen = new Map<string, number>();
+  return keys.map((key) => {
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    return n === 1 ? key : `${key}#${n}`;
+  });
+}
+
 /** The latest Spec Version of a Feature, scrollable. */
 export function SpecScreen({
   api,
@@ -138,7 +157,27 @@ export function SpecScreen({
   );
 }
 
+const secondsLeft = (end: number) => Math.max(1, Math.ceil((end - Date.now()) / 1000));
+
+/** Whole seconds left until `retryInMs` after the status arrived, ticking down to 1. */
+function useRetryCountdown(status: LiveStatus | undefined): number {
+  // Each new status restarts the countdown, even with the same delay.
+  const until = useMemo(
+    () => (status?.state === 'offline' ? Date.now() + status.retryInMs : undefined),
+    [status],
+  );
+  const [, setShown] = useState(0);
+  useEffect(() => {
+    if (until === undefined) return;
+    // Tick often enough that each second shows on time; same-value updates don't re-render.
+    const timer = setInterval(() => setShown(secondsLeft(until)), 200);
+    return () => clearInterval(timer);
+  }, [until]);
+  return until === undefined ? 0 : secondsLeft(until);
+}
+
 function LiveIndicator({ status }: { status: LiveStatus | undefined }) {
+  const retryIn = useRetryCountdown(status);
   if (!status) return null;
   switch (status.state) {
     case 'connecting':
@@ -146,12 +185,7 @@ function LiveIndicator({ status }: { status: LiveStatus | undefined }) {
     case 'live':
       return <Text color="green"> ● live</Text>;
     case 'offline':
-      return (
-        <Text color="yellow">
-          {' '}
-          ○ offline · retrying in {Math.max(1, Math.round(status.retryInMs / 1000))}s
-        </Text>
-      );
+      return <Text color="yellow"> ○ offline · retrying in {retryIn}s</Text>;
     case 'stopped':
       return <Text color="red"> ✖ live updates off</Text>;
   }
@@ -179,7 +213,12 @@ export function App({
 
   const [tab, setTab] = useState<Tab>(0);
   const [view, setView] = useState<View>({ kind: 'list' });
-  const [selected, setSelected] = useState<[number, number, number]>([0, 0, 0]);
+  /** Per tab: the selected row's key, and its index for when that row goes away. */
+  const [selected, setSelected] = useState<[Cursor, Cursor, Cursor]>([
+    { index: 0 },
+    { index: 0 },
+    { index: 0 },
+  ]);
   const [help, setHelp] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [inbox, setInbox] = useState<Remote<InboxData>>({ status: 'loading' });
@@ -191,7 +230,8 @@ export function App({
   const [tick, setTick] = useState(0);
   /** A form inside a screen has the keyboard: global keys (q, r, Tab…) are off. */
   const [capture, setCapture] = useState(false);
-  const [flash, setFlash] = useState<{ tone: 'ok' | 'error'; text: string }>();
+  // The list's ✔ is about the Inbox (marking Notifications read).
+  const [flash, setFlash] = useFlash(inbox);
 
   // Inbox Items seen so far; undefined until the first load, which never notifies.
   const seenItems = useRef<Set<string> | undefined>(undefined);
@@ -302,11 +342,14 @@ export function App({
   const boundName =
     features.status === 'ok' ? features.data.find((f) => f.projectId === bound)?.projectName : '';
 
+  // Keyed by what the row shows, so the cursor follows the item across refreshes.
+  const itemKeys =
+    inbox.status === 'ok' ? uniqueKeys(inbox.data.items.map((i) => `item:${inboxItemKey(i)}`)) : [];
   const inboxRows: Row[] =
     inbox.status === 'ok'
       ? [
           ...inbox.data.items.map((item, i) => ({
-            key: `item-${i}`,
+            key: itemKeys[i] as string,
             label: inboxItemLine(item),
             header: i === 0 ? `Inbox Items (${inbox.data.items.length})` : undefined,
           })),
@@ -330,7 +373,20 @@ export function App({
     highlight: Boolean(bound) && f.projectId === bound,
   }));
   const rowsOf = [inboxRows, requestRows, featureRows] as const;
-  const current = Math.min(selected[tab], Math.max(0, rowsOf[tab].length - 1));
+  const current = cursorRow(selected[tab], rowsOf[tab]);
+  // Remember where the selected row is now (and which row that is), so if it goes away
+  // the cursor stays at that position rather than jumping back to an older one.
+  const currentKey = rowsOf[tab][current]?.key;
+  useEffect(() => {
+    setSelected((s) => {
+      const cursor = s[tab];
+      if (cursor.index === current && cursor.key === currentKey) return s;
+      if (currentKey === undefined) return s;
+      const next = [...s] as [Cursor, Cursor, Cursor];
+      next[tab] = { index: current, key: currentKey };
+      return next;
+    });
+  }, [tab, current, currentKey]);
 
   const switchTab = (next: Tab) => {
     setView({ kind: 'list' });
@@ -420,14 +476,15 @@ export function App({
       if (tab === 0 && (input === 'm' || input === 'M')) return markRead(input === 'M');
       if (input === 'a' && tab === 2 && bound) {
         setShowAll((v) => !v);
-        setSelected((s) => [s[0], s[1], 0]);
+        setSelected((s) => [s[0], s[1], { index: 0 }]);
         return;
       }
-      const count = rowsOf[tab].length;
+      const rows = rowsOf[tab];
       const move = (delta: number) =>
         setSelected((s) => {
-          const next = [...s] as [number, number, number];
-          next[tab] = Math.min(Math.max(0, current + delta), Math.max(0, count - 1));
+          const next = [...s] as [Cursor, Cursor, Cursor];
+          const index = Math.min(Math.max(0, current + delta), Math.max(0, rows.length - 1));
+          next[tab] = { index, key: rows[index]?.key };
           return next;
         });
       if (key.downArrow || input === 'j') move(1);

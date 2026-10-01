@@ -188,6 +188,107 @@ describe('GET /events (Server-Sent Events)', () => {
     expect(await stream.nextEvent()).toEqual({ event: 'inbox.changed', data: {} });
   });
 
+  async function sessionFor(email: string): Promise<string> {
+    const login = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { email, password: SEED_PASSWORD },
+    });
+    return (login.json() as LoginResult).token;
+  }
+
+  async function createPat(session: string): Promise<CreatedAccessToken> {
+    const pat = await app.inject({
+      method: 'POST',
+      url: '/me/tokens',
+      headers: { authorization: `Bearer ${session}` },
+      payload: { name: 'cli' },
+    });
+    return pat.json() as CreatedAccessToken;
+  }
+
+  async function withHeartbeat<T>(ms: number, run: () => Promise<T>): Promise<T> {
+    const controller = app.get(EventsController);
+    const previous = controller.heartbeatMs;
+    controller.heartbeatMs = ms;
+    try {
+      return await run();
+    } finally {
+      controller.heartbeatMs = previous;
+    }
+  }
+
+  /** Reads until the server ends the stream; fails if it is still open after `timeoutMs`. */
+  async function expectEnded(stream: EventStream, timeoutMs: number) {
+    const deadline = Date.now() + timeoutMs;
+    while (true) {
+      const left = deadline - Date.now();
+      if (left <= 0) throw new Error('stream still open');
+      try {
+        await stream.next(left);
+      } catch (error) {
+        expect((error as Error).message).toBe('stream ended');
+        return;
+      }
+    }
+  }
+
+  test('revoking a personal access token ends its open stream within one heartbeat', async () => {
+    await withHeartbeat(200, async () => {
+      const session = await sessionFor(pim.email);
+      const created = await createPat(session);
+      const stream = await connect({ authorization: `Bearer ${created.token}` });
+      expect(await stream.next()).toEqual({ comment: 'connected' });
+      expect(bus.listenerCount()).toBe(1);
+
+      const revoked = await app.inject({
+        method: 'DELETE',
+        url: `/me/tokens/${created.id}`,
+        headers: { authorization: `Bearer ${session}` },
+      });
+      expect(revoked.statusCode).toBeLessThan(300);
+
+      // The next heartbeat (at most 200ms away) re-checks the token and ends the stream.
+      await expectEnded(stream, 390);
+      await waitFor(() => bus.listenerCount() === 0);
+    });
+  });
+
+  test('an expired personal access token ends its open stream', async () => {
+    await withHeartbeat(50, async () => {
+      const created = await createPat(await sessionFor(pim.email));
+      const stream = await connect({ authorization: `Bearer ${created.token}` });
+      expect(await stream.next()).toEqual({ comment: 'connected' });
+      await db.personalAccessToken.update({
+        where: { id: created.id },
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+      await expectEnded(stream, 500);
+    });
+  });
+
+  test('signing out a session ends its open stream; a live session keeps streaming', async () => {
+    await withHeartbeat(50, async () => {
+      const ended = await sessionFor(pim.email);
+      const kept = await sessionFor(pim.email);
+      const endedStream = await connect({ authorization: `Bearer ${ended}` });
+      const keptStream = await connect({ authorization: `Bearer ${kept}` });
+      expect(await endedStream.next()).toEqual({ comment: 'connected' });
+      expect(await keptStream.next()).toEqual({ comment: 'connected' });
+
+      const logout = await app.inject({
+        method: 'POST',
+        url: '/auth/logout',
+        headers: { authorization: `Bearer ${ended}` },
+      });
+      expect(logout.statusCode).toBeLessThan(300);
+
+      await expectEnded(endedStream, 500);
+      // Several heartbeats later the other session's stream is still open.
+      for (let i = 0; i < 3; i++) expect(await keptStream.next()).toEqual({ comment: 'heartbeat' });
+    });
+  });
+
   test('a refused action pushes nothing', async () => {
     const request = await sendToPim();
     const pimStream = await connectAs(pim.id);

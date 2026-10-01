@@ -29,6 +29,19 @@ Grilling becomes one Conversation per person, holding one of the round's Team Ro
 - **One shared group chat per Project for Grilling.** People would talk over each other, and the AI could no longer tell whose answer belongs to which Team Role.
 - **Keeping only the forms.** They remain as fallbacks, reachable from Action Cards and the side panel, but they are no longer the main way in.
 
+## Visual design
+
+The look follows Gemini: no hard borders, surfaces told apart by tone, pill-shaped buttons and list items, a large rounded composer, AI replies without a bubble (a spark marks them), and a greeting with starter cards on a new Conversation. The colours come from the name: วรสาร is a journal, a record that people sign off.
+
+| Token | Meaning | Used for |
+| --- | --- | --- |
+| Ink (indigo-blue) | What the AI writes and proposes | Primary buttons, the selected item, Action Card titles |
+| Jade | Approved, written into the record | Approve, "approved" badges, a new Spec Version |
+| Lacquer (seal red) | Blockers, removed lines | Blocker badges and dots |
+| Saffron | Waiting on a person | The Inbox count, "waiting" badges |
+
+The AI's spark runs from ink to jade, meaning a proposal on its way to approval. The type is Figtree with Anuphan for Thai. Both light and dark themes are designed. The reference is the clickable mockup in [`docs/design/chat-web-ui-mockup.html`](../design/chat-web-ui-mockup.html); its `:root` block holds the tokens.
+
 ## Consequences
 
 - We add `Conversation` and `ConversationMessage` tables.

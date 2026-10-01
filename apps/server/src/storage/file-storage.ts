@@ -11,7 +11,11 @@ export interface FileStorage {
   get(key: string): Promise<Uint8Array>;
   /** Succeeds when nothing is stored under `key`. */
   delete(key: string): Promise<void>;
+  /** Every stored file whose key starts with `prefix` (e.g. to sweep orphaned files). */
+  list(prefix: string): AsyncIterable<StoredFileInfo>;
 }
+
+export type StoredFileInfo = { key: string; lastModified: Date };
 
 export const FILE_STORAGE = Symbol('FILE_STORAGE');
 

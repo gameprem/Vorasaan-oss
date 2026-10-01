@@ -66,6 +66,27 @@ export class AuthService {
     return null;
   }
 
+  /**
+   * Whether `token` still signs in `userId`: the session or Personal Access Token exists,
+   * is not revoked and has not expired. Unlike `userForToken` it writes nothing, so a
+   * long-lived stream can re-check on every heartbeat.
+   */
+  async tokenIsLive(token: string, userId: string): Promise<boolean> {
+    const tokenHash = hashToken(token);
+    const now = new Date();
+    if (token.startsWith(SESSION_PREFIX)) {
+      const session = await this.db.session.findUnique({ where: { tokenHash } });
+      return !!session && session.userId === userId && session.expiresAt > now;
+    }
+    if (token.startsWith(PAT_PREFIX)) {
+      const pat = await this.db.personalAccessToken.findUnique({ where: { tokenHash } });
+      return (
+        !!pat && pat.userId === userId && !pat.revokedAt && (!pat.expiresAt || pat.expiresAt > now)
+      );
+    }
+    return false;
+  }
+
   userById(id: string) {
     return this.db.user.findUnique({ where: { id } }).catch(() => null);
   }

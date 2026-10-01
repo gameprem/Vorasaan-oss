@@ -1,7 +1,8 @@
 import type { ServerResponse } from 'node:http';
 import { Controller, Get, type OnModuleDestroy, Res } from '@nestjs/common';
 import type { User } from '@vorasaan/db';
-import { CurrentUser } from '../auth/identity.guard.ts';
+import { AuthService } from '../auth/auth.service.ts';
+import { CurrentToken, CurrentUser } from '../auth/identity.guard.ts';
 import { EventBus } from './event-bus.ts';
 import { NotificationsService } from './notifications.service.ts';
 
@@ -27,10 +28,15 @@ export class EventsController implements OnModuleDestroy {
   constructor(
     private readonly bus: EventBus,
     private readonly notifications: NotificationsService,
+    private readonly auth: AuthService,
   ) {}
 
   @Get()
-  stream(@CurrentUser() user: User, @Res() reply: RawReply) {
+  stream(
+    @CurrentUser() user: User,
+    @CurrentToken() token: string | undefined,
+    @Res() reply: RawReply,
+  ) {
     reply.hijack();
     const res = reply.raw;
     res.writeHead(200, {
@@ -51,9 +57,28 @@ export class EventsController implements OnModuleDestroy {
     const catchUp = () => {
       this.notifications.startDelegations(user.id).catch(() => {});
     };
+    // A stream outlives the request that authenticated it, so each heartbeat re-checks the
+    // session or Personal Access Token and ends the stream once it is revoked or expired.
+    // (Dev-auth streams have no token to re-check.) A failed check (e.g. a database blip)
+    // keeps the stream and tries again on the next heartbeat.
+    let checking = false;
+    const recheck = async () => {
+      if (!token || checking) return;
+      checking = true;
+      try {
+        if (!(await this.auth.tokenIsLive(token, user.id))) close();
+      } catch {
+        // Try again on the next heartbeat.
+      } finally {
+        checking = false;
+      }
+    };
     const heartbeat = setInterval(() => {
-      write(': heartbeat\n\n');
-      catchUp();
+      void recheck().then(() => {
+        if (closed) return;
+        write(': heartbeat\n\n');
+        catchUp();
+      });
     }, this.heartbeatMs);
 
     let closed = false;

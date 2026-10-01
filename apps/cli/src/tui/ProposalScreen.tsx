@@ -4,12 +4,11 @@ import { useEffect, useState } from 'react';
 import type { TuiApi } from './App.tsx';
 import { Confirm, ScrollText } from './components.tsx';
 import { diffView, errorMessage } from './format.ts';
-import { RemoteStatus, useRemote } from './remote.tsx';
+import { RemoteStatus, useFlash, useRemote } from './remote.tsx';
 
 export type ProposalKind = 'spec' | 'brief';
 
 type Proposal = SpecProposalView | BriefProposalView;
-type Flash = { tone: 'ok' | 'error'; text: string };
 
 const NOUN: Record<ProposalKind, { proposal: string; doc: string }> = {
   spec: { proposal: 'Spec Proposal', doc: 'Spec' },
@@ -48,7 +47,7 @@ export function ProposalScreen({
   );
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [flash, setFlash] = useState<Flash>();
+  const [flash, setFlash] = useFlash(state);
   const noun = NOUN[kind];
 
   useEffect(() => {
