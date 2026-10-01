@@ -10,6 +10,10 @@ export const SEED = {
   users: {
     pim: { id: '00000000-0000-4000-8000-000000000101', email: 'pim@acme.test', name: 'Pim' },
     beam: { id: '00000000-0000-4000-8000-000000000102', email: 'beam@acme.test', name: 'Beam' },
+    // Added by seedFullTeam(), not by seed().
+    mint: { id: '00000000-0000-4000-8000-000000000103', email: 'mint@acme.test', name: 'Mint' },
+    fern: { id: '00000000-0000-4000-8000-000000000104', email: 'fern@acme.test', name: 'Fern' },
+    oak: { id: '00000000-0000-4000-8000-000000000105', email: 'oak@acme.test', name: 'Oak' },
   },
 } as const;
 
@@ -137,6 +141,49 @@ export async function seed(db: PrismaClient) {
       summary: 'Initial Spec',
       approvedById: pim.id,
     },
+  });
+
+  return SEED;
+}
+
+/**
+ * Adds the rest of the Checkout Team on top of seed(): a second PO who is also a Role Owner
+ * of the Feature (so a request can go to all POs and one of them Claims it), a Designer and a
+ * Tech Lead (so every Grilling round has someone to ask). `bun run db:seed` and the end-to-end
+ * tests use it; API tests keep the smaller world of seed() alone. Safe to run repeatedly.
+ */
+export async function seedFullTeam(db: PrismaClient) {
+  const { mint, fern, oak } = SEED.users;
+  const passwordHash = await Bun.password.hash(SEED_PASSWORD, { algorithm: 'argon2id' });
+
+  const members = [
+    { user: mint, role: 'PO' },
+    { user: fern, role: 'DESIGNER' },
+    { user: oak, role: 'TECH_LEAD' },
+  ] as const;
+
+  for (const { user, role } of members) {
+    await db.user.upsert({
+      where: { id: user.id },
+      update: { passwordHash },
+      create: { ...user, passwordHash },
+    });
+    await db.orgMembership.upsert({
+      where: { organizationId_userId: { organizationId: SEED.organizationId, userId: user.id } },
+      update: {},
+      create: { organizationId: SEED.organizationId, userId: user.id, role: 'MEMBER' },
+    });
+    await db.teamMembership.upsert({
+      where: { teamId_userId_role: { teamId: SEED.teamId, userId: user.id, role } },
+      update: {},
+      create: { teamId: SEED.teamId, userId: user.id, role },
+    });
+  }
+
+  await db.roleOwner.upsert({
+    where: { featureId_userId_role: { featureId: SEED.featureId, userId: mint.id, role: 'PO' } },
+    update: {},
+    create: { featureId: SEED.featureId, userId: mint.id, role: 'PO' },
   });
 
   return SEED;

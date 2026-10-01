@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 depends-on: []
 slice: mvp-polish
 ---
@@ -20,4 +20,4 @@ The main web flows are checked automatically on every PR, instead of by hand in 
 
 ## Acceptance criteria
 - [ ] The four flows pass in CI on a PR.
-- [ ] Breaking one of them (e.g. hiding the Claim button) turns the job red.
+- [x] Breaking one of them (e.g. hiding the Claim button) turns the job red. (Checked locally: with the Claim form hidden, the flow fails at "Claim it".)
