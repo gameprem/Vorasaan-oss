@@ -7,9 +7,9 @@ import { LocalFileStorage } from './local-file-storage.ts';
 import { S3FileStorage } from './s3-file-storage.ts';
 import { fileStorageFromEnv } from './storage.module.ts';
 
-/** A path-style S3 endpoint in memory: PUT, GET and DELETE on /<bucket>/<key>. Ignores auth. */
+/** A path-style S3 endpoint in memory: PUT, GET and DELETE on /<bucket>/<key>, and ListObjectsV2. Ignores auth. */
 function startFakeS3() {
-  const objects = new Map<string, { body: Uint8Array; type: string | null }>();
+  const objects = new Map<string, { body: Uint8Array; type: string | null; lastModified: Date }>();
   const notFound = () =>
     new Response('<?xml version="1.0"?><Error><Code>NoSuchKey</Code></Error>', {
       status: 404,
@@ -24,8 +24,26 @@ function startFakeS3() {
         objects.set(path, {
           body: new Uint8Array(await req.arrayBuffer()),
           type: req.headers.get('content-type'),
+          lastModified: new Date(),
         });
         return new Response(null, { status: 200, headers: { etag: '"fake"' } });
+      }
+      const url = new URL(req.url);
+      if (req.method === 'GET' && url.searchParams.get('list-type') === '2') {
+        // ListObjectsV2 on /<bucket>, one page.
+        const bucket = path.replace(/\/$/, '');
+        const prefix = url.searchParams.get('prefix') ?? '';
+        const contents = [...objects.entries()]
+          .filter(([p]) => p.startsWith(`${bucket}/${prefix}`))
+          .map(
+            ([p, o]) =>
+              `<Contents><Key>${p.slice(bucket.length + 1)}</Key><LastModified>${o.lastModified.toISOString()}</LastModified><Size>${o.body.byteLength}</Size></Contents>`,
+          )
+          .join('');
+        return new Response(
+          `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><Name>${bucket.slice(1)}</Name><Prefix>${prefix}</Prefix><IsTruncated>false</IsTruncated>${contents}</ListBucketResult>`,
+          { headers: { 'content-type': 'application/xml' } },
+        );
       }
       const object = objects.get(path);
       if (req.method === 'GET') {
@@ -62,6 +80,27 @@ function contract(name: string, make: () => FileStorage) {
       );
       // Deleting twice is fine.
       await storage.delete('attachments/f1/a1');
+    });
+
+    test('list yields every key under a prefix, with when it was last written', async () => {
+      const storage = make();
+      const root = `list-${crypto.randomUUID()}`;
+      const before = Date.now() - 5_000;
+      await storage.put(`${root}/f1/a1`, bytes('a'), 'text/plain');
+      await storage.put(`${root}/projects/p1/a2`, bytes('b'), 'text/plain');
+      await storage.put(`${root}-other/a3`, bytes('c'), 'text/plain');
+
+      const listed = [];
+      for await (const file of storage.list(`${root}/`)) listed.push(file);
+      expect(listed.map((f) => f.key).sort()).toEqual([`${root}/f1/a1`, `${root}/projects/p1/a2`]);
+      for (const file of listed) {
+        expect(file.lastModified).toBeInstanceOf(Date);
+        expect(file.lastModified.getTime()).toBeGreaterThan(before);
+      }
+
+      const none = [];
+      for await (const file of storage.list(`${root}-missing/`)) none.push(file);
+      expect(none).toEqual([]);
     });
 
     test('keys that could escape the root are refused', async () => {

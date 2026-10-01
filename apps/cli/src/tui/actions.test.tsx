@@ -370,6 +370,105 @@ describe('Notifications and live updates', () => {
     expect(ui.notified).toEqual([['Vorasaan: needs you', '5 new Inbox Items']]);
   });
 
+  test('"retrying in Ns" counts down while offline', async () => {
+    const feed = fakeLive();
+    const ui = open({}, { live: feed.live });
+    await waitFor(ui.frame, 'Inbox Items (5)');
+    feed.status({ state: 'offline', reason: 'Cannot reach', retryInMs: 2200 });
+    await waitFor(ui.frame, '○ offline · retrying in 3s');
+    await waitFor(ui.frame, '○ offline · retrying in 2s', 1000);
+    await waitFor(ui.frame, '○ offline · retrying in 1s', 1500);
+    // It never shows 0s; the next status replaces it.
+    await settle(1300);
+    expect(ui.frame()).toContain('retrying in 1s');
+    feed.status({ state: 'offline', reason: 'Cannot reach', retryInMs: 4000 });
+    await waitFor(ui.frame, '○ offline · retrying in 4s');
+    feed.status({ state: 'live' });
+    await waitFor(ui.frame, '● live');
+  }, 10_000);
+
+  test('after a live refresh the cursor stays on the same item, not the same row', async () => {
+    const feed = fakeLive();
+    const shown = [items[0], items[1]] as InboxItem[];
+    const ui = open({ inbox: shown }, { live: feed.live });
+    await waitFor(ui.frame, 'Inbox Items (2)');
+    await press(ui.stdin, 'j');
+    await waitFor(ui.frame, '› Claim Blocker: Which provider?');
+
+    // A new Inbox Item arrives above the selected one.
+    shown.unshift(items[2] as InboxItem);
+    feed.emit({ event: 'inbox.changed', data: {} });
+    await waitFor(ui.frame, 'Inbox Items (3)');
+    expect(ui.frame()).toContain('› Claim Blocker: Which provider?');
+    await press(ui.stdin, KEY.enter);
+    await waitFor(ui.frame, 'c Claim');
+    expect(ui.frame()).toContain('Which provider?');
+    await press(ui.stdin, KEY.escape);
+    await waitFor(ui.frame, '› Claim Blocker: Which provider?');
+
+    // The selected item goes away: the cursor stays on the row it was last on (3rd),
+    // which now holds the next entry.
+    shown.splice(2, 1);
+    feed.emit({ event: 'inbox.changed', data: {} });
+    await waitFor(ui.frame, 'Inbox Items (2)');
+    expect(ui.frame()).toContain('› • New Spec Version v2 by Pim');
+  });
+
+  test('My Requests keeps the cursor on the same request when the list reorders', async () => {
+    const feed = fakeLive();
+    const first = request({ id: id(311), title: 'First request' });
+    const second = request({ id: id(312), title: 'Second request' });
+    const mine = [first, second];
+    const ui = open({ myRequests: mine }, { live: feed.live });
+    await waitFor(ui.frame, 'Inbox Items (5)');
+    await press(ui.stdin, '2');
+    await waitFor(ui.frame, 'Second request');
+    await press(ui.stdin, 'j');
+    await waitFor(ui.frame, '› [Open] Blocker: Second request');
+    mine.reverse();
+    feed.emit({ event: 'inbox.changed', data: {} });
+    await settle(400);
+    await waitFor(ui.frame, '› [Open] Blocker: Second request');
+    expect(ui.frame().indexOf('Second request')).toBeLessThan(ui.frame().indexOf('First request'));
+  });
+
+  test('a ✔ message clears once a refresh shows something changed, not on its own echo', async () => {
+    const feed = fakeLive();
+    const requests = { [toDecide.id]: toDecide };
+    const ui = open({ requests }, { live: feed.live });
+    await openItem(ui, 0, 'd decide');
+    await press(ui.stdin, 'n', 'Noted', KEY.enter);
+    await waitFor(ui.frame, '✔ Note added.');
+
+    // The server echoes my own action: nothing else changed, so the message stays.
+    feed.emit({ event: 'inbox.changed', data: {} });
+    await settle(400);
+    expect(ui.frame()).toContain('✔ Note added.');
+
+    // Someone else changes the request: the message is stale now.
+    requests[toDecide.id] = { ...toDecide, title: 'Which retry policy, really?' };
+    feed.emit({ event: 'inbox.changed', data: {} });
+    await waitFor(ui.frame, 'Which retry policy, really?');
+    expect(ui.frame()).not.toContain('✔ Note added.');
+  });
+
+  test('a ✔ message on the list clears when a live refresh changes the Inbox', async () => {
+    const feed = fakeLive();
+    const shown = items.slice(0, 1);
+    const ui = open({ inbox: shown }, { live: feed.live });
+    await waitFor(ui.frame, 'Inbox Items (1)');
+    await press(ui.stdin, 'M');
+    await waitFor(ui.frame, '✔ All Notifications marked read.');
+    feed.emit({ event: 'inbox.changed', data: {} });
+    await settle(400);
+    expect(ui.frame()).toContain('✔ All Notifications marked read.');
+
+    shown.push(items[1] as InboxItem);
+    feed.emit({ event: 'inbox.changed', data: {} });
+    await waitFor(ui.frame, 'Inbox Items (2)');
+    expect(ui.frame()).not.toContain('✔ All Notifications marked read.');
+  });
+
   test('an open request reloads on a live event without closing its form', async () => {
     const feed = fakeLive();
     const ui = open({}, { live: feed.live });

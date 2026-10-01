@@ -1,4 +1,9 @@
-import { assertStorageKey, type FileStorage, StoredFileNotFoundError } from './file-storage.ts';
+import {
+  assertStorageKey,
+  type FileStorage,
+  type StoredFileInfo,
+  StoredFileNotFoundError,
+} from './file-storage.ts';
 
 export type S3StorageOptions = {
   bucket: string;
@@ -38,6 +43,20 @@ export class S3FileStorage implements FileStorage {
     } catch (error) {
       if (!isNotFound(error)) throw error;
     }
+  }
+
+  async *list(prefix: string): AsyncIterable<StoredFileInfo> {
+    let continuationToken: string | undefined;
+    do {
+      const page = await this.client.list({ prefix, continuationToken });
+      for (const object of page.contents ?? []) {
+        yield {
+          key: object.key,
+          lastModified: object.lastModified ? new Date(object.lastModified) : new Date(),
+        };
+      }
+      continuationToken = page.isTruncated ? page.nextContinuationToken : undefined;
+    } while (continuationToken);
   }
 }
 
