@@ -15,4 +15,4 @@ A PO editing a Project's Guideline overrides sees the text of every inherited cr
 
 ## Acceptance criteria (test first, real Postgres)
 - [x] A Member gets 200 on `GET` and 403 on `PUT`; an Admin can do both.
-- [ ] Browser-verified: a non-Admin PO sees the hidden criterion's text in the Project overrides editor.
+- [x] Browser-verified: a non-Admin PO sees the hidden criterion's text in the Project overrides editor.
