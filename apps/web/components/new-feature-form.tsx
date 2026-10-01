@@ -13,8 +13,8 @@ import { field, primaryButton, secondaryButton } from './ui';
 
 const VERDICT: Record<GuidelineFitVerdict, { text: string; className: string }> = {
   MET: { text: 'Met', className: 'bg-jade-wash text-jade' },
-  UNCLEAR: { text: 'Unclear', className: 'border border-rule text-ink-soft' },
-  NOT_MET: { text: 'Not met', className: 'bg-seal-wash text-seal' },
+  UNCLEAR: { text: 'Unclear', className: 'bg-surface text-fg-soft' },
+  NOT_MET: { text: 'Not met', className: 'bg-lacquer-wash text-lacquer' },
 };
 
 /**
@@ -47,7 +47,7 @@ export function NewFeatureForm({
     });
 
   return (
-    <form action={create} className="rounded-xl border border-rule bg-sheet p-5">
+    <form action={create} className="rounded-card bg-rail p-5">
       <h3 className="font-semibold">New Feature</h3>
       <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_10rem]">
         <label className="block">
@@ -85,11 +85,11 @@ export function NewFeatureForm({
           Feature Guidelines for this Project
         </h4>
         {guidelinesError ? (
-          <p role="alert" className="mt-1 text-sm text-seal">
+          <p role="alert" className="mt-1 text-sm text-lacquer">
             {guidelinesError}
           </p>
         ) : guidelines.length === 0 ? (
-          <p className="mt-1 text-sm text-ink-soft">
+          <p className="mt-1 text-sm text-fg-soft">
             This Project has no Feature Guidelines, so there is nothing to check.
           </p>
         ) : (
@@ -105,9 +105,9 @@ export function NewFeatureForm({
             Fit check{fit.for !== current && ' (the title or description changed since)'}
           </h4>
           {fit.result.results.length === 0 ? (
-            <p className="mt-1 text-sm text-ink-soft">No Feature Guidelines to check against.</p>
+            <p className="mt-1 text-sm text-fg-soft">No Feature Guidelines to check against.</p>
           ) : (
-            <ul className="mt-2 divide-y divide-rule border-y border-rule">
+            <ul className="mt-2 rows">
               {fit.result.results.map((r) => (
                 <li key={r.guidelineId} className="py-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -117,9 +117,9 @@ export function NewFeatureForm({
                       {VERDICT[r.verdict].text}
                     </span>
                     <span className="font-medium">{r.title}</span>
-                    {r.required && <span className="text-xs text-ink-soft">Required</span>}
+                    {r.required && <span className="text-xs text-fg-soft">Required</span>}
                   </div>
-                  <p className="mt-1 text-sm text-ink-soft">{r.reason}</p>
+                  <p className="mt-1 text-sm text-fg-soft">{r.reason}</p>
                 </li>
               ))}
             </ul>
@@ -137,7 +137,7 @@ export function NewFeatureForm({
         </section>
       )}
       {fit.error && (
-        <p role="alert" className="mt-3 text-sm text-seal">
+        <p role="alert" className="mt-3 text-sm text-lacquer">
           {fit.error}
         </p>
       )}
@@ -158,7 +158,7 @@ export function NewFeatureForm({
         </button>
       </div>
       {state.error && (
-        <p role="alert" className="mt-2 text-seal">
+        <p role="alert" className="mt-2 text-lacquer">
           {state.error}
         </p>
       )}

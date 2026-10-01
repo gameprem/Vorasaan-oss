@@ -14,12 +14,12 @@ export default async function ProjectsPage() {
   return (
     <section className="max-w-3xl">
       <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-      <p className="mt-2 text-ink-soft">
+      <p className="mt-2 text-fg-soft">
         A Project is a product you build. Teams inside it own Features.
       </p>
 
       {projects.length === 0 && (
-        <p className="mt-8 text-ink-soft">
+        <p className="mt-8 text-fg-soft">
           {isAdmin
             ? 'No Projects yet. Create the first one below.'
             : 'No Projects yet. An Admin creates them.'}
@@ -34,21 +34,21 @@ export default async function ProjectsPage() {
                 {p.name}
               </Link>
               {p.jiraKey && (
-                <span className="ml-2 text-sm font-normal text-ink-soft">Jira {p.jiraKey}</span>
+                <span className="ml-2 text-sm font-normal text-fg-soft">Jira {p.jiraKey}</span>
               )}
             </h2>
             <p className="mt-1 text-sm">
               <Link
                 href={`/projects/${p.id}`}
-                className="text-ink-soft underline underline-offset-2 hover:text-ink"
+                className="text-fg-soft underline underline-offset-2 hover:text-fg"
               >
                 Project Brief, Grilling, Guidelines and Feature Suggestions
               </Link>
             </p>
             {p.teams.length === 0 ? (
-              <p className="mt-2 text-ink-soft">No Teams yet.</p>
+              <p className="mt-2 text-fg-soft">No Teams yet.</p>
             ) : (
-              <ul className="mt-3 divide-y divide-rule border-y border-rule">
+              <ul className="mt-3 rows">
                 {p.teams.map((t) => (
                   <li key={t.id}>
                     <Link
@@ -56,7 +56,7 @@ export default async function ProjectsPage() {
                       className="flex justify-between py-3 hover:underline"
                     >
                       <span className="font-medium">{t.name}</span>
-                      <span className="text-sm text-ink-soft">
+                      <span className="text-sm text-fg-soft">
                         {t.featureCount} {t.featureCount === 1 ? 'Feature' : 'Features'}
                       </span>
                     </Link>
@@ -88,7 +88,7 @@ export default async function ProjectsPage() {
       </div>
 
       {isAdmin && (
-        <div className="mt-12 border-t border-rule pt-8">
+        <div className="mt-12 pt-8">
           <h2 className="text-lg font-semibold">New Project</h2>
           <div className="mt-4">
             <ActionForm

@@ -28,12 +28,12 @@ export function SpecPanel({
   if (!markdown) {
     return canEdit ? (
       <div>
-        <p className="mb-4 text-ink-soft">
+        <p className="mb-4 text-fg-soft">
           This Feature has no Spec yet. Write the first version; the team and AI build from it. Or
           add Attachments and{' '}
           <Link
             href={`/features/${featureId}?tab=attachments`}
-            className="text-ink underline underline-offset-2"
+            className="text-fg underline underline-offset-2"
           >
             draft a Spec from them
           </Link>
@@ -42,9 +42,7 @@ export function SpecPanel({
         <SpecEditor save={save} current={null} baseVersion={0} />
       </div>
     ) : (
-      <p className="text-ink-soft">
-        This Feature has no Spec yet. Its PO writes the first version.
-      </p>
+      <p className="text-fg-soft">This Feature has no Spec yet. Its PO writes the first version.</p>
     );
   }
 
@@ -62,14 +60,14 @@ export function SpecPanel({
   return (
     <>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-ink-soft">{meta}</p>
+        <p className="text-sm text-fg-soft">{meta}</p>
         {canEdit && (
           <button type="button" onClick={() => setEditing(true)} className={secondaryButton}>
             Edit Spec
           </button>
         )}
       </div>
-      <div className="spec rounded-xl border border-rule bg-sheet p-6 sm:p-10">
+      <div className="spec rounded-sheet bg-rail p-6 sm:p-10">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
       </div>
     </>

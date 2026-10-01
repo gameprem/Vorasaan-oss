@@ -116,13 +116,13 @@ export default async function ProjectPage({
         </div>
       )}
 
-      <p className="text-sm text-ink-soft">
+      <p className="text-sm text-fg-soft">
         <Link href="/projects" className="hover:underline">
           Projects
         </Link>
       </p>
       <h1 className="mt-1 text-3xl font-semibold tracking-tight">{project.name}</h1>
-      <p className="mt-2 text-sm text-ink-soft">
+      <p className="mt-2 text-sm text-fg-soft">
         {project.teams.length === 0
           ? 'No Teams yet.'
           : project.teams.map((t, i) => (
@@ -136,19 +136,16 @@ export default async function ProjectPage({
         {project.jiraKey && ` · Jira ${project.jiraKey}`}
       </p>
 
-      <nav
-        aria-label="Project sections"
-        className="mt-6 flex gap-6 overflow-x-auto border-b border-rule"
-      >
+      <nav aria-label="Project sections" className="mt-6 flex gap-2 overflow-x-auto pb-1">
         {TABS.map((t) => (
           <Link
             key={t.id}
             href={`/projects/${id}?tab=${t.id}`}
             aria-current={tab === t.id ? 'page' : undefined}
-            className={`-mb-px shrink-0 border-b-2 pb-2 text-sm ${
+            className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium ${
               tab === t.id
-                ? 'border-ink font-medium text-ink'
-                : 'border-transparent text-ink-soft hover:text-ink'
+                ? 'bg-ink-wash font-semibold text-ink'
+                : 'bg-surface text-fg hover:bg-surface-hi'
             }`}
           >
             {t.label}
@@ -187,7 +184,7 @@ async function BriefTab({ projectId, brief }: { projectId: string; brief: Projec
             A Brief Proposal is waiting for approval.{' '}
             <Link
               href={`/projects/${projectId}?tab=grilling#brief-proposal`}
-              className="font-medium text-ink underline underline-offset-2"
+              className="font-medium text-fg underline underline-offset-2"
             >
               Review it
             </Link>
@@ -224,7 +221,7 @@ async function HistoryTab({
   if (!versions.data) return <Notice tone="error">{versions.error}</Notice>;
   if (versions.data.length === 0) {
     return (
-      <p className="text-ink-soft">
+      <p className="text-fg-soft">
         No Brief Versions yet. Each approved edit, Grilling or revert of the Project Brief becomes a
         numbered version here.
       </p>
@@ -241,7 +238,7 @@ async function HistoryTab({
   const latest = brief.version;
 
   return (
-    <ol className="max-w-4xl divide-y divide-rule border-y border-rule">
+    <ol className="max-w-4xl rows">
       {versions.data.map((v) => {
         const open = showDiff && diffTo === v.version;
         return (
@@ -250,7 +247,7 @@ async function HistoryTab({
               <span className="w-12 shrink-0 font-semibold">v{v.version}</span>
               <span className="flex-1">
                 <span className="block">{v.summary ?? SOURCE_TEXT[v.source]}</span>
-                <span className="block text-sm text-ink-soft">
+                <span className="block text-sm text-fg-soft">
                   {SOURCE_TEXT[v.source]}
                   {v.revertedFrom !== null && ` from v${v.revertedFrom}`}, approved by{' '}
                   {v.approvedBy.name} {relativeTime(v.createdAt)}
@@ -354,7 +351,7 @@ async function GuidelinesTab({ projectId, canEdit }: { projectId: string; canEdi
 
   return (
     <div className="max-w-4xl">
-      <p className="text-ink-soft">
+      <p className="text-fg-soft">
         What a new Feature in this Project must serve or respect. The AI checks Feature Suggestions
         and new Features against them. They come from the Organization’s Feature Guidelines (
         <Link href="/settings/feature-guidelines" className="underline underline-offset-2">
@@ -365,7 +362,7 @@ async function GuidelinesTab({ projectId, canEdit }: { projectId: string; canEdi
 
       <h2 className="mt-8 text-lg font-semibold">In effect</h2>
       {effective.data.criteria.length === 0 ? (
-        <p className="mt-2 text-ink-soft">No Feature Guidelines apply to this Project yet.</p>
+        <p className="mt-2 text-fg-soft">No Feature Guidelines apply to this Project yet.</p>
       ) : (
         <div className="mt-3">
           <EffectiveGuidelinesList criteria={effective.data.criteria} />
@@ -377,7 +374,7 @@ async function GuidelinesTab({ projectId, canEdit }: { projectId: string; canEdi
           <h2 id="overrides-heading" className="text-lg font-semibold">
             Adjust for this Project
           </h2>
-          <p className="mt-1 mb-6 text-sm text-ink-soft">
+          <p className="mt-1 mb-6 text-sm text-fg-soft">
             Edit or hide a criterion inherited from the Organization, or add one only this Project
             has. Saving replaces all of this Project’s adjustments at once.
           </p>
@@ -430,14 +427,14 @@ async function SuggestionsTab({
 
   return (
     <div className="max-w-4xl">
-      <p className="text-ink-soft">
+      <p className="text-fg-soft">
         Features the AI proposes from the Project Brief, the Feature Guidelines and the Decision
         Log. Accepting one creates the Feature in a Team with a first Spec to approve; dismissing
         one needs a reason, which the AI takes into account next time.
       </p>
 
       {canEdit && (
-        <div className="mt-6 rounded-xl border border-rule bg-sheet p-5">
+        <div className="mt-6 rounded-card bg-rail p-5">
           <ActionForm
             action={generateSuggestions.bind(null, projectId)}
             submitLabel="Generate Feature Suggestions"
@@ -460,7 +457,7 @@ async function SuggestionsTab({
       )}
 
       {suggestions.data.length === 0 ? (
-        <p className="mt-8 text-ink-soft">
+        <p className="mt-8 text-fg-soft">
           No Feature Suggestions yet.
           {canEdit
             ? ' Generate some above; a Project Brief makes them better.'
@@ -477,7 +474,7 @@ async function SuggestionsTab({
               </h2>
               <ul className="mt-3 space-y-4">
                 {group.map((s) => (
-                  <li key={s.id} className="rounded-xl border border-rule bg-sheet p-5">
+                  <li key={s.id} className="rounded-card bg-rail p-5">
                     <h3 className="font-semibold">{s.title}</h3>
                     <div className="mt-1 flex flex-wrap gap-2">
                       <Tag>Effort: {LEVEL_TEXT[s.effort]}</Tag>
@@ -489,14 +486,14 @@ async function SuggestionsTab({
                       {s.businessValue}
                     </p>
                     {s.servesGuidelineIds.length > 0 && (
-                      <p className="mt-2 text-sm text-ink-soft">
+                      <p className="mt-2 text-sm text-fg-soft">
                         Serves:{' '}
                         {s.servesGuidelineIds
                           .map((g) => titles.get(g) ?? 'a criterion no longer in effect')
                           .join('; ')}
                       </p>
                     )}
-                    <p className="mt-2 text-sm text-ink-soft">
+                    <p className="mt-2 text-sm text-fg-soft">
                       Generated by {s.generatedBy.name} {relativeTime(s.createdAt)}
                     </p>
 
@@ -522,7 +519,7 @@ async function SuggestionsTab({
                     )}
 
                     {s.status === 'PENDING' && canEdit && (
-                      <div className="mt-5 grid gap-6 border-t border-rule pt-4 md:grid-cols-2">
+                      <div className="mt-5 grid gap-6 pt-4 md:grid-cols-2">
                         {acceptTeams.length > 0 ? (
                           <ActionForm
                             action={acceptSuggestion.bind(null, projectId, s.id)}
@@ -541,7 +538,7 @@ async function SuggestionsTab({
                             </label>
                           </ActionForm>
                         ) : (
-                          <p className="text-sm text-ink-soft">
+                          <p className="text-sm text-fg-soft">
                             {teams?.error ??
                               'To accept, you need a Team in this Project where you are PO (or be an Admin).'}
                           </p>

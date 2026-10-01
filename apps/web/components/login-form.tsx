@@ -4,7 +4,7 @@ import { useActionState } from 'react';
 import { type LoginState, login } from '@/lib/auth-actions';
 
 export const inputClass =
-  'mt-1 w-full rounded-lg border border-rule bg-sheet px-3 py-2 text-ink placeholder:text-ink-soft/60';
+  'mt-1 w-full rounded-tile bg-surface ring-1 ring-inset ring-line px-3 py-2 text-fg placeholder:text-fg-faint';
 
 export function LoginForm() {
   const [state, action, pending] = useActionState<LoginState, FormData>(login, {});
@@ -32,14 +32,14 @@ export function LoginForm() {
         />
       </label>
       {state.error && (
-        <p role="alert" className="text-seal">
+        <p role="alert" className="text-lacquer">
           {state.error}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-lg bg-ink px-5 py-2.5 font-medium text-sheet disabled:opacity-40"
+        className="w-full rounded-full bg-ink px-5 py-2.5 font-semibold text-on-ink hover:opacity-90 disabled:opacity-40"
       >
         {pending ? 'Signing in…' : 'Sign in'}
       </button>

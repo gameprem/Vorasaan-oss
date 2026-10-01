@@ -39,11 +39,11 @@ function DiffTable({ rows, caption }: { rows: Row[]; caption?: string }) {
   const added = rows.filter((r) => r.kind === 'add').length;
   const removed = rows.filter((r) => r.kind === 'del').length;
   return (
-    <figure className="overflow-hidden rounded-xl border border-rule bg-sheet">
-      <figcaption className="border-b border-rule px-4 py-2 text-sm text-ink-soft">
-        {caption && <span className="mr-2 font-medium text-ink">{caption}:</span>}
+    <figure className="overflow-hidden rounded-card bg-rail">
+      <figcaption className="border-b-2 border-bg px-4 py-2 text-sm text-fg-soft">
+        {caption && <span className="mr-2 font-medium text-fg">{caption}:</span>}
         <span className="text-jade">{added} added</span>,{' '}
-        <span className="text-seal">{removed} removed</span>
+        <span className="text-lacquer">{removed} removed</span>
       </figcaption>
       <pre className="overflow-x-auto py-2 font-mono text-[13px] leading-6">
         {rows.map((row, i) => (
@@ -54,10 +54,10 @@ function DiffTable({ rows, caption }: { rows: Row[]; caption?: string }) {
               row.kind === 'add'
                 ? 'bg-jade-wash px-4 text-jade'
                 : row.kind === 'del'
-                  ? 'bg-seal-wash px-4 text-seal line-through decoration-seal/40'
+                  ? 'bg-lacquer-wash px-4 text-lacquer line-through decoration-lacquer/40'
                   : row.kind === 'fold'
-                    ? 'px-4 text-ink-soft/70 italic'
-                    : 'px-4 text-ink-soft'
+                    ? 'px-4 text-fg-soft/70 italic'
+                    : 'px-4 text-fg-soft'
             }
           >
             <span aria-hidden className="mr-3 inline-block w-3 select-none">

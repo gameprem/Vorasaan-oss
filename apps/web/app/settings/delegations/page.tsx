@@ -39,13 +39,13 @@ export default async function DelegationsPage() {
 
   return (
     <section className="max-w-3xl">
-      <h1 className="text-2xl font-semibold tracking-tight">Delegations</h1>
-      <p className="mt-2 text-ink-soft">
+      <h2 className="text-[26px] font-semibold tracking-tight">Delegations</h2>
+      <p className="mt-2 text-fg-soft">
         Going on leave? Name a Delegate for your Team Role. While it is active, Decision Requests
         sent to you for that Team Role in that Team go to your Delegate, who decides on your behalf.
       </p>
 
-      <h2 className="mt-10 text-lg font-semibold">My Delegations</h2>
+      <h3 className="mt-10 text-lg font-semibold">My Delegations</h3>
       <div className="mt-3">
         <DelegationList
           delegations={given}
@@ -54,10 +54,10 @@ export default async function DelegationsPage() {
         />
       </div>
 
-      <h2 className="mt-10 text-lg font-semibold">Name a Delegate</h2>
+      <h3 className="mt-10 text-lg font-semibold">Name a Delegate</h3>
       <div className="mt-3">
         {teams.length === 0 ? (
-          <p className="text-ink-soft">
+          <p className="text-fg-soft">
             You are not in any Team yet. Ask an Admin or your Team's PO to add you.
           </p>
         ) : (
@@ -67,7 +67,7 @@ export default async function DelegationsPage() {
 
       {received.length > 0 && (
         <>
-          <h2 className="mt-10 text-lg font-semibold">Delegated to me</h2>
+          <h3 className="mt-10 text-lg font-semibold">Delegated to me</h3>
           <div className="mt-3">
             <DelegationList
               delegations={received}

@@ -1,10 +1,10 @@
 // Shared class names so buttons and fields look the same everywhere.
 export const primaryButton =
-  'rounded-lg bg-ink px-4 py-2 font-medium text-sheet disabled:cursor-not-allowed disabled:opacity-40';
+  'rounded-full bg-ink px-4 py-2 font-semibold text-on-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40';
 export const secondaryButton =
-  'rounded-lg border border-rule bg-sheet px-4 py-2 font-medium text-ink disabled:opacity-40';
+  'rounded-full bg-surface px-4 py-2 font-semibold text-fg hover:bg-surface-hi disabled:opacity-40';
 export const field =
-  'mt-1 w-full rounded-lg border border-rule bg-sheet px-3 py-2 text-ink placeholder:text-ink-soft/60';
+  'mt-1 w-full rounded-tile bg-surface ring-1 ring-inset ring-line px-3 py-2 text-fg placeholder:text-fg-faint';
 export const ROLE_LABEL = {
   PO: 'PO',
   DESIGNER: 'Designer',

@@ -62,7 +62,7 @@ function useAction() {
 function Status({ message }: { message?: { ok: boolean; text: string } }) {
   if (!message) return null;
   return (
-    <p role={message.ok ? 'status' : 'alert'} className={message.ok ? 'text-jade' : 'text-seal'}>
+    <p role={message.ok ? 'status' : 'alert'} className={message.ok ? 'text-jade' : 'text-lacquer'}>
       {message.text}
     </p>
   );
@@ -88,16 +88,16 @@ function ProvidersSection({ providers }: { providers: AiProviderView[] }) {
   const [adding, setAdding] = useState(providers.length === 0);
   return (
     <section aria-labelledby="ai-providers">
-      <h2 id="ai-providers" className="text-lg font-semibold">
+      <h3 id="ai-providers" className="text-lg font-semibold">
         Providers
-      </h2>
-      <p className="mt-1 text-sm text-ink-soft">
+      </h3>
+      <p className="mt-1 text-sm text-fg-soft">
         The services your models run on, each with its own key. Keys are stored encrypted and never
         shown again.
       </p>
-      <ul className="mt-4 divide-y divide-rule rounded-lg border border-rule bg-sheet">
+      <ul className="mt-4 rows">
         {providers.length === 0 && (
-          <li className="px-4 py-3 text-ink-soft">No provider connected yet.</li>
+          <li className="px-4 py-3 text-fg-soft">No provider connected yet.</li>
         )}
         {providers.map((p) => (
           <ProviderRow key={p.id} provider={p} />
@@ -128,7 +128,7 @@ function ProviderRow({ provider }: { provider: AiProviderView }) {
     <li className="px-4 py-3">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="font-medium">{provider.name}</span>
-        <span className="text-sm text-ink-soft">
+        <span className="text-sm text-fg-soft">
           {kindLabel(provider.kind)}
           {provider.baseUrl ? ` · ${provider.baseUrl}` : ''} · key ends in{' '}
           {provider.apiKeyHint.replace('…', '')} · {provider.modelCount}{' '}
@@ -138,7 +138,7 @@ function ProviderRow({ provider }: { provider: AiProviderView }) {
           <button
             type="button"
             onClick={() => setEditing((e) => !e)}
-            className="text-ink-soft hover:text-ink"
+            className="text-fg-soft hover:text-fg"
           >
             {editing ? 'Cancel' : 'Edit'}
           </button>
@@ -150,7 +150,7 @@ function ProviderRow({ provider }: { provider: AiProviderView }) {
                 run(() => deleteAiProvider(provider.id));
               }
             }}
-            className="text-ink-soft hover:text-seal disabled:opacity-40"
+            className="text-fg-soft hover:text-lacquer disabled:opacity-40"
           >
             Remove
           </button>
@@ -196,7 +196,7 @@ function ProviderRow({ provider }: { provider: AiProviderView }) {
           )}
           <label className="block">
             <span className="text-sm">
-              New key <span className="text-ink-soft">(leave blank to keep the saved one)</span>
+              New key <span className="text-fg-soft">(leave blank to keep the saved one)</span>
             </span>
             <input
               type="password"
@@ -233,7 +233,7 @@ function NewProviderForm({ onDone, canCancel }: { onDone: () => void; canCancel:
   return (
     <form
       aria-label="Connect a provider"
-      className="mt-4 rounded-lg border border-rule p-4"
+      className="mt-4 rounded-card bg-rail p-4"
       onSubmit={(e) => {
         e.preventDefault();
         const name = draft.name.trim();
@@ -258,8 +258,8 @@ function NewProviderForm({ onDone, canCancel }: { onDone: () => void; canCancel:
             return (
               <label
                 key={p.value}
-                className={`cursor-pointer rounded-lg border px-3 py-2.5 ${
-                  active ? 'border-ink bg-sheet' : 'border-rule hover:border-ink-soft'
+                className={`cursor-pointer rounded-card px-3 py-2.5 ${
+                  active ? 'bg-ink-wash text-fg' : 'bg-bg hover:bg-surface-hi'
                 }`}
               >
                 <input
@@ -278,7 +278,7 @@ function NewProviderForm({ onDone, canCancel }: { onDone: () => void; canCancel:
             );
           })}
         </div>
-        <p className="mt-2 text-sm text-ink-soft">{current?.hint}</p>
+        <p className="mt-2 text-sm text-fg-soft">{current?.hint}</p>
       </fieldset>
       <label className="mt-4 block">
         <span className="text-sm">Name</span>
@@ -344,16 +344,16 @@ function ModelsSection({
   const [adding, setAdding] = useState(false);
   return (
     <section aria-labelledby="approved-models">
-      <h2 id="approved-models" className="text-lg font-semibold">
+      <h3 id="approved-models" className="text-lg font-semibold">
         Approved Models
-      </h2>
-      <p className="mt-1 text-sm text-ink-soft">
+      </h3>
+      <p className="mt-1 text-sm text-fg-soft">
         The only models people can use, under names they recognize. The default is used wherever no
         other model is set.
       </p>
-      <ul className="mt-4 divide-y divide-rule rounded-lg border border-rule bg-sheet">
+      <ul className="mt-4 rows">
         {models.length === 0 && (
-          <li className="px-4 py-3 text-ink-soft">
+          <li className="px-4 py-3 text-fg-soft">
             No Approved Model yet. Until there is one, the server's environment chooses the model.
           </li>
         )}
@@ -362,7 +362,7 @@ function ModelsSection({
         ))}
       </ul>
       {providers.length === 0 ? (
-        <p className="mt-4 text-sm text-ink-soft">Connect a provider to add models.</p>
+        <p className="mt-4 text-sm text-fg-soft">Connect a provider to add models.</p>
       ) : adding ? (
         <NewModelForm
           providers={providers}
@@ -395,11 +395,11 @@ function ModelRow({
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="font-medium">{model.displayName}</span>
         {model.isDefault && (
-          <span className="rounded-full border border-rule px-2 py-0.5 text-xs text-ink-soft">
+          <span className="rounded-full bg-surface font-semibold px-2 py-0.5 text-xs text-fg-soft">
             Default
           </span>
         )}
-        <span className="text-sm text-ink-soft">
+        <span className="text-sm text-fg-soft">
           {model.modelId} · {model.providerName}
         </span>
         <span className="ml-auto flex flex-wrap gap-3 text-sm">
@@ -407,7 +407,7 @@ function ModelRow({
             type="button"
             disabled={testing}
             onClick={() => startTest(async () => setTest(await testApprovedModel(model.id)))}
-            className="text-ink-soft hover:text-ink disabled:opacity-40"
+            className="text-fg-soft hover:text-fg disabled:opacity-40"
           >
             {testing ? 'Testing…' : 'Test'}
           </button>
@@ -416,7 +416,7 @@ function ModelRow({
               type="button"
               disabled={pending}
               onClick={() => run(() => updateApprovedModel(model.id, { isDefault: true }))}
-              className="text-ink-soft hover:text-ink disabled:opacity-40"
+              className="text-fg-soft hover:text-fg disabled:opacity-40"
             >
               Make default
             </button>
@@ -424,7 +424,7 @@ function ModelRow({
           <button
             type="button"
             onClick={() => setEditing((e) => !e)}
-            className="text-ink-soft hover:text-ink"
+            className="text-fg-soft hover:text-fg"
           >
             {editing ? 'Cancel' : 'Edit'}
           </button>
@@ -439,16 +439,16 @@ function ModelRow({
                   run(() => deleteApprovedModel(model.id));
                 }
               }}
-              className="text-ink-soft hover:text-seal disabled:opacity-40"
+              className="text-fg-soft hover:text-lacquer disabled:opacity-40"
             >
               Remove
             </button>
           )}
         </span>
       </div>
-      {model.note && <p className="mt-1 text-sm text-ink-soft">{model.note}</p>}
+      {model.note && <p className="mt-1 text-sm text-fg-soft">{model.note}</p>}
       {test && (
-        <p role="status" className={`mt-1 text-sm ${test.ok ? 'text-jade' : 'text-seal'}`}>
+        <p role="status" className={`mt-1 text-sm ${test.ok ? 'text-jade' : 'text-lacquer'}`}>
           {test.ok
             ? `${test.message} (${((test.latencyMs ?? 0) / 1000).toFixed(1)}s)`
             : test.message}
@@ -501,7 +501,7 @@ function NewModelForm({
   const { pending, message, run } = useAction();
   const provider = providers[0];
   return (
-    <div className="mt-4 rounded-lg border border-rule p-4">
+    <div className="mt-4 rounded-card bg-rail p-4">
       <ModelForm
         providers={providers}
         initial={{
@@ -643,10 +643,10 @@ function TasksSection({ settings }: { settings: AiSettingsView }) {
 
   return (
     <section aria-labelledby="ai-tasks">
-      <h2 id="ai-tasks" className="text-lg font-semibold">
+      <h3 id="ai-tasks" className="text-lg font-semibold">
         Model per task
-      </h2>
-      <p className="mt-1 text-sm text-ink-soft">
+      </h3>
+      <p className="mt-1 text-sm text-fg-soft">
         Which Approved Model each kind of AI work uses. Changes apply to the next request.
       </p>
       <form
@@ -664,7 +664,7 @@ function TasksSection({ settings }: { settings: AiSettingsView }) {
           );
         }}
       >
-        <div className="divide-y divide-rule rounded-lg border border-rule bg-sheet">
+        <div className="rows">
           {settings.tasks.map((t) => (
             <label
               key={t.task}
@@ -672,9 +672,9 @@ function TasksSection({ settings }: { settings: AiSettingsView }) {
             >
               <span>
                 <span className="block font-medium">{TASK_LABEL[t.task].label}</span>
-                <span className="block text-sm text-ink-soft">{TASK_LABEL[t.task].hint}</span>
+                <span className="block text-sm text-fg-soft">{TASK_LABEL[t.task].hint}</span>
                 {t.envOverrides.length > 0 && (
-                  <span className="block text-sm text-seal">
+                  <span className="block text-sm text-lacquer">
                     Set on the server by {t.envOverrides.join(', ')}, which wins over this setting.
                   </span>
                 )}

@@ -28,7 +28,7 @@ export function ReviewProposal({
   return (
     <div className="mt-6">
       {error && (
-        <p role="alert" className="mb-4 text-seal">
+        <p role="alert" className="mb-4 text-lacquer">
           {error}
         </p>
       )}
@@ -37,7 +37,7 @@ export function ReviewProposal({
           <button
             type="submit"
             disabled={busy}
-            className="rounded-lg bg-jade px-5 py-2.5 font-medium text-sheet disabled:opacity-40"
+            className="rounded-full bg-jade px-5 py-2.5 font-semibold text-on-ink hover:opacity-90 disabled:opacity-40"
           >
             {approving ? 'Approving…' : approveLabel}
           </button>
@@ -46,13 +46,13 @@ export function ReviewProposal({
           <button
             type="submit"
             disabled={busy}
-            className="rounded-lg border border-rule bg-sheet px-5 py-2.5 font-medium text-ink disabled:opacity-40"
+            className="rounded-full bg-surface px-5 py-2.5 font-semibold text-fg hover:bg-surface-hi disabled:opacity-40"
           >
             {rejecting ? 'Rejecting…' : 'Reject'}
           </button>
         </form>
       </div>
-      <p className="mt-3 text-sm text-ink-soft">{note}</p>
+      <p className="mt-3 text-sm text-fg-soft">{note}</p>
     </div>
   );
 }

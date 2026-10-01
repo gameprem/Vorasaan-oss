@@ -13,7 +13,7 @@ import { field, primaryButton, secondaryButton } from './ui';
 
 function ErrorText({ state }: { state: RequestActionState }) {
   return state.error ? (
-    <p role="alert" className="mt-2 text-seal">
+    <p role="alert" className="mt-2 text-lacquer">
       {state.error}
     </p>
   ) : null;
@@ -55,7 +55,7 @@ export function WithdrawButton({ requestId, draft }: { requestId: string; draft?
     );
   }
   return (
-    <form action={run} className="rounded-lg border border-rule bg-sheet p-4">
+    <form action={run} className="rounded-card bg-rail p-4">
       <p>
         {draft
           ? 'Discard this draft? Nobody has seen it yet.'
@@ -66,7 +66,7 @@ export function WithdrawButton({ requestId, draft }: { requestId: string; draft?
           ref={confirmRef}
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-seal px-4 py-2 font-medium text-sheet disabled:opacity-40"
+          className="rounded-full bg-lacquer px-4 py-2 font-semibold text-on-ink hover:opacity-90 disabled:opacity-40"
         >
           {pending ? 'Withdrawing…' : draft ? 'Yes, discard it' : 'Yes, withdraw it'}
         </button>
@@ -100,7 +100,7 @@ export function ReassignForm({
   );
   if (candidates.length === 0) {
     return (
-      <p className="text-ink-soft">
+      <p className="text-fg-soft">
         Nobody else in the Team holds the {roleLabel} role, so there is no one to reassign to.
       </p>
     );

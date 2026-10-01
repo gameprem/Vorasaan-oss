@@ -23,8 +23,8 @@ export default async function AiSettingsPage() {
   }
   return (
     <section className="max-w-3xl">
-      <h1 className="text-2xl font-semibold tracking-tight">AI models</h1>
-      <p className="mt-2 text-ink-soft">
+      <h2 className="text-[26px] font-semibold tracking-tight">AI models</h2>
+      <p className="mt-2 text-fg-soft">
         The AI providers your organization connects, the models people may use, and the model each
         kind of AI work runs on.
       </p>

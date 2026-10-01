@@ -48,7 +48,7 @@ export default async function ProposalPage({
 
   return (
     <article className="max-w-4xl">
-      <p className="text-sm text-ink-soft">
+      <p className="text-sm text-fg-soft">
         <Link href={`/features/${id}`} className="hover:underline">
           {feature.title}
         </Link>
@@ -60,7 +60,7 @@ export default async function ProposalPage({
             ? 'Approved Spec change'
             : 'Rejected Spec change'}
       </h1>
-      <p className="mt-1 text-sm text-ink-soft">
+      <p className="mt-1 text-sm text-fg-soft">
         {ORIGIN[proposal.source]}{' '}
         {proposal.baseVersion ? `against Spec v${proposal.baseVersion}` : 'as the first Spec'},{' '}
         {relativeTime(proposal.createdAt)}.
@@ -93,7 +93,7 @@ export default async function ProposalPage({
             }
           />
         ) : (
-          <p className="mt-6 text-ink-soft">Waiting for {proposal.approver.name} to review it.</p>
+          <p className="mt-6 text-fg-soft">Waiting for {proposal.approver.name} to review it.</p>
         ))}
       {proposal.status !== 'PENDING' && (
         <p className="mt-6">

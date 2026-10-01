@@ -28,9 +28,9 @@ export default async function MyRequestsPage() {
   return (
     <section className="max-w-3xl">
       <h1 className="text-2xl font-semibold tracking-tight">My Requests</h1>
-      <p className="mt-1 text-ink-soft">Decision Requests you raised, and where each one stands.</p>
+      <p className="mt-1 text-fg-soft">Decision Requests you raised, and where each one stands.</p>
       {requests.length === 0 ? (
-        <p className="mt-6 text-ink-soft">
+        <p className="mt-6 text-fg-soft">
           You haven't raised any Decision Requests yet. Raise a Blocker or a Question from a
           Feature's page.
         </p>
@@ -57,9 +57,9 @@ function RequestGroup({
   return (
     <section aria-labelledby={`requests-${id}`}>
       <h2 id={`requests-${id}`} className="text-lg font-semibold">
-        {heading} <span className="font-normal text-ink-soft">({requests.length})</span>
+        {heading} <span className="font-normal text-fg-soft">({requests.length})</span>
       </h2>
-      <ul className="mt-3 divide-y divide-rule border-y border-rule">
+      <ul className="mt-3 rows">
         {requests.map((r) => (
           <li key={r.id}>
             <Link
@@ -70,13 +70,13 @@ function RequestGroup({
                 <KindBadge kind={r.kind} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block font-medium text-ink group-hover:underline">{r.title}</span>
-                <span className="block text-sm text-ink-soft">
+                <span className="block font-medium text-fg group-hover:underline">{r.title}</span>
+                <span className="block text-sm text-fg-soft">
                   {r.featureTitle}. {statusText(r.status)}
                   {r.decider && r.status !== 'DRAFT' ? `, Decider ${r.decider.name}` : ''}
                 </span>
               </span>
-              <span className="shrink-0 text-sm text-ink-soft">
+              <span className="shrink-0 text-sm text-fg-soft">
                 {relativeTime(r.submittedAt ?? r.createdAt)}
               </span>
             </Link>

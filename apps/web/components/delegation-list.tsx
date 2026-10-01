@@ -32,12 +32,12 @@ function DeleteButton({ delegation, label }: { delegation: DelegationView; label
         type="submit"
         disabled={pending}
         aria-label={`Delete Delegation: ${label}`}
-        className={`${secondaryButton} text-sm text-seal`}
+        className={`${secondaryButton} text-sm text-lacquer`}
       >
         {pending ? 'Deleting…' : 'Delete'}
       </button>
       {state.error && (
-        <p role="alert" className="mt-1 text-sm text-seal">
+        <p role="alert" className="mt-1 text-sm text-lacquer">
           {state.error}
         </p>
       )}
@@ -58,9 +58,9 @@ export function DelegationList({
   teamNames?: Record<string, string>;
   empty: string;
 }) {
-  if (delegations.length === 0) return <p className="text-ink-soft">{empty}</p>;
+  if (delegations.length === 0) return <p className="text-fg-soft">{empty}</p>;
   return (
-    <ul className="divide-y divide-rule border-y border-rule">
+    <ul className="rows">
       {delegations.map((d) => {
         const role = ROLE_LABEL[d.role];
         const team = teamNames?.[d.teamId];
@@ -70,19 +70,19 @@ export function DelegationList({
             <span className="min-w-0 flex-1">
               <span className="block font-medium">
                 {d.delegator.name} → {d.delegate.name}{' '}
-                <span className="font-normal text-ink-soft">
+                <span className="font-normal text-fg-soft">
                   ({role}
                   {team ? `, ${team}` : ''})
                 </span>
               </span>
-              <span className="block text-sm text-ink-soft">
+              <span className="block text-sm text-fg-soft">
                 <LocalDate iso={d.startsAt} /> – <LocalDate iso={d.endsAt} />
                 {d.createdBy.id !== d.delegator.id && ` · set by ${d.createdBy.name}`}
               </span>
             </span>
             <span
-              className={`rounded-full border px-2.5 py-0.5 text-sm ${
-                d.active ? 'border-jade/40 bg-jade-wash text-jade' : 'border-rule text-ink-soft'
+              className={`rounded-full px-2.5 py-0.5 text-sm font-semibold ${
+                d.active ? 'bg-jade-wash text-jade' : 'bg-surface text-fg-soft'
               }`}
             >
               {d.active ? 'Active' : 'Upcoming'}

@@ -72,7 +72,7 @@ export function DelegationForm({
 
   return (
     <form action={run} className="space-y-4" aria-describedby={`${id}-hint`}>
-      <p id={`${id}-hint`} className="text-sm text-ink-soft">
+      <p id={`${id}-hint`} className="text-sm text-fg-soft">
         Dates are in your local time. The Delegate must hold the same Team Role in that Team.
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -200,7 +200,7 @@ export function DelegationForm({
       <input type="hidden" name="startsAt" value={toIso(startsAt)} />
       <input type="hidden" name="endsAt" value={toIso(endsAt)} />
       {noRole && (
-        <p className="text-sm text-ink-soft">
+        <p className="text-sm text-fg-soft">
           {forAnyone ? 'This member has' : 'You have'} no Team Role in this Team to delegate.
         </p>
       )}
@@ -208,7 +208,7 @@ export function DelegationForm({
         {pending ? 'Saving…' : 'Name Delegate'}
       </button>
       {state.error && (
-        <p role="alert" className="text-seal">
+        <p role="alert" className="text-lacquer">
           {state.error}
         </p>
       )}

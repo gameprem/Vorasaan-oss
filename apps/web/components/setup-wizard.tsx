@@ -44,15 +44,15 @@ export function SetupWizard() {
   return (
     <div className="mx-auto max-w-xl">
       <h1 className="text-3xl font-semibold tracking-tight">Set up Vorasaan</h1>
-      <p className="mt-2 text-ink-soft">Two steps, then you're in.</p>
+      <p className="mt-2 text-fg-soft">Two steps, then you're in.</p>
 
-      <ol className="mt-8 flex gap-6 border-b border-rule text-sm" aria-label="Setup steps">
+      <ol className="mt-8 flex flex-wrap gap-2 text-sm" aria-label="Setup steps">
         {STEPS.map((label, i) => (
           <li
             key={label}
             aria-current={i === step ? 'step' : undefined}
-            className={`-mb-px border-b-2 pb-2 ${
-              i === step ? 'border-ink font-medium text-ink' : 'border-transparent text-ink-soft'
+            className={`rounded-full px-4 py-2 ${
+              i === step ? 'bg-ink-wash font-semibold text-ink' : 'bg-surface text-fg-soft'
             }`}
           >
             {i + 1}. {label}
@@ -84,7 +84,7 @@ export function SetupWizard() {
                 className={inputClass}
               />
             </label>
-            <p className="text-sm text-ink-soft">
+            <p className="text-sm text-fg-soft">
               You'll be the first Admin. You can invite your team next.
             </p>
             <label className="block">
@@ -119,7 +119,7 @@ export function SetupWizard() {
           </div>
         ) : (
           <>
-            <p className="mb-6 text-ink-soft">
+            <p className="mb-6 text-fg-soft">
               Vorasaan uses this model to draft Choices and Spec changes. It becomes your first
               provider and default Approved Model; you can add more providers and models later in
               Settings → AI models.
@@ -129,7 +129,7 @@ export function SetupWizard() {
         )}
 
         {error && (
-          <p role="alert" className="mt-6 text-seal">
+          <p role="alert" className="mt-6 text-lacquer">
             {error}
           </p>
         )}
@@ -139,7 +139,7 @@ export function SetupWizard() {
             <button
               type="button"
               onClick={() => setStep(0)}
-              className="rounded-lg border border-rule px-5 py-2.5 text-ink"
+              className="rounded-full bg-surface px-5 py-2.5 font-semibold text-fg hover:bg-surface-hi"
             >
               Back
             </button>
@@ -147,7 +147,7 @@ export function SetupWizard() {
           <button
             type="submit"
             disabled={finishing}
-            className="rounded-lg bg-ink px-5 py-2.5 font-medium text-sheet disabled:opacity-40"
+            className="rounded-full bg-ink px-5 py-2.5 font-semibold text-on-ink hover:opacity-90 disabled:opacity-40"
           >
             {step === 0 ? 'Continue' : finishing ? 'Setting up…' : 'Finish setup'}
           </button>

@@ -107,7 +107,7 @@ export default async function FeaturePage({
         </div>
       )}
 
-      <p className="text-sm text-ink-soft">
+      <p className="text-sm text-fg-soft">
         {feature.projectName},{' '}
         <Link href={`/teams/${feature.teamId}`} className="hover:underline">
           {feature.teamName} team
@@ -120,20 +120,20 @@ export default async function FeaturePage({
             <BlockedBadge openBlockers={feature.openBlockers} />
           </div>
           {feature.jiraIssueKey && (
-            <p className="mt-2 text-sm text-ink-soft">
+            <p className="mt-2 text-sm text-fg-soft">
               Jira Epic{' '}
               {feature.jiraIssueUrl ? (
                 <a
                   href={feature.jiraIssueUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-medium text-ink underline underline-offset-2"
+                  className="font-medium text-fg underline underline-offset-2"
                 >
                   {feature.jiraIssueKey}
                   <span className="sr-only"> (opens in a new tab)</span>
                 </a>
               ) : (
-                <span className="font-medium text-ink">{feature.jiraIssueKey}</span>
+                <span className="font-medium text-fg">{feature.jiraIssueKey}</span>
               )}
             </p>
           )}
@@ -145,19 +145,16 @@ export default async function FeaturePage({
         )}
       </div>
 
-      <nav
-        aria-label="Feature sections"
-        className="flex gap-6 overflow-x-auto border-b border-rule"
-      >
+      <nav aria-label="Feature sections" className="flex gap-2 overflow-x-auto pb-1">
         {TABS.map((t) => (
           <Link
             key={t.id}
             href={`/features/${id}?tab=${t.id}`}
             aria-current={tab === t.id ? 'page' : undefined}
-            className={`-mb-px shrink-0 border-b-2 pb-2 text-sm ${
+            className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium ${
               tab === t.id
-                ? 'border-ink font-medium text-ink'
-                : 'border-transparent text-ink-soft hover:text-ink'
+                ? 'bg-ink-wash font-semibold text-ink'
+                : 'bg-surface text-fg hover:bg-surface-hi'
             }`}
           >
             {t.label}
@@ -200,21 +197,19 @@ export default async function FeaturePage({
           team &&
           (team.canManage ? (
             <div className="max-w-3xl">
-              <p className="mb-6 text-ink-soft">
+              <p className="mb-6 text-fg-soft">
                 Decision Requests on this Feature go to its Role Owners. Choose who owns each role.
               </p>
               <RoleOwnersEditor featureId={id} team={team} owners={owners} />
             </div>
           ) : owners.length === 0 ? (
-            <p className="text-ink-soft">
-              No Role Owners yet. The Team's PO or an Admin sets them.
-            </p>
+            <p className="text-fg-soft">No Role Owners yet. The Team's PO or an Admin sets them.</p>
           ) : (
-            <ul className="max-w-3xl divide-y divide-rule border-y border-rule">
+            <ul className="max-w-3xl rows">
               {owners.map((o) => (
                 <li key={`${o.userId}:${o.role}`} className="flex justify-between py-3">
                   <span className="font-medium">{o.name}</span>
-                  <span className="text-ink-soft">{ROLE_LABEL[o.role]}</span>
+                  <span className="text-fg-soft">{ROLE_LABEL[o.role]}</span>
                 </li>
               ))}
             </ul>
@@ -222,9 +217,9 @@ export default async function FeaturePage({
 
         {tab === 'history' &&
           (versions.length === 0 ? (
-            <p className="text-ink-soft">No Spec Versions yet.</p>
+            <p className="text-fg-soft">No Spec Versions yet.</p>
           ) : (
-            <ol className="max-w-4xl divide-y divide-rule border-y border-rule">
+            <ol className="max-w-4xl rows">
               {versions.map((v) => {
                 const open = showDiff && diffTo === v.version;
                 return (
@@ -233,7 +228,7 @@ export default async function FeaturePage({
                       <span className="w-12 shrink-0 font-semibold">v{v.version}</span>
                       <span className="flex-1">
                         <span className="block">{v.summary ?? SOURCE_TEXT[v.source]}</span>
-                        <span className="block text-sm text-ink-soft">
+                        <span className="block text-sm text-fg-soft">
                           {SOURCE_TEXT[v.source]}
                           {v.revertedFrom !== null && ` from v${v.revertedFrom}`}, approved by{' '}
                           {v.approvedBy.name} {relativeTime(v.createdAt)}
@@ -282,12 +277,12 @@ export default async function FeaturePage({
 
         {tab === 'decisions' &&
           (log.length === 0 ? (
-            <p className="text-ink-soft">
+            <p className="text-fg-soft">
               No Decisions yet. When someone decides a Blocker or Question on this Feature, it is
               recorded here with the Spec version it produced.
             </p>
           ) : (
-            <ol className="max-w-3xl divide-y divide-rule border-y border-rule">
+            <ol className="max-w-3xl rows">
               {log.map((entry) => (
                 <li key={entry.decisionId} className="py-5">
                   <div className="flex flex-wrap items-center gap-3">
@@ -304,8 +299,8 @@ export default async function FeaturePage({
                       ? `${entry.choice.label}. ${entry.choice.title}`
                       : entry.customAnswer}
                   </p>
-                  {entry.rationale && <p className="mt-1 text-ink-soft">{entry.rationale}</p>}
-                  <p className="mt-2 text-sm text-ink-soft">
+                  {entry.rationale && <p className="mt-1 text-fg-soft">{entry.rationale}</p>}
+                  <p className="mt-2 text-sm text-fg-soft">
                     Decided by {entry.decidedBy.name}
                     {entry.onBehalfOf && ` on behalf of ${entry.onBehalfOf.name}`}{' '}
                     {relativeTime(entry.createdAt)}.{' '}

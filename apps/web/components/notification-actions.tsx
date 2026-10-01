@@ -8,11 +8,11 @@ import {
 } from '@/lib/notification-actions';
 
 const linkButton =
-  'text-sm text-ink-soft underline underline-offset-2 hover:text-ink disabled:opacity-40';
+  'text-sm text-fg-soft underline underline-offset-2 hover:text-fg disabled:opacity-40';
 
 function ErrorText({ state }: { state: NotificationActionState }) {
   return state.error ? (
-    <p role="alert" className="mt-1 text-sm text-seal">
+    <p role="alert" className="mt-1 text-sm text-lacquer">
       {state.error}
     </p>
   ) : null;

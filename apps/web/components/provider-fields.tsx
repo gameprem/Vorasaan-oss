@@ -80,8 +80,8 @@ export function ProviderFields({
             return (
               <label
                 key={p.value}
-                className={`cursor-pointer rounded-lg border px-3 py-2.5 ${
-                  active ? 'border-ink bg-sheet' : 'border-rule hover:border-ink-soft'
+                className={`cursor-pointer rounded-card px-3 py-2.5 ${
+                  active ? 'bg-ink-wash text-fg' : 'bg-bg hover:bg-surface-hi'
                 }`}
               >
                 <input
@@ -103,7 +103,7 @@ export function ProviderFields({
             );
           })}
         </div>
-        <p className="mt-2 text-sm text-ink-soft">{current?.hint}</p>
+        <p className="mt-2 text-sm text-fg-soft">{current?.hint}</p>
       </fieldset>
 
       {value.provider === 'OPENAI_COMPATIBLE' && (
@@ -134,7 +134,7 @@ export function ProviderFields({
         <span className="text-sm">
           {current?.keyLabel}
           {keyOptional && keyHint ? (
-            <span className="text-ink-soft">
+            <span className="text-fg-soft">
               {' '}
               (saved key ends in {keyHint.replace('…', '')}; leave blank to keep it)
             </span>
@@ -154,12 +154,12 @@ export function ProviderFields({
           type="button"
           disabled={testing}
           onClick={() => startTest(async () => setResult(await test(toSettingsInput(value))))}
-          className="rounded-lg border border-rule bg-sheet px-4 py-2 font-medium text-ink disabled:opacity-40"
+          className="rounded-full bg-surface px-4 py-2 font-semibold text-fg hover:bg-surface-hi disabled:opacity-40"
         >
           {testing ? 'Testing…' : 'Test connection'}
         </button>
         {result && (
-          <p role="status" className={result.ok ? 'text-jade' : 'text-seal'}>
+          <p role="status" className={result.ok ? 'text-jade' : 'text-lacquer'}>
             {result.ok
               ? `${result.message} (${((result.latencyMs ?? 0) / 1000).toFixed(1)}s)`
               : result.message}

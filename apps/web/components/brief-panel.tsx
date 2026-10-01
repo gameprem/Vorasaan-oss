@@ -45,7 +45,7 @@ export function BriefPanel({
   return (
     <>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-ink-soft">
+        <p className="text-sm text-fg-soft">
           {meta ??
             (canEdit
               ? 'No Project Brief yet: this is the empty template. Write it yourself, or start a Grilling and let the AI draft it from your answers.'
@@ -58,7 +58,7 @@ export function BriefPanel({
         )}
       </div>
       <div
-        className={`spec rounded-xl border border-rule bg-sheet p-6 sm:p-10 ${version === 0 ? 'text-ink-soft' : ''}`}
+        className={`spec rounded-sheet bg-rail p-6 sm:p-10 ${version === 0 ? 'text-fg-soft' : ''}`}
       >
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
       </div>

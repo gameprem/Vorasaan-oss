@@ -110,7 +110,7 @@ export function LiveUpdates() {
         <button
           type="button"
           onClick={() => retry.current()}
-          className="text-sm text-ink-soft underline underline-offset-2 hover:text-ink"
+          className="text-sm text-fg-soft underline underline-offset-2 hover:text-fg"
           title="Live updates stopped after several failed attempts"
         >
           Live updates paused. Reconnect
