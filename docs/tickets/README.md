@@ -145,6 +145,8 @@ After the MVP release, the web app becomes a chat app (ADR 0008):
 | 0046 | [Web: the chat view with Action Cards and a document panel](./0046-web-chat-view.md) | 0043, 0045 |
 | 0047 | [Web: Grilling in the chat view](./0047-web-grilling-chat.md) | 0044, 0046 |
 | 0048 | [End-to-end tests for the chat-first UI](./0048-chat-e2e.md) | 0039, 0046, 0047 |
+| 0053 | [Several providers and Approved Models](./0053-providers-and-approved-models.md) | none |
+| 0054 | [The model picker in chat](./0054-model-picker-in-chat.md) | 0042, 0053, 0046 |
 
 ```
 0042 ─┬─ 0043 ─┐
