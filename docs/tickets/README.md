@@ -120,11 +120,20 @@ Follow-ups recorded during the MVP reviews.
 | 0040 | [`GET /me/teams`](./0040-me-teams.md) | none |
 | 0041 | [Hardening follow-ups from the MVP reviews](./0041-hardening.md) | none |
 
+## Backlog
+
+Recorded follow-ups that are not scheduled yet.
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0049 | [Delete a Feature or a Project](./0049-delete-feature-project.md) | none |
+
 ## Chat-first Web UI (Post-MVP 1)
 
 After the MVP release, the web app becomes a chat app (ADR 0008):
 - A Sidebar holds the Inbox, Projects → Features, recent Conversations, and Settings, which opens as a full-screen modal with Back.
 - In a Conversation, the AI proposes through Action Cards that a person approves.
+- It looks like Gemini, with the palette from ADR 0008. The reference is [`docs/design/chat-web-ui-mockup.html`](../design/chat-web-ui-mockup.html).
 - Grilling runs as per-person Conversations with follow-ups.
 
 | # | Ticket | Depends on |

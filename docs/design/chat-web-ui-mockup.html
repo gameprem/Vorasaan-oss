@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Design mockup for ADR 0008 (chat-first Web UI). Static: fake data, no API calls. Open this file in a browser. -->
+<title>Vorasaan Chat Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/*
+  Layout: Gemini-style shell. A borderless tinted rail on the left, a white stage in the middle,
+  and the Spec as a floating sheet on the right. No hard borders: surfaces separate by tone.
+
+  Palette, from the name: วรสาร (Vorasaan) is a journal, a record people sign off.
+  - Ink (indigo-blue): what the AI writes and proposes; the primary.
+  - Jade: approved, decided, written into the record.
+  - Lacquer (Thai red lacquer, the colour of a seal): Blockers, removed lines.
+  - Saffron: waiting on a person (Inbox, pending).
+  The AI's spark runs ink → jade: a proposal on its way to approval.
+*/
+:root {
+  --bg: #ffffff;
+  --rail: #f2f4fa;
+  --surface: #eef1f8;
+  --surface-hi: #e4e9f5;
+  --line: #dfe4ef;
+  --fg: #1c2033;
+  --fg-soft: #586078;
+  --fg-faint: #8a91a8;
+  --ink: #3346c8;
+  --ink-wash: #e1e6fb;
+  --on-ink: #ffffff;
+  --jade: #0c7d61;
+  --jade-wash: #dcf2ea;
+  --lacquer: #b8321f;
+  --lacquer-wash: #fbe5e0;
+  --saffron: #b26a00;
+  --saffron-wash: #fdf0d9;
+  --spark-a: #3346c8;
+  --spark-b: #12a17c;
+  --shadow: 0 1px 2px rgba(28, 32, 51, .06), 0 6px 20px -8px rgba(28, 32, 51, .18);
+  --focus: #3346c8;
+
+  --font: "Figtree", "Anuphan", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --r-s: 12px; --r-m: 20px; --r-l: 28px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12141f; --rail: #1a1d2b; --surface: #20243a; --surface-hi: #2a2f4a; --line: #2e3350;
+  --fg: #e6e8f2; --fg-soft: #a5abc4; --fg-faint: #7a809a;
+  --ink: #a8b5ff; --ink-wash: #2a3366; --on-ink: #10142e;
+  --jade: #5fd3ad; --jade-wash: #133a30; --lacquer: #ff8a74; --lacquer-wash: #3d1e19;
+  --saffron: #f2b54f; --saffron-wash: #3a2c12; --spark-a: #8f9eff; --spark-b: #4fd1a8;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -12px rgba(0,0,0,.6); --focus: #a8b5ff;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12141f; --rail: #1a1d2b; --surface: #20243a; --surface-hi: #2a2f4a; --line: #2e3350;
+  --fg: #e6e8f2; --fg-soft: #a5abc4; --fg-faint: #7a809a;
+  --ink: #a8b5ff; --ink-wash: #2a3366; --on-ink: #10142e;
+  --jade: #5fd3ad; --jade-wash: #133a30; --lacquer: #ff8a74; --lacquer-wash: #3d1e19;
+  --saffron: #f2b54f; --saffron-wash: #3a2c12; --spark-a: #8f9eff; --spark-b: #4fd1a8;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -12px rgba(0,0,0,.6); --focus: #a8b5ff;
+  color-scheme: dark }
+
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.65; -webkit-font-smoothing: antialiased; overflow: hidden; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 10px; }
+.icon { width: 20px; height: 20px; flex: none; }
+.mock-note { position: fixed; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 60; font: 500 11px/1 var(--mono); letter-spacing: .04em; color: var(--fg-faint); background: var(--surface); padding: 7px 10px; border-radius: 999px; }
+
+.app { display: grid; grid-template-columns: 280px minmax(0, 1fr) auto; height: 100%; }
+
+/* ── Rail ─────────────────────────────── */
+.side { background: var(--rail); display: flex; flex-direction: column; min-height: 0; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 18px 20px 12px; }
+.brand b { font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
+.brand span { color: var(--fg-faint); font-size: 13px; }
+.new { margin: 4px 12px 14px; display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 999px; background: var(--surface-hi); color: var(--fg); font-weight: 500; width: fit-content; }
+.new:hover { background: var(--ink-wash); }
+.new kbd { font: 11px var(--mono); color: var(--fg-faint); margin-left: 6px; }
+.side-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 12px 12px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 18px; }
+.group, .features { min-width: 0; }
+.group h2 { font: 500 13px/1 var(--font); color: var(--fg-soft); margin: 6px 14px 8px; }
+.item { box-sizing: border-box; width: 100%; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: 999px; text-align: left; font-size: 14px; color: var(--fg); }
+.item:hover { background: var(--surface-hi); }
+.item[aria-current="page"] { background: var(--ink-wash); color: var(--ink); font-weight: 600; }
+.item .muted { color: var(--fg-faint); font-size: 12px; margin-left: auto; white-space: nowrap; font-weight: 400; }
+.item .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.count { margin-left: auto; background: var(--saffron-wash); color: var(--saffron); font: 600 12px/1 var(--font); padding: 5px 9px; border-radius: 999px; }
+.caret { width: 14px; display: inline-grid; place-items: center; color: var(--fg-faint); transition: transform .15s; font-size: 11px; }
+[aria-expanded="true"] > .caret { transform: rotate(90deg); }
+.features { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding-left: 18px; }
+.features[hidden] { display: none; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
+.dot.blocker { background: var(--lacquer); }
+.dot.ok { background: var(--jade); }
+.side-foot { padding: 8px 12px 12px; display: grid; gap: 2px; }
+.me { display: flex; align-items: center; gap: 12px; padding: 8px 14px; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--jade); color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 600; flex: none; }
+.me small { display: block; color: var(--fg-faint); font-size: 12px; line-height: 1.3; }
+
+/* ── Stage ────────────────────────────── */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+.top { display: flex; align-items: center; gap: 10px; padding: 12px 24px; min-height: 60px; }
+.crumbs { min-width: 0; font-size: 15px; color: var(--fg-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crumbs b { color: var(--fg); font-weight: 600; }
+.top .spacer { flex: 1; }
+.chip { font: 500 13px/1 var(--font); padding: 9px 14px; border-radius: 999px; background: var(--surface); color: var(--fg); white-space: nowrap; }
+.chip:hover { background: var(--surface-hi); }
+.chip[aria-pressed="true"] { background: var(--ink-wash); color: var(--ink); }
+.menu-btn { display: none; padding: 8px; border-radius: 999px; }
+.thread { flex: 1; overflow-y: auto; padding: 16px 24px 12px; }
+.col { max-width: 780px; margin: 0 auto; display: grid; gap: 26px; }
+.msg { display: grid; gap: 8px; }
+.msg.user { justify-items: end; }
+.msg.user .bubble { background: var(--surface); padding: 12px 18px; border-radius: 24px 6px 24px 24px; max-width: 80%; }
+.msg.ai { position: relative; padding-left: 48px; }
+.msg.ai > .spark { position: absolute; left: 0; top: 0; }
+.spark { width: 28px; height: 28px; }
+.msg.ai .who { font-size: 13px; color: var(--fg-faint); line-height: 28px; }
+.msg.ai p { margin: 0; max-width: 68ch; }
+.tool { font: 12px/1.5 var(--mono); color: var(--fg-soft); display: inline-flex; align-items: center; gap: 8px; background: var(--surface); padding: 6px 12px; border-radius: 999px; width: fit-content; }
+.tool::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--jade); }
+
+/* Greeting (new conversation) */
+.hello { max-width: 780px; margin: 9vh auto 0; display: grid; gap: 28px; }
+.hello h1 { margin: 0; font-size: clamp(32px, 5vw, 46px); line-height: 1.15; font-weight: 600; letter-spacing: -.02em; text-wrap: balance; }
+.hello h1 .grad { background: linear-gradient(90deg, var(--spark-a), var(--spark-b)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hello h1 .sub { display: block; color: var(--fg-faint); }
+.starters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.starter { text-align: left; background: var(--surface); border-radius: var(--r-m); padding: 16px; min-height: 132px; display: flex; flex-direction: column; gap: 10px; }
+.starter:hover { background: var(--surface-hi); }
+.starter span { font-size: 14px; }
+.starter small { margin-top: auto; color: var(--fg-faint); font-size: 12px; }
+
+/* Action Card */
+.card { background: var(--bg); border-radius: var(--r-m); box-shadow: var(--shadow); overflow: hidden; }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 16px 20px 6px; }
+.card-head .kind { font-size: 13px; font-weight: 600; color: var(--ink); }
+.pill { font: 600 12px/1 var(--font); padding: 5px 10px; border-radius: 999px; }
+.pill.blocker { background: var(--lacquer-wash); color: var(--lacquer); }
+.pill.state { margin-left: auto; background: var(--surface); color: var(--fg-soft); }
+.pill.state.done { background: var(--jade-wash); color: var(--jade); }
+.pill.state.wait { background: var(--saffron-wash); color: var(--saffron); }
+.card-body { padding: 8px 20px 16px; display: grid; gap: 14px; }
+.card-body h3 { margin: 0; font-size: 18px; line-height: 1.35; font-weight: 600; text-wrap: balance; }
+.choices { display: grid; gap: 8px; }
+.choice { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; padding: 12px 14px; background: var(--rail); border-radius: var(--r-s); }
+.choice .l { width: 28px; height: 28px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; font: 600 13px var(--font); color: var(--ink); }
+.choice b { font-weight: 600; }
+.choice .impact { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--fg-soft); margin-top: 4px; }
+.meta { font-size: 13px; color: var(--fg-soft); }
+.meta b { color: var(--fg); font-weight: 600; }
+.card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 20px 18px; }
+.btn { padding: 10px 20px; border-radius: 999px; font-weight: 600; font-size: 14px; background: transparent; color: var(--ink); }
+.btn:hover { background: var(--ink-wash); }
+.btn.primary { background: var(--ink); color: var(--on-ink); }
+.btn.approve { background: var(--jade); color: #fff; }
+.btn:disabled { opacity: .4; cursor: default; }
+.card-foot .hint { font-size: 12px; color: var(--fg-faint); margin-left: auto; }
+.diff { font: 13px/1.75 var(--mono); background: var(--rail); border-radius: var(--r-s); overflow-x: auto; padding: 8px 0; }
+.diff div { padding: 0 14px; white-space: pre; }
+.diff .add { background: var(--jade-wash); }
+.diff .add::before { content: "+ "; color: var(--jade); }
+.diff .ctx { color: var(--fg-soft); }
+.diff .ctx::before { content: "  "; }
+
+/* Composer */
+.composer-wrap { padding: 8px 24px calc(10px + env(safe-area-inset-bottom, 0px)); }
+.composer { max-width: 780px; margin: 0 auto; background: var(--surface); border-radius: var(--r-l); padding: 14px 12px 10px 22px; display: grid; gap: 6px; }
+.composer:focus-within { background: var(--surface-hi); }
+.composer textarea { width: 100%; border: 0; resize: none; background: transparent; color: var(--fg); font: inherit; font-size: 16px; min-height: 28px; outline: none; }
+.composer textarea::placeholder { color: var(--fg-faint); }
+.composer-row { display: flex; align-items: center; gap: 8px; }
+.composer-row .chip { background: transparent; padding: 8px 10px; }
+.composer-row .chip:hover { background: var(--bg); }
+.composer-row .scope { font-size: 12px; color: var(--fg-faint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.send { margin-left: auto; width: 40px; height: 40px; border-radius: 50%; background: var(--ink); color: var(--on-ink); display: grid; place-items: center; flex: none; }
+.suggest { max-width: 780px; margin: 0 auto 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+.disclaimer { max-width: 780px; margin: 8px auto 0; text-align: center; font-size: 12px; color: var(--fg-faint); }
+
+/* Spec sheet */
+.doc { width: 420px; padding: 12px 12px 12px 0; display: flex; min-height: 0; background: var(--bg); }
+.doc[hidden] { display: none; }
+.doc-inner { flex: 1; background: var(--rail); border-radius: var(--r-l); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.doc-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px 8px; }
+.doc-head b { font-size: 15px; }
+.doc-head .v { font-size: 12px; color: var(--jade); background: var(--jade-wash); padding: 4px 9px; border-radius: 999px; font-weight: 600; }
+.doc-head button { margin-left: auto; color: var(--fg-soft); width: 34px; height: 34px; border-radius: 50%; }
+.doc-head button:hover { background: var(--surface-hi); }
+.doc-body { overflow-y: auto; padding: 8px 24px 28px; font-size: 14px; }
+.doc-body h1 { font-size: 22px; margin: 0 0 6px; font-weight: 600; }
+.doc-body h2 { font-size: 15px; margin: 20px 0 4px; font-weight: 600; }
+.doc-body p, .doc-body li { color: var(--fg-soft); }
+.doc-body ul { padding-left: 18px; margin: 4px 0; }
+.doc-body code { font: 12.5px var(--mono); background: var(--surface); padding: 1px 6px; border-radius: 6px; }
+.doc-body .pending { background: var(--jade-wash); border-radius: 8px; padding: 4px 8px; color: var(--fg); }
+
+/* Grilling */
+.round { max-width: 780px; margin: 0 auto 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.round div { background: var(--rail); border-radius: var(--r-s); padding: 10px 14px; font-size: 14px; font-weight: 500; }
+.round div.now { background: var(--ink-wash); color: var(--ink); }
+.round small { display: block; color: var(--fg-soft); font-size: 12px; font-weight: 400; }
+.answered { font-size: 13px; color: var(--fg-soft); background: var(--rail); border-radius: var(--r-s); padding: 8px 14px; }
+
+/* ── Settings modal ───────────────────── */
+.settings { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
+.settings[hidden] { display: none; }
+.settings-top { display: flex; align-items: center; gap: 14px; padding: 14px 24px; }
+.back { display: flex; align-items: center; gap: 6px; padding: 9px 18px 9px 12px; border-radius: 999px; background: var(--surface); font-weight: 600; }
+.back:hover { background: var(--surface-hi); }
+.settings-top h1 { font-size: 20px; margin: 0; font-weight: 600; }
+.settings-top .url { margin-left: auto; font: 12px var(--mono); color: var(--fg-faint); }
+.settings-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr); }
+.settings-nav { padding: 8px 12px; display: grid; align-content: start; gap: 2px; }
+.settings-pane { overflow-y: auto; padding: 16px 40px 40px; }
+.settings-pane h2 { margin: 0 0 4px; font-size: 26px; font-weight: 600; letter-spacing: -.01em; }
+.settings-pane > p { margin: 0 0 24px; color: var(--fg-soft); max-width: 62ch; }
+.rows { background: var(--rail); border-radius: var(--r-m); max-width: 720px; padding: 6px; display: grid; gap: 2px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px 16px; border-radius: 14px; background: var(--bg); }
+.row .grow { flex: 1; min-width: 0; font-weight: 500; }
+.row small { display: block; color: var(--fg-soft); font-size: 12px; font-weight: 400; }
+.tag { font: 600 12px/1 var(--font); padding: 5px 10px; border-radius: 999px; background: var(--surface); color: var(--fg-soft); }
+.tag.ok { background: var(--jade-wash); color: var(--jade); }
+
+/* ── Narrow ───────────────────────────── */
+.scrim { display: none; }
+@media (max-width: 1180px) { .doc { position: fixed; right: 0; top: 0; bottom: 0; z-index: 30; width: min(420px, 94vw); padding: 10px; background: transparent; } .doc-inner { box-shadow: var(--shadow); background: var(--bg); } .starters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .side { position: fixed; inset: 0 auto 0 0; width: min(300px, 86vw); z-index: 40; transform: translateX(-100%); transition: transform .2s; padding-top: env(safe-area-inset-top, 0px); border-radius: 0 var(--r-l) var(--r-l) 0; }
+  .side.open { transform: none; box-shadow: var(--shadow); }
+  .scrim.show { display: block; position: fixed; inset: 0; z-index: 35; background: rgba(10, 12, 24, .35); }
+  .menu-btn { display: inline-grid; place-items: center; }
+  .top { padding: 8px 16px; }
+  .thread { padding: 8px 16px; }
+  .composer-wrap { padding-inline: 16px; }
+  .msg.ai { padding-left: 0; padding-top: 2px; }
+  .msg.ai > .spark { position: static; }
+  .round { grid-template-columns: minmax(0, 1fr); }
+  .hello { margin-top: 4vh; }
+  .starter { min-height: 104px; }
+  .settings-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .settings-nav { display: flex; overflow-x: auto; padding: 4px 16px 10px; }
+  .settings-nav .item { white-space: nowrap; width: auto; }
+  .settings-pane { padding: 12px 16px 32px; }
+  .settings-top { padding: 10px 16px; }
+  .settings-top .url, .mock-note, .disclaimer { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="sparkGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--spark-a)"/><stop offset="1" style="stop-color:var(--spark-b)"/></linearGradient>
+    <symbol id="spark" viewBox="0 0 24 24"><path fill="url(#sparkGrad)" d="M12 2c.5 4.9 2.9 8.6 10 10-7.1 1.4-9.5 5.1-10 10-.5-4.9-2.9-8.6-10-10 7.1-1.4 9.5-5.1 10-10Z"/></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <aside class="side" id="side" aria-label="Sidebar">
+    <div class="brand"><svg class="spark" aria-hidden="true"><use href="#spark"/></svg><b>Vorasaan</b><span>วรสาร</span></div>
+    <button class="new" id="newBtn" type="button">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      New conversation <kbd>⌘K</kbd>
+    </button>
+    <nav class="side-scroll">
+      <div class="group">
+        <button class="item" type="button" data-view="inbox">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 9l1.6-5.2A1 1 0 0 1 4.6 3h6.8a1 1 0 0 1 1 .8L14 9v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9Zm0 0h3.5l1 1.5h3L10.5 9H14" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          <span class="label">Inbox</span><span class="count" title="3 things wait for you">3</span>
+        </button>
+      </div>
+      <div class="group">
+        <h2>Projects</h2>
+        <button class="item" type="button" aria-expanded="true" data-toggle="p1"><span class="caret">▸</span><span class="label">Mobile Banking</span></button>
+        <div class="features" id="p1">
+          <button class="item" type="button" data-view="feature" aria-current="page"><span class="dot blocker"></span><span class="label">Async checkout</span><span class="muted">1 Blocker</span></button>
+          <button class="item" type="button" data-view="feature"><span class="dot ok"></span><span class="label">PromptPay QR</span></button>
+          <button class="item" type="button" data-view="feature"><span class="dot"></span><span class="label">Supplier payouts</span></button>
+        </div>
+        <button class="item" type="button" aria-expanded="false" data-toggle="p2"><span class="caret">▸</span><span class="label">Merchant Portal</span></button>
+        <div class="features" id="p2" hidden>
+          <button class="item" type="button" data-view="feature"><span class="dot"></span><span class="label">Settlement report</span></button>
+          <button class="item" type="button" data-view="feature"><span class="dot"></span><span class="label">Refund flow</span></button>
+        </div>
+      </div>
+      <div class="group">
+        <h2>Recent conversations</h2>
+        <button class="item" type="button" data-view="grilling"><span class="label">Grilling: Business round</span><span class="muted">Mobile Banking</span></button>
+        <button class="item" type="button" data-view="feature"><span class="label">Keep the cart after a failed payment?</span></button>
+        <button class="item" type="button" data-view="feature"><span class="label">Suggest Features for Q4</span></button>
+        <button class="item" type="button" data-view="feature"><span class="label">Draft the Spec from the Figma link</span></button>
+      </div>
+    </nav>
+    <div class="side-foot">
+      <button class="item" type="button" id="settingsBtn">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span class="label">Settings</span>
+      </button>
+      <div class="me"><span class="avatar">P</span><div>Pim<small>PO · Admin</small></div></div>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <main class="main">
+    <header class="top">
+      <button class="menu-btn" id="menuBtn" type="button" aria-label="Open the Sidebar">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+      <div class="crumbs" id="crumbs">Mobile Banking › <b>Async checkout</b></div>
+      <span class="spacer"></span>
+      <button class="chip" id="docBtn" type="button" aria-pressed="true">Spec v1</button>
+    </header>
+
+    <div class="thread" id="thread"></div>
+
+    <div class="composer-wrap">
+      <div class="suggest" id="suggest"></div>
+      <form class="composer" id="composer">
+        
+        <textarea id="msg" rows="1" aria-label="Message" placeholder="Ask about this Feature, or tell the AI what to draft…"></textarea>
+        <div class="composer-row">
+          <button class="chip" type="button">+ Attachment</button>
+          <span class="scope" id="scope">Context: Async checkout · Spec v1 · 4 Decisions · 2 Attachments</span>
+          <button class="send" type="submit" aria-label="Send">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </form>
+      <p class="disclaimer">The AI only proposes. Nothing changes until a person approves it.</p>
+    </div>
+  </main>
+
+  <aside class="doc" id="doc" aria-label="Spec">
+  <div class="doc-inner">
+    <div class="doc-head"><b>Spec</b><span class="v" id="docVer">v1 · approved by Pim</span><button type="button" id="docClose" aria-label="Close the Spec panel"><svg class="icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
+    <div class="doc-body" id="docBody">
+      <h1>Async checkout</h1>
+      <p>Stop blocking checkout on the payment provider.</p>
+      <h2>Goals</h2>
+      <ul><li>Checkout returns in under 2 s even when the provider is slow.</li><li>No double charge on retry.</li></ul>
+      <h2>Flow</h2>
+      <ul><li>Order is created as <code>PENDING_PAYMENT</code>.</li><li>A worker polls the provider every 5 s for up to 30 s.</li><li>The user is notified by push when payment settles.</li></ul>
+      <h2>Open questions</h2>
+      <ul><li>How long do we wait before treating a payment as failed?</li><li>Do we notify by push only, or also by email?</li></ul>
+      <h2 id="decHead" hidden>Decisions</h2>
+      <ul id="decList" hidden><li class="pending">Keep the cart for 30 minutes after a failed payment, so the user can retry.</li></ul>
+    </div>
+  </div>
+  </aside>
+</div>
+
+<div class="settings" id="settings" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
+  <div class="settings-top">
+    <button class="back" id="backBtn" type="button">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3 5 8l5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Back
+    </button>
+    <h1 id="settingsTitle">Settings</h1>
+    <span class="url" id="settingsUrl">/settings/members</span>
+  </div>
+  <div class="settings-body">
+    <nav class="settings-nav" id="settingsNav" aria-label="Settings sections"></nav>
+    <section class="settings-pane" id="settingsPane"></section>
+  </div>
+</div>
+
+<span class="mock-note">Mockup · fake data</span>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const thread = $('#thread'), suggest = $('#suggest');
+
+const featureThread = `
+<div class="col">
+  <div class="msg user"><div class="bubble">Payment provider timeout ทำให้ตะกร้าหาย ผู้ใช้ต้องเลือกสินค้าใหม่หมด เปิด Blocker ให้ PO ตัดสินใจหน่อย</div></div>
+  <div class="msg ai">
+    <svg class="spark" aria-hidden="true"><use href="#spark"/></svg><div class="who">Vorasaan</div>
+    <div class="tool">Read Spec v1, 4 Decisions and the PagerDuty Attachment</div>
+    <p>Spec v1 ยังไม่ได้บอกว่าตะกร้าควรเป็นอย่างไรเมื่อจ่ายเงินไม่สำเร็จ และใน Decision Log ก็ยังไม่มีเรื่องนี้ ผมร่าง Blocker ไว้ให้แล้ว ตรวจ Choices ก่อนส่งได้เลย</p>
+  </div>
+  <div class="card" id="drCard">
+    <div class="card-head"><span class="kind">Decision Request draft</span><span class="pill blocker">● Blocker</span><span class="pill state" id="drState">Draft</span></div>
+    <div class="card-body">
+      <h3>Keep the cart after a failed payment?</h3>
+      <div class="choices">
+        <div class="choice"><span class="l">A</span><div><b>Keep the cart for 30 minutes</b><div>The user can retry without rebuilding the order.</div><div class="impact"><span>Scope: cart TTL job</span><span>Time: +1 day</span><span>Risk: stale prices</span></div></div></div>
+        <div class="choice"><span class="l">B</span><div><b>Clear the cart, keep a "reorder" link</b><div>Simple, and prices are always fresh.</div><div class="impact"><span>Scope: reorder link</span><span>Time: +0.5 day</span><span>Risk: more drop-off</span></div></div></div>
+        <div class="choice"><span class="l">C</span><div><b>Keep it until the provider confirms the failure</b><div>Exact, but depends on the provider's webhook.</div><div class="impact"><span>Scope: webhook handler</span><span>Time: +3 days</span><span>Risk: provider outage</span></div></div></div>
+      </div>
+      <div class="meta">Decider: <b>PO</b> (suggested) · goes to <b>Pim</b>, the only PO for this Feature</div>
+    </div>
+    <div class="card-foot"><button class="btn primary" id="drSend" type="button">Send to Pim</button><button class="btn" type="button">Edit</button><button class="btn" type="button" id="drDiscard">Discard</button><span class="hint">Nothing is sent until you press Send</span></div>
+  </div>
+
+  <div class="msg user"><div class="bubble">Pim ตัดสินใจเลือก A แล้ว ช่วยอัปเดต Spec ให้ด้วย</div></div>
+  <div class="msg ai">
+    <svg class="spark" aria-hidden="true"><use href="#spark"/></svg><div class="who">Vorasaan</div>
+    <p>ร่าง Spec Proposal จาก Decision นี้แล้ว มีบรรทัดที่เพิ่ม 2 บรรทัด และไม่มีบรรทัดที่ลบ Pim เป็นคน Approve</p>
+  </div>
+  <div class="card" id="spCard">
+    <div class="card-head"><span class="kind">Spec Proposal</span><span class="meta">against Spec v1</span><span class="pill state" id="spState">Proposed</span></div>
+    <div class="card-body">
+      <div class="diff">
+        <div class="ctx">- Do we notify by push only, or also by email?</div>
+        <div class="add"></div>
+        <div class="add">## Decisions</div>
+        <div class="add">- Keep the cart for 30 minutes after a failed payment, so the user can retry.</div>
+      </div>
+    </div>
+    <div class="card-foot"><button class="btn approve" id="spApprove" type="button">Approve Spec change</button><button class="btn" type="button" id="spReject">Reject</button><span class="hint">Approving writes Spec v2</span></div>
+  </div>
+</div>`;
+
+const grillingThread = `
+<div class="round">
+  <div class="now">Business · PO<small>2 of 4 answered</small></div>
+  <div>UX · Designer<small>Not reached yet</small></div>
+  <div>Technical · Tech Lead<small>Not reached yet</small></div>
+</div>
+<div class="col">
+  <div class="msg ai">
+    <svg class="spark" aria-hidden="true"><use href="#spark"/></svg><div class="who">Vorasaan · Grilling</div>
+    <p>สวัสดีครับ Pim ผมอ่าน Brief, Attachments และ Features ของ Mobile Banking แล้ว เหลือคำถามรอบ Business อีก 2 ข้อที่ยังหาคำตอบไม่ได้ครับ</p>
+  </div>
+  <div class="answered">Q1 What business goals should this Project serve? Answered by Nok, 2 hours ago</div>
+  <div class="answered">Q2 Who are the target users? Answered by Nok, 2 hours ago</div>
+  <div class="msg ai"><p><b>Q3.</b> ใช้ KPI อะไรวัดว่า Project นี้ได้ผลครับ</p></div>
+  <div class="msg user"><div class="bubble">ลด failed checkout ลงครึ่งหนึ่ง</div></div>
+  <div class="msg ai">
+    <svg class="spark" aria-hidden="true"><use href="#spark"/></svg><div class="who">Follow-up 1 of 2</div>
+    <p>ตอนนี้ failed checkout อยู่ที่กี่เปอร์เซ็นต์ และอยากให้ถึงเป้าภายในเมื่อไรครับ จะได้เขียนเป็นเป้าที่วัดได้ใน Brief</p>
+  </div>
+  <div class="msg user"><div class="bubble">ตอนนี้ 8% อยากให้เหลือ 4% ภายใน Q4</div></div>
+  <div class="msg ai"><p>รับทราบครับ บันทึกเป็น <i>"Failed checkout: 8% → 4% by end of Q4"</i> แล้ว</p><p><b>Q4.</b> มีอะไรที่ตั้งใจไม่ทำใน Project นี้ไหมครับ (non-goals)</p></div>
+</div>`;
+
+const inboxThread = `
+<div class="col">
+  <div class="msg ai"><svg class="spark" aria-hidden="true"><use href="#spark"/></svg><div class="who">Inbox</div><p>3 เรื่องรอคุณอยู่</p></div>
+  <div class="card"><div class="card-head"><span class="kind">Decide</span><span class="pill blocker">● Blocker</span><span class="pill state wait">Waiting 2 h</span></div><div class="card-body"><h3>Keep the cart after a failed payment?</h3><div class="meta">Async checkout · raised by <b>Beam</b></div></div><div class="card-foot"><button class="btn primary" type="button" data-go="feature">Open</button></div></div>
+  <div class="card"><div class="card-head"><span class="kind">Answer Grilling</span><span class="pill state wait">2 questions left</span></div><div class="card-body"><h3>Business round</h3><div class="meta">Mobile Banking</div></div><div class="card-foot"><button class="btn primary" type="button" data-go="grilling">Answer in chat</button></div></div>
+  <div class="card"><div class="card-head"><span class="kind">Approve Brief Proposal</span><span class="pill state">From Repo Scan</span></div><div class="card-body"><h3>Merchant Portal Brief v3</h3><div class="meta">5 added, 1 removed</div></div><div class="card-foot"><button class="btn primary" type="button">Review</button></div></div>
+</div>`;
+
+const helloView = `
+<div class="hello">
+  <h1><span class="grad">สวัสดี Pim</span><span class="sub">วันนี้ให้ช่วยร่างอะไรดี</span></h1>
+  <div class="starters">
+    <button class="starter" type="button" data-go="feature"><span>เปิด Blocker เรื่องตะกร้าหายหลังจ่ายเงินไม่สำเร็จ</span><small>Async checkout</small></button>
+    <button class="starter" type="button" data-go="feature"><span>ร่าง Spec จากลิงก์ Figma กับ PRD ที่แนบไว้</span><small>Supplier payouts</small></button>
+    <button class="starter" type="button" data-go="grilling"><span>ตอบคำถาม Grilling รอบ Business ที่เหลือ 2 ข้อ</span><small>Mobile Banking</small></button>
+    <button class="starter" type="button" data-go="feature"><span>แนะนำ Feature ที่ช่วยลด failed checkout</span><small>Mobile Banking</small></button>
+  </div>
+</div>`;
+
+const views = {
+  new: { html: helloView, crumbs: '<b>New conversation</b>', doc: false, scope: 'Context: pick a Project or Feature, or let the AI ask', placeholder: 'บอก Vorasaan ว่าต้องการอะไร…', chips: [] },
+  feature: { html: featureThread, crumbs: 'Mobile Banking › <b>Async checkout</b>', doc: true, scope: 'Context: Async checkout · Spec v1 · 4 Decisions · 2 Attachments', placeholder: 'Ask about this Feature, or tell the AI what to draft…', chips: ['Raise a Blocker', 'Draft the Spec from the Attachments', 'Summarize open questions'] },
+  grilling: { html: grillingThread, crumbs: 'Mobile Banking › <b>Grilling · Business round</b>', doc: false, scope: 'Your answers go to the Brief Proposal, attributed to you', placeholder: 'Answer in your own words, or type "skip"…', chips: ['Skip this question'] },
+  inbox: { html: inboxThread, crumbs: '<b>Inbox</b>', doc: false, scope: 'Inbox', placeholder: 'Ask what needs you today…', chips: [] },
+};
+
+function show(name) {
+  const v = views[name];
+  thread.innerHTML = v.html;
+  $('#crumbs').innerHTML = v.crumbs;
+  $('#scope').textContent = v.scope;
+  $('#msg').placeholder = v.placeholder;
+  $('#docBtn').hidden = !v.doc;
+  $('#doc').hidden = !v.doc || $('#docBtn').getAttribute('aria-pressed') !== 'true';
+  suggest.innerHTML = v.chips.map((c) => `<button class="chip" type="button">${c}</button>`).join('');
+  thread.scrollTop = 0;
+  if (name === 'feature') wireFeature();
+  thread.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => select(b.dataset.go)));
+  closeSide();
+}
+function select(name) {
+  document.querySelectorAll('.side [aria-current]').forEach((e) => e.removeAttribute('aria-current'));
+  const first = document.querySelector(`.side [data-view="${name}"]`);
+  if (first) first.setAttribute('aria-current', 'page');
+  show(name);
+}
+function wireFeature() {
+  $('#drSend').addEventListener('click', (e) => { e.target.disabled = true; $('#drDiscard').disabled = true; const s = $('#drState'); s.textContent = 'Sent to Pim'; s.classList.add('done'); });
+  $('#spApprove').addEventListener('click', (e) => { e.target.disabled = true; $('#spReject').disabled = true; const s = $('#spState'); s.textContent = 'Approved · Spec v2'; s.classList.add('done'); $('#docVer').textContent = 'v2 · approved by Pim just now'; $('#docBtn').textContent = 'Spec v2'; $('#decHead').hidden = false; $('#decList').hidden = false; });
+  $('#spReject').addEventListener('click', (e) => { e.target.disabled = true; $('#spApprove').disabled = true; $('#spState').textContent = 'Rejected'; });
+}
+
+document.querySelectorAll('.side [data-view]').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.side [aria-current]').forEach((e) => e.removeAttribute('aria-current'));
+  b.setAttribute('aria-current', 'page');
+  show(b.dataset.view);
+}));
+document.querySelectorAll('[data-toggle]').forEach((b) => b.addEventListener('click', () => {
+  const open = b.getAttribute('aria-expanded') === 'true';
+  b.setAttribute('aria-expanded', String(!open));
+  document.getElementById(b.dataset.toggle).hidden = open;
+}));
+$('#docBtn').addEventListener('click', (e) => { const on = e.currentTarget.getAttribute('aria-pressed') !== 'true'; e.currentTarget.setAttribute('aria-pressed', String(on)); $('#doc').hidden = !on; });
+$('#docClose').addEventListener('click', () => { $('#docBtn').setAttribute('aria-pressed', 'false'); $('#doc').hidden = true; });
+$('#composer').addEventListener('submit', (e) => { e.preventDefault(); });
+$('#newBtn').addEventListener('click', () => { document.querySelectorAll('.side [aria-current]').forEach((e) => e.removeAttribute('aria-current')); show('new'); });
+
+// Mobile drawer
+const side = $('#side'), scrim = $('#scrim');
+function closeSide() { side.classList.remove('open'); scrim.classList.remove('show'); }
+$('#menuBtn').addEventListener('click', () => { side.classList.add('open'); scrim.classList.add('show'); });
+scrim.addEventListener('click', closeSide);
+
+// Settings modal
+const sections = {
+  members: { label: 'Members', url: '/settings/members', title: 'Members', intro: 'People in the Organization and their Org Role. Team Roles are set per Team.', rows: [['Pim', 'pim@acme.test', 'Admin'], ['Beam', 'beam@acme.test', 'Member'], ['Nok', 'nok@acme.test', 'Member'], ['Dana', 'dana@acme.test', 'Member']] },
+  delegations: { label: 'Delegations', url: '/settings/delegations', title: 'Delegations', intro: 'While you are away, a Delegate decides in your place. Decisions record that they acted on your behalf.', rows: [['Nok decides for you as PO', 'Checkout · 3 to 10 Oct', 'Active']] },
+  guidelines: { label: 'Feature Guidelines', url: '/settings/feature-guidelines', title: 'Feature Guidelines', intro: 'What every new Feature must serve or respect. Each Project can adjust them on its Guidelines tab.', rows: [['Moves conversion', 'Checkout conversion +2%', 'KPI'], ['PDPA compliant', 'No personal data leaves Thailand without consent', 'Constraint']] },
+  ai: { label: 'AI provider', url: '/settings/ai', title: 'AI provider', intro: 'The model the AI uses for Choices, Specs, Grilling and chat, and the embeddings model for retrieval.', rows: [['Anthropic', 'Key ends in …4f2a', 'Connected'], ['Embeddings', 'OpenAI-compatible endpoint', 'Connected']] },
+  tokens: { label: 'Access tokens', url: '/settings/tokens', title: 'Access tokens', intro: 'Tokens for the CLI and integrations. Revoke one and its sessions close at once.', rows: [['MacBook CLI', 'Last used 5 minutes ago', 'Active'], ['CI bot', 'Last used yesterday', 'Active']] },
+};
+let lastFocus = null;
+function openSettings(key = 'members') {
+  lastFocus = document.activeElement;
+  $('#settings').hidden = false;
+  renderSettings(key);
+  $('#backBtn').focus();
+}
+function closeSettings() { $('#settings').hidden = true; lastFocus?.focus(); }
+function renderSettings(key) {
+  const s = sections[key];
+  $('#settingsNav').innerHTML = Object.entries(sections).map(([k, v]) => `<button class="item" type="button" data-sec="${k}" ${k === key ? 'aria-current="page"' : ''}><span class="label">${v.label}</span></button>`).join('');
+  $('#settingsNav').querySelectorAll('[data-sec]').forEach((b) => b.addEventListener('click', () => renderSettings(b.dataset.sec)));
+  $('#settingsUrl').textContent = s.url;
+  $('#settingsPane').innerHTML = `<h2>${s.title}</h2><p>${s.intro}</p><div class="rows">${s.rows.map(([a, b, c]) => `<div class="row"><div class="grow">${a}<small>${b}</small></div><span class="tag${/Active|Connected/.test(c) ? ' ok' : ''}">${c}</span></div>`).join('')}</div>`;
+}
+$('#settingsBtn').addEventListener('click', () => openSettings());
+$('#backBtn').addEventListener('click', closeSettings);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#settings').hidden) closeSettings();
+  if (e.key === 'Tab' && !$('#settings').hidden) {
+    const f = [...$('#settings').querySelectorAll('button')];
+    if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f.at(-1).focus(); }
+    else if (!e.shiftKey && document.activeElement === f.at(-1)) { e.preventDefault(); f[0].focus(); }
+  }
+});
+
+if (matchMedia('(max-width: 1180px)').matches) $('#docBtn').setAttribute('aria-pressed', 'false');
+if (location.hash === '#settings') openSettings();
+if (location.hash === '#grilling') select('grilling'); else if (location.hash === '#new') { document.querySelectorAll('.side [aria-current]').forEach((e) => e.removeAttribute('aria-current')); show('new'); } else show('feature');
+</script>
+</body>
+</html>
