@@ -182,39 +182,39 @@ Bun, Commander.js (subcommands), **Ink** (persistent TUI), SSE client, OS notifi
 - [x] CI (GitHub Actions: lint, typecheck, test with Postgres), added once the tracer bullet has tests.
 - [x] `schema.prisma` for the MVP domain model (Prisma 7) + initial migration.
 - [x] `CONTEXT.md` glossary, ADRs 0001–0005, `CLAUDE.md`, `README.md`.
-- [ ] Scaffold `apps/web`, `apps/server`, `apps/cli` and `packages/skills` as workspace packages.
-- [ ] Zod schemas in `packages/shared` (align with Prisma enums: add `TECH_LEAD`, `DecisionRequest` replaces `BlockerPayload`).
+- [x] Scaffold `apps/web`, `apps/server`, `apps/cli` and `packages/skills` as workspace packages.
+- [x] Zod schemas in `packages/shared` (align with Prisma enums: add `TECH_LEAD`, `DecisionRequest` replaces `BlockerPayload`).
 - [x] `docker/Dockerfile.server` and `docker/Dockerfile.web`; `docker compose up` runs the whole product.
 
 ### Tracer bullet (first)
 Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → web page to decide → Spec Proposal approved → Spec v2 in the Decision Log. No auth, onboarding, TUI, recipients/Claim/Delegation, NEEDS_INFO, Attachments or SSE yet. Broken into tickets in `docs/tickets/`.
 
 ### Phase 2: MVP Backend
-- [ ] Auth (email/password, invitations, PAT) and Org/Team Role Guards.
-- [ ] `/setup` API, Project/Team/Feature CRUD, Role Owners.
-- [ ] Attachments with Snapshot + refresh (file, URL, Confluence, Jira).
-- [ ] Spec Versions, Spec Proposals, diff, revert.
-- [ ] Mastra workflows: Choice generation, decider-role suggestion, Spec Proposal drafting, Attachment summary.
-- [ ] Decision Request state machine, recipients, Claim, reassign, NEEDS_INFO thread.
-- [ ] Delegations.
-- [ ] Inbox Items (derived) + Notifications + SSE stream.
+- [x] Auth (email/password, invitations, PAT) and Org/Team Role Guards.
+- [x] `/setup` API, Project/Team/Feature CRUD, Role Owners.
+- [x] Attachments with Snapshot + refresh (file, URL, Confluence, Jira).
+- [x] Spec Versions, Spec Proposals, diff, revert.
+- [x] Mastra workflows: Choice generation, decider-role suggestion, Spec Proposal drafting, Attachment summary.
+- [x] Decision Request state machine, recipients, Claim, reassign, NEEDS_INFO thread.
+- [x] Delegations.
+- [x] Inbox Items (derived) + Notifications + SSE stream.
 
 ### Retrieval (after the MVP backend, before the Project foundation)
-- [ ] pgvector, content chunks, `EmbeddingPort` and indexing.
-- [ ] A context retriever used by every AI workflow.
+- [x] pgvector, content chunks, `EmbeddingPort` and indexing.
+- [x] A context retriever used by every AI workflow.
 
 ### Project foundation (after the MVP backend, before the MVP Web UI)
-- [ ] Project Brief with Brief Versions and Project-level Attachments.
-- [ ] Feature Guidelines (Organization default + Project override).
-- [ ] Grilling workflow, including existing Projects and the opt-in Repo Scan.
-- [ ] Feature Suggestions and the Guidelines fit check.
-- [ ] Web and CLI for all of the above.
+- [x] Project Brief with Brief Versions and Project-level Attachments.
+- [x] Feature Guidelines (Organization default + Project override).
+- [x] Grilling workflow, including existing Projects and the opt-in Repo Scan.
+- [x] Feature Suggestions and the Guidelines fit check.
+- [x] Web and CLI for all of the above.
 
 ### Phase 3: MVP Web UI
-- [ ] Setup wizard, onboarding, members & invitations.
-- [ ] Feature page: Attachments, BlockNote Spec editor, Version History with diff, Decision Log.
-- [ ] Choice Widget, Claim, and Spec Proposal approval.
-- [ ] Inbox, Delegation settings.
+- [x] Setup wizard, onboarding, members & invitations.
+- [x] Feature page: Attachments, BlockNote Spec editor, Version History with diff, Decision Log.
+- [x] Choice Widget, Claim, and Spec Proposal approval.
+- [x] Inbox, Delegation settings.
 
 ### Phase 4: MVP CLI
 - [x] PAT login, optional `vorasaan init`.

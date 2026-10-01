@@ -108,3 +108,14 @@ Goal: a Project has a shared, human-approved foundation before and alongside its
       │        │
       └─ 0033 ─┘ (Grilling and Suggestions use the latest Repo Scan if there is one)
 ```
+
+## MVP polish
+
+Follow-ups recorded during the MVP reviews.
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0038 | [POs can read the Organization's default Feature Guidelines](./0038-po-reads-org-guidelines.md) | none |
+| 0039 | [End-to-end browser tests in CI](./0039-e2e-in-ci.md) | none |
+| 0040 | [`GET /me/teams`](./0040-me-teams.md) | none |
+| 0041 | [Hardening follow-ups from the MVP reviews](./0041-hardening.md) | none |
