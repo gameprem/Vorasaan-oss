@@ -236,7 +236,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [ ] Chat view, Action Cards and the document panel (0046).
    - [ ] Grilling in the chat view (0047).
    - [ ] End-to-end tests for the chat UI (0048).
-2. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why, using the checks each Platform switches on. The AI fills or asks about the gaps.
+2. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why (Spec section, someone to ask, open Blockers, QA ready), using the checks each Platform switches on. The AI fills or asks about the gaps.
    - [ ] Platforms per Project, targeted by Features (0050).
    - [ ] Coverage per Platform, used by the AI (0051).
    - [ ] Web and CLI: Platform chips and the Coverage matrix (0052).

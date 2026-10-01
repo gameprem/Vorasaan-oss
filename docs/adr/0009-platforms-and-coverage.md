@@ -13,6 +13,9 @@ We add **Platforms**:
 - **Spec section:** the Spec has a non-empty section for the Platform.
 - **Someone to ask:** someone in the Team holds one of the Platform's Team Roles. For example Back-End maps to BACKEND, and Flutter to MOBILE.
 - **No open Blockers:** no open Blocker is about the Platform. This uses the Platform named in the Blocker's text or Choices, and becomes exact if Decision Requests are tagged later.
+- **QA ready:** the Platform's Spec section has acceptance criteria or test cases (a `###` heading such as "Acceptance criteria" or "Test cases"), and someone in the Team holds the QA Team Role.
+
+QA is a check, not a Platform. Testing applies to every Platform, so "Flutter is missing QA" is more useful than a separate QA column that can't say which Platform is untested.
 
 A template switches every check on. A Project can switch a check off for one Platform, for example "Someone to ask" for a Platform an outside agency builds.
 
@@ -21,4 +24,5 @@ The AI reads coverage: when it drafts a Spec or a Spec Proposal, it fills or ask
 ## Rejected
 - **Free-form tags on Features.** Tags would be quick to add, but nothing could say a Platform is *missing*, because no list exists to compare against.
 - **One fixed, built-in list.** Simple, but it doesn't fit a company with Flutter, or one with a separate admin web app.
+- **QA as a Platform.** A QA column would show tested or not, but not which Platform still lacks test cases.
 - **One Spec per Platform.** That would split one Feature's Decisions and history across documents, which is what ADR 0001 avoids.

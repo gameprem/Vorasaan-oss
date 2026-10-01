@@ -11,7 +11,7 @@ Each Project has its own list of Platforms, and each Feature says which of them 
 
 ## Scope
 - Prisma:
-  - `Platform` has a Project, a name, a position, its Team Roles, and its checks: `specSection`, `someoneToAsk` and `noOpenBlockers`, each a boolean.
+  - `Platform` has a Project, a name, a position, its Team Roles, and its checks: `specSection`, `someoneToAsk`, `noOpenBlockers` and `qaReady`, each a boolean.
   - `FeaturePlatform` links a Feature to the Platforms it targets.
   - `OrgPlatformTemplate` is the Organization's default list.
 - Built-in templates:
@@ -25,7 +25,7 @@ Each Project has its own list of Platforms, and each Feature says which of them 
   - `GET` and `PUT /projects/:id/platforms`: the Project's POs and Admins edit; everyone reads.
   - `GET` and `PUT /settings/platform-template`: Admins edit; every member reads.
   - `PUT /features/:id/platforms` sets a Feature's target Platforms.
-- A new Feature's Spec template gets one `## <Platform>` section per target Platform.
+- A new Feature's Spec template gets one `## <Platform>` section per target Platform, each with an empty `### Acceptance criteria` subsection.
 
 ## Acceptance criteria (test first, real Postgres)
 - [ ] A new Project gets the Organization default. Adding Flutter to one Project leaves the others unchanged.

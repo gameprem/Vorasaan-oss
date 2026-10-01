@@ -35,7 +35,7 @@ A part of the product a Feature can ship on, such as Back-End, Front-End, Mobile
 _Avoid_: Tag, label, component, stack
 
 **Coverage**:
-For each Feature and each of its target Platforms, whether that Platform is covered or missing (for example no Spec section, nobody in the Team to ask, or open Blockers), using the checks that Platform has switched on.
+For each Feature and each of its target Platforms, whether that Platform is covered or missing (for example no Spec section, nobody in the Team to ask, open Blockers, or no QA: no acceptance criteria or test cases, or nobody holding QA), using the checks that Platform has switched on.
 _Avoid_: Completeness score, progress
 
 **Role Owner**:

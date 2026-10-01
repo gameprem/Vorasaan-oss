@@ -14,7 +14,7 @@ People pick Platforms, see Coverage at a glance, and fix the gaps from where the
   - Settings modal → Platforms: edit the Organization template.
   - Project → Platforms: add, rename, reorder or remove Platforms; map Team Roles; switch checks on or off.
   - A Feature header shows one chip per target Platform: jade when covered, saffron when missing, with the reason on hover or tap.
-  - Project Coverage view: a Feature × Platform matrix, filterable to "missing only".
+  - Project Coverage view: a Feature × Platform matrix, filterable to "missing only" and by reason (for example "missing QA"), so QA can see which Platforms still need test cases.
   - In chat, the AI can propose "Add a Flutter section" as an Action Card (0043).
 - **CLI:**
   - The Features tab shows each Feature's Platform chips.
