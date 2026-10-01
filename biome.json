@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/generated", "!**/dist", "!**/.next"]
+    "includes": ["**", "!**/generated", "!**/dist", "!**/.next", "!docs/design"]
   },
   "formatter": {
     "enabled": true,

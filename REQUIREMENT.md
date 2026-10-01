@@ -221,8 +221,21 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 - [x] Ink TUI: Inbox / My Requests / Features tabs, raise a Decision Request with repo context.
 - [x] OS notifications.
 
+### MVP polish (follow-ups from the MVP reviews)
+- [x] Any Organization member reads the Feature Guidelines (0038).
+- [ ] End-to-end browser tests in CI (0039).
+- [x] `GET /me/teams` for the Delegation and CLI pickers (0040).
+- [x] Hardening: SSE ends on a revoked token, Attachment file cleanup and the orphan sweep, TUI polish (0041).
+
 ### Post-MVP (in order)
-1. **Chat-first Web UI** ([ADR 0008](./docs/adr/0008-chat-first-web-ui.md)): a Sidebar (Inbox, Projects → Features, recent Conversations, and Settings, which opens as a full-screen modal with Back) and a Conversation with the AI per Project or Feature. The AI proposes through Action Cards that a person approves, and Grilling runs as per-person Conversations with follow-ups.
+1. **Chat-first Web UI** ([ADR 0008](./docs/adr/0008-chat-first-web-ui.md)): a Sidebar (Inbox, Projects → Features, recent Conversations, and Settings, which opens as a full-screen modal with Back) and a Conversation with the AI per Project or Feature. The AI proposes through Action Cards that a person approves, and Grilling runs as per-person Conversations with follow-ups. It looks like Gemini, with the palette from ADR 0008 (mockup: `docs/design/chat-web-ui-mockup.html`).
+   - [ ] Conversations and streamed AI replies (0042).
+   - [ ] Action Cards (0043).
+   - [ ] Grilling as per-person Conversations (0044).
+   - [ ] App shell with the Sidebar and the Settings modal (0045).
+   - [ ] Chat view, Action Cards and the document panel (0046).
+   - [ ] Grilling in the chat view (0047).
+   - [ ] End-to-end tests for the chat UI (0048).
 2. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything.
 3. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec, as per-person Conversations (ADR 0008).
 4. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
