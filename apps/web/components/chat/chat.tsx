@@ -25,7 +25,7 @@ import { postJson } from '@/lib/chat-client';
 import { onConversationEvent } from '@/lib/conversation-events';
 import type { AttachmentOwner } from '@/lib/ids';
 import type { Lang } from '@/lib/lang';
-import { DocIcon, Spark } from '../icons';
+import { DocIcon, Flame } from '../icons';
 import { ActionCard } from './action-card';
 import { Composer } from './composer';
 import { type ChatDoc, DocPanel, docName } from './doc-panel';
@@ -464,7 +464,7 @@ export function Chat({
               ))}
               {sending && drafts.length === 0 && (
                 <div className="msg ai thinking">
-                  <Spark size={28} className="spark" />
+                  <Flame size={26} className="spark" />
                   <span className="who">Vorasaan is thinking…</span>
                 </div>
               )}
@@ -577,7 +577,7 @@ function AiMessage({
     <div className={first ? 'msg ai' : 'msg ai cont'}>
       {first && (
         <>
-          <Spark size={28} className="spark" />
+          <Flame size={26} className="spark" />
           <div className="who">{grilling ? 'Vorasaan · Grilling' : 'Vorasaan'}</div>
         </>
       )}

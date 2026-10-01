@@ -9,11 +9,11 @@ import {
   CloseIcon,
   GearIcon,
   InboxIcon,
+  Logo,
   MenuIcon,
   PanelIcon,
   PlusIcon,
   SentIcon,
-  Spark,
 } from './icons';
 
 // The app shell (ADR 0008): a tinted rail Sidebar on the left and the stage in the middle.
@@ -153,7 +153,7 @@ export function Shell({
             >
               <MenuIcon />
             </button>
-            <Spark size={22} />
+            <Logo size={22} />
             <b>Vorasaan</b>
           </header>
           <main id="main" tabIndex={-1}>
@@ -213,7 +213,7 @@ function Sidebar({
   return (
     <>
       <div className="brand">
-        <Spark size={24} className="spark-mark" />
+        <Logo size={26} className="spark-mark" />
         <b className="brand-name">Vorasaan</b>
         <span className="th brand-name" lang="th">
           วรสาร

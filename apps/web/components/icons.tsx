@@ -10,19 +10,50 @@ const stroke = {
   strokeLinejoin: 'round',
 } as const;
 
-/** The AI's spark, ink → jade: a proposal on its way to approval. */
-export function Spark({ size = 24, className }: IconProps & { className?: string }) {
+/**
+ * The Vorasaan mark: a person's tongs hold the AI's flame over the grill.
+ * The AI brings the heat; a person decides where it goes (ADR 0008).
+ */
+export function Logo({ size = 24, className }: IconProps & { className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden className={className}>
-      <defs>
-        <linearGradient id="spark-grad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" style={{ stopColor: 'var(--spark-a)' }} />
-          <stop offset="1" style={{ stopColor: 'var(--spark-b)' }} />
-        </linearGradient>
-      </defs>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 48 48"
+      fill="none"
+      aria-hidden
+      className={className}
+    >
+      <path d="M8 37h32M11 43h26" stroke="var(--fg)" strokeWidth={3} strokeLinecap="round" />
       <path
-        fill="url(#spark-grad)"
-        d="M12 2c.5 4.9 2.9 8.6 10 10-7.1 1.4-9.5 5.1-10 10-.5-4.9-2.9-8.6-10-10 7.1-1.4 9.5-5.1 10-10Z"
+        d="M24 30c-4.2 0-7-2.9-7-6.4 0-3.9 3.3-5.6 4.2-9.6 2.6 2 3.7 4 3.7 6 1.3-.8 2.1-2.1 2.4-3.6 2.3 1.9 3.7 4.3 3.7 7.2 0 3.6-3 6.4-7 6.4Z"
+        fill="var(--ember)"
+      />
+      <path
+        d="M24 30c-2.1 0-3.4-1.4-3.4-3.1 0-1.9 1.6-2.8 2.1-4.7 1.3 1 1.8 2 1.8 3 .7-.4 1-1 1.2-1.8 1.1.9 1.8 2.1 1.8 3.5 0 1.8-1.5 3.1-3.5 3.1Z"
+        fill="var(--saffron)"
+      />
+      <path
+        d="M42.5 4.5 27 14M45.5 7.5 31 18.5M42.5 4.5a2.3 2.3 0 0 1 3 3M27 14l-1.8 1.6M31 18.5l-1.2 2"
+        stroke="var(--ink)"
+        strokeWidth={3}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** The AI's flame from the mark, which starts each AI reply. */
+export function Flame({ size = 24, className }: IconProps & { className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="14 12 20 20" aria-hidden className={className}>
+      <path
+        d="M24 30c-4.2 0-7-2.9-7-6.4 0-3.9 3.3-5.6 4.2-9.6 2.6 2 3.7 4 3.7 6 1.3-.8 2.1-2.1 2.4-3.6 2.3 1.9 3.7 4.3 3.7 7.2 0 3.6-3 6.4-7 6.4Z"
+        fill="var(--ember)"
+      />
+      <path
+        d="M24 30c-2.1 0-3.4-1.4-3.4-3.1 0-1.9 1.6-2.8 2.1-4.7 1.3 1 1.8 2 1.8 3 .7-.4 1-1 1.2-1.8 1.1.9 1.8 2.1 1.8 3.5 0 1.8-1.5 3.1-3.5 3.1Z"
+        fill="var(--saffron)"
       />
     </svg>
   );

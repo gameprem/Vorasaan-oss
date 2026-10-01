@@ -31,16 +31,17 @@ Grilling becomes one Conversation per person, holding one of the round's Team Ro
 
 ## Visual design
 
-The look follows Gemini: no hard borders, surfaces told apart by tone, pill-shaped buttons and list items, a large rounded composer, AI replies without a bubble (a spark marks them), and a greeting with starter cards on a new Conversation. The colours come from the name: วรสาร is a journal, a record that people sign off.
+The look follows Gemini: no hard borders, surfaces told apart by tone, pill-shaped buttons and list items, a large rounded composer, AI replies without a bubble (the AI's flame marks them), and a greeting with starter cards on a new Conversation. The colours come from the name: วรสาร is a journal, a record that people sign off.
 
 | Token | Meaning | Used for |
 | --- | --- | --- |
 | Ink (indigo-blue) | What the AI writes and proposes | Primary buttons, the selected item, Action Card titles |
 | Jade | Approved, written into the record | Approve, "approved" badges, a new Spec Version |
 | Lacquer (seal red) | Blockers, removed lines | Blocker badges and dots |
-| Saffron | Waiting on a person | The Inbox count, "waiting" badges |
+| Saffron | Waiting on a person | The Inbox count, "waiting" badges, the flame's core |
+| Ember | The AI's heat | The flame in the mark and before AI replies |
 
-The AI's spark runs from ink to jade, meaning a proposal on its way to approval. The type is Figtree with Anuphan for Thai. Both light and dark themes are designed. The reference is the clickable mockup in [`docs/design/chat-web-ui-mockup.html`](../design/chat-web-ui-mockup.html); its `:root` block holds the tokens.
+**The mark** is a grill, after Grilling: a person's ink tongs hold the AI's flame (ember with a saffron core) over the grate. The AI brings the heat; a person decides where it goes. It replaced an early four-point spark that looked too much like Gemini's. AI replies carry the flame alone. The greeting's gradient still runs from ink to jade, meaning a proposal on its way to approval. The type is Figtree with Anuphan for Thai. Both light and dark themes are designed. The reference is the clickable mockup in [`docs/design/chat-web-ui-mockup.html`](../design/chat-web-ui-mockup.html); its `:root` block holds the tokens.
 
 ## Consequences
 

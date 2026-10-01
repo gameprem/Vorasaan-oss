@@ -11,7 +11,7 @@ import {
 } from '@vorasaan/shared';
 import { Fragment } from 'react';
 import type { Lang } from '@/lib/lang';
-import { Spark } from '../icons';
+import { Flame } from '../icons';
 import { GRILLING_UI } from './grilling-copy';
 import { Markdown } from './markdown';
 
@@ -193,15 +193,15 @@ export function GrillingMessage({
             </div>
           );
         }
-        const withSpark = spark;
+        const withFlame = spark;
         spark = false;
         const followUp = b.notes[0]?.kind === 'FOLLOW_UP' ? b.notes[0] : null;
         return (
           // biome-ignore lint/suspicious/noArrayIndexKey: a stored message's notes never change
-          <div key={i} className={withSpark ? 'msg ai' : 'msg ai cont'} lang={lang}>
-            {withSpark ? (
+          <div key={i} className={withFlame ? 'msg ai' : 'msg ai cont'} lang={lang}>
+            {withFlame ? (
               <>
-                <Spark size={28} className="spark" />
+                <Flame size={26} className="spark" />
                 <div className="who">
                   {followUp?.kind === 'FOLLOW_UP' ? t.followUpOf(followUp.number) : t.who}
                 </div>
