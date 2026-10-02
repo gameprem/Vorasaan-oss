@@ -1,0 +1,344 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="910" height="878" viewBox="0 0 910 878" role="img" aria-label="vorasaan raise">
+<rect width="910" height="878" rx="10" fill="#151827"/>
+<rect x="0.5" y="0.5" width="909" height="877" rx="10" fill="none" stroke="#2c3150"/>
+<circle cx="20" cy="17" r="6" fill="#ff5f57"/><circle cx="40" cy="17" r="6" fill="#febc2e"/><circle cx="60" cy="17" r="6" fill="#28c840"/>
+<text x="455" y="22" fill="#8a90ad" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="13" text-anchor="middle">vorasaan raise</text>
+<g font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', 'Noto Sans Thai', monospace" font-size="14">
+<text x="18.0" y="57.1" fill="#6b7194" xml:space="preserve">┌</text>
+<text x="26.4" y="57.1" fill="#dfe3f0" textLength="865.2" lengthAdjust="spacing" xml:space="preserve">  vorasaan raise                                                                                       </text>
+<text x="18.0" y="76.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="95.1" fill="#4fd1a1" xml:space="preserve">◇</text>
+<text x="26.4" y="95.1" fill="#dfe3f0" textLength="865.2" lengthAdjust="spacing" xml:space="preserve">  Which Feature?                                                                                       </text>
+<text x="18.0" y="114.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="43.2" y="114.1" fill="#dfe3f0" opacity="0.6" textLength="176.4" lengthAdjust="spacing" xml:space="preserve">PromptPay QR payments</text>
+<text x="18.0" y="133.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="152.1" fill="#4fd1a1" xml:space="preserve">◇</text>
+<text x="26.4" y="152.1" fill="#dfe3f0" textLength="865.2" lengthAdjust="spacing" xml:space="preserve">  What kind of Decision Request?                                                                       </text>
+<text x="18.0" y="171.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="43.2" y="171.1" fill="#dfe3f0" opacity="0.6" textLength="67.2" lengthAdjust="spacing" xml:space="preserve">Question</text>
+<text x="18.0" y="190.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="209.1" fill="#4fd1a1" xml:space="preserve">◇</text>
+<text x="26.4" y="209.1" fill="#dfe3f0" textLength="865.2" lengthAdjust="spacing" xml:space="preserve">  Title                                                                                                </text>
+<text x="18.0" y="228.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="43.2" y="228.1" fill="#dfe3f0" opacity="0.6" textLength="327.6" lengthAdjust="spacing" xml:space="preserve">Show the name in the QR or the merchant</text>
+<text x="370.8" y="228.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">’</text>
+<text x="379.2" y="228.1" fill="#dfe3f0" opacity="0.6" textLength="151.2" lengthAdjust="spacing" xml:space="preserve">s registered name?</text>
+<text x="18.0" y="247.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="266.1" fill="#4fd1a1" xml:space="preserve">◇</text>
+<text x="26.4" y="266.1" fill="#dfe3f0" textLength="865.2" lengthAdjust="spacing" xml:space="preserve">  Describe it (what you found, what is blocked)                                                        </text>
+<text x="18.0" y="285.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="43.2" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="84.0" lengthAdjust="spacing" xml:space="preserve">Tag 30 QR </text>
+<text x="127.2" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">มี</text>
+<text x="135.6" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">ชื่</text>
+<text x="144.0" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">อ</text>
+<text x="152.4" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">ร้</text>
+<text x="160.8" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">า</text>
+<text x="169.2" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">น</text>
+<text x="177.6" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">อ</text>
+<text x="186.0" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">ยู่</text>
+<text x="194.4" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">ใ</text>
+<text x="202.8" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">น</text>
+<text x="211.2" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="33.6" lengthAdjust="spacing" xml:space="preserve"> QR </text>
+<text x="244.8" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">แ</text>
+<text x="253.2" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">ต่</text>
+<text x="261.6" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">ชื่</text>
+<text x="270.0" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">อ</text>
+<text x="278.4" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">ที่</text>
+<text x="286.8" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">จ</text>
+<text x="295.2" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">ด</text>
+<text x="303.6" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">ท</text>
+<text x="312.0" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">ะ</text>
+<text x="320.4" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">เ</text>
+<text x="328.8" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">บี</text>
+<text x="337.2" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">ย</text>
+<text x="345.6" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">น</text>
+<text x="354.0" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">กั</text>
+<text x="362.4" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">บ</text>
+<text x="370.8" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="50.4" lengthAdjust="spacing" xml:space="preserve"> ITMX </text>
+<text x="421.2" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">อ</text>
+<text x="429.6" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">า</text>
+<text x="438.0" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">จ</text>
+<text x="446.4" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">ไ</text>
+<text x="454.8" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">ม่</text>
+<text x="463.2" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">ต</text>
+<text x="471.6" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">ร</text>
+<text x="480.0" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">ง</text>
+<text x="488.4" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">กั</text>
+<text x="496.8" y="285.1" fill="#dfe3f0" opacity="0.6" xml:space="preserve">น</text>
+<text x="505.2" y="285.1" fill="#dfe3f0" opacity="0.6" textLength="386.4" lengthAdjust="spacing" xml:space="preserve">. Which one goes on the confirm screen and the</text>
+<text x="18.0" y="304.1" fill="#dfe3f0" opacity="0.6" textLength="67.2" lengthAdjust="spacing" xml:space="preserve"> e-slip?</text>
+<text x="18.0" y="323.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="342.1" fill="#4fd1a1" xml:space="preserve">◇</text>
+<text x="26.4" y="342.1" fill="#dfe3f0" textLength="865.2" lengthAdjust="spacing" xml:space="preserve">  Choices drafted                                                                                      </text>
+<text x="18.0" y="361.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="380.1" fill="#4fd1a1" xml:space="preserve">◇</text>
+<text x="26.4" y="380.1" fill="#dfe3f0" textLength="84.0" lengthAdjust="spacing" xml:space="preserve">  Choices </text>
+<text x="110.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="118.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="127.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="135.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="144.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="152.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="160.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="169.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="177.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="186.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="194.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="202.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="211.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="219.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="228.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="236.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="244.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="253.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="261.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="270.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="278.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="286.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="295.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="303.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="312.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="320.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="328.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="337.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="345.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="354.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="362.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="370.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="379.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="387.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="396.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="404.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="412.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="421.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="429.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="438.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="446.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="454.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="463.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="471.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="480.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="488.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="496.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="505.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="513.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="522.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="530.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="538.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="547.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="555.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="564.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="572.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="580.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="589.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="597.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="606.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="614.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="622.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="631.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="639.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="648.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="656.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="664.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="673.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="681.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="690.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="698.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="706.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="715.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="723.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="732.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="740.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="748.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="757.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="765.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="774.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="782.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="790.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="799.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="807.6" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="816.0" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="824.4" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="832.8" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="841.2" y="380.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="849.6" y="380.1" fill="#6b7194" xml:space="preserve">╮</text>
+<text x="18.0" y="399.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="849.6" y="399.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="418.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="418.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">  A. The registered name from the ITMX lookup                                                     </text>
+<text x="849.6" y="418.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="437.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="437.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">     Look the merchant up before confirm and show the masked registered name, as for a transfer.  </text>
+<text x="849.6" y="437.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="456.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="456.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">     scope: One lookup call before the confirm screen                                             </text>
+<text x="849.6" y="456.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="475.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="475.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">     time:  +1 day                                                                                </text>
+<text x="849.6" y="475.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="494.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="494.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">     risk:  Low: adds about 300 ms before confirm                                                 </text>
+<text x="849.6" y="494.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="513.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="849.6" y="513.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="532.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="532.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">  B. The name in the QR (Tag 59)                                                                  </text>
+<text x="849.6" y="532.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="551.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="551.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">     No extra call: show the name the merchant printed in the QR.                                 </text>
+<text x="849.6" y="551.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="570.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="570.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">     scope: None                                                                                  </text>
+<text x="849.6" y="570.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="589.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="589.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">     time:  None                                                                                  </text>
+<text x="849.6" y="589.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="608.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="608.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">     risk:  High: a fake QR can show any name                                                     </text>
+<text x="849.6" y="608.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="627.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="849.6" y="627.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="646.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="646.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">  C. Both: the QR name, the registered name below it                                              </text>
+<text x="849.6" y="646.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="665.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="665.1" fill="#dfe3f0" textLength="92.4" lengthAdjust="spacing" xml:space="preserve">     Show &quot;</text>
+<text x="118.8" y="665.1" fill="#dfe3f0" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">ร้</text>
+<text x="127.2" y="665.1" fill="#dfe3f0" xml:space="preserve">า</text>
+<text x="135.6" y="665.1" fill="#dfe3f0" xml:space="preserve">น</text>
+<text x="144.0" y="665.1" fill="#dfe3f0" textLength="8.4" lengthAdjust="spacing" xml:space="preserve">ป้</text>
+<text x="152.4" y="665.1" fill="#dfe3f0" xml:space="preserve">า</text>
+<text x="160.8" y="665.1" fill="#dfe3f0" xml:space="preserve">แ</text>
+<text x="169.2" y="665.1" fill="#dfe3f0" xml:space="preserve">ด</text>
+<text x="177.6" y="665.1" fill="#dfe3f0" xml:space="preserve">ง</text>
+<text x="186.0" y="665.1" fill="#dfe3f0" textLength="67.2" lengthAdjust="spacing" xml:space="preserve">&quot; with &quot;</text>
+<text x="253.2" y="665.1" fill="#dfe3f0" xml:space="preserve">น</text>
+<text x="261.6" y="665.1" fill="#dfe3f0" xml:space="preserve">า</text>
+<text x="270.0" y="665.1" fill="#dfe3f0" xml:space="preserve">ง</text>
+<text x="286.8" y="665.1" fill="#dfe3f0" xml:space="preserve">แ</text>
+<text x="295.2" y="665.1" fill="#dfe3f0" xml:space="preserve">ด</text>
+<text x="303.6" y="665.1" fill="#dfe3f0" xml:space="preserve">ง</text>
+<text x="320.4" y="665.1" fill="#dfe3f0" xml:space="preserve">ใ</text>
+<text x="328.8" y="665.1" fill="#dfe3f0" textLength="520.8" lengthAdjust="spacing" xml:space="preserve">***&quot; under it.                                                </text>
+<text x="849.6" y="665.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="684.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="684.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">     scope: Confirm screen layout                                                                 </text>
+<text x="849.6" y="684.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="703.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="703.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">     time:  +2 days                                                                               </text>
+<text x="849.6" y="703.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="722.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="26.4" y="722.1" fill="#dfe3f0" textLength="823.2" lengthAdjust="spacing" xml:space="preserve">     risk:  Low: a longer screen on small phones                                                  </text>
+<text x="849.6" y="722.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="741.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="849.6" y="741.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="760.1" fill="#6b7194" xml:space="preserve">├</text>
+<text x="26.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="34.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="43.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="51.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="60.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="68.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="76.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="85.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="93.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="102.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="110.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="118.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="127.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="135.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="144.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="152.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="160.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="169.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="177.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="186.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="194.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="202.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="211.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="219.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="228.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="236.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="244.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="253.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="261.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="270.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="278.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="286.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="295.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="303.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="312.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="320.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="328.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="337.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="345.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="354.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="362.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="370.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="379.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="387.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="396.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="404.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="412.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="421.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="429.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="438.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="446.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="454.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="463.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="471.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="480.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="488.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="496.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="505.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="513.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="522.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="530.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="538.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="547.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="555.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="564.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="572.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="580.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="589.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="597.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="606.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="614.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="622.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="631.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="639.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="648.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="656.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="664.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="673.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="681.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="690.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="698.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="706.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="715.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="723.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="732.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="740.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="748.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="757.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="765.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="774.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="782.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="790.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="799.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="807.6" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="816.0" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="824.4" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="832.8" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="841.2" y="760.1" fill="#6b7194" xml:space="preserve">─</text>
+<text x="849.6" y="760.1" fill="#6b7194" xml:space="preserve">╯</text>
+<text x="18.0" y="779.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="798.1" fill="#4fd1a1" xml:space="preserve">◇</text>
+<text x="26.4" y="798.1" fill="#dfe3f0" textLength="865.2" lengthAdjust="spacing" xml:space="preserve">  Send to the PO?                                                                                      </text>
+<text x="18.0" y="817.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="43.2" y="817.1" fill="#dfe3f0" opacity="0.6" textLength="84.0" lengthAdjust="spacing" xml:space="preserve">Send to PO</text>
+<text x="18.0" y="836.1" fill="#6b7194" xml:space="preserve">│</text>
+<text x="18.0" y="855.1" fill="#6b7194" xml:space="preserve">└</text>
+<text x="26.4" y="855.1" fill="#dfe3f0" textLength="865.2" lengthAdjust="spacing" xml:space="preserve">  Sent to Mint Chaiyaporn, Pim Wongsakul (PO). Request 3b01eb09-c9bd-453a-88b0-fa1346980ae0            </text>
+</g>
+</svg>

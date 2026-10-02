@@ -1,6 +1,16 @@
-import { Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import type { User } from '@vorasaan/db';
-import { CurrentUser } from '../dev-identity/dev-user.guard.ts';
+import { RevertSpecInput, SpecDiffQuery } from '@vorasaan/shared';
+import { CurrentUser } from '../auth/identity.guard.ts';
 import { SpecService } from './spec.service.ts';
 
 @Controller()
@@ -22,9 +32,37 @@ export class SpecController {
     return this.spec.reject(user, id);
   }
 
+  @Post('features/:id/spec-proposals/from-attachments')
+  proposeFromAttachments(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.spec.proposeFromAttachments(user, id);
+  }
+
   @Get('features/:id/spec-versions')
   versions(@Param('id', ParseUUIDPipe) id: string) {
     return this.spec.listVersions(id);
+  }
+
+  @Get('features/:id/spec-versions/:version')
+  version(@Param('id', ParseUUIDPipe) id: string, @Param('version', ParseIntPipe) version: number) {
+    return this.spec.getVersion(id, version);
+  }
+
+  @Post('features/:id/spec-versions/:version/revert')
+  revert(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('version', ParseIntPipe) version: number,
+    @Body({ schema: RevertSpecInput }) body: RevertSpecInput,
+  ) {
+    return this.spec.revert(user, id, version, body);
+  }
+
+  @Get('features/:id/spec-diff')
+  diff(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query({ schema: SpecDiffQuery }) query: SpecDiffQuery,
+  ) {
+    return this.spec.diff(id, query.from, query.to);
   }
 
   @Get('features/:id/decision-log')

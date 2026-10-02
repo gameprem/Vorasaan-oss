@@ -30,14 +30,14 @@ export function DecideForm({ requestId, choices }: { requestId: string; choices:
         </legend>
 
         {choices.length > 0 && (
-          <div className="mt-4 overflow-hidden rounded-xl border border-rule bg-sheet">
+          <div className="mt-4 overflow-hidden rounded-card bg-rail">
             {choices.map((c) => {
               const active = selected === c.id;
               return (
                 <label
                   key={c.id}
-                  className={`flex cursor-pointer gap-4 border-b border-rule p-5 last:border-b-0 transition-colors ${
-                    active ? 'bg-jade-wash' : 'hover:bg-paper'
+                  className={`flex cursor-pointer gap-4 border-b-2 border-bg p-5 last:border-b-0 transition-colors ${
+                    active ? 'bg-jade-wash' : 'hover:bg-surface-hi'
                   }`}
                 >
                   <input
@@ -50,30 +50,30 @@ export function DecideForm({ requestId, choices }: { requestId: string; choices:
                   />
                   <span
                     aria-hidden
-                    className={`flex size-11 shrink-0 items-center justify-center rounded-full border-2 text-xl font-semibold ${
-                      active ? 'border-jade bg-jade text-sheet' : 'border-rule text-ink-soft'
+                    className={`flex size-11 shrink-0 items-center justify-center rounded-full text-xl font-semibold ${
+                      active ? 'bg-jade text-on-ink' : 'bg-bg text-ink'
                     }`}
                   >
                     {c.label}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-semibold text-ink">
+                    <span className="block font-semibold text-fg">
                       <span className="sr-only">Choice {c.label}: </span>
                       {c.title}
                     </span>
-                    <span className="mt-1 block max-w-[68ch] text-ink-soft">{c.description}</span>
+                    <span className="mt-1 block max-w-[68ch] text-fg-soft">{c.description}</span>
                     <dl className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
                       <div>
-                        <dt className="text-ink-soft">Scope</dt>
-                        <dd className="text-ink">{c.impactScope}</dd>
+                        <dt className="text-fg-soft">Scope</dt>
+                        <dd className="text-fg">{c.impactScope}</dd>
                       </div>
                       <div>
-                        <dt className="text-ink-soft">Time</dt>
-                        <dd className="text-ink">{c.impactTime}</dd>
+                        <dt className="text-fg-soft">Time</dt>
+                        <dd className="text-fg">{c.impactTime}</dd>
                       </div>
                       <div>
-                        <dt className="text-ink-soft">Risk</dt>
-                        <dd className="text-ink">{c.impactRisk}</dd>
+                        <dt className="text-fg-soft">Risk</dt>
+                        <dd className="text-fg">{c.impactRisk}</dd>
                       </div>
                     </dl>
                   </span>
@@ -85,7 +85,7 @@ export function DecideForm({ requestId, choices }: { requestId: string; choices:
 
         <div className="mt-4">
           {choices.length > 0 && (
-            <label className="flex cursor-pointer items-center gap-2 text-ink-soft">
+            <label className="flex cursor-pointer items-center gap-2 text-fg-soft">
               <input
                 type="radio"
                 name="choice"
@@ -106,7 +106,7 @@ export function DecideForm({ requestId, choices }: { requestId: string; choices:
                 rows={3}
                 aria-label="Your answer"
                 placeholder="What should the team do?"
-                className="mt-3 w-full max-w-[72ch] rounded-lg border border-rule bg-sheet p-3 text-ink"
+                className="mt-3 w-full max-w-[72ch] rounded-tile bg-surface ring-1 ring-inset ring-line p-3 text-fg"
               />
             </>
           )}
@@ -114,16 +114,16 @@ export function DecideForm({ requestId, choices }: { requestId: string; choices:
       </fieldset>
 
       <label className="mt-6 block max-w-[72ch]">
-        <span className="text-sm text-ink-soft">Why? (optional, saved in the Decision Log)</span>
+        <span className="text-sm text-fg-soft">Why? (optional, saved in the Decision Log)</span>
         <textarea
           name="rationale"
           rows={2}
-          className="mt-1 w-full rounded-lg border border-rule bg-sheet p-3 text-ink"
+          className="mt-1 w-full rounded-tile bg-surface ring-1 ring-inset ring-line p-3 text-fg"
         />
       </label>
 
       {state.error && (
-        <p role="alert" className="mt-4 text-seal">
+        <p role="alert" className="mt-4 text-lacquer">
           {state.error}
         </p>
       )}
@@ -131,12 +131,12 @@ export function DecideForm({ requestId, choices }: { requestId: string; choices:
       <button
         type="submit"
         disabled={pending || !selected}
-        className="mt-6 rounded-lg bg-ink px-5 py-2.5 font-medium text-sheet disabled:cursor-not-allowed disabled:opacity-40"
+        className="mt-6 rounded-full bg-ink px-5 py-2.5 font-semibold text-on-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {submitLabel}
       </button>
       {pending && (
-        <p className="mt-2 text-sm text-ink-soft">
+        <p className="mt-2 text-sm text-fg-soft">
           Drafting the Spec change. This can take a few seconds.
         </p>
       )}

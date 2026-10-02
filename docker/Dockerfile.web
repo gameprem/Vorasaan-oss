@@ -1,0 +1,21 @@
+# Vorasaan web app (Next.js on Bun).
+FROM oven/bun:1.4.2 AS build
+WORKDIR /app
+COPY package.json bun.lock turbo.json tsconfig.base.json ./
+COPY apps/server/package.json apps/server/
+COPY apps/web/package.json apps/web/
+COPY apps/cli/package.json apps/cli/
+COPY packages/db/package.json packages/db/
+COPY packages/shared/package.json packages/shared/
+COPY packages/skills/package.json packages/skills/
+RUN bun install --frozen-lockfile
+
+COPY packages/shared ./packages/shared
+COPY apps/web ./apps/web
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN cd apps/web && bun --bun next build
+
+ENV NODE_ENV=production PORT=3000
+EXPOSE 3000
+WORKDIR /app/apps/web
+CMD ["bun", "--bun", "next", "start", "--port", "3000"]

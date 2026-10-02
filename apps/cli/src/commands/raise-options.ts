@@ -9,6 +9,8 @@ export type RaiseFlags = {
   deciderRole?: string;
   choices?: boolean; // --no-choices sets false
   yes?: boolean;
+  diff?: boolean;
+  file?: string[];
 };
 
 export type RaiseOptions = {
@@ -20,6 +22,10 @@ export type RaiseOptions = {
   withChoices: boolean;
   /** Send without the interactive review. */
   yes: boolean;
+  /** Attach the current `git diff HEAD` as context. */
+  diff?: boolean;
+  /** Attach these repository files as context. */
+  files?: string[];
 };
 
 export class UsageError extends Error {}
@@ -43,6 +49,8 @@ export function parseRaiseFlags(flags: RaiseFlags): RaiseOptions {
     deciderRole: deciderRole as TeamRole | undefined,
     withChoices: flags.choices !== false,
     yes: flags.yes === true,
+    ...(flags.diff ? { diff: true } : {}),
+    ...(flags.file?.length ? { files: flags.file } : {}),
   };
   if (options.yes) {
     const missing = (['featureId', 'title', 'description'] as const).filter((k) => !options[k]);

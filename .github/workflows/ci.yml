@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [development, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: vorasaan
+          POSTGRES_PASSWORD: vorasaan
+          POSTGRES_DB: vorasaan
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vorasaan"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://vorasaan:vorasaan@localhost:5432/vorasaan
+      TEST_DATABASE_URL: postgresql://vorasaan:vorasaan@localhost:5432/vorasaan_test
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+      - run: bun run db:generate
+      - run: bun run check
+      # The web image runs `next build` (docker/Dockerfile.web); build here too so a
+      # prerender-time failure is caught before merge, not at install time.
+      - run: cd apps/web && bun --bun next build
+
+  # The main web flows in a real browser (ticket 0039): the server with canned AI output
+  # (VORASAAN_AI=fake) and the dev identity cookie, and the production web build.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: vorasaan
+          POSTGRES_PASSWORD: vorasaan
+          POSTGRES_DB: vorasaan_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vorasaan"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://vorasaan:vorasaan@localhost:5432/vorasaan_e2e
+      E2E_DATABASE_URL: postgresql://vorasaan:vorasaan@localhost:5432/vorasaan_e2e
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+      - run: bun run db:generate
+      - name: Migrate and seed the database
+        run: |
+          bun run --filter @vorasaan/db db:deploy
+          bun run db:seed
+      # The browser download is cached per Playwright version; the system packages are not.
+      # Both steps get a time limit and retries, since a stalled download once hung the job.
+      - name: Cache the Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Install Chromium for Playwright
+        working-directory: apps/web
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2 3; do
+            timeout 240 bunx playwright install --with-deps chromium && exit 0
+            echo "Playwright install attempt $attempt failed or stalled; retrying"
+            sleep 10
+          done
+          exit 1
+      - name: Build the web app
+        working-directory: apps/web
+        run: bun --bun next build
+      # Playwright starts the server and `next start`, waits for both, re-seeds, then runs.
+      - name: Run the end-to-end tests
+        working-directory: apps/web
+        run: bun run e2e
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 14

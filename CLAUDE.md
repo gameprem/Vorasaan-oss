@@ -11,7 +11,9 @@ Open-source "AI proposes, human approves" alignment engine. Product scope: `REQU
 ## Workflow
 
 - Work one ticket at a time from `docs/tickets/`: one ticket = one branch = one PR.
-- Branch names: `feat/NNNN-slug`, `fix/...`, `chore/...`. Never commit to `main` directly.
+- Branch from and open PRs against **`development`** (the default branch). Branch names: `feat/NNNN-slug`, `fix/...`, `chore/...`.
+- `main` only moves on an explicit release (merge `development` → `main`). Never commit to either directly.
+- This repo stays **private**. The public open-source repo will be a separate repository that receives only `main` on release, so unreleased work never leaks.
 - Keep the ticket's `status` frontmatter up to date.
 
 ## Stack & conventions
@@ -34,7 +36,7 @@ Open-source "AI proposes, human approves" alignment engine. Product scope: `REQU
 ## Commands
 
 ```bash
-docker compose up -d db     # Postgres for dev/tests
+docker compose up -d db     # Postgres for dev/tests (docker compose up -d = full stack)
 bun install
 bun run db:generate         # Prisma client
 bun run db:migrate          # create/apply migrations (dev)
@@ -44,4 +46,4 @@ bun run test
 bun run check               # all three; run before committing
 ```
 
-There is no CI yet: run `bun run check` (lint → typecheck → test, stops at the first failure) before every commit. `bun test` alone does **not** type-check.
+CI (`.github/workflows/ci.yml`) runs the same `bun run check` on every PR, but still run it (lint → typecheck → test, stops at the first failure) before every commit. `bun test` alone does **not** type-check.

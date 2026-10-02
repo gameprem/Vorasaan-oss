@@ -1,7 +1,7 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { DEV_USER_HEADER } from '../dev-identity/dev-user.guard.ts';
+import { DEV_USER_HEADER } from '../auth/identity.guard.ts';
 
-type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 /** `app.inject` bound to a user, returning status + parsed JSON. */
 export function as(app: NestFastifyApplication, userId: string) {

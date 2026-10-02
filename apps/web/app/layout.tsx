@@ -1,53 +1,80 @@
 import type { Metadata } from 'next';
-import { IBM_Plex_Mono, IBM_Plex_Sans_Thai } from 'next/font/google';
-import Link from 'next/link';
+import { Anuphan, Figtree, JetBrains_Mono } from 'next/font/google';
+import { cookies } from 'next/headers';
 import type { ReactNode } from 'react';
+import { LiveUpdates } from '@/components/live-updates';
+import { Shell, SIDEBAR_COOKIE } from '@/components/shell';
 import { UserSwitcher } from '@/components/user-switcher';
-import { api, currentUserId, type DevUser } from '@/lib/api';
+import { api, currentUser, DEV_USER_COOKIE, type DevUser, devAuth } from '@/lib/api';
+import { logout } from '@/lib/auth-actions';
+import { loadSidebar } from '@/lib/sidebar';
 import './globals.css';
+import './chat.css';
 
-const plexThai = IBM_Plex_Sans_Thai({
-  subsets: ['thai', 'latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-plex-thai',
-});
-const plexMono = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-  variable: '--font-plex-mono',
-});
+// The type from ADR 0008: Figtree, with Anuphan for Thai.
+const figtree = Figtree({ subsets: ['latin'], variable: '--font-figtree' });
+const anuphan = Anuphan({ subsets: ['thai', 'latin'], variable: '--font-anuphan' });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains-mono' });
 
 export const metadata: Metadata = {
   title: { default: 'Vorasaan', template: '%s · Vorasaan' },
   description: 'Decide once. Keep the Spec true.',
 };
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  const users = await api<DevUser[]>('/dev/users').catch(() => [] as DevUser[]);
-  const userId = await currentUserId();
+export default async function RootLayout({
+  children,
+  modal,
+}: {
+  children: ReactNode;
+  /** Settings, when opened from the app (app/@modal/(.)settings). */
+  modal: ReactNode;
+}) {
+  const jar = await cookies();
+  const me = await currentUser();
+  const dev = devAuth();
+  const devUsers = dev
+    ? await api<DevUser[]>('/dev/users', { redirectOnUnauthorized: false, anonymous: true }).catch(
+        () => [],
+      )
+    : [];
+  const devUserId = dev ? jar.get(DEV_USER_COOKIE)?.value : undefined;
+  const switcher = dev && <UserSwitcher users={devUsers} currentId={devUserId} />;
 
   return (
-    <html lang="en" className={`${plexThai.variable} ${plexMono.variable}`}>
+    <html lang="en" className={`${figtree.variable} ${anuphan.variable} ${jetbrainsMono.variable}`}>
       <body className="min-h-dvh">
-        <header className="border-b border-rule bg-sheet">
-          <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-8 gap-y-3 px-4 py-3 sm:px-6">
-            <Link href="/inbox" className="flex items-baseline gap-2 text-ink no-underline">
-              <span className="text-lg font-semibold tracking-tight">Vorasaan</span>
-              <span className="text-sm text-ink-soft" lang="th">
-                วรสาร
-              </span>
-            </Link>
-            <nav className="flex gap-5 text-sm">
-              <Link href="/inbox" className="text-ink-soft hover:text-ink">
-                Inbox
-              </Link>
-            </nav>
-            <div className="ml-auto">
-              <UserSwitcher users={users} currentId={userId} />
-            </div>
-          </div>
-        </header>
-        <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">{children}</main>
+        {me ? (
+          <Shell
+            me={me}
+            data={await loadSidebar()}
+            initiallyCollapsed={jar.get(SIDEBAR_COOKIE)?.value === 'collapsed'}
+            footer={
+              <>
+                {switcher && <div className="dev-only px-3.5 pt-1">{switcher}</div>}
+                {!devUserId && (
+                  <form action={logout} className="collapsible px-3.5">
+                    <button
+                      type="submit"
+                      className="text-sm text-fg-soft hover:text-fg hover:underline"
+                    >
+                      Sign out
+                    </button>
+                  </form>
+                )}
+                <LiveUpdates />
+              </>
+            }
+          >
+            {children}
+          </Shell>
+        ) : (
+          // Signing in, setting up or accepting an invitation: no Sidebar yet.
+          <>
+            {switcher && <header className="flex justify-end px-4 py-3">{switcher}</header>}
+            <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">{children}</main>
+          </>
+        )}
+        {modal}
       </body>
     </html>
   );

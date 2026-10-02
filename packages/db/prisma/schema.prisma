@@ -39,9 +39,29 @@ enum FeatureStatus {
 }
 
 enum IntegrationProvider {
-  ANTHROPIC
-  OPENAI_COMPATIBLE // e.g. 9Router
+  ANTHROPIC // Claude API
+  OPENAI // OpenAI API (GPT and Codex models)
+  OPENAI_COMPATIBLE // any OpenAI-compatible URL + token, e.g. 9Router
   ATLASSIAN
+  EMBEDDINGS // OpenAI-compatible embeddings endpoint for retrieval (ADR 0007)
+  LINE // LINE Messaging API channel (ADR 0011): channel access token + channel secret
+  SLACK // Slack app: bot token + signing secret
+  TEAMS // Microsoft Teams bot: app id (in appId) + password
+}
+
+// A chat app a person can link to their account (ADR 0011, ticket 0057).
+enum ChatProvider {
+  LINE
+  SLACK
+  TEAMS
+}
+
+// What a person may receive in their linked chat app (ticket 0057; cards arrive with 0058).
+enum ChatEventKind {
+  DECISION_REQUEST // a Decision Request sent to them, to decide
+  NEEDS_INFO // a request for more info on a Decision Request they raised
+  SPEC_PROPOSAL // a Spec Proposal to approve (only a link: a diff needs a real screen)
+  ESCALATION // Response Window reminders and overdue notices
 }
 
 enum AttachmentSource {
@@ -49,6 +69,7 @@ enum AttachmentSource {
   URL
   CONFLUENCE
   JIRA
+  REPO_SCAN // a Repo Scan summary sent by `vorasaan scan`; no file, can't be refreshed
 }
 
 enum SpecVersionSource {
@@ -56,6 +77,20 @@ enum SpecVersionSource {
   AI_SUMMARY // AI draft from Attachments, approved by a human
   DECISION // AI draft after a Decision, approved by the Decider
   REVERT // rolled back to an earlier version
+  CONVERSATION // AI draft from a Conversation's Action Card, approved by a human
+}
+
+enum BriefVersionSource {
+  MANUAL // edited by hand
+  GRILLING // AI draft from Grilling answers, approved by a human
+  REVERT // rolled back to an earlier version
+  CONVERSATION // AI draft from a Conversation's Action Card, approved by a human
+}
+
+enum GuidelineCriterionKind {
+  KPI // a measurable goal the Feature should move
+  CONSTRAINT // something the Feature must respect
+  REQUIRED_SECTION // a section the Feature's Spec must contain
 }
 
 enum ProposalStatus {
@@ -90,6 +125,38 @@ enum RequestMessageKind {
   NOTE
 }
 
+// What a ContentChunk was cut from.
+enum GrillingStatus {
+  RUNNING // asking a round; at most one per Project
+  DRAFTED // every round done; its Brief Proposal awaits the starter
+  CANCELLED // stopped by the starter or an Admin; no Brief Version comes of it
+}
+
+enum GrillingRoundKind {
+  BUSINESS // asked to the Project's POs
+  UX // asked to its Designers
+  TECHNICAL // asked to its Tech Leads
+}
+
+enum GrillingRoundStatus {
+  ASKING // questions wait for answers; at most one per Grilling
+  ANSWERED
+  SKIPPED
+}
+
+enum GrillingSkipReason {
+  NO_ONE_WITH_ROLE // nobody in the Project's Teams holds the round's Team Role
+  NOTHING_TO_ASK // what is already known answers the round
+  BY_STARTER // skipped by the starter or an Admin
+}
+
+enum ChunkSource {
+  ATTACHMENT // its current Snapshot
+  SPEC_VERSION // the Feature's latest Spec Version only
+  DECISION // with its Decision Request and rationale
+  BRIEF_VERSION // the Project's latest Brief Version only
+}
+
 // Informational only. Inbox Items are derived from DecisionRequest/SpecProposal state.
 enum NotificationType {
   REQUEST_DECIDED // to the Raiser
@@ -97,6 +164,46 @@ enum NotificationType {
   REQUEST_WITHDRAWN // to the Decider or recipients
   SPEC_VERSION_CREATED // to the Feature's PO Role Owners
   DELEGATION_STARTED // to the Delegate
+  REQUEST_REMINDER // escalation step 1: to the Decider, or the Recipients while nobody has Claimed it
+  REQUEST_ESCALATED // escalation step 2: to each active Delegate added as a Recipient
+  REQUEST_OVERDUE // escalation step 3: to the Raiser and the Team's Tech Leads
+}
+
+// How a Response Window is counted (ADR 0011): in working hours or working days of the
+// Organization's calendar. A working day is as long as the working hours of one day.
+enum ResponseWindowUnit {
+  WORKING_HOURS
+  WORKING_DAYS
+}
+
+// The steps of a Decision Request's escalation, written to its history (ticket 0055).
+enum RequestHistoryKind {
+  REMINDED // 1: the Recipients were reminded
+  DELEGATES_ADDED // 2: each Recipient's active Delegate became a Recipient
+  OVERDUE_REPORTED // 3: the Raiser and the Team's Tech Leads were told it is overdue
+}
+
+// How someone became the Decider of a Decision Request after it was sent (ticket 0056).
+enum DeciderChangeKind {
+  CLAIMED // a Claim, explicit or implied by asking a QUESTION or deciding
+  REASSIGNED // the Decider handed it to someone else holding the role
+}
+
+// Where a Decision was made (ticket 0058): the web app, the CLI, or a button in a Chat App.
+enum DecisionSource {
+  WEB
+  CLI
+  LINE
+  SLACK
+  TEAMS
+}
+
+// A card for a person's Chat Account (ticket 0058).
+enum ChatCardStatus {
+  PENDING // waiting for the person's Quiet Hours to end
+  SENT
+  SKIPPED // no longer relevant when its turn came (decided, withdrawn, unlinked, preference off)
+  FAILED // the chat app refused it; the Inbox still has it
 }
 
 // ─── Identity & access ──────────────────────────────────────────────────────
@@ -114,19 +221,36 @@ model User {
   roleOwnerships  RoleOwner[]
   sessions        Session[]
   accessTokens    PersonalAccessToken[]
+  chatAccounts    ChatAccount[]
+  chatLinkCodes   ChatLinkCode[]
+  chatPreference  ChatPreference?
+  chatCards       ChatCard[]
   notifications   Notification[]
   invitationsSent Invitation[]
   attachments     Attachment[]
 
-  requestsRaised     DecisionRequest[]  @relation("RequestRaiser")
-  requestsDeciding   DecisionRequest[]  @relation("RequestDecider")
-  requestsReceived   RequestRecipient[]
-  requestMessages    RequestMessage[]
-  decisionsMade      Decision[]         @relation("DecisionDecidedBy")
-  decisionsDelegated Decision[]         @relation("DecisionOnBehalfOf")
+  requestsRaised           DecisionRequest[]  @relation("RequestRaiser")
+  requestsDeciding         DecisionRequest[]  @relation("RequestDecider")
+  requestsReceived         RequestRecipient[] @relation("RecipientUser")
+  requestsReceivedOnBehalf RequestRecipient[] @relation("RecipientOnBehalfOf")
+  requestMessages          RequestMessage[]
+  decisionsMade            Decision[]         @relation("DecisionDecidedBy")
+  decisionsDelegated       Decision[]         @relation("DecisionOnBehalfOf")
+  deciderChanges           DeciderChange[]
 
   proposalsToApprove SpecProposal[] @relation("ProposalApprover")
   specVersions       SpecVersion[]  @relation("SpecVersionApprovedBy")
+
+  briefProposalsToApprove BriefProposal[] @relation("BriefProposalApprover")
+  briefVersions           BriefVersion[]  @relation("BriefVersionApprovedBy")
+
+  grillingsStarted Grilling[]         @relation("GrillingStartedBy")
+  grillingAnswers  GrillingQuestion[] @relation("GrillingAnsweredBy")
+
+  featureSuggestionsGenerated FeatureSuggestion[] @relation("FeatureSuggestionGeneratedBy")
+  featureSuggestionsDecided   FeatureSuggestion[] @relation("FeatureSuggestionDecidedBy")
+
+  conversations Conversation[] @relation("ConversationOwner")
 
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
@@ -167,10 +291,46 @@ model Organization {
   name      String
   createdAt DateTime @default(now())
 
-  memberships  OrgMembership[]
-  invitations  Invitation[]
-  integrations OrgIntegration[]
-  projects     Project[]
+  memberships    OrgMembership[]
+  invitations    Invitation[]
+  integrations   OrgIntegration[]
+  approvedModels ApprovedModel[]
+  aiTaskModels   AiTaskModel[]
+  projects       Project[]
+  chunks         ContentChunk[]
+  guidelines     GuidelineCriterion[]
+  chatAccounts   ChatAccount[]
+  chatLinkCodes  ChatLinkCode[]
+  responseWindow ResponseWindowSettings?
+  holidays       OrgHoliday[]
+}
+
+// The Organization's working calendar and default Response Windows (ADR 0011).
+// No row: the defaults (UTC, Monday to Friday 09:00-18:00, Blocker 4 working hours,
+// Question 2 working days).
+model ResponseWindowSettings {
+  organizationId     String             @id
+  timeZone           String // IANA name, e.g. Asia/Bangkok
+  workingDays        Int[] // ISO weekdays: 1 = Monday ... 7 = Sunday
+  workStartMinute    Int // minutes after local midnight, e.g. 540 = 09:00
+  workEndMinute      Int // after workStartMinute
+  blockerWindow      Int
+  blockerWindowUnit  ResponseWindowUnit
+  questionWindow     Int
+  questionWindowUnit ResponseWindowUnit
+  updatedAt          DateTime           @updatedAt
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// A public holiday the Admin maintains: no working time that day.
+model OrgHoliday {
+  id             String       @id @default(uuid())
+  organizationId String
+  date           DateTime     @db.Date
+  name           String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, date])
 }
 
 model OrgMembership {
@@ -201,33 +361,105 @@ model Invitation {
   @@index([organizationId, email])
 }
 
-// LLM provider and Atlassian credentials, set by an Admin in /setup or settings.
+// LLM providers, Atlassian and embeddings credentials, set by an Admin in /setup or settings.
 model OrgIntegration {
   id              String              @id @default(uuid())
   organizationId  String
   provider        IntegrationProvider
+  name            String? // LLM providers: the Admin's label, e.g. "Anthropic" or "Local 9Router"
   baseUrl         String?
   accountEmail    String? // Atlassian API tokens are paired with an email
+  model           String? // EMBEDDINGS: the embedding model. LLM models are Approved Models.
+  appId           String? // TEAMS: the bot's Microsoft app id (the JWT audience); not a secret
+  // Chat apps: a JSON object of the provider's secrets, encrypted as one value.
   secretEncrypted String
-  isDefaultLlm    Boolean             @default(false)
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  approvedModels  ApprovedModel[]
 
-  @@unique([organizationId, provider])
+  // An Organization may connect several LLM providers (ADR 0010), but at most one
+  // ATLASSIAN, EMBEDDINGS, LINE, SLACK and TEAMS integration (partial unique indexes
+  // in the migrations).
+  @@index([organizationId, provider])
+}
+
+// An AI model an Admin allows people to use (ADR 0010): a provider plus a model id,
+// with a name people recognize. Exactly one per Organization is the default
+// (at most one by a partial unique index in the migration; the service keeps one).
+model ApprovedModel {
+  id             String         @id @default(uuid())
+  organizationId String
+  integrationId  String // the LLM provider it runs on; a provider with models can't be deleted
+  modelId        String // the provider's model name, e.g. claude-opus-5-5
+  displayName    String // e.g. "Fast", "Best", "Local (no data leaves)"
+  note           String?
+  // How many tokens one call to it may hold, prompt and reply together (ticket 0060):
+  // prefilled for known models, else VORASAAN_CONTEXT_WINDOW; an Admin can edit it.
+  contextWindow  Int
+  position       Int
+  isDefault      Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integration    OrgIntegration @relation(fields: [integrationId], references: [id], onDelete: NoAction)
+  taskModels     AiTaskModel[]
+  conversations  Conversation[] // picked in them (ticket 0054)
+
+  @@unique([organizationId, displayName])
+  @@index([organizationId, position])
+  @@index([integrationId])
+}
+
+// The AI tasks an Admin can set a model for. Each groups one or more AI calls.
+enum AiTaskKind {
+  CHOICES // a Decision Request's Choices
+  SPEC_PROPOSAL // Spec Proposals: after a Decision, from Attachments, from a Feature Suggestion
+  SUMMARIES // Attachment summaries and Conversation summaries
+  GRILLING // Grilling questions and the Brief Proposal drafted from the answers
+  FEATURE_SUGGESTIONS
+  FIT_CHECK // a new Feature against the Feature Guidelines
+  CHAT // Conversation replies
+}
+
+// The Approved Model an AI task uses. No row: the default Approved Model.
+// Removing the model removes the row, so the task falls back to the default.
+model AiTaskModel {
+  id              String        @id @default(uuid())
+  organizationId  String
+  task            AiTaskKind
+  approvedModelId String
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  approvedModel   ApprovedModel @relation(fields: [approvedModelId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, task])
+  @@index([approvedModelId])
 }
 
 // ─── Project / Team / Feature ───────────────────────────────────────────────
 
 // A product (e.g. "Mobile Banking"). Maps to a Jira project.
 model Project {
-  id             String       @id @default(uuid())
-  organizationId String
-  name           String
-  jiraKey        String?
-  createdAt      DateTime     @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  teams          Team[]
+  id                 String               @id @default(uuid())
+  organizationId     String
+  name               String
+  jiraKey            String?
+  // The Project's own default Response Windows; null keeps the Organization's (ADR 0011).
+  blockerWindow      Int?
+  blockerWindowUnit  ResponseWindowUnit?
+  questionWindow     Int?
+  questionWindowUnit ResponseWindowUnit?
+  createdAt          DateTime             @default(now())
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  teams              Team[]
+  chunks             ContentChunk[]
+  attachments        Attachment[] // Project-level Attachments (not on a Feature)
+  briefVersions      BriefVersion[]
+  briefProposals     BriefProposal[]
+  guidelines         GuidelineCriterion[]
+  grillings          Grilling[]
+  suggestions        FeatureSuggestion[]
+  conversations      Conversation[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -263,7 +495,7 @@ model TeamMembership {
 // Someone deciding on another person's behalf for a period (e.g. leave).
 // Set by the delegator or an Admin; the Delegate must hold the same Team Role in the Team.
 model Delegation {
-  id          String   @id @default(uuid())
+  id          String        @id @default(uuid())
   teamId      String
   role        TeamRole
   delegatorId String
@@ -271,11 +503,12 @@ model Delegation {
   startsAt    DateTime
   endsAt      DateTime
   createdById String
-  createdAt   DateTime @default(now())
-  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  delegator   User     @relation("DelegationDelegator", fields: [delegatorId], references: [id], onDelete: Cascade)
-  delegate    User     @relation("DelegationDelegate", fields: [delegateId], references: [id], onDelete: Cascade)
-  createdBy   User     @relation("DelegationCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now())
+  team        Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  delegator   User          @relation("DelegationDelegator", fields: [delegatorId], references: [id], onDelete: Cascade)
+  delegate    User          @relation("DelegationDelegate", fields: [delegateId], references: [id], onDelete: Cascade)
+  createdBy   User          @relation("DelegationCreatedBy", fields: [createdById], references: [id])
+  started     Notification? // DELEGATION_STARTED, to the Delegate
 
   @@index([delegatorId, teamId, role, startsAt, endsAt])
 }
@@ -297,6 +530,9 @@ model Feature {
   specProposals    SpecProposal[]
   decisionRequests DecisionRequest[]
   notifications    Notification[]
+  chunks           ContentChunk[]
+  suggestion       FeatureSuggestion? // the Feature Suggestion it was accepted from, if any
+  conversations    Conversation[]
 
   @@index([teamId])
   @@index([jiraIssueKey])
@@ -315,11 +551,13 @@ model RoleOwner {
   @@index([userId])
 }
 
-// External docs aggregated on the Feature page. Content is snapshotted so the AI
-// can use it as context; "Refresh" re-fetches.
+// External docs on a Feature or on a Project (exactly one of featureId/projectId
+// is set; a CHECK constraint in the migration enforces it). Content is
+// snapshotted so the AI can use it as context; "Refresh" re-fetches.
 model Attachment {
   id           String           @id @default(uuid())
-  featureId    String
+  featureId    String?
+  projectId    String?
   source       AttachmentSource
   title        String
   url          String?
@@ -327,12 +565,15 @@ model Attachment {
   mimeType     String?
   snapshotText String?
   snapshotAt   DateTime?
+  summary      String? // AI summary of the Snapshot; null when none or the AI call failed
   addedById    String
   createdAt    DateTime         @default(now())
-  feature      Feature          @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  feature      Feature?         @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  project      Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   addedBy      User             @relation(fields: [addedById], references: [id])
 
   @@index([featureId])
+  @@index([projectId])
 }
 
 // ─── Spec ───────────────────────────────────────────────────────────────────
@@ -371,6 +612,12 @@ model SpecProposal {
   approverId       String // the Decider for DECISION, the requesting PO for AI_SUMMARY
   decisionId       String?           @unique
   reviewedAt       DateTime?
+  // The model that drafted it in a Conversation (ticket 0054), as it was then: the
+  // Approved Model (a plain id, so the record outlives it), its display name and
+  // the provider's model id (or the env "provider/model"). Null when drafted elsewhere.
+  approvedModelId  String?
+  modelDisplayName String?
+  modelName        String?
   createdAt        DateTime          @default(now())
   feature          Feature           @relation(fields: [featureId], references: [id], onDelete: Cascade)
   baseVersion      SpecVersion?      @relation("ProposalBase", fields: [baseVersionId], references: [id])
@@ -382,6 +629,59 @@ model SpecProposal {
   @@index([featureId, status])
 }
 
+// ─── Project Brief (ADR 0006) ─────────────────────────────────────────────────
+
+// Immutable. The highest version is the current Project Brief; a Project with no
+// Brief Version shows the empty template as "v0".
+model BriefVersion {
+  id             String             @id @default(uuid())
+  projectId      String
+  version        Int
+  markdown       String
+  source         BriefVersionSource
+  summary        String? // one-line "what changed"
+  approvedById   String
+  proposalId     String?            @unique
+  revertedFromId String?
+  createdAt      DateTime           @default(now())
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  approvedBy     User               @relation("BriefVersionApprovedBy", fields: [approvedById], references: [id])
+  proposal       BriefProposal?     @relation("BriefProposalResult", fields: [proposalId], references: [id])
+  revertedFrom   BriefVersion?      @relation("BriefRevert", fields: [revertedFromId], references: [id])
+  reverts        BriefVersion[]     @relation("BriefRevert")
+  basedProposals BriefProposal[]    @relation("BriefProposalBase")
+
+  @@unique([projectId, version])
+}
+
+// A drafted change to the Project Brief (e.g. from Grilling), awaiting approval.
+model BriefProposal {
+  id               String             @id @default(uuid())
+  projectId        String
+  baseVersionId    String? // null when drafting the first version
+  source           BriefVersionSource
+  proposedMarkdown String
+  summary          String? // one-line "what changed", copied to the Brief Version on approval
+  status           ProposalStatus     @default(PENDING)
+  approverId       String
+  reviewedAt       DateTime?
+  // The model that drafted it in a Conversation (ticket 0054), as it was then: the
+  // Approved Model (a plain id, so the record outlives it), its display name and
+  // the provider's model id (or the env "provider/model"). Null when drafted elsewhere.
+  approvedModelId  String?
+  modelDisplayName String?
+  modelName        String?
+  createdAt        DateTime           @default(now())
+  project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  baseVersion      BriefVersion?      @relation("BriefProposalBase", fields: [baseVersionId], references: [id])
+  approver         User               @relation("BriefProposalApprover", fields: [approverId], references: [id])
+  resultVersion    BriefVersion?      @relation("BriefProposalResult")
+  grilling         Grilling?
+
+  @@index([approverId, status])
+  @@index([projectId, status])
+}
+
 // ─── Decision Requests ──────────────────────────────────────────────────────
 
 // A Blocker or a Question. Inbox Items derive from it:
@@ -389,33 +689,50 @@ model SpecProposal {
 //   OPEN + deciderId null + I'm a recipient     -> claim / decide
 //   NEEDS_INFO + raiserId = me                  -> answer
 model DecisionRequest {
-  id            String                @id @default(uuid())
-  featureId     String
-  kind          DecisionRequestKind
-  withChoices   Boolean               @default(true) // false: plain-text Question
-  raiserId      String
-  title         String
-  description   String
-  suggestedRole TeamRole? // AI suggestion
-  deciderRole   TeamRole // confirmed by the Raiser
-  deciderId     String? // null until Claimed when sent to several recipients
-  status        DecisionRequestStatus @default(DRAFT)
-  submittedAt   DateTime?
-  closedAt      DateTime?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  feature       Feature               @relation(fields: [featureId], references: [id], onDelete: Cascade)
-  raiser        User                  @relation("RequestRaiser", fields: [raiserId], references: [id])
-  decider       User?                 @relation("RequestDecider", fields: [deciderId], references: [id])
+  id                      String                @id @default(uuid())
+  featureId               String
+  kind                    DecisionRequestKind
+  withChoices             Boolean               @default(true) // false: plain-text Question
+  raiserId                String
+  title                   String
+  description             String
+  suggestedRole           TeamRole? // AI suggestion
+  deciderRole             TeamRole // confirmed by the Raiser
+  deciderId               String? // null until Claimed when sent to several recipients
+  status                  DecisionRequestStatus @default(DRAFT)
+  submittedAt             DateTime?
+  closedAt                DateTime?
+  // Response Window (ADR 0011, ticket 0055). Set on submit: the window in working
+  // minutes and when it runs out. While NEEDS_INFO the clock is paused (`pausedAt`);
+  // the answer moves `dueAt` later by the working time spent waiting.
+  responseWindowMinutes   Int?
+  dueAt                   DateTime?
+  pausedAt                DateTime?
+  // How far escalation has gone: 0 none, 1 reminded, 2 Delegates added, 3 overdue reported.
+  escalationStep          Int                   @default(0)
+  // The model that drafted its AI Choices in a Conversation (ticket 0054), as it
+  // was then (see SpecProposal). Null when raised elsewhere.
+  choicesApprovedModelId  String?
+  choicesModelDisplayName String?
+  choicesModelName        String?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  feature                 Feature               @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  raiser                  User                  @relation("RequestRaiser", fields: [raiserId], references: [id])
+  decider                 User?                 @relation("RequestDecider", fields: [deciderId], references: [id])
 
-  recipients    RequestRecipient[]
-  contexts      RequestContext[]
-  choices       Choice[]
-  messages      RequestMessage[]
-  decision      Decision?
-  notifications Notification[]
+  recipients     RequestRecipient[]
+  contexts       RequestContext[]
+  choices        Choice[]
+  messages       RequestMessage[]
+  decision       Decision?
+  notifications  Notification[]
+  history        RequestHistoryEntry[]
+  deciderChanges DeciderChange[]
+  chatCards      ChatCard[]
 
   @@index([featureId, kind, status])
+  @@index([status, dueAt])
   @@index([deciderId, status])
   @@index([raiserId, status])
 }
@@ -423,14 +740,45 @@ model DecisionRequest {
 // Who the Raiser sent the request to (one Role Owner, or all of them for the role).
 // Resolved through active Delegations at send time.
 model RequestRecipient {
-  id        String          @id @default(uuid())
-  requestId String
-  userId    String
-  request   DecisionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String          @id @default(uuid())
+  requestId    String
+  userId       String
+  onBehalfOfId String? // the delegator, when this recipient replaced them as their Delegate
+  request      DecisionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user         User            @relation("RecipientUser", fields: [userId], references: [id], onDelete: Cascade)
+  onBehalfOf   User?           @relation("RecipientOnBehalfOf", fields: [onBehalfOfId], references: [id], onDelete: SetNull)
 
   @@unique([requestId, userId])
   @@index([userId])
+  @@index([onBehalfOfId])
+}
+
+// One escalation step of a Decision Request, at most once each (ticket 0055).
+// `people` snapshots who was reminded, added or told, as [{ id, name }].
+model RequestHistoryEntry {
+  id        String             @id @default(uuid())
+  requestId String
+  kind      RequestHistoryKind
+  people    Json
+  createdAt DateTime
+  request   DecisionRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, kind])
+}
+
+// Each time a sent Decision Request got a new Decider, and when (ticket 0056). Decision
+// Lead Time attributes the wait to the routed Recipients until the first one, then to
+// whoever it names. A request may be Claimed or reassigned several times.
+model DeciderChange {
+  id        String            @id @default(uuid())
+  requestId String
+  deciderId String // the new Decider
+  kind      DeciderChangeKind
+  createdAt DateTime
+  request   DecisionRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  decider   User              @relation(fields: [deciderId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
 }
 
 // Local context sent from the CLI (--file, --diff) or pasted text.
@@ -485,6 +833,7 @@ model Decision {
   choiceId     String?
   customAnswer String?
   rationale    String?
+  source       DecisionSource  @default(WEB) // the web app, the CLI or a Chat App button
   createdAt    DateTime        @default(now())
   request      DecisionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   decidedBy    User            @relation("DecisionDecidedBy", fields: [decidedById], references: [id])
@@ -503,12 +852,375 @@ model Notification {
   featureId     String?
   requestId     String?
   specVersionId String?
+  delegationId  String?          @unique // DELEGATION_STARTED only: one per Delegation, written lazily
   readAt        DateTime?
   createdAt     DateTime         @default(now())
   user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   feature       Feature?         @relation(fields: [featureId], references: [id], onDelete: Cascade)
   request       DecisionRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
   specVersion   SpecVersion?     @relation(fields: [specVersionId], references: [id], onDelete: Cascade)
+  delegation    Delegation?      @relation(fields: [delegationId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
+}
+
+// ─── Retrieval (ADR 0007) ───────────────────────────────────────────────────
+
+// A piece of long content, embedded for retrieval. Rows are replaced whenever their
+// source is re-indexed. `embedding` is a pgvector `vector` of any dimension; it is
+// null when no embeddings provider is configured or the call failed. Vector reads,
+// writes and search are raw SQL in ContentChunkRepository only. Each dimension in
+// use gets a partial HNSW index, created on first use:
+//   USING hnsw ((embedding::vector(N)) vector_cosine_ops) WHERE "embeddingDims" = N
+model ContentChunk {
+  id             String                 @id @default(uuid())
+  organizationId String
+  projectId      String
+  featureId      String?
+  source         ChunkSource
+  sourceId       String
+  position       Int
+  text           String
+  tokenCount     Int
+  embedding      Unsupported("vector")?
+  embeddingModel String? // the model that produced `embedding`; vectors of different models are never compared
+  embeddingDims  Int?
+  createdAt      DateTime               @default(now())
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  feature        Feature?               @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  @@unique([source, sourceId, position])
+  @@index([organizationId, projectId, featureId])
+  @@index([featureId])
+}
+
+// One criterion of the Feature Guidelines (ADR 0006). With projectId null it is
+// part of the Organization default. With a projectId it is a Project override:
+// an addition (overridesId null), an edit of a default criterion (overridesId
+// set), or a default criterion hidden in that Project (overridesId set,
+// disabled). A disabled row keeps a copy of the default's text, unused.
+model GuidelineCriterion {
+  id             String                 @id @default(uuid())
+  organizationId String
+  projectId      String?
+  overridesId    String?
+  title          String
+  description    String
+  kind           GuidelineCriterionKind
+  required       Boolean
+  disabled       Boolean                @default(false)
+  position       Int
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project?               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Removing a default criterion removes the Projects' edits and hides of it.
+  overrides      GuidelineCriterion?    @relation("GuidelineOverride", fields: [overridesId], references: [id], onDelete: Cascade)
+  overriddenBy   GuidelineCriterion[]   @relation("GuidelineOverride")
+
+  @@unique([projectId, overridesId])
+  @@index([organizationId, projectId, position])
+}
+
+// Grilling (ADR 0006, ticket 0032): rounds of AI-asked questions (business, UX,
+// technical) to the people holding each round's Team Role in the Project's
+// Teams, drafted into a Brief Proposal for the starter to approve. It spans days
+// and many people, so its whole state lives here rather than in a Mastra
+// workflow snapshot. `memory` is a WorkflowMemory (short summaries of the
+// rounds done), sent back to the AI instead of the whole transcript.
+// At most one RUNNING Grilling per Project (partial unique index in the migration).
+model Grilling {
+  id           String             @id @default(uuid())
+  projectId    String
+  startedById  String
+  status       GrillingStatus     @default(RUNNING)
+  currentRound GrillingRoundKind? // the round being asked while RUNNING
+  memory       Json
+  revision     Int                @default(0) // bumped by every change; guards concurrent writes
+  proposalId   String?            @unique
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  startedBy    User               @relation("GrillingStartedBy", fields: [startedById], references: [id])
+  proposal     BriefProposal?     @relation(fields: [proposalId], references: [id])
+  rounds       GrillingRound[]
+  questions    GrillingQuestion[]
+
+  @@index([projectId, createdAt])
+}
+
+// One round of a Grilling, created when it is reached. At most one ASKING per
+// Grilling (partial unique index in the migration).
+model GrillingRound {
+  id            String              @id @default(uuid())
+  grillingId    String
+  kind          GrillingRoundKind
+  role          TeamRole // who answers: PO, DESIGNER or TECH_LEAD
+  status        GrillingRoundStatus
+  skipReason    GrillingSkipReason?
+  createdAt     DateTime            @default(now())
+  completedAt   DateTime?
+  grilling      Grilling            @relation(fields: [grillingId], references: [id], onDelete: Cascade)
+  questions     GrillingQuestion[]
+  // Each holder's own Grilling Conversation for this round (ticket 0044).
+  conversations Conversation[]
+
+  @@unique([grillingId, kind])
+  @@index([status, role])
+}
+
+model GrillingQuestion {
+  id           String        @id @default(uuid())
+  grillingId   String
+  roundId      String
+  position     Int
+  text         String
+  answer       String?
+  answeredById String?
+  answeredAt   DateTime?
+  skipped      Boolean       @default(false) // left unanswered when its round was skipped
+  // The follow-ups the AI asked the answerer in their Grilling Conversation, and
+  // their replies, as [{ question, answer }] (ticket 0044). Null when answered without.
+  followUps    Json?
+  createdAt    DateTime      @default(now())
+  grilling     Grilling      @relation(fields: [grillingId], references: [id], onDelete: Cascade)
+  round        GrillingRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  answeredBy   User?         @relation("GrillingAnsweredBy", fields: [answeredById], references: [id])
+
+  @@unique([roundId, position])
+  @@index([grillingId])
+}
+
+// ─── Feature Suggestions (ADR 0006, ticket 0034) ──────────────────────────────
+
+enum FeatureSuggestionStatus {
+  PENDING
+  ACCEPTED // a Feature was created from it (featureId)
+  DISMISSED // with a reason, sent back to the AI on the next generation
+}
+
+// A rough level, for a Feature Suggestion's effort and risk.
+enum SuggestionLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// A Feature the AI proposes from the Project Brief, the Feature Guidelines, the
+// Project's existing Features and the Decision Log. Suggestions generated together
+// share a batchId. `servesGuidelineIds` are the effective Guidelines criteria it
+// serves, as they were when it was generated (a criterion may be gone since).
+model FeatureSuggestion {
+  id                 String                  @id @default(uuid())
+  projectId          String
+  batchId            String
+  title              String
+  rationale          String
+  businessValue      String
+  effort             SuggestionLevel
+  risk               SuggestionLevel
+  servesGuidelineIds String[]
+  status             FeatureSuggestionStatus @default(PENDING)
+  dismissReason      String?
+  decidedById        String?
+  decidedAt          DateTime?
+  featureId          String?                 @unique
+  generatedById      String
+  createdAt          DateTime                @default(now())
+  project            Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  feature            Feature?                @relation(fields: [featureId], references: [id], onDelete: SetNull)
+  generatedBy        User                    @relation("FeatureSuggestionGeneratedBy", fields: [generatedById], references: [id])
+  decidedBy          User?                   @relation("FeatureSuggestionDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([projectId, status, createdAt])
+}
+
+// ─── Conversations (ADR 0008, ticket 0042) ────────────────────────────────────
+
+enum ConversationMessageRole {
+  USER // what the owner wrote
+  ASSISTANT // the AI's reply, stored once its stream completed
+  TOOL // a tool's result for the AI's next step (Action Cards, ticket 0043)
+}
+
+// A person's chat with the AI about a Project, or about one of its Features
+// (featureId set; projectId is then the Feature's Project). Only its owner reads
+// it. Each turn the AI gets `summary` (the messages before `summarizedThrough`,
+// folded together) plus the messages from it on, never the whole history (ADR 0007).
+model Conversation {
+  id                String                @id @default(uuid())
+  ownerId           String
+  projectId         String
+  featureId         String?
+  title             String
+  summary           String                @default("")
+  summarizedThrough Int                   @default(0) // messages with a lower position are in `summary`
+  // Set on a Grilling Conversation (ticket 0044): the round its owner answers here.
+  // One per person and round; always a Project Conversation.
+  grillingRoundId   String?
+  // Where a Grilling Conversation stands: the question being asked, the answer
+  // and follow-ups so far, the questions its owner skipped (GrillingThreadState).
+  grillingState     Json?
+  // The Approved Model picked in it (ticket 0054), kept for its next messages.
+  // Null until someone picks one, or once it is removed: then the chat default.
+  modelId           String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt // bumped by every message
+  owner             User                  @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  project           Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  feature           Feature?              @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  grillingRound     GrillingRound?        @relation(fields: [grillingRoundId], references: [id], onDelete: Cascade)
+  model             ApprovedModel?        @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  messages          ConversationMessage[]
+  actionCards       ActionCard[]
+
+  @@unique([grillingRoundId, ownerId])
+  @@index([ownerId, updatedAt])
+  @@index([modelId])
+  @@index([projectId])
+  @@index([featureId])
+}
+
+// One message of a Conversation, numbered from 0 in the order written.
+// `toolCalls` (ASSISTANT) holds the tools the AI called, as [{ id, name, args }];
+// `toolCallId` (TOOL) names the call a result answers. Action Cards (0043) point
+// at the message that made them.
+model ConversationMessage {
+  id               String                  @id @default(uuid())
+  conversationId   String
+  position         Int
+  role             ConversationMessageRole
+  content          String
+  toolCalls        Json?
+  toolCallId       String?
+  // ASSISTANT: the model that wrote it (ticket 0054), as it was then (see
+  // SpecProposal). Null for the server's own messages (Grilling questions).
+  approvedModelId  String?
+  modelDisplayName String?
+  modelName        String?
+  // ASSISTANT: on the one reply after the Conversation's model was removed, what it used instead.
+  modelNotice      String?
+  // ASSISTANT, in a Grilling Conversation: what the server wrote, as Grilling Notes
+  // (ticket 0047, `GrillingNote` in @vorasaan/shared), so it can be shown in the
+  // reader's language. `content` holds the same in English.
+  grillingNotes    Json?
+  createdAt        DateTime                @default(now())
+  conversation     Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  actionCards      ActionCard[] // made by this ASSISTANT message's tool calls
+
+  @@unique([conversationId, position])
+}
+
+// ─── Action Cards (ADR 0008, ticket 0043) ───────────────────────────────────
+
+enum ActionCardKind {
+  DECISION_REQUEST // a DRAFT Decision Request; approving sends it
+  SPEC_PROPOSAL // a PENDING Spec Proposal; approving makes the next Spec Version
+  BRIEF_PROPOSAL // a PENDING Brief Proposal; approving makes the next Brief Version
+  FEATURE_SUGGESTION // a PENDING Feature Suggestion; approving accepts it
+}
+
+enum ActionCardStatus {
+  PROPOSED // waiting for the Conversation's owner
+  APPROVED // approved through the target's own service
+  DECLINED // withdrawn, rejected or dismissed through the target's own service
+  STALE // the target changed elsewhere, so the card can no longer be acted on
+}
+
+model ActionCard {
+  id             String              @id @default(uuid())
+  conversationId String
+  messageId      String // the ASSISTANT message whose tool call made it
+  toolCallId     String
+  kind           ActionCardKind
+  targetId       String // the Decision Request, Spec Proposal, Brief Proposal or Feature Suggestion
+  status         ActionCardStatus    @default(PROPOSED)
+  title          String
+  summary        String?
+  reviewedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  conversation   Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        ConversationMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([kind, targetId])
+  @@index([conversationId, createdAt])
+  @@index([messageId])
+}
+
+// ─── Chat apps (ADR 0011, ticket 0057) ──────────────────────────────────────
+
+// A person's account in a chat app, linked with a one-time code. Messages and button
+// presses from it count as that person; nothing else does.
+model ChatAccount {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  provider       ChatProvider
+  providerUserId String // LINE userId, Slack user id, Teams from.id
+  // Where to send that person messages: Slack { teamId, channelId }; Teams
+  // { serviceUrl, conversationId, tenantId, botId }; LINE {} (the user id is enough).
+  address        Json
+  displayName    String? // as the chat app reported it, when it does (Teams)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider, providerUserId]) // one person per chat account
+  @@unique([userId, provider]) // one chat account per person per chat app
+}
+
+// A one-time code a person sends to the bot to link their chat account. Only the
+// SHA-256 of the code is stored; it is valid for 10 minutes and used once.
+model ChatLinkCode {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  provider       ChatProvider
+  codeHash       String       @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, provider])
+}
+
+// What a person receives in their chat apps, and when not. No row: the defaults
+// (Decision Requests and NEEDS_INFO, no quiet hours).
+model ChatPreference {
+  userId           String          @id
+  events           ChatEventKind[]
+  quietStartMinute Int? // minutes after local midnight; both set or both null
+  quietEndMinute   Int? // may be before the start: quiet hours across midnight
+  timeZone         String? // IANA; null: the Organization's time zone
+  language         String? // "en" or "th": the language of cards and bot replies; null: English
+  updatedAt        DateTime        @updatedAt
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A card for one person's Chat Account (ticket 0058): a Decision Request to decide, a
+// NEEDS_INFO question to answer, an escalation notice, or a link to a Spec Proposal. Its
+// buttons carry this row's id, signed, so a press is matched to the card and to the person
+// it was sent to. Held back as PENDING during the person's Quiet Hours.
+model ChatCard {
+  id             String           @id @default(uuid())
+  userId         String // who it is for; only their linked Chat Account may press it
+  provider       ChatProvider
+  event          ChatEventKind // which of the person's chat preferences it falls under
+  requestId      String?
+  specProposalId String?
+  escalationStep Int? // 1-3 for an escalation card
+  status         ChatCardStatus   @default(PENDING)
+  // Where the chat app put it, to update it after a press: Slack { channel, ts };
+  // Teams { serviceUrl, conversationId, activityId }. LINE can't edit a sent message.
+  messageRef     Json?
+  createdAt      DateTime
+  sentAt         DateTime?
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  request        DecisionRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([requestId])
 }

@@ -51,8 +51,16 @@ export function createTestPrisma(): PrismaClient {
   return createPrismaClient(testDatabaseUrl);
 }
 
+/**
+ * Waits registered before each truncate: test apps register their background
+ * indexing here, so a job left over from the previous test can't deadlock TRUNCATE
+ * or write into the next test's data.
+ */
+export const beforeTruncate = new Set<() => Promise<void>>();
+
 /** Empties every application table. Call in beforeEach. */
 export async function truncateAll(db: PrismaClient) {
+  for (const wait of beforeTruncate) await wait();
   const tables = await db.$queryRaw<{ tablename: string }[]>`
     SELECT tablename FROM pg_tables
     WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;

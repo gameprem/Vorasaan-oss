@@ -3,10 +3,13 @@ import type { User } from '@vorasaan/db';
 import {
   DecideInput,
   ListDecisionRequestsQuery,
+  PostRequestMessageInput,
   RaiseDecisionRequestInput,
+  ReassignInput,
   SubmitDecisionRequestInput,
 } from '@vorasaan/shared';
-import { CurrentUser } from '../dev-identity/dev-user.guard.ts';
+import { CurrentToken, CurrentUser } from '../auth/identity.guard.ts';
+import { PAT_PREFIX } from '../auth/tokens.ts';
 import { DecisionRequestsService } from './decision-requests.service.ts';
 
 @Controller('decision-requests')
@@ -30,8 +33,8 @@ export class DecisionRequestsController {
   }
 
   @Get(':id')
-  get(@Param('id', ParseUUIDPipe) id: string) {
-    return this.service.get(id);
+  get(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.get(user, id);
   }
 
   @Post(':id/submit')
@@ -43,13 +46,38 @@ export class DecisionRequestsController {
     return this.service.submit(user, id, body);
   }
 
+  @Post(':id/claim')
+  claim(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.claim(user, id);
+  }
+
+  @Post(':id/reassign')
+  reassign(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: ReassignInput }) body: ReassignInput,
+  ) {
+    return this.service.reassign(user, id, body);
+  }
+
+  @Post(':id/messages')
+  postMessage(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: PostRequestMessageInput }) body: PostRequestMessageInput,
+  ) {
+    return this.service.postMessage(user, id, body);
+  }
+
   @Post(':id/decision')
   decide(
     @CurrentUser() user: User,
+    @CurrentToken() token: string | undefined,
     @Param('id', ParseUUIDPipe) id: string,
     @Body({ schema: DecideInput }) body: DecideInput,
   ) {
-    return this.service.decide(user, id, body);
+    // The CLI signs in with a Personal Access Token; the web app with a session.
+    return this.service.decide(user, id, body, token?.startsWith(PAT_PREFIX) ? 'CLI' : 'WEB');
   }
 
   @Post(':id/withdraw')

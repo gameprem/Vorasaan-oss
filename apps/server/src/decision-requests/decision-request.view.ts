@@ -1,14 +1,19 @@
 import type { Prisma } from '@vorasaan/db';
-import type { DecisionRequestView } from '@vorasaan/shared';
+import type { DecisionRequestView, ResponseWindowState, TeamRole } from '@vorasaan/shared';
 
 const person = { select: { id: true, name: true } } as const;
 
 /** The `include` every Decision Request read uses, so `toView` always has what it needs. */
 export const decisionRequestInclude = {
-  feature: { select: { title: true } },
+  feature: { select: { title: true, teamId: true } },
   raiser: person,
   decider: person,
+  recipients: {
+    select: { user: person, onBehalfOfId: true },
+    orderBy: { user: { name: 'asc' } },
+  },
   choices: { orderBy: { position: 'asc' } },
+  messages: { include: { author: person }, orderBy: { createdAt: 'asc' } },
   decision: {
     include: {
       decidedBy: person,
@@ -16,13 +21,39 @@ export const decisionRequestInclude = {
       specProposal: { select: { id: true, status: true } },
     },
   },
+  history: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.DecisionRequestInclude;
 
 export type DecisionRequestWithRelations = Prisma.DecisionRequestGetPayload<{
   include: typeof decisionRequestInclude;
 }>;
 
-export function toDecisionRequestView(r: DecisionRequestWithRelations): DecisionRequestView {
+/** Who is looking, and the Team Roles they hold (`teamId:role`), for viewer-specific fields. */
+export type Viewer = { userId: string; teamRoles: ReadonlySet<string> };
+
+export const teamRoleKey = (teamId: string, role: TeamRole) => `${teamId}:${role}`;
+
+/**
+ * Who may ever Claim the request: anyone but the Raiser holding the decider role in the
+ * Feature's Team, plus its recipients.
+ */
+export function isClaimant(r: DecisionRequestWithRelations, viewer: Viewer): boolean {
+  if (r.raiserId === viewer.userId) return false;
+  return (
+    viewer.teamRoles.has(teamRoleKey(r.feature.teamId, r.deciderRole)) ||
+    r.recipients.some((x) => x.user.id === viewer.userId)
+  );
+}
+
+/** Whether the viewer can Claim it right now: OPEN, and not already its Decider. */
+export function canClaim(r: DecisionRequestWithRelations, viewer: Viewer): boolean {
+  return r.status === 'OPEN' && r.deciderId !== viewer.userId && isClaimant(r, viewer);
+}
+
+export function toDecisionRequestView(
+  r: DecisionRequestWithRelations,
+  viewer: Viewer,
+): DecisionRequestView {
   return {
     id: r.id,
     featureId: r.featureId,
@@ -36,6 +67,8 @@ export function toDecisionRequestView(r: DecisionRequestWithRelations): Decision
     suggestedRole: r.suggestedRole,
     deciderRole: r.deciderRole,
     decider: r.decider,
+    recipients: r.recipients.map((x) => x.user),
+    canClaim: canClaim(r, viewer),
     choices: r.choices.map((c) => ({
       id: c.id,
       position: c.position,
@@ -47,6 +80,13 @@ export function toDecisionRequestView(r: DecisionRequestWithRelations): Decision
       impactRisk: c.impactRisk,
       editedByUser: c.editedByUser,
     })),
+    messages: r.messages.map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      author: m.author,
+      body: m.body,
+      createdAt: m.createdAt.toISOString(),
+    })),
     decision: r.decision && {
       id: r.decision.id,
       decidedBy: r.decision.decidedBy,
@@ -54,10 +94,30 @@ export function toDecisionRequestView(r: DecisionRequestWithRelations): Decision
       choiceId: r.decision.choiceId,
       customAnswer: r.decision.customAnswer,
       rationale: r.decision.rationale,
+      source: r.decision.source,
       createdAt: r.decision.createdAt.toISOString(),
     },
     specProposal: r.decision?.specProposal ?? null,
     submittedAt: r.submittedAt?.toISOString() ?? null,
+    responseWindow: responseWindowState(r),
+    history: r.history.map((h) => ({
+      kind: h.kind,
+      people: h.people as { id: string; name: string }[],
+      createdAt: h.createdAt.toISOString(),
+    })),
     createdAt: r.createdAt.toISOString(),
+  };
+}
+
+/** Where a request stands against its Response Window; paused while NEEDS_INFO. */
+export function responseWindowState(r: {
+  dueAt: Date | null;
+  pausedAt: Date | null;
+  escalationStep: number;
+}): ResponseWindowState {
+  return {
+    dueAt: r.dueAt?.toISOString() ?? null,
+    paused: r.pausedAt !== null,
+    escalationStep: r.escalationStep,
   };
 }

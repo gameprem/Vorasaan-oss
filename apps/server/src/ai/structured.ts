@@ -1,8 +1,12 @@
 import type { z } from 'zod';
 import { AiOutputError } from './ai.port.ts';
+import type { Prompt } from './prompt-cache.ts';
 
-/** One structured LLM call: returns the raw object the model produced. */
-export type StructuredGenerate = (prompt: string, schema: z.ZodType) => Promise<unknown>;
+/**
+ * One structured LLM call: returns the raw object the model produced. A Prompt
+ * carries its cache breakpoints (ticket 0061); a string has none.
+ */
+export type StructuredGenerate = (prompt: Prompt | string, schema: z.ZodType) => Promise<unknown>;
 
 /**
  * Calls the model and validates the result against `schema`.
@@ -11,7 +15,7 @@ export type StructuredGenerate = (prompt: string, schema: z.ZodType) => Promise<
 export async function generateStructured<T extends z.ZodType>(
   generate: StructuredGenerate,
   task: string,
-  prompt: string,
+  prompt: Prompt | string,
   schema: T,
 ): Promise<z.infer<T>> {
   let lastError: unknown;

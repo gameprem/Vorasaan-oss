@@ -1,7 +1,23 @@
 // Prompt templates live as Markdown in ../prompts so non-developers can edit them.
 // Placeholders are written {{name}}; every placeholder must be supplied.
+// `{{cacheBreak}}` marks where a prompt's stable prefix ends (ticket 0061): the
+// server cuts the prompt there for prompt caching and sends no text for it.
+// Everything above a break must stay the same from one call to the next.
 
-export const SKILLS = ['generate-choices', 'draft-spec-proposal'] as const;
+export const SKILLS = [
+  'generate-choices',
+  'draft-spec-proposal',
+  'summarize-attachment',
+  'draft-spec-from-attachments',
+  'grilling-questions',
+  'grilling-follow-up',
+  'draft-brief-from-grilling',
+  'suggest-features',
+  'draft-spec-from-suggestion',
+  'check-feature-fit',
+  'chat',
+  'summarize-conversation',
+] as const;
 export type SkillName = (typeof SKILLS)[number];
 
 const promptsDir = new URL('../prompts/', import.meta.url);

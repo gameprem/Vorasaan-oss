@@ -8,9 +8,17 @@
     "start": "bun src/main.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "bun test",
-    "eval:choices": "bun scripts/eval-choices.ts"
+    "eval:choices": "bun scripts/eval-choices.ts",
+    "eval:spec-from-attachments": "bun scripts/eval-spec-from-attachments.ts",
+    "eval:retrieval": "bun scripts/eval-retrieval.ts",
+    "eval:grilling": "bun scripts/eval-grilling.ts",
+    "eval:feature-suggestions": "bun scripts/eval-feature-suggestions.ts",
+    "eval:conversation": "bun scripts/eval-conversation.ts",
+    "tokens:fixture": "bun scripts/token-fixture.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@fastify/multipart": "^10.1.0",
     "@mastra/core": "1.72.0",
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",
@@ -20,11 +28,13 @@
     "@vorasaan/skills": "workspace:*",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "unpdf": "^1.8.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@nestjs/testing": "12.1.2",
     "@types/pg": "^8.23.1",
+    "js-tiktoken": "^1.0.21",
     "pg": "^8.23.0"
   }
 }

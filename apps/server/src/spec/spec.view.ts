@@ -1,9 +1,17 @@
 import type { Prisma } from '@vorasaan/db';
 import type { SpecProposalView, SpecVersionView } from '@vorasaan/shared';
+import { fromRecordedModelColumns } from '../ai/recorded-model.ts';
 
 const person = { select: { id: true, name: true } } as const;
+const draftedWith = {
+  select: { approvedModelId: true, modelDisplayName: true, modelName: true },
+} as const;
 
-export const specVersionInclude = { approvedBy: person } satisfies Prisma.SpecVersionInclude;
+export const specVersionInclude = {
+  approvedBy: person,
+  revertedFrom: { select: { version: true } },
+  proposal: draftedWith,
+} satisfies Prisma.SpecVersionInclude;
 
 export function toSpecVersionView(
   v: Prisma.SpecVersionGetPayload<{ include: typeof specVersionInclude }>,
@@ -16,6 +24,8 @@ export function toSpecVersionView(
     source: v.source,
     summary: v.summary,
     approvedBy: v.approvedBy,
+    revertedFrom: v.revertedFrom?.version ?? null,
+    draftedWith: fromRecordedModelColumns(v.proposal),
     createdAt: v.createdAt.toISOString(),
   };
 }
@@ -41,6 +51,7 @@ export function toSpecProposalView(p: SpecProposalWithRelations): SpecProposalVi
     baseMarkdown: p.baseVersion?.markdown ?? '',
     proposedMarkdown: p.proposedMarkdown,
     decisionRequestId: p.decision?.requestId ?? null,
+    draftedWith: fromRecordedModelColumns(p),
     createdAt: p.createdAt.toISOString(),
   };
 }
