@@ -4,6 +4,7 @@ import { createTool } from '@mastra/core/tools';
 import { Logger } from '@nestjs/common';
 import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
 import { z } from 'zod';
+import { estimateTokens } from '../retrieval/token-estimate.ts';
 import type { AiTask } from './ai.config.ts';
 import {
   type ActionCardForAi,
@@ -40,6 +41,14 @@ import {
 } from './ai.port.ts';
 import { type MastraModel, mastraModelOf } from './model-config.ts';
 import {
+  anthropicSystem,
+  anthropicUserMessage,
+  isAnthropicModel,
+  logCacheUsage,
+  type Prompt,
+  wholePrompt,
+} from './prompt-cache.ts';
+import {
   chatPrompt,
   checkFeatureFitPrompt,
   draftBriefFromGrillingPrompt,
@@ -61,7 +70,18 @@ const INSTRUCTIONS =
   'You are Vorasaan, an assistant that helps software teams align on what to build. ' +
   'Follow the task instructions exactly and return only the requested structure.';
 
+const INSTRUCTIONS_TOKENS = estimateTokens(INSTRUCTIONS);
+
 export type { AiTask };
+
+/** Logs a call's usage and cache hits (ticket 0061); a missing usage never fails the call. */
+async function logUsage(task: string, usage: PromiseLike<unknown> | unknown): Promise<void> {
+  try {
+    logCacheUsage(task, await usage);
+  } catch {
+    // Usage is for the log only.
+  }
+}
 
 /**
  * The Mastra model for one call. `chosen` is the model the server picked for the
@@ -83,12 +103,21 @@ export function agentGenerate(task: string, model: MastraModel): StructuredGener
     instructions: INSTRUCTIONS,
     model: model as AgentModel,
   });
+  const anthropic = isAnthropicModel(model);
   // Always stream: some OpenAI-compatible routers (e.g. 9Router) answer with SSE even
   // for non-streaming requests, which breaks a plain generate() call. Streaming works
   // with every provider, and we only need the final validated object.
-  return async (prompt, schema) => {
-    const stream = await agent.stream(prompt, { structuredOutput: { schema } });
-    return stream.object;
+  return async (input, schema) => {
+    const prompt = typeof input === 'string' ? wholePrompt(input) : input;
+    // Anthropic: the prompt's stable parts carry cache_control (ticket 0061). Every
+    // other provider gets the whole text, exactly as before.
+    const message = anthropic ? [anthropicUserMessage(prompt, INSTRUCTIONS_TOKENS)] : prompt.text;
+    const stream = await agent.stream(message as Parameters<typeof agent.stream>[0], {
+      structuredOutput: { schema },
+    });
+    const object = await stream.object;
+    await logUsage(task, stream.usage);
+    return object;
   };
 }
 
@@ -456,12 +485,19 @@ function toAgentTools(tools: ChatTool[]) {
  */
 async function* streamChat(
   model: MastraModel,
-  instructions: string,
+  instructions: Prompt,
   messages: ChatMessageForAi[],
   tools: ChatTool[],
   signal: AbortSignal | undefined,
 ): AsyncIterable<ChatChunk> {
-  const agent = new Agent({ id: 'chat', name: 'chat', instructions, model: model as AgentModel });
+  // Anthropic: the system prompt's stable parts carry cache_control (ticket 0061).
+  // Every other provider gets the whole text as one system prompt, as before.
+  const agent = new Agent({
+    id: 'chat',
+    name: 'chat',
+    instructions: isAnthropicModel(model) ? anthropicSystem(instructions) : instructions.text,
+    model: model as AgentModel,
+  });
   const output = await agent.stream(toAgentMessages(messages, tools.length > 0), {
     maxSteps: 1,
     ...(tools.length ? { clientTools: toAgentTools(tools) } : {}),
@@ -487,6 +523,7 @@ async function* streamChat(
         : new Error(`The chat stream failed: ${String(chunk.payload.error)}`);
     }
   }
+  await logUsage('chat', output.usage);
 }
 
 /** The Anthropic model and key to count with, when the call runs on Anthropic. */

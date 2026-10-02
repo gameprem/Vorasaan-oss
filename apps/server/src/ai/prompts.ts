@@ -20,7 +20,16 @@ import type {
   RequestForAi,
   SuggestionForAi,
 } from './ai.port.ts';
+import { CACHE_BREAK, type Prompt, splitPrompt } from './prompt-cache.ts';
 import { renderMemory, type WorkflowMemory } from './workflow-memory.ts';
+
+/**
+ * A skill rendered as a Prompt (ticket 0061): cut at its `{{cacheBreak}}`s and at
+ * the breaks the values carry, so the stable prefix can be cached.
+ */
+async function renderPrompt(name: SkillName, values: Record<string, string>): Promise<Prompt> {
+  return splitPrompt(await renderSkill(name, { ...values, cacheBreak: CACHE_BREAK }));
+}
 
 /** The prompt (skill) each AI task renders. */
 export const TASK_SKILLS: Record<AiTask, SkillName> = {
@@ -97,10 +106,15 @@ export function renderAttachments(attachments: AttachmentForAi[]): string {
  */
 export function renderContext(
   blocks: ContextBlock[],
-  /** For Project-level tasks (Grilling), where there is no Feature to be "elsewhere" from. */
-  options: { projectLevel?: boolean } = {},
+  options: {
+    /** For Project-level tasks (Grilling), where there is no Feature to be "elsewhere" from. */
+    projectLevel?: boolean;
+    /** The index of the first block, when blocks before it were rendered apart. */
+    startIndex?: number;
+  } = {},
 ): string {
   if (blocks.length === 0) return '(No context found.)';
+  const start = options.startIndex ?? 1;
   return blocks
     .map((b, i) => {
       const version = b.source.version === undefined ? '' : ` version="${b.source.version}"`;
@@ -110,11 +124,32 @@ export function renderContext(
           ? 'this Feature'
           : 'elsewhere in the Project';
       return (
-        `<context index="${i + 1}" kind="${b.source.kind}" id="${attribute(b.source.id)}"${version} ` +
+        `<context index="${i + start}" kind="${b.source.kind}" id="${attribute(b.source.id)}"${version} ` +
         `from="${from}" title="${attribute(b.source.title)}">\n${fence(b.text)}\n</context>`
       );
     })
     .join('\n\n');
+}
+
+/**
+ * Retrieved context like `renderContext`, with a cache break after its first
+ * block when that block is stable from call to call (the Feature's own Spec, or
+ * the Project Brief of a Project-level task). The text is the same as without it.
+ */
+export function renderContextAfterLead(
+  blocks: ContextBlock[],
+  lead: 'FEATURE_SPEC' | 'PROJECT_BRIEF',
+  options: { projectLevel?: boolean } = {},
+): string {
+  const [first, ...rest] = blocks;
+  const isLead =
+    lead === 'FEATURE_SPEC'
+      ? first?.scope === 'FEATURE' && first.source.kind === 'SPEC_VERSION'
+      : first?.source.kind === 'BRIEF_VERSION';
+  if (!first || !isLead) return renderContext(blocks, options);
+  const head = renderContext([first], options);
+  if (rest.length === 0) return `${head}${CACHE_BREAK}`;
+  return `${head}\n\n${CACHE_BREAK}${renderContext(rest, { ...options, startIndex: 2 })}`;
 }
 
 /** The Project Brief (latest version, maybe shortened) as the inside of a <brief> block. */
@@ -131,7 +166,7 @@ export function generateChoicesPrompt(
   context: ContextBlock[],
   foundation: ProjectFoundationForAi = NO_FOUNDATION,
 ) {
-  return renderSkill('generate-choices', {
+  return renderPrompt('generate-choices', {
     spec: fence(specMarkdown),
     brief: renderBrief(foundation.brief),
     guidelines: renderGuidelines(foundation.guidelines),
@@ -163,7 +198,7 @@ export function draftSpecProposalPrompt(
   context: ContextBlock[],
   foundation: ProjectFoundationForAi = NO_FOUNDATION,
 ) {
-  return renderSkill('draft-spec-proposal', {
+  return renderPrompt('draft-spec-proposal', {
     spec: fence(specMarkdown),
     brief: renderBrief(foundation.brief),
     guidelines: renderGuidelines(foundation.guidelines),
@@ -176,7 +211,7 @@ export function draftSpecProposalPrompt(
 }
 
 export function summarizeAttachmentPrompt(attachment: AttachmentForAi) {
-  return renderSkill('summarize-attachment', {
+  return renderPrompt('summarize-attachment', {
     attachments: renderAttachments([attachment]),
   });
 }
@@ -186,7 +221,7 @@ export function draftSpecFromAttachmentsPrompt(
   specMarkdown: string,
   context: ContextBlock[],
 ) {
-  return renderSkill('draft-spec-from-attachments', {
+  return renderPrompt('draft-spec-from-attachments', {
     featureTitle: feature.title,
     featureDescription: feature.description || '(No description.)',
     spec: fence(specMarkdown) || '(No Spec yet: this will be the first version.)',
@@ -265,7 +300,7 @@ export function grillingFollowUpPrompt(input: {
   const followUps = input.followUps.length
     ? renderFollowUps(input.followUps)
     : '(No follow-up asked yet.)';
-  return renderSkill('grilling-follow-up', {
+  return renderPrompt('grilling-follow-up', {
     projectName: attribute(input.project.name),
     round: input.round,
     role: input.role,
@@ -285,12 +320,12 @@ export function grillingQuestionsPrompt(input: {
   guidelines: GuidelineForAi[];
   memory: WorkflowMemory;
 }) {
-  return renderSkill('grilling-questions', {
+  return renderPrompt('grilling-questions', {
     projectName: attribute(input.project.name),
     round: input.round,
     role: input.role,
     roundFocus: ROUND_FOCUS[input.round],
-    context: renderContext(input.projectContext, { projectLevel: true }),
+    context: renderContextAfterLead(input.projectContext, 'PROJECT_BRIEF', { projectLevel: true }),
     guidelines: renderGuidelines(input.guidelines),
     memory: renderMemory(input.memory),
   });
@@ -304,7 +339,7 @@ export function draftBriefFromGrillingPrompt(input: {
   memory: WorkflowMemory;
   answers: GrillingAnswerForAi[];
 }) {
-  return renderSkill('draft-brief-from-grilling', {
+  return renderPrompt('draft-brief-from-grilling', {
     projectName: attribute(input.project.name),
     brief: fence(input.briefMarkdown),
     context: renderContext(input.projectContext, { projectLevel: true }),
@@ -337,10 +372,10 @@ export function suggestFeaturesPrompt(input: {
   const pending = input.pending.length
     ? input.pending.map((t) => `- ${oneLineOf(t)}`).join('\n')
     : '(None.)';
-  return renderSkill('suggest-features', {
+  return renderPrompt('suggest-features', {
     projectName: attribute(input.project.name),
     count: String(input.count),
-    context: renderContext(input.projectContext, { projectLevel: true }),
+    context: renderContextAfterLead(input.projectContext, 'PROJECT_BRIEF', { projectLevel: true }),
     guidelines: renderGuidelines(input.guidelines),
     decisions: renderContext(input.decisions, { projectLevel: true }),
     dismissed: renderDismissed(input.dismissed),
@@ -366,10 +401,10 @@ export function draftSpecFromSuggestionPrompt(input: {
   projectContext: ContextBlock[];
   guidelines: GuidelineForAi[];
 }) {
-  return renderSkill('draft-spec-from-suggestion', {
+  return renderPrompt('draft-spec-from-suggestion', {
     projectName: attribute(input.project.name),
     suggestion: renderSuggestion(input.suggestion),
-    context: renderContext(input.projectContext, { projectLevel: true }),
+    context: renderContextAfterLead(input.projectContext, 'PROJECT_BRIEF', { projectLevel: true }),
     guidelines: renderGuidelines(input.guidelines),
   });
 }
@@ -381,10 +416,10 @@ export function checkFeatureFitPrompt(input: {
   guidelines: GuidelineForAi[];
 }) {
   const feature = `Title: ${oneLineOf(input.feature.title)}\n\n${input.feature.description || '(No description.)'}`;
-  return renderSkill('check-feature-fit', {
+  return renderPrompt('check-feature-fit', {
     projectName: attribute(input.project.name),
     feature: fence(feature),
-    context: renderContext(input.projectContext, { projectLevel: true }),
+    context: renderContextAfterLead(input.projectContext, 'PROJECT_BRIEF', { projectLevel: true }),
     guidelines: renderGuidelines(input.guidelines),
   });
 }
@@ -403,12 +438,14 @@ export function chatPrompt(input: {
   foundation: ProjectFoundationForAi;
   summary: string;
 }) {
-  return renderSkill('chat', {
+  return renderPrompt('chat', {
     scope: describeConversationScope(input.scope),
     scopeKind: input.scope.kind === 'FEATURE' ? 'Feature' : 'Project',
     brief: renderBrief(input.foundation.brief),
     guidelines: renderGuidelines(input.foundation.guidelines),
-    context: renderContext(input.context, { projectLevel: input.scope.kind === 'PROJECT' }),
+    context: renderContextAfterLead(input.context, 'FEATURE_SPEC', {
+      projectLevel: input.scope.kind === 'PROJECT',
+    }),
     summary: input.summary.trim() ? fence(input.summary) : '(Nothing earlier.)',
   });
 }
@@ -431,7 +468,7 @@ export function summarizeConversationPrompt(input: {
   actionCards?: ActionCardForAi[];
 }) {
   const cards = input.actionCards ?? [];
-  return renderSkill('summarize-conversation', {
+  return renderPrompt('summarize-conversation', {
     scope: describeConversationScope(input.scope),
     summary: input.summary.trim() ? fence(input.summary) : '(Empty: this is the first fold.)',
     actionCards: cards.length

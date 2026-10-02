@@ -106,7 +106,7 @@ export async function chatPromptTokens(input: {
   tools: ChatTool[];
 }): Promise<number> {
   return (
-    estimateChatTokens({ system: await chatPrompt(input), messages: input.recentMessages }) +
+    estimateChatTokens({ system: (await chatPrompt(input)).text, messages: input.recentMessages }) +
     toolTokens(input.tools)
   );
 }
