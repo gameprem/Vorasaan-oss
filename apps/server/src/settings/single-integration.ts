@@ -1,10 +1,14 @@
 import type { IntegrationProvider, PrismaClient } from '@vorasaan/db';
 
-type SingleProvider = Extract<IntegrationProvider, 'ATLASSIAN' | 'EMBEDDINGS'>;
+export type SingleProvider = Extract<
+  IntegrationProvider,
+  'ATLASSIAN' | 'EMBEDDINGS' | 'LINE' | 'SLACK' | 'TEAMS'
+>;
 
 /**
- * An Organization has at most one Atlassian and one embeddings integration (a
- * partial unique index; LLM providers may be several, so there is no plain one).
+ * An Organization has at most one Atlassian, one embeddings and one of each chat app
+ * integration (partial unique indexes; LLM providers may be several, so there is no
+ * plain one).
  */
 export function findSingleIntegration(
   db: PrismaClient,
@@ -19,7 +23,13 @@ export async function saveSingleIntegration(
   db: PrismaClient,
   organizationId: string,
   provider: SingleProvider,
-  data: { baseUrl: string; secretEncrypted: string; model?: string; accountEmail?: string },
+  data: {
+    baseUrl?: string;
+    secretEncrypted: string;
+    model?: string;
+    accountEmail?: string;
+    appId?: string | null;
+  },
 ): Promise<void> {
   const existing = await findSingleIntegration(db, organizationId, provider);
   if (existing) {

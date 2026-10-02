@@ -5,6 +5,7 @@ import { FakeAiPort } from '../ai/fake-ai.port.ts';
 import { AI_ENGINE } from '../ai/mastra.module.ts';
 import { AppModule } from '../app.module.ts';
 import { CLOCK } from '../clock/clock.ts';
+import { installVerbatimBody } from '../http/verbatim-body.ts';
 import { EscalationJob } from '../response-windows/escalation.job.ts';
 import { EMBEDDING_PORT_FACTORY } from '../retrieval/embedding.port.ts';
 import { FakeEmbeddings } from '../retrieval/fake-embedding.port.ts';
@@ -52,7 +53,9 @@ export async function createTestApp(): Promise<TestApp> {
       return connection.tester(provider);
     }) satisfies AiConnectionTester)
     .compile();
-  const app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter(), {
+  const adapter = new FastifyAdapter();
+  installVerbatimBody(adapter.getInstance());
+  const app = moduleRef.createNestApplication<NestFastifyApplication>(adapter, {
     logger: false,
   });
   await app.init();

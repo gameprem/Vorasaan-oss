@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ActionCardEvent } from './action-card.ts';
+import { ChatAccountChangedEvent } from './chat-apps.ts';
 import {
   ConversationAppendedEvent,
   ConversationDeltaEvent,
@@ -174,6 +175,7 @@ export const ServerEvent = z.discriminatedUnion('event', [
   z.object({ event: z.literal('conversation.appended'), data: ConversationAppendedEvent }),
   z.object({ event: z.literal('conversation.actionCard.created'), data: ActionCardEvent }),
   z.object({ event: z.literal('conversation.actionCard.updated'), data: ActionCardEvent }),
+  z.object({ event: z.literal('chatAccount.changed'), data: ChatAccountChangedEvent }),
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;
 export type ServerEventName = ServerEvent['event'];
