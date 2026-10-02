@@ -13,7 +13,8 @@
     "eval:retrieval": "bun scripts/eval-retrieval.ts",
     "eval:grilling": "bun scripts/eval-grilling.ts",
     "eval:feature-suggestions": "bun scripts/eval-feature-suggestions.ts",
-    "eval:conversation": "bun scripts/eval-conversation.ts"
+    "eval:conversation": "bun scripts/eval-conversation.ts",
+    "tokens:fixture": "bun scripts/token-fixture.ts"
   },
   "dependencies": {
     "@fastify/multipart": "^10.1.0",
@@ -32,6 +33,7 @@
   "devDependencies": {
     "@nestjs/testing": "12.1.2",
     "@types/pg": "^8.23.1",
+    "js-tiktoken": "^1.0.21",
     "pg": "^8.23.0"
   }
 }

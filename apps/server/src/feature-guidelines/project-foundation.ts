@@ -2,15 +2,14 @@ import { Injectable } from '@nestjs/common';
 import type { PrismaClient } from '@vorasaan/db';
 import type { EffectiveGuidelineCriterion } from '@vorasaan/shared';
 import type { ContextBlock, GuidelineForAi, ProjectFoundationForAi } from '../ai/ai.port.ts';
-import { clipForAi } from '../attachments/attachment-context.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
-import { CHARS_PER_TOKEN, estimateTokens } from '../retrieval/chunker.ts';
+import { clipToTokens, estimateTokens } from '../retrieval/token-estimate.ts';
 import { FeatureGuidelinesService } from './feature-guidelines.service.ts';
 
 /** How much of a Feature task's budget the Project Brief may take, at most. */
 export const FOUNDATION_BRIEF_TOKENS = 1_500;
-/** A Guideline's description is shortened to this in a Feature task's prompt. */
-const GUIDELINE_DESCRIPTION_CHARS = 300;
+/** A Guideline's description is shortened to this many tokens in a Feature task's prompt. */
+const GUIDELINE_DESCRIPTION_TOKENS = 75;
 /** What a Guideline's line costs beyond its text, roughly. */
 const GUIDELINE_OVERHEAD_TOKENS = 8;
 
@@ -70,7 +69,7 @@ export class ProjectFoundation {
     ]);
     const guidelines: GuidelineForAi[] = criteria.map((c) => ({
       title: c.title,
-      description: clipForAi(c.description, GUIDELINE_DESCRIPTION_CHARS),
+      description: clipToTokens(c.description, GUIDELINE_DESCRIPTION_TOKENS),
       kind: c.kind,
       required: c.required,
     }));
@@ -82,7 +81,7 @@ export class ProjectFoundation {
     const brief = latest
       ? {
           version: latest.version,
-          markdown: clipForAi(latest.markdown.trim(), FOUNDATION_BRIEF_TOKENS * CHARS_PER_TOKEN),
+          markdown: clipToTokens(latest.markdown.trim(), FOUNDATION_BRIEF_TOKENS),
         }
       : null;
     const used = guidelineTokens + (brief ? estimateTokens(brief.markdown) : 0);

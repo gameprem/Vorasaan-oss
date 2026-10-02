@@ -8,9 +8,19 @@
  *   the last ~`overlapTokens` of the piece before it, so a sentence cut at a
  *   boundary is still found whole in one of the two chunks.
  *
- * Sizes are estimated at 4 characters per token: close enough for budgeting,
- * with no tokenizer dependency. No chunk is longer than `targetTokens`.
+ * Sizes are the script-aware estimate (token-estimate.ts): close enough for
+ * budgeting, with no tokenizer dependency. No chunk is longer than
+ * `targetTokens`, in Thai as in English. Text without Thai is cut exactly where
+ * it was at four characters per token; Thai is cut into more, smaller chunks.
  */
+
+import {
+  estimateTokens,
+  fitsTokens,
+  prefixWithin,
+  suffixWithin,
+  tokenCost,
+} from './token-estimate.ts';
 
 export const CHUNKING = { targetTokens: 400, overlapTokens: 50 } as const;
 
@@ -18,20 +28,14 @@ export type ChunkingOptions = { targetTokens: number; overlapTokens: number };
 
 export type TextChunk = { position: number; text: string; tokenCount: number };
 
-export const CHARS_PER_TOKEN = 4;
-
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
-}
-
 export function chunkMarkdown(
   markdown: string,
   options: Partial<ChunkingOptions> = {},
 ): TextChunk[] {
   const { targetTokens, overlapTokens } = { ...CHUNKING, ...options };
-  const maxChars = Math.max(1, targetTokens) * CHARS_PER_TOKEN;
+  const maxTokens = Math.max(1, targetTokens);
   // Overlap may take at most a quarter of a chunk, so every chunk adds new text.
-  const overlapChars = Math.min(Math.max(0, overlapTokens) * CHARS_PER_TOKEN, maxChars / 4);
+  const overlap = Math.min(Math.max(0, overlapTokens), maxTokens / 4);
 
   const texts: string[] = [];
   let buffer = '';
@@ -40,13 +44,13 @@ export function chunkMarkdown(
     buffer = '';
   };
   for (const section of sections(markdown.replace(/\r\n?/g, '\n'))) {
-    if (section.text.length > maxChars) {
+    if (!fitsTokens(section.text, maxTokens)) {
       flush();
-      texts.push(...splitSection(section, maxChars, overlapChars));
+      texts.push(...splitSection(section, maxTokens, overlap));
       continue;
     }
     const joined = buffer ? `${buffer}\n\n${section.text}` : section.text;
-    if (joined.length > maxChars) {
+    if (!fitsTokens(joined, maxTokens)) {
       flush();
       buffer = section.text;
     } else {
@@ -87,60 +91,76 @@ function sections(text: string): Section[] {
   return out;
 }
 
-function splitSection(section: Section, maxChars: number, overlapChars: number): string[] {
+/** Two newlines join paragraphs; they cost as much as two Latin characters. */
+const PARAGRAPH_BREAK_TOKENS = tokenCost('\n\n');
+
+function splitSection(section: Section, maxTokens: number, overlap: number): string[] {
   let prefix = '';
   let body = section.text;
   const newline = section.text.indexOf('\n');
   // Repeat the heading on every piece, unless the heading itself is most of a chunk.
-  if (section.heading && newline !== -1 && newline + 1 <= maxChars / 4) {
+  if (
+    section.heading &&
+    newline !== -1 &&
+    fitsTokens(section.text.slice(0, newline + 1), maxTokens / 4)
+  ) {
     prefix = `${section.text.slice(0, newline)}\n`;
     body = section.text.slice(newline + 1).trim();
   }
-  const budget = maxChars - prefix.length;
-  const hardSize = Math.max(1, Math.floor(budget - overlapChars - 2));
+  const budget = maxTokens - tokenCost(prefix);
+  const hardSize = budget - overlap - PARAGRAPH_BREAK_TOKENS;
 
   const units = body
     .split(/\n[ \t]*\n/)
     .map((p) => p.trim())
     .filter(Boolean)
-    .flatMap((p) => (p.length > budget ? hardSplit(p, hardSize) : [p]));
+    .flatMap((p) => (fitsTokens(p, budget) ? [p] : hardSplit(p, hardSize)));
 
   const pieces: string[] = [];
   let current = '';
   for (const unit of units) {
     const joined = current ? `${current}\n\n${unit}` : unit;
-    if (joined.length <= budget) {
+    if (fitsTokens(joined, budget)) {
       current = joined;
       continue;
     }
     pieces.push(current);
-    const tail = overlapTail(current, overlapChars);
-    current = tail && tail.length + 2 + unit.length <= budget ? `${tail}\n\n${unit}` : unit;
+    const tail = overlapTail(current, overlap);
+    const withTail = `${tail}\n\n${unit}`;
+    current = tail && fitsTokens(withTail, budget) ? withTail : unit;
   }
   if (current) pieces.push(current);
   return pieces.map((piece) => prefix + piece);
 }
 
-/** The last ~`chars` characters of `text`, starting at a word boundary. */
-function overlapTail(text: string, chars: number): string {
-  if (chars <= 0 || text.length <= chars) return '';
-  const slice = text.slice(-chars);
+/** The last ~`tokens` tokens of `text`, starting at a word boundary. */
+function overlapTail(text: string, tokens: number): string {
+  if (tokens <= 0 || fitsTokens(text, tokens)) return '';
+  const slice = text.slice(suffixWithin(text, tokens));
   const cut = slice.search(/\s/);
   return cut === -1 ? '' : slice.slice(cut).trim();
 }
 
-/** Pieces of at most `size` characters, cut at whitespace when there is any nearby. */
+/** Thai vowels and tone marks written above or below the consonant before them. */
+const THAI_MARK = /[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/;
+
+/** Pieces of at most `size` tokens, cut at whitespace when there is any nearby. */
 function hardSplit(text: string, size: number): string[] {
   const out: string[] = [];
   let rest = text;
-  while (rest.length > size) {
-    let cut = size;
-    for (let i = size; i > size / 2; i--) {
+  while (!fitsTokens(rest, size)) {
+    // At least one character per piece, so a tiny `size` still ends.
+    const end = Math.max(1, prefixWithin(rest, size));
+    const half = prefixWithin(rest, size / 2);
+    let cut = end;
+    for (let i = end; i > half; i--) {
       if (/\s/.test(rest[i] ?? '')) {
         cut = i;
         break;
       }
     }
+    // Never strand a Thai vowel or tone mark at the start of the next piece.
+    while (cut > 1 && THAI_MARK.test(rest[cut] ?? '')) cut--;
     out.push(rest.slice(0, cut).trim());
     rest = rest.slice(cut).trim();
   }

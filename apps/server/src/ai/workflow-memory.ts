@@ -1,4 +1,4 @@
-import { clipForAi } from '../attachments/attachment-context.ts';
+import { clipToTokens } from '../retrieval/token-estimate.ts';
 import { fence } from './prompts.ts';
 
 /**
@@ -16,8 +16,8 @@ export type WorkflowMemory = { rounds: RoundSummary[] };
 export const WORKFLOW_MEMORY_LIMITS = {
   /** Only the most recent rounds are kept; older ones are dropped. */
   maxRounds: 8,
-  /** Each round's summary is cut to this many characters. */
-  maxSummaryChars: 1_200,
+  /** Each round's summary is cut to this many tokens (script-aware, ticket 0059). */
+  maxSummaryTokens: 300,
 } as const;
 
 export function emptyMemory(): WorkflowMemory {
@@ -28,10 +28,10 @@ export function emptyMemory(): WorkflowMemory {
 export function rememberRound(
   memory: WorkflowMemory,
   summary: string,
-  limits: { maxRounds: number; maxSummaryChars: number } = WORKFLOW_MEMORY_LIMITS,
+  limits: { maxRounds: number; maxSummaryTokens: number } = WORKFLOW_MEMORY_LIMITS,
 ): WorkflowMemory {
   const round = (memory.rounds.at(-1)?.round ?? 0) + 1;
-  const entry = { round, summary: clipForAi(summary.trim(), limits.maxSummaryChars) };
+  const entry = { round, summary: clipToTokens(summary.trim(), limits.maxSummaryTokens) };
   return { rounds: [...memory.rounds, entry].slice(-Math.max(1, limits.maxRounds)) };
 }
 

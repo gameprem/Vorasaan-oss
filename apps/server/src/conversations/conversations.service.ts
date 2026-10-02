@@ -39,7 +39,6 @@ import {
   modelLabel,
   toRecordedModelColumns,
 } from '../ai/recorded-model.ts';
-import { clipForAi } from '../attachments/attachment-context.ts';
 import { projectAccess } from '../brief/brief-access.ts';
 import { FeatureGuidelinesService } from '../feature-guidelines/feature-guidelines.service.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
@@ -54,6 +53,7 @@ import {
   ContextRetriever,
   splitProjectBrief,
 } from '../retrieval/context-retriever.ts';
+import { clipToTokens } from '../retrieval/token-estimate.ts';
 import {
   type ConversationWithScope,
   conversationInclude,
@@ -70,8 +70,8 @@ export const CONVERSATION_LIMITS = {
   maxRecentMessages: 12,
   /** A fold leaves this many of the newest messages out of the summary. */
   keepRecentMessages: 6,
-  /** The summary is cut to this many characters. */
-  maxSummaryChars: 4_000,
+  /** The summary is cut to this many tokens (script-aware, ticket 0059). */
+  maxSummaryTokens: 1_000,
 } as const;
 
 /**
@@ -521,7 +521,7 @@ export class ConversationsService {
     scope: ConversationScopeForAi,
     rows: MessageRow[],
   ): Promise<{ summary: string; recent: MessageRow[] }> {
-    const { maxRecentMessages, keepRecentMessages, maxSummaryChars } = CONVERSATION_LIMITS;
+    const { maxRecentMessages, keepRecentMessages, maxSummaryTokens } = CONVERSATION_LIMITS;
     if (rows.length <= maxRecentMessages) return { summary: conversation.summary, recent: rows };
     const older = rows.slice(0, rows.length - keepRecentMessages);
     const recent = rows.slice(rows.length - keepRecentMessages);
@@ -532,7 +532,7 @@ export class ConversationsService {
         summary: conversation.summary,
         messages: older.map(toChatMessage),
       });
-      summary = clipForAi(folded.summary.trim(), maxSummaryChars);
+      summary = clipToTokens(folded.summary.trim(), maxSummaryTokens);
     } catch (error) {
       this.logger.error('Folding a Conversation into its summary failed', error as Error);
       throw replyFailed(
