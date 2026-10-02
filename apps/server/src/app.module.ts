@@ -13,6 +13,7 @@ import { BriefModule } from './brief/brief.module.ts';
 import { ClockModule } from './clock/clock.ts';
 import { ConversationsModule } from './conversations/conversations.module.ts';
 import { DecisionRequestsModule } from './decision-requests/decision-requests.module.ts';
+import { DecisionStatsModule } from './decision-stats/decision-stats.module.ts';
 import {
   DelegationsController,
   MyDelegationsController,
@@ -48,6 +49,7 @@ import { SpecModule } from './spec/spec.module.ts';
     GrillingModule,
     FeatureSuggestionsModule,
     DecisionRequestsModule,
+    DecisionStatsModule,
     SpecModule,
     BriefModule,
     ConversationsModule,
