@@ -10,6 +10,7 @@ import { AuthService } from './auth/auth.service.ts';
 import { DevUsersController } from './auth/dev-users.controller.ts';
 import { IdentityGuard } from './auth/identity.guard.ts';
 import { BriefModule } from './brief/brief.module.ts';
+import { ClockModule } from './clock/clock.ts';
 import { ConversationsModule } from './conversations/conversations.module.ts';
 import { DecisionRequestsModule } from './decision-requests/decision-requests.module.ts';
 import {
@@ -26,6 +27,7 @@ import { InboxModule } from './inbox/inbox.module.ts';
 import { OrgController } from './org/org.controller.ts';
 import { OrgService } from './org/org.service.ts';
 import { PrismaModule } from './prisma/prisma.module.ts';
+import { ResponseWindowsModule } from './response-windows/response-windows.module.ts';
 import { RetrievalModule } from './retrieval/retrieval.module.ts';
 import { AiSettingsController } from './settings/ai-settings.controller.ts';
 import { AtlassianModule } from './settings/atlassian.module.ts';
@@ -35,11 +37,13 @@ import { SpecModule } from './spec/spec.module.ts';
 @Module({
   imports: [
     PrismaModule,
+    ClockModule,
     MastraModule,
     RetrievalModule,
     AtlassianModule,
     AttachmentsModule,
     InboxModule,
+    ResponseWindowsModule,
     FeatureGuidelinesModule,
     GrillingModule,
     FeatureSuggestionsModule,

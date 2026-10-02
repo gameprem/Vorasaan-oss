@@ -17,6 +17,7 @@ import {
   SpecVersionSource,
   TeamRole,
 } from './enums.ts';
+import { ResponseWindowState } from './response-window.ts';
 
 const Id = z.uuid();
 const Timestamp = z.iso.datetime();
@@ -50,6 +51,8 @@ const RequestToDecide = DecisionRequestRef.extend({
   deciderRole: TeamRole,
   /** Set when the viewer received the request as someone's Delegate. */
   onBehalfOf: PersonRef.nullable(),
+  /** For "due in 2h", "overdue 1h" and "escalated" (ticket 0055). */
+  responseWindow: ResponseWindowState,
 });
 
 export const InboxItem = z.discriminatedUnion('kind', [
@@ -110,7 +113,7 @@ export const NotificationView = z.object({
   id: Id,
   type: NotificationType,
   feature: FeatureRef.nullable(),
-  /** REQUEST_DECIDED, REQUEST_CLAIMED, REQUEST_WITHDRAWN. */
+  /** REQUEST_DECIDED, REQUEST_CLAIMED, REQUEST_WITHDRAWN, REQUEST_REMINDER, REQUEST_ESCALATED, REQUEST_OVERDUE. */
   decisionRequest: DecisionRequestRef.extend({ status: DecisionRequestStatus }).nullable(),
   /** SPEC_VERSION_CREATED. */
   specVersion: z.object({ id: Id, version: z.int().positive(), approvedBy: PersonRef }).nullable(),

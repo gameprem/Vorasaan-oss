@@ -239,11 +239,11 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [x] Several AI providers and Approved Models chosen by an Admin, with a model per AI task (0053, [ADR 0010](./docs/adr/0010-approved-models-and-the-chat-picker.md)).
    - [x] A model picker in the chat: each Conversation remembers its model, and every reply records the model that wrote it (0054).
 2. **Context management** ([ADR 0012](./docs/adr/0012-context-budgets-and-auto-compaction.md)): token counts that are right for Thai, context budgets as shares of each model's window, and Conversations that auto-compact into a structured summary (goal, agreed points, open questions, pending Action Cards, preferences) instead of forgetting. Compact and retry once when a provider says the prompt is too long. Prompt caching for the stable prefix.
-   - [ ] Count tokens correctly for Thai (0059).
-   - [ ] Context budgets from the model, and auto-compaction (0060).
-   - [ ] Prompt caching (0061).
+   - [x] Count tokens correctly for Thai (0059).
+   - [x] Context budgets from the model, and auto-compaction (0060).
+   - [x] Prompt caching (0061).
 3. **Decision speed** ([ADR 0011](./docs/adr/0011-response-windows-and-deciding-from-chat-apps.md)): every Decision Request has a Response Window (Blocker 4 working hours, Question 2 working days by default). Past it, it escalates: reminders, then the Delegate, then the Raiser and Tech Leads. Escalation never decides or reassigns by itself. Decision Lead Time is measured per Project. Recipients can link LINE, Slack or Teams and decide from a card there.
-   - [ ] Response Windows and escalation (0055).
+   - [x] Response Windows and escalation (0055).
    - [ ] Decision Lead Time (0056).
    - [ ] Link a LINE, Slack or Teams account (0057).
    - [ ] Decide from LINE, Slack and Teams (0058).

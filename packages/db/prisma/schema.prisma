@@ -146,6 +146,23 @@ enum NotificationType {
   REQUEST_WITHDRAWN // to the Decider or recipients
   SPEC_VERSION_CREATED // to the Feature's PO Role Owners
   DELEGATION_STARTED // to the Delegate
+  REQUEST_REMINDER // escalation step 1: to the Decider, or the Recipients while nobody has Claimed it
+  REQUEST_ESCALATED // escalation step 2: to each active Delegate added as a Recipient
+  REQUEST_OVERDUE // escalation step 3: to the Raiser and the Team's Tech Leads
+}
+
+// How a Response Window is counted (ADR 0011): in working hours or working days of the
+// Organization's calendar. A working day is as long as the working hours of one day.
+enum ResponseWindowUnit {
+  WORKING_HOURS
+  WORKING_DAYS
+}
+
+// The steps of a Decision Request's escalation, written to its history (ticket 0055).
+enum RequestHistoryKind {
+  REMINDED // 1: the Recipients were reminded
+  DELEGATES_ADDED // 2: each Recipient's active Delegate became a Recipient
+  OVERDUE_REPORTED // 3: the Raiser and the Team's Tech Leads were told it is overdue
 }
 
 // ─── Identity & access ──────────────────────────────────────────────────────
@@ -236,6 +253,36 @@ model Organization {
   projects       Project[]
   chunks         ContentChunk[]
   guidelines     GuidelineCriterion[]
+  responseWindow ResponseWindowSettings?
+  holidays       OrgHoliday[]
+}
+
+// The Organization's working calendar and default Response Windows (ADR 0011).
+// No row: the defaults (UTC, Monday to Friday 09:00-18:00, Blocker 4 working hours,
+// Question 2 working days).
+model ResponseWindowSettings {
+  organizationId     String             @id
+  timeZone           String // IANA name, e.g. Asia/Bangkok
+  workingDays        Int[] // ISO weekdays: 1 = Monday ... 7 = Sunday
+  workStartMinute    Int // minutes after local midnight, e.g. 540 = 09:00
+  workEndMinute      Int // after workStartMinute
+  blockerWindow      Int
+  blockerWindowUnit  ResponseWindowUnit
+  questionWindow     Int
+  questionWindowUnit ResponseWindowUnit
+  updatedAt          DateTime           @updatedAt
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// A public holiday the Admin maintains: no working time that day.
+model OrgHoliday {
+  id             String       @id @default(uuid())
+  organizationId String
+  date           DateTime     @db.Date
+  name           String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, date])
 }
 
 model OrgMembership {
@@ -342,21 +389,26 @@ model AiTaskModel {
 
 // A product (e.g. "Mobile Banking"). Maps to a Jira project.
 model Project {
-  id             String               @id @default(uuid())
-  organizationId String
-  name           String
-  jiraKey        String?
-  createdAt      DateTime             @default(now())
-  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  teams          Team[]
-  chunks         ContentChunk[]
-  attachments    Attachment[] // Project-level Attachments (not on a Feature)
-  briefVersions  BriefVersion[]
-  briefProposals BriefProposal[]
-  guidelines     GuidelineCriterion[]
-  grillings      Grilling[]
-  suggestions    FeatureSuggestion[]
-  conversations  Conversation[]
+  id                 String               @id @default(uuid())
+  organizationId     String
+  name               String
+  jiraKey            String?
+  // The Project's own default Response Windows; null keeps the Organization's (ADR 0011).
+  blockerWindow      Int?
+  blockerWindowUnit  ResponseWindowUnit?
+  questionWindow     Int?
+  questionWindowUnit ResponseWindowUnit?
+  createdAt          DateTime             @default(now())
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  teams              Team[]
+  chunks             ContentChunk[]
+  attachments        Attachment[] // Project-level Attachments (not on a Feature)
+  briefVersions      BriefVersion[]
+  briefProposals     BriefProposal[]
+  guidelines         GuidelineCriterion[]
+  grillings          Grilling[]
+  suggestions        FeatureSuggestion[]
+  conversations      Conversation[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -599,6 +651,14 @@ model DecisionRequest {
   status                  DecisionRequestStatus @default(DRAFT)
   submittedAt             DateTime?
   closedAt                DateTime?
+  // Response Window (ADR 0011, ticket 0055). Set on submit: the window in working
+  // minutes and when it runs out. While NEEDS_INFO the clock is paused (`pausedAt`);
+  // the answer moves `dueAt` later by the working time spent waiting.
+  responseWindowMinutes   Int?
+  dueAt                   DateTime?
+  pausedAt                DateTime?
+  // How far escalation has gone: 0 none, 1 reminded, 2 Delegates added, 3 overdue reported.
+  escalationStep          Int                   @default(0)
   // The model that drafted its AI Choices in a Conversation (ticket 0054), as it
   // was then (see SpecProposal). Null when raised elsewhere.
   choicesApprovedModelId  String?
@@ -616,8 +676,10 @@ model DecisionRequest {
   messages      RequestMessage[]
   decision      Decision?
   notifications Notification[]
+  history       RequestHistoryEntry[]
 
   @@index([featureId, kind, status])
+  @@index([status, dueAt])
   @@index([deciderId, status])
   @@index([raiserId, status])
 }
@@ -636,6 +698,19 @@ model RequestRecipient {
   @@unique([requestId, userId])
   @@index([userId])
   @@index([onBehalfOfId])
+}
+
+// One escalation step of a Decision Request, at most once each (ticket 0055).
+// `people` snapshots who was reminded, added or told, as [{ id, name }].
+model RequestHistoryEntry {
+  id        String             @id @default(uuid())
+  requestId String
+  kind      RequestHistoryKind
+  people    Json
+  createdAt DateTime
+  request   DecisionRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, kind])
 }
 
 // Local context sent from the CLI (--file, --diff) or pasted text.
