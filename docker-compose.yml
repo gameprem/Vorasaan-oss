@@ -28,8 +28,11 @@ services:
       DATABASE_URL: postgresql://vorasaan:vorasaan@db:5432/vorasaan
       # Required: the server refuses to start without it. Generate: openssl rand -base64 32
       VORASAAN_SECRET_KEY: ${VORASAAN_SECRET_KEY:-}
-      # The web app's public address, for the links on chat app cards.
+      # The web app's public address, for the links on chat app cards and the setup link.
       VORASAAN_WEB_URL: ${VORASAAN_WEB_URL:-http://localhost:3000}
+      # Optional: your own Setup Token for first-run setup (at least 20 characters). Unset, the
+      # server prints a new one at each start until setup is done: docker compose logs server
+      VORASAAN_SETUP_TOKEN: ${VORASAAN_SETUP_TOKEN:-}
       # Attachment files: the vorasaan_files volume by default, or any S3-compatible bucket.
       FILE_STORAGE_DRIVER: ${FILE_STORAGE_DRIVER:-local}
       FILE_STORAGE_LOCAL_DIR: /data/files

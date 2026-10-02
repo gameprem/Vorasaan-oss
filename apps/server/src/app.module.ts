@@ -34,6 +34,7 @@ import { RetrievalModule } from './retrieval/retrieval.module.ts';
 import { AiSettingsController } from './settings/ai-settings.controller.ts';
 import { AtlassianModule } from './settings/atlassian.module.ts';
 import { SetupController } from './setup/setup.controller.ts';
+import { SetupTokenService } from './setup/setup-token.service.ts';
 import { SpecModule } from './spec/spec.module.ts';
 
 @Module({
@@ -78,6 +79,7 @@ import { SpecModule } from './spec/spec.module.ts';
     AuthService,
     DelegationsService,
     OrgService,
+    SetupTokenService,
   ],
 })
 export class AppModule {}

@@ -13,6 +13,7 @@ import type {
   ProjectView,
   TeamRole,
 } from '@vorasaan/shared';
+import { SETUP_TOKEN_HEADER } from '@vorasaan/shared';
 import type { ScriptedModel } from './model';
 import {
   BEAM_ERRORS,
@@ -39,13 +40,20 @@ export type Seeded = {
   userIds: Record<PersonKey, string>;
 };
 
-type Api = <T>(as: string | null, method: string, path: string, body?: unknown) => Promise<T>;
+type Api = <T>(
+  as: string | null,
+  method: string,
+  path: string,
+  body?: unknown,
+  headers?: Record<string, string>,
+) => Promise<T>;
 
 export function apiClient(baseUrl: string): Api {
-  return async (token, method, path, body) => {
+  return async (token, method, path, body, headers) => {
     const res = await fetch(`${baseUrl}${path}`, {
       method,
       headers: {
+        ...headers,
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
@@ -57,21 +65,32 @@ export function apiClient(baseUrl: string): Api {
   };
 }
 
-export async function seedStory(api: Api, model: ScriptedModel, password: string) {
+export async function seedStory(
+  api: Api,
+  model: ScriptedModel,
+  password: string,
+  setupToken: string,
+) {
   const tokens = {} as Record<PersonKey, string>;
   const userIds = {} as Record<PersonKey, string>;
 
   // The first Admin sets the Organization up, with the AI gateway as its provider.
-  const setup = await api<LoginResult>(null, 'POST', '/setup', {
-    organizationName: ORGANIZATION,
-    admin: { name: PEOPLE.pim.name, email: PEOPLE.pim.email, password },
-    ai: {
-      provider: 'OPENAI_COMPATIBLE',
-      model: 'qwen3-235b-a22b-instruct',
-      baseUrl: model.url,
-      apiKey: 'sk-gw-7Hq2mZ9vR4tL8nXcP3',
+  const setup = await api<LoginResult>(
+    null,
+    'POST',
+    '/setup',
+    {
+      organizationName: ORGANIZATION,
+      admin: { name: PEOPLE.pim.name, email: PEOPLE.pim.email, password },
+      ai: {
+        provider: 'OPENAI_COMPATIBLE',
+        model: 'qwen3-235b-a22b-instruct',
+        baseUrl: model.url,
+        apiKey: 'sk-gw-7Hq2mZ9vR4tL8nXcP3',
+      },
     },
-  });
+    { [SETUP_TOKEN_HEADER]: setupToken },
+  );
   tokens.pim = setup.token;
   userIds.pim = setup.user.id;
   const pim = setup.token;

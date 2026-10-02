@@ -25,6 +25,8 @@ export class ApiError extends Error {
 type ApiOptions = {
   method?: string;
   body?: unknown;
+  /** Extra request headers, such as the Setup Token. */
+  headers?: Record<string, string>;
   /** Send the visitor to /login on 401 (default). Off for the layout and login itself. */
   redirectOnUnauthorized?: boolean;
   /**
@@ -53,6 +55,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     res = await fetch(`${API_URL}${path}`, {
       method: options.method ?? 'GET',
       headers: {
+        ...options.headers,
         ...auth,
         ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
       },

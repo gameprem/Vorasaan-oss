@@ -57,6 +57,9 @@ export default defineConfig({
         VORASAAN_AI: 'fake',
         VORASAAN_DEV_AUTH: 'true',
         VORASAAN_SECRET_KEY: randomBytes(32).toString('base64'),
+        // Global setup seeds an Organization directly, so no spec runs /setup; should the
+        // server boot on an empty database, setup needs a known Setup Token (ticket 0062).
+        VORASAAN_SETUP_TOKEN: E2E.setupToken,
         // Chat app replies go to the fake LINE API in chat-apps.e2e.ts, never to LINE.
         VORASAAN_LINE_API_URL: E2E.fakeChatUrl,
       },
