@@ -1,5 +1,6 @@
 import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
 import type {
+  ActionCardForAi,
   AiCallOptions,
   AiPort,
   AttachmentForAi,
@@ -8,6 +9,7 @@ import type {
   ChatTool,
   ContextBlock,
   ConversationScopeForAi,
+  ConversationSummaryDraft,
   DecisionForAi,
   DismissedSuggestionForAi,
   FeatureFitDraft,
@@ -23,7 +25,9 @@ import type {
   RequestForAi,
   SuggestionForAi,
 } from './ai.port.ts';
-import { describeDecision } from './prompts.ts';
+import { toolTokens } from './context-budget.ts';
+import { chatPrompt, describeDecision, SUMMARY_SECTIONS } from './prompts.ts';
+import { estimateChatTokens } from './token-count.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
 
 /**
@@ -88,6 +92,42 @@ export function fakeChatReply(input: {
   return `About ${about}: you said "${latest.slice(0, 80)}". I read ${input.context.length} context blocks.`;
 }
 
+/**
+ * What a chat call's whole prompt costs, measured the way the fake counts: the
+ * rendered instructions (Brief, Guidelines, context, summary), the tools and the
+ * messages, by the script-aware estimate. Tests check budgets against it.
+ */
+export async function chatPromptTokens(input: {
+  scope: ConversationScopeForAi;
+  context: ContextBlock[];
+  foundation: ProjectFoundationForAi;
+  summary: string;
+  recentMessages: ChatMessageForAi[];
+  tools: ChatTool[];
+}): Promise<number> {
+  return (
+    estimateChatTokens({ system: await chatPrompt(input), messages: input.recentMessages }) +
+    toolTokens(input.tools)
+  );
+}
+
+/** Words that mark an agreement, in English and Thai, for the fake's Conversation Summary. */
+const AGREED = /\b(agreed?|we will|decided|let's go with)\b|ตกลง|เห็นด้วย|สรุปว่า|ใช้แบบ/i;
+/** What the fake keeps as names, numbers and ids: ticket keys, ids, amounts with units. */
+const KEY_FACT =
+  /\b[A-Z][A-Z0-9]+-\d+\b|\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g;
+
+/** The items of one section of a rendered Conversation Summary (the fake carries them over). */
+function summarySection(summary: string, heading: string): string[] {
+  const at = summary.indexOf(`## ${heading}\n`);
+  if (at < 0) return [];
+  const body = summary.slice(at + heading.length + 4).split('\n## ')[0] ?? '';
+  return body
+    .split('\n')
+    .filter((l) => l.startsWith('- ') && l !== '- (none)')
+    .map((l) => l.slice(2));
+}
+
 /** The fake asks a follow-up when the latest reply has fewer words than this. */
 export const FAKE_THIN_ANSWER_WORDS = 4;
 
@@ -102,6 +142,13 @@ export class FakeAiPort implements AiPort {
   readonly calls: { method: keyof AiPort; input: unknown; model: ModelChoice | null }[] = [];
   /** Replies the next chat calls give, in order, instead of the default one. */
   readonly chatScript: ScriptedChatReply[] = [];
+  /** Every countTokens call, with what it counted (kept apart from `calls`). */
+  readonly tokenCounts: {
+    input: { system: string; messages: ChatMessageForAi[] };
+    tokens: number;
+  }[] = [];
+  /** The fake's counter is the estimate times this: above 1 plays a denser tokenizer. */
+  tokenScale = 1;
 
   /**
    * Decisions the next grillingFollowUp calls return, in order, instead of the
@@ -150,18 +197,58 @@ export class FakeAiPort implements AiPort {
     if (scripted?.error) throw scripted.error;
   }
 
-  /** The old summary, then one line per folded message. */
+  /** The script-aware estimate (ticket 0059) times `tokenScale`: deterministic. */
+  async countTokens(input: { system: string; messages: ChatMessageForAi[] }) {
+    const tokens = Math.ceil(estimateChatTokens(input) * this.tokenScale);
+    this.tokenCounts.push({ input, tokens });
+    return tokens;
+  }
+
+  /**
+   * A deterministic Conversation Summary: the sections so far carried over; the
+   * goal from the first message; every line that agrees ("agreed", "ตกลง"...) in
+   * Agreed; questions in Open questions; the PROPOSED Action Cards; ticket keys
+   * and ids in Names, numbers and ids; and one short line per folded message.
+   */
   async summarizeConversation(
     input: {
       scope: ConversationScopeForAi;
       summary: string;
       messages: ChatMessageForAi[];
+      actionCards: ActionCardForAi[];
     },
     options?: AiCallOptions,
-  ) {
+  ): Promise<ConversationSummaryDraft> {
     this.calls.push({ method: 'summarizeConversation', input, model: options?.model ?? null });
-    const lines = input.messages.map((m) => `${m.role}: ${m.content.slice(0, 60)}`);
-    return { summary: [input.summary, ...lines].filter(Boolean).join('\n') };
+    const before = (key: (typeof SUMMARY_SECTIONS)[number][0]) =>
+      summarySection(input.summary, SUMMARY_SECTIONS.find(([k]) => k === key)?.[1] ?? '');
+    const lines = input.messages.flatMap((m) =>
+      m.content
+        .split(/\n+|(?<=[.!?])\s+/)
+        .map((l) => l.trim())
+        .filter(Boolean),
+    );
+    const firstUser = input.messages.find((m) => m.role === 'USER')?.content ?? '';
+    const unique = (items: string[]) => [...new Set(items)];
+    return {
+      goal: before('goal')[0] ?? firstUser.slice(0, 120),
+      agreed: unique([...before('agreed'), ...lines.filter((l) => AGREED.test(l))]).map((l) =>
+        l.slice(0, 300),
+      ),
+      openQuestions: unique([
+        ...before('openQuestions'),
+        ...lines.filter((l) => l.endsWith('?')).map((l) => l.slice(0, 300)),
+      ]),
+      pendingActionCards: input.actionCards
+        .filter((c) => c.status === 'PROPOSED')
+        .map((c) => `${c.kind}: ${c.title}`),
+      preferences: before('preferences'),
+      keyFacts: unique([
+        ...before('keyFacts'),
+        ...input.messages.flatMap((m) => m.content.match(KEY_FACT) ?? []),
+        ...input.messages.map((m) => `${m.role}: ${m.content.slice(0, 60)}`),
+      ]),
+    };
   }
 
   async generateChoices(

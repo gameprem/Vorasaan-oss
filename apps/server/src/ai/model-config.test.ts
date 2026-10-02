@@ -85,6 +85,7 @@ describe('MastraAiPort', () => {
       integrationId: 'i1',
       provider: null,
       name: 'x',
+      contextWindow: 32_000,
     };
     await expect(
       port.summarizeAttachment({ attachment: { title: 't', source: 'URL', text: 'x' } }, { model }),
@@ -131,7 +132,12 @@ describe('MastraAiPort', () => {
     });
     await expect(drain(port.chat(chatInput))).rejects.toThrow('stop');
     await expect(
-      port.summarizeConversation({ scope: chatInput.scope, summary: '', messages: [] }),
+      port.summarizeConversation({
+        scope: chatInput.scope,
+        summary: '',
+        messages: [],
+        actionCards: [],
+      }),
     ).rejects.toThrow('stop');
     expect(tasks).toEqual(['chat', 'summarizeConversation']);
   });

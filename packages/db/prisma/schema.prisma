@@ -296,6 +296,9 @@ model ApprovedModel {
   modelId        String // the provider's model name, e.g. claude-opus-5-5
   displayName    String // e.g. "Fast", "Best", "Local (no data leaves)"
   note           String?
+  // How many tokens one call to it may hold, prompt and reply together (ticket 0060):
+  // prefilled for known models, else VORASAAN_CONTEXT_WINDOW; an Admin can edit it.
+  contextWindow  Int
   position       Int
   isDefault      Boolean        @default(false)
   createdAt      DateTime       @default(now())

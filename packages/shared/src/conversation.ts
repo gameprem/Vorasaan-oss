@@ -188,6 +188,12 @@ export const ConversationListItem = z.object({
    * Conversation then runs on the chat default (`GET /ai/models`).
    */
   modelId: Id.nullable(),
+  /**
+   * How many of the oldest messages were summarized (ticket 0060): the AI now
+   * reads them only through the Conversation Summary. They stay stored and shown;
+   * a client marks them "Earlier messages were summarized". 0 before any.
+   */
+  summarizedThrough: z.int().nonnegative(),
   createdAt: Timestamp,
   /** When the last message was written. */
   updatedAt: Timestamp,

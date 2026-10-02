@@ -226,10 +226,31 @@ export type ChatTool = { name: string; description: string; inputSchema: z.ZodTy
 /** What a chat reply streams: pieces of its text, and the tools it calls. */
 export type ChatChunk = { type: 'text'; delta: string } | { type: 'tool-call'; call: ChatToolCall };
 
+const SummaryItems = z.array(z.string().trim().min(1).max(1_000)).max(60);
+
+/**
+ * A Conversation Summary (ticket 0060, ADR 0012): the older turns of a
+ * Conversation folded into fixed sections, so what was agreed survives. The
+ * server renders it as Markdown (`renderConversationSummary`) and stores it.
+ */
 export const ConversationSummaryDraft = z.object({
-  summary: z.string().trim().min(1),
+  /** What the person is trying to do in this Conversation. */
+  goal: z.string().trim().max(2_000),
+  /** What the person and the assistant agreed on, decided or settled. */
+  agreed: SummaryItems,
+  /** Questions still open. */
+  openQuestions: SummaryItems,
+  /** Action Cards still waiting for a decision, each with its state. */
+  pendingActionCards: SummaryItems,
+  /** The person's stated preferences (language, tone, format, priorities). */
+  preferences: SummaryItems,
+  /** Names, numbers and ids that must survive word for word. */
+  keyFacts: SummaryItems,
 });
 export type ConversationSummaryDraft = z.infer<typeof ConversationSummaryDraft>;
+
+/** An Action Card of the Conversation, as the summary is told about it. Its title is untrusted. */
+export type ActionCardForAi = { kind: string; title: string; status: string };
 
 /**
  * The model one AI call runs on, chosen by the server for that call (ADR 0010).
@@ -246,6 +267,12 @@ export type ModelChoice = {
   provider: ResolvedProvider | null;
   /** The model id, or the env "provider/model" string. Safe to show. */
   name: string;
+  /**
+   * Tokens one call may hold, prompt and reply together (ticket 0060): the Approved
+   * Model's, or for an env model VORASAAN_CONTEXT_WINDOW, else its known window.
+   * Every budget of the call is a share of it (`planBudget`).
+   */
+  contextWindow: number;
 };
 
 /**
@@ -285,15 +312,32 @@ export interface AiPort {
     options?: AiCallOptions,
   ): AsyncIterable<ChatChunk>;
 
-  /** The Conversation's summary with `messages` (the oldest not yet in it) folded in. */
+  /**
+   * The Conversation Summary with `messages` (the oldest not yet in it) folded
+   * in, in its fixed sections (ticket 0060).
+   */
   summarizeConversation(
     input: {
       scope: ConversationScopeForAi;
+      /** The Conversation Summary so far (rendered), or empty before the first fold. */
       summary: string;
       messages: ChatMessageForAi[];
+      /** The Conversation's Action Cards and their state, for "pending Action Cards". */
+      actionCards: ActionCardForAi[];
     },
     options?: AiCallOptions,
   ): Promise<ConversationSummaryDraft>;
+
+  /**
+   * How many tokens `system` and `messages` cost on the call's model (ticket
+   * 0060): the provider's counting API where there is one, else the script-aware
+   * estimate (ticket 0059). Counted once per turn, never per chunk. Never throws
+   * for a counting failure: it falls back to the estimate.
+   */
+  countTokens(
+    input: { system: string; messages: ChatMessageForAi[] },
+    options?: AiCallOptions,
+  ): Promise<number>;
 
   generateChoices(
     input: {
@@ -431,6 +475,43 @@ export interface AiPort {
     },
     options?: AiCallOptions,
   ): Promise<FeatureFitDraft>;
+}
+
+/**
+ * The provider refused a request as longer than the model's window (ticket 0060).
+ * A Conversation then compacts at once and retries one time.
+ */
+export class ContextTooLongError extends Error {
+  constructor(cause?: unknown) {
+    super('The request is longer than the model can read', { cause });
+    this.name = 'ContextTooLongError';
+  }
+}
+
+/** How providers word a too-long request: Anthropic, OpenAI, and OpenAI-compatible servers. */
+const TOO_LONG =
+  /prompt is too long|context[_ ]length|context window|maximum context|too many (input )?tokens|input is too long|exceeds? the (model'?s? )?(maximum|max) (input|context)/i;
+
+/** Whether `error` (or one of its causes) says the request was too long for the model. */
+export function isContextTooLong(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    if (current instanceof ContextTooLongError) return true;
+    const e = current as {
+      message?: unknown;
+      code?: unknown;
+      responseBody?: unknown;
+      cause?: unknown;
+    };
+    if (e.code === 'context_length_exceeded') return true;
+    for (const text of [e.message, e.responseBody]) {
+      if (typeof text === 'string' && TOO_LONG.test(text)) return true;
+    }
+    current = e.cause;
+  }
+  return typeof error === 'string' && TOO_LONG.test(error);
 }
 
 export class AiOutputError extends Error {

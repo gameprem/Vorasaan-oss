@@ -29,16 +29,20 @@ import {
   type ChatMessageForAi,
   type ChatToolCall,
   type ContextBlock,
+  ContextTooLongError,
   type ConversationScopeForAi,
   type ModelChoice,
   type ProjectFoundationForAi,
 } from '../ai/ai.port.ts';
 import { AiSettingsService } from '../ai/ai-settings.service.ts';
+import { BUDGET_CONFIG, type Budget, ContextBudgets, projectBudget } from '../ai/context-budget.ts';
+import { renderConversationSummary } from '../ai/prompts.ts';
 import {
   fromRecordedModelColumns,
   modelLabel,
   toRecordedModelColumns,
 } from '../ai/recorded-model.ts';
+import { estimateMessageTokens, MESSAGE_OVERHEAD_TOKENS } from '../ai/token-count.ts';
 import { projectAccess } from '../brief/brief-access.ts';
 import { FeatureGuidelinesService } from '../feature-guidelines/feature-guidelines.service.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
@@ -48,12 +52,8 @@ import {
 } from '../grilling/grilling-conversations.service.ts';
 import { EventBus } from '../inbox/event-bus.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
-import {
-  CONTEXT_BUDGET,
-  ContextRetriever,
-  splitProjectBrief,
-} from '../retrieval/context-retriever.ts';
-import { clipToTokens } from '../retrieval/token-estimate.ts';
+import { ContextRetriever, splitProjectBrief } from '../retrieval/context-retriever.ts';
+import { clipToTokens, estimateTokens } from '../retrieval/token-estimate.ts';
 import {
   type ConversationWithScope,
   conversationInclude,
@@ -63,16 +63,6 @@ import {
 } from './conversation.view.ts';
 import { conversationNotFound as notFound, replyFailed } from './conversation-errors.ts';
 import { ConversationLocks } from './conversation-locks.ts';
-
-/** How much of a Conversation the AI gets on each turn, besides its retrieved context (ADR 0007). */
-export const CONVERSATION_LIMITS = {
-  /** At most this many messages after the summary are sent; past it, the oldest are folded in. */
-  maxRecentMessages: 12,
-  /** A fold leaves this many of the newest messages out of the summary. */
-  keepRecentMessages: 6,
-  /** The summary is cut to this many tokens (script-aware, ticket 0059). */
-  maxSummaryTokens: 1_000,
-} as const;
 
 /**
  * The most rounds of tool calls in one turn (Action Cards, 0043). After them the
@@ -104,9 +94,15 @@ type Turn = {
  * part of the reply is stored, the owner gets `conversation.failed`, the call
  * is a 502, and the message stays so `retry` can ask again.
  *
- * Each turn the AI gets freshly retrieved context for the scope, the summary of
- * earlier turns and only the messages after it. Past `maxRecentMessages` the
- * oldest of those are folded into the summary first.
+ * Each turn the AI gets freshly retrieved context for the scope, the
+ * Conversation Summary of earlier turns and only the messages after it, each
+ * within its share of the turn's model's window (ticket 0060, ADR 0012). When the
+ * history passes `BUDGET_CONFIG.compaction.at` of its share (counted once per
+ * turn with `AiPort.countTokens`), it is compacted first: the newest turns are
+ * kept word for word and the rest is folded into the Conversation Summary.
+ * Messages stay stored; only what is sent to the AI shrinks. When the provider
+ * still rejects the request as too long, the Conversation compacts at once and
+ * retries one time before reporting the failure.
  *
  * The AI may call tools (Action Cards, 0043). Each round that calls tools is
  * stored as it completes: the ASSISTANT message with its calls, then one TOOL
@@ -144,6 +140,7 @@ export class ConversationsService {
     private readonly locks: ConversationLocks,
     private readonly grilling: GrillingConversationsService,
     private readonly models: AiSettingsService,
+    private readonly budgets: ContextBudgets,
   ) {}
 
   /** Anyone in the scope's Organization starts one; the AI replies to the first message. */
@@ -295,8 +292,8 @@ export class ConversationsService {
   }
 
   /**
-   * Replies to the trailing message: folds old messages into the summary if
-   * needed, retrieves the scope's context, then streams the AI's reply to the
+   * Replies to the trailing message: compacts the history if needed, retrieves
+   * the scope's context, then streams the AI's reply to the
    * owner. Each round of tool calls is run and stored, and the AI goes on with
    * the results; the final reply is stored once complete. Call only while
    * holding the Conversation's lock.
@@ -331,13 +328,21 @@ export class ConversationsService {
       orderBy: { position: 'desc' },
     });
     const scope = scopeForAi(conversation);
-    const { summary, recent } = await this.fold(conversation, scope, rows);
-    const { context, foundation } = await this.contextFor(conversation, recent);
     const model = await this.modelFor(conversation);
     const recordedModel = toRecordedModelColumns(model.record);
-
     const tools = this.cards.toolsFor(conversation);
-    const recentMessages = recent.map(toChatMessage);
+    // Every share of this turn comes from its model's window (0060).
+    const { budget } = await this.budgets.forTask(
+      'chat',
+      conversation.featureId ? 'conversationFeature' : 'conversationProject',
+      { model: model.choice, tools },
+    );
+    const compacting = { user, scope, budget, model: model.choice };
+    let { summary, recent } = await this.compact(conversation, rows, compacting);
+    const { context, foundation } = await this.contextFor(conversation, recent, budget);
+
+    let recentMessages = forAi(recent, budget.history - estimateTokens(summary));
+    let retried = false;
     const steps: MessageRow[] = [];
     const actionCards: ActionCardView[] = [];
     const emit = (event: ServerEvent) => this.bus.emit(user.id, event);
@@ -382,6 +387,23 @@ export class ConversationsService {
       } catch (error) {
         if (stopped.aborted)
           return this.finish(user, id, replyId, text, message, steps, actionCards, model);
+        if (error instanceof ContextTooLongError && !retried) {
+          // Too long for the model after all: compact at once, then try this step once more.
+          retried = true;
+          this.logger.warn('The request was too long for the model; compacting and retrying');
+          const current = await this.db.conversation.findUniqueOrThrow({ where: { id } });
+          const since = await this.db.conversationMessage.findMany({
+            where: { conversationId: id, position: { gte: current.summarizedThrough } },
+            orderBy: { position: 'asc' },
+          });
+          ({ summary, recent } = await this.compact(current, since, {
+            ...compacting,
+            force: true,
+          }));
+          recentMessages = forAi(recent, budget.history - estimateTokens(summary));
+          round--;
+          continue;
+        }
         this.logger.error('A Conversation reply failed', error as Error);
         const reason = 'The AI failed while replying, so no reply was saved. Try again.';
         emit({
@@ -428,7 +450,8 @@ export class ConversationsService {
       }
       steps.push(step.message, ...results);
       actionCards.push(...made);
-      recentMessages.push(toChatMessage(step.message), ...results.map(toChatMessage));
+      // The turn's own tool rounds come out of the reply's room, as they are written.
+      recentMessages = [...recentMessages, ...[step.message, ...results].map(toChatMessage)];
     }
   }
 
@@ -512,27 +535,76 @@ export class ConversationsService {
   }
 
   /**
-   * The summary and the messages to send. Past `maxRecentMessages`, all but the
-   * newest `keepRecentMessages` are folded into the summary, which is saved
-   * before the reply, so a failed reply never folds them twice.
+   * The Conversation Summary and the messages to send this turn (ticket 0060).
+   * The history (the summary so far and the messages after it) is counted once
+   * on the turn's model; past `compaction.at` of its share, every message before
+   * the newest turns that fit in `compaction.keep` of it (the current turn always
+   * stays) is folded into the summary, which is cut to `compaction.summary` of
+   * it and saved before the reply, so a failed reply never folds them twice.
+   * `force` (the provider said "too long") folds everything before the current
+   * turn without counting.
    */
-  private async fold(
+  private async compact(
     conversation: { id: string; summary: string; summarizedThrough: number },
-    scope: ConversationScopeForAi,
     rows: MessageRow[],
+    turn: {
+      user: User;
+      scope: ConversationScopeForAi;
+      budget: Budget;
+      model: ModelChoice;
+      force?: boolean;
+    },
   ): Promise<{ summary: string; recent: MessageRow[] }> {
-    const { maxRecentMessages, keepRecentMessages, maxSummaryTokens } = CONVERSATION_LIMITS;
-    if (rows.length <= maxRecentMessages) return { summary: conversation.summary, recent: rows };
-    const older = rows.slice(0, rows.length - keepRecentMessages);
-    const recent = rows.slice(rows.length - keepRecentMessages);
+    const { at, keep, summary: summaryShare } = BUDGET_CONFIG.compaction;
+    const share = turn.budget.history;
+    const unchanged = { summary: conversation.summary, recent: rows };
+    // The current turn starts at the person's last message; it is never folded.
+    const current = rows.findLastIndex((m) => m.role === 'USER');
+    if (current <= 0) return unchanged;
+
+    // The provider's count over the script-aware estimate: scales each message's estimate.
+    let scale = 1;
+    if (!turn.force) {
+      const messages = rows.map(toChatMessage);
+      const counted = await this.ai.countTokens(
+        { system: conversation.summary, messages },
+        { model: turn.model },
+      );
+      if (counted <= at * share) return unchanged;
+      const estimated =
+        estimateTokens(conversation.summary) +
+        messages.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
+      scale = Math.max(0.25, counted / Math.max(1, estimated));
+    }
+
+    // Keep the newest whole turns word for word while they fit in `keep` of the share.
+    let start = current;
+    if (!turn.force) {
+      const cost = (m: MessageRow) => estimateMessageTokens(toChatMessage(m)) * scale;
+      let kept = rows.slice(current).reduce((sum, m) => sum + cost(m), 0);
+      for (let i = current - 1; i >= 0; i--) {
+        kept += cost(rows[i] as MessageRow);
+        if (kept > keep * share) break;
+        if (rows[i]?.role === 'USER') start = i;
+      }
+    }
+    if (start === 0) return unchanged;
+    const older = rows.slice(0, start);
+    const recent = rows.slice(start);
+
     let summary: string;
     try {
+      const cards = await this.cards.forConversation(turn.user, conversation.id);
       const folded = await this.ai.summarizeConversation({
-        scope,
+        scope: turn.scope,
         summary: conversation.summary,
         messages: older.map(toChatMessage),
+        actionCards: cards.map((c) => ({ kind: c.kind, title: c.title, status: c.status })),
       });
-      summary = clipToTokens(folded.summary.trim(), maxSummaryTokens);
+      summary = clipToTokens(
+        renderConversationSummary(folded),
+        Math.max(200, Math.floor(summaryShare * share)),
+      );
     } catch (error) {
       this.logger.error('Folding a Conversation into its summary failed', error as Error);
       throw replyFailed(
@@ -550,13 +622,14 @@ export class ConversationsService {
 
   /**
    * The scope's retrieved context for this turn, queried with the person's
-   * newest messages, within the same budgets as the other workflows: a Feature
-   * gets its own Spec, Decisions and Attachments first (with the Brief and the
-   * Guidelines), a Project its Brief, Features and Project Attachments.
+   * newest messages, within the turn's budget: a Feature gets its own Spec,
+   * Decisions and Attachments first (with the Brief and the Guidelines in the
+   * foundation's share), a Project its Brief, Features and Project Attachments.
    */
   private async contextFor(
     conversation: { projectId: string; featureId: string | null },
     recent: MessageRow[],
+    budget: Budget,
   ): Promise<{ context: ContextBlock[]; foundation: ProjectFoundationForAi }> {
     // The person's newest messages, before any tool round of the turn being replied to.
     const trailing: string[] = [];
@@ -567,13 +640,13 @@ export class ConversationsService {
     if (conversation.featureId) {
       const { foundation, contextBudget } = await this.foundation.forFeature(
         conversation.featureId,
-        CONTEXT_BUDGET.conversationFeature,
+        budget,
       );
       const context = await this.retriever.forFeature(conversation.featureId, query, contextBudget);
       return { context: withoutBrief(context), foundation };
     }
     const [blocks, criteria] = await Promise.all([
-      this.retriever.forProject(conversation.projectId, query, CONTEXT_BUDGET.conversationProject),
+      this.retriever.forProject(conversation.projectId, query, projectBudget(budget)),
       this.guidelines.effective(conversation.projectId),
     ]);
     const { brief, context } = splitProjectBrief(blocks);
@@ -674,6 +747,33 @@ function toChatMessage(m: MessageRow): ChatMessageForAi {
     ? { role: 'ASSISTANT', content: m.content, toolCalls }
     : { role: 'ASSISTANT', content: m.content };
 }
+
+/**
+ * The messages as the AI gets them, within `room` tokens (the history's share
+ * less the summary). Compaction keeps the current turn whole, so only a very
+ * long message (one long paste on a small model) can still overflow: the
+ * longest messages are then shortened, for the AI only; the stored ones stay whole.
+ */
+function forAi(rows: MessageRow[], room: number): ChatMessageForAi[] {
+  const messages = rows.map(toChatMessage);
+  const costs = messages.map(estimateMessageTokens);
+  let over = costs.reduce((a, b) => a + b, 0) - Math.max(0, room);
+  while (over > 0) {
+    const longest = costs.indexOf(Math.max(...costs));
+    const m = messages[longest];
+    const cost = costs[longest] ?? 0;
+    if (!m || cost <= MIN_SENT_MESSAGE_TOKENS) break;
+    const target = Math.max(MIN_SENT_MESSAGE_TOKENS, cost - over);
+    const clipped = { ...m, content: clipToTokens(m.content, target - MESSAGE_OVERHEAD_TOKENS) };
+    messages[longest] = clipped;
+    costs[longest] = estimateMessageTokens(clipped);
+    over -= cost - (costs[longest] ?? 0);
+  }
+  return messages;
+}
+
+/** A message is never shortened below this many tokens for the AI. */
+const MIN_SENT_MESSAGE_TOKENS = 100;
 
 function toTurnView(turn: Turn): ConversationTurnView {
   return {

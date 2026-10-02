@@ -7,8 +7,10 @@ import {
   type AiTask,
   type AiTestResult,
   type ApprovedModelSettingsView,
+  CONTEXT_WINDOW_LIMITS,
   DEFAULT_MODELS,
   DEFAULT_PROVIDER_NAMES,
+  knownContextWindow,
 } from '@vorasaan/shared';
 import { useState, useTransition } from 'react';
 import {
@@ -331,8 +333,23 @@ type ModelDraft = {
   modelId: string;
   displayName: string;
   note: string;
+  /** Tokens, as typed; empty lets the server prefill it (ticket 0060). */
+  contextWindow: string;
   isDefault: boolean;
 };
+
+/** The window as typed ("200,000", "200_000" or "200000"), or undefined when left empty. */
+function windowOf(text: string): number | undefined {
+  const cleaned = text.replace(/[\s,_]/g, '');
+  return cleaned ? Number(cleaned) : undefined;
+}
+
+/** "200k tokens", "1M tokens", "8,192 tokens". */
+function formatWindow(tokens: number): string {
+  if (tokens >= 1_000_000 && tokens % 1_000_000 === 0) return `${tokens / 1_000_000}M tokens`;
+  if (tokens >= 1_000 && tokens % 1_000 === 0) return `${tokens / 1_000}k tokens`;
+  return `${tokens.toLocaleString('en')} tokens`;
+}
 
 function ModelsSection({
   providers,
@@ -400,7 +417,7 @@ function ModelRow({
           </span>
         )}
         <span className="text-sm text-fg-soft">
-          {model.modelId} · {model.providerName}
+          {model.modelId} · {model.providerName} · {formatWindow(model.contextWindow)}
         </span>
         <span className="ml-auto flex flex-wrap gap-3 text-sm">
           <button
@@ -462,6 +479,7 @@ function ModelRow({
             modelId: model.modelId,
             displayName: model.displayName,
             note: model.note ?? '',
+            contextWindow: String(model.contextWindow),
             isDefault: model.isDefault,
           }}
           showDefault={false}
@@ -475,6 +493,7 @@ function ModelRow({
                   modelId: d.modelId.trim(),
                   displayName: d.displayName.trim(),
                   note: d.note.trim() || null,
+                  contextWindow: windowOf(d.contextWindow),
                 }),
               undefined,
               () => setEditing(false),
@@ -509,6 +528,9 @@ function NewModelForm({
           modelId: provider ? DEFAULT_MODELS[provider.kind] : '',
           displayName: '',
           note: '',
+          contextWindow: String(
+            (provider && knownContextWindow(DEFAULT_MODELS[provider.kind])) ?? '',
+          ),
           isDefault: first,
         }}
         showDefault={!first}
@@ -523,6 +545,7 @@ function NewModelForm({
                 modelId: d.modelId.trim(),
                 displayName: d.displayName.trim(),
                 note: d.note.trim() || null,
+                contextWindow: windowOf(d.contextWindow),
                 isDefault: d.isDefault,
               }),
             undefined,
@@ -555,6 +578,8 @@ function ModelForm({
   onCancel?: () => void;
 }) {
   const [draft, setDraft] = useState(initial);
+  /** Until the Admin types a window, it follows the model id (a known model's window). */
+  const [windowTyped, setWindowTyped] = useState(false);
   return (
     <form
       aria-label={submitLabel}
@@ -592,7 +617,15 @@ function ModelForm({
         <span className="text-sm">Model id</span>
         <input
           value={draft.modelId}
-          onChange={(e) => setDraft({ ...draft, modelId: e.target.value })}
+          onChange={(e) => {
+            const modelId = e.target.value;
+            const known = knownContextWindow(modelId);
+            setDraft({
+              ...draft,
+              modelId,
+              ...(windowTyped ? {} : { contextWindow: known ? String(known) : '' }),
+            });
+          }}
           placeholder="The model name the provider expects"
           className={field}
         />
@@ -606,6 +639,24 @@ function ModelForm({
           placeholder="For quick questions"
           className={field}
         />
+      </label>
+      <label className="block">
+        <span className="text-sm">Context window (tokens)</span>
+        <input
+          value={draft.contextWindow}
+          inputMode="numeric"
+          onChange={(e) => {
+            setWindowTyped(true);
+            setDraft({ ...draft, contextWindow: e.target.value });
+          }}
+          placeholder="Left empty: the server's default"
+          aria-describedby="context-window-hint"
+          className={field}
+        />
+        <span id="context-window-hint" className="mt-1 block text-xs text-fg-soft">
+          How much one AI call can hold. Every task's context is a share of it. At least{' '}
+          {CONTEXT_WINDOW_LIMITS.min.toLocaleString('en')}.
+        </span>
       </label>
       {showDefault && (
         <label className="flex items-center gap-2 text-sm sm:col-span-2">

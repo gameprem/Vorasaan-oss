@@ -14,8 +14,12 @@
 //   approval; an injected instruction never makes it claim an approval; told a
 //   tool call was refused, it explains why and who could do it;
 // - Thai input gets a Thai reply;
-// - the summary keeps what later turns need (wants, facts, open questions, what
-//   was proposed) in about 300 words, and records nothing as approved.
+// - the Conversation Summary (ticket 0060) fills its fixed sections: the goal,
+//   what was agreed, open questions, pending Action Cards, preferences, and names,
+//   numbers and ids copied exactly (PAY-142, 24 hours, 1.5M); it records nothing as
+//   approved, says when an agreed point isn't in the Spec yet, and is written in
+//   the person's language (the Thai case in Thai, ids and numbers untouched);
+// - continuing from the summary, the reply still knows what was agreed.
 
 import { chatToolsFor } from '../src/action-cards/chat-tools.ts';
 import { loadAiConfig } from '../src/ai/ai.config.ts';
@@ -26,6 +30,7 @@ import type {
   ProjectFoundationForAi,
 } from '../src/ai/ai.port.ts';
 import { MastraAiPort } from '../src/ai/mastra-ai.port.ts';
+import { renderConversationSummary } from '../src/ai/prompts.ts';
 
 const TOOLS = chatToolsFor({ featureId: 'feature' });
 
@@ -175,13 +180,45 @@ const turns: ChatMessageForAi[] = [
   { role: 'USER', content: 'Support wants to see why a payment is pending. Is that covered?' },
   { role: 'ASSISTANT', content: 'Not yet: the Spec has no support view. I would propose one.' },
 ];
-const started = performance.now();
-const { summary } = await ai.summarizeConversation({
-  scope: SCOPE,
-  summary: 'The person is the Feature PO, checking the Spec before the sprint.',
-  messages: turns,
-});
-console.log(`━━ Summary (${((performance.now() - started) / 1000).toFixed(1)}s)\n${summary}\n`);
+async function summarize(name: string, before: string, messages: ChatMessageForAi[]) {
+  const started = performance.now();
+  const draft = await ai.summarizeConversation({
+    scope: SCOPE,
+    summary: before,
+    messages,
+    actionCards: [
+      {
+        kind: 'SPEC_PROPOSAL',
+        title: 'Add a support view of pending payments',
+        status: 'PROPOSED',
+      },
+      { kind: 'DECISION_REQUEST', title: 'Provider timeout', status: 'APPROVED' },
+    ],
+  });
+  const summary = renderConversationSummary(draft);
+  console.log(`━━ ${name} (${((performance.now() - started) / 1000).toFixed(1)}s)\n${summary}\n`);
+  return summary;
+}
+
+const summary = await summarize(
+  'Conversation Summary',
+  '## Goal\n- The person is the Feature PO, checking the Spec before the sprint.',
+  [
+    ...turns,
+    { role: 'USER', content: 'Agreed: support sees the reason, per PAY-142. Keep answers short.' },
+  ],
+);
+
+await summarize('Conversation Summary in Thai', '', [
+  {
+    role: 'USER',
+    content:
+      'เราตกลงกันแล้วว่าจะรอผู้ให้บริการไม่เกิน 24 ชั่วโมง ตามตั๋ว PAY-142 ' +
+      'แต่ยังไม่ได้แก้ใน Spec นะ เป้าหมายคือผู้ใช้ที่ชำระเงิน 1.5M คนต่อเดือน',
+  },
+  { role: 'ASSISTANT', content: 'รับทราบครับ ต้องการให้ผมร่างการแก้ไข Spec ไหมครับ' },
+  { role: 'USER', content: 'ยังก่อน ขอถามก่อนว่าทีมซัพพอร์ตต้องเห็นอะไรบ้าง ตอบสั้น ๆ เป็นภาษาไทยนะ' },
+]);
 
 await reply('Continuing from the summary', summary, [
   { role: 'USER', content: 'OK, what should the support view show?' },

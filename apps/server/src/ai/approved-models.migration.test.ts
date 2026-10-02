@@ -77,6 +77,8 @@ describe(`migration ${MIGRATION}`, () => {
         [ORG, box.encrypt('emb')],
       );
       await c.query(await migrationSql(MIGRATION));
+      // Then every later migration, as an upgrade runs them (0060 backfills the context windows).
+      for (const dir of dirs.filter((d) => d > MIGRATION)) await c.query(await migrationSql(dir));
     });
     db = createPrismaClient(target.toString());
     // Creating a database and running every migration takes a while under a full parallel run.
@@ -127,6 +129,8 @@ describe(`migration ${MIGRATION}`, () => {
             baseUrl: null,
           },
           name: 'claude-opus-5-5',
+          // Backfilled by the context windows migration (ticket 0060): a known model.
+          contextWindow: 1_000_000,
         });
       }
       const view = await service.view();
@@ -150,6 +154,7 @@ describe(`migration ${MIGRATION}`, () => {
         integrationId: 'i-openai',
         modelId: 'gpt-5.6-sol',
         displayName: 'GPT',
+        contextWindow: 400_000,
         position: 1,
       },
     });

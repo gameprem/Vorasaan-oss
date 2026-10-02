@@ -33,6 +33,7 @@ import {
   envOverridesFor,
 } from './ai.config.ts';
 import type { ModelChoice } from './ai.port.ts';
+import { envModelContextWindow, prefilledContextWindow } from './context-window.ts';
 import { type ResolvedProvider, toMastraModel } from './model-config.ts';
 
 export const AI_CONNECTION_TESTER = Symbol('AI_CONNECTION_TESTER');
@@ -292,6 +293,7 @@ export class AiSettingsService {
             modelId: input.modelId,
             displayName: input.displayName,
             note: input.note ?? null,
+            contextWindow: input.contextWindow ?? prefilledContextWindow(input.modelId),
             position: last ? last.position + 1 : 0,
             isDefault,
           },
@@ -307,7 +309,13 @@ export class AiSettingsService {
     input: UpdateApprovedModelInput,
   ): Promise<ApprovedModelSettingsView> {
     const organizationId = await this.requireOrganizationId();
-    await this.model(organizationId, id);
+    const existing = await this.model(organizationId, id);
+    // A new model id without a window given takes the new model's prefilled window.
+    const contextWindow =
+      input.contextWindow ??
+      (input.modelId && input.modelId !== existing.modelId
+        ? prefilledContextWindow(input.modelId)
+        : undefined);
     if (input.providerId) await this.provider(organizationId, input.providerId);
     if (input.displayName) await this.assertNameFree(organizationId, input.displayName, id);
     const updated = await conflictOnRace(() =>
@@ -325,6 +333,7 @@ export class AiSettingsService {
             ...(input.modelId ? { modelId: input.modelId } : {}),
             ...(input.displayName ? { displayName: input.displayName } : {}),
             ...(input.note !== undefined ? { note: input.note } : {}),
+            ...(contextWindow !== undefined ? { contextWindow } : {}),
             ...(input.isDefault ? { isDefault: true } : {}),
           },
           include: { integration: true },
@@ -399,6 +408,7 @@ export class AiSettingsService {
           integrationId: provider.id,
           modelId: input.model,
           displayName: input.model,
+          contextWindow: prefilledContextWindow(input.model),
           position: 0,
           isDefault: true,
         },
@@ -451,6 +461,7 @@ export class AiSettingsService {
       integrationId: model.integrationId,
       provider: this.resolve(model),
       name: model.modelId,
+      contextWindow: model.contextWindow,
     };
   }
 
@@ -502,8 +513,16 @@ export class AiSettingsService {
             orderBy: { createdAt: 'asc' },
           })
         : null;
+    const contextWindow = envModelContextWindow(name);
     if (!kind || !integration) {
-      return { source: 'ENV', approvedModelId: null, integrationId: null, provider: null, name };
+      return {
+        source: 'ENV',
+        approvedModelId: null,
+        integrationId: null,
+        provider: null,
+        name,
+        contextWindow,
+      };
     }
     return {
       source: 'ENV',
@@ -516,6 +535,7 @@ export class AiSettingsService {
         baseUrl: null,
       },
       name,
+      contextWindow,
     };
   }
 }
@@ -530,6 +550,7 @@ function modelSettingsView(m: ModelWithProvider): ApprovedModelSettingsView {
     modelId: m.modelId,
     displayName: m.displayName,
     note: m.note,
+    contextWindow: m.contextWindow,
     position: m.position,
     isDefault: m.isDefault,
   };

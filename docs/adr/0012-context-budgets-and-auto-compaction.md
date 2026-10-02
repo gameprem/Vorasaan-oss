@@ -13,7 +13,7 @@ The approach follows Claude's own auto-compact: watch how full the context is, c
 - **Count tokens per model.**
   - Each Approved Model has a `contextWindow`, prefilled for known models and editable by an Admin.
   - Tokens are counted with the provider's counting API where one exists.
-  - Otherwise a script-aware estimate is used: Thai is counted at about 1.5 characters per token and Latin text at about 4.
+  - Otherwise a script-aware estimate is used: Thai is counted at about 0.95 characters per token (measured against a real tokenizer in ticket 0059) and Latin text at about 4.
 - **Budgets are shares of the window, not fixed numbers.** A turn is split into the system prompt and foundation, retrieved context, Conversation history, and room for the reply. Each share has a floor, so a small model still gets something useful.
 - **Compact on fullness.** When a Conversation's history passes about 70% of its share, the oldest turns are folded into a structured summary. The newest turns are kept word for word. The summary has fixed sections:
   - the goal

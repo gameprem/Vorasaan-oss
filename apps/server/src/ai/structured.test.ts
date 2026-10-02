@@ -223,11 +223,15 @@ describe('FakeAiPort', () => {
 
     const summary2 = await ai.summarizeConversation({
       scope: { kind: 'PROJECT', project: { name: 'Mobile Banking' } },
-      summary: 'They want card controls.',
-      messages: [{ role: 'USER', content: 'And limits?' }],
+      summary: '## Goal\n- They want card controls.',
+      messages: [{ role: 'USER', content: 'And limits? We agreed on CARD-12.' }],
+      actionCards: [],
     });
     expect(ConversationSummaryDraft.safeParse(summary2).success).toBe(true);
-    expect(summary2.summary).toBe('They want card controls.\nUSER: And limits?');
+    expect(summary2.goal).toBe('They want card controls.');
+    expect(summary2.openQuestions).toEqual(['And limits?']);
+    expect(summary2.agreed).toEqual(['We agreed on CARD-12.']);
+    expect(summary2.keyFacts).toContain('CARD-12');
   });
 
   const chatInput = {

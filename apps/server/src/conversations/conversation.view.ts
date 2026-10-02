@@ -37,6 +37,7 @@ export function toConversationListItem(c: ConversationWithScope): ConversationLi
       ? { id: c.grillingRound.grillingId, round: c.grillingRound.kind, role: c.grillingRound.role }
       : null,
     modelId: c.modelId,
+    summarizedThrough: c.summarizedThrough,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };

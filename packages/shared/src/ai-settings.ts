@@ -17,6 +17,48 @@ export const DEFAULT_PROVIDER_NAMES: Record<AiProvider, string> = {
   OPENAI_COMPATIBLE: 'Custom endpoint',
 };
 
+/**
+ * A model's context window (ticket 0060, ADR 0012): how many tokens one call may
+ * hold, prompt and reply together. Below the minimum a turn can't fit at all.
+ */
+export const CONTEXT_WINDOW_LIMITS = { min: 4_096, max: 10_000_000 } as const;
+
+/**
+ * Context windows of known model ids, by prefix; the first match wins. A new
+ * Approved Model is prefilled from it (the server keeps its backfill migration in
+ * sync); an unknown model gets the server's default.
+ */
+export const KNOWN_CONTEXT_WINDOWS: readonly (readonly [RegExp, number])[] = [
+  [/^claude-(opus|sonnet|fable|mythos)-(5|4-[6-9])/, 1_000_000],
+  [/^claude-/, 200_000],
+  [/^gpt-4\.1/, 1_047_576],
+  [/^gpt-5/, 400_000],
+  [/^(gpt-4o|gpt-4-turbo)/, 128_000],
+  [/^o[134](-|$)/, 200_000],
+  [/^gpt-3\.5-turbo/, 16_385],
+  [/^gpt-4(-|$)/, 8_192],
+];
+
+/** The context window of a known model id (a "provider/" prefix is allowed), or null. */
+export function knownContextWindow(modelId: string): number | null {
+  const id = modelId
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z0-9_-]+\//, '');
+  return KNOWN_CONTEXT_WINDOWS.find(([pattern]) => pattern.test(id))?.[1] ?? null;
+}
+
+export const ContextWindow = z
+  .int('Enter a whole number of tokens')
+  .min(
+    CONTEXT_WINDOW_LIMITS.min,
+    `At least ${CONTEXT_WINDOW_LIMITS.min.toLocaleString('en')} tokens`,
+  )
+  .max(
+    CONTEXT_WINDOW_LIMITS.max,
+    `At most ${CONTEXT_WINDOW_LIMITS.max.toLocaleString('en')} tokens`,
+  );
+
 const Model = z.string().trim().min(1, 'Enter a model name').max(200);
 const ApiKey = z.string().trim().min(1, 'Enter an API key').max(4_000);
 const BaseUrl = z.url({ message: 'Enter the full URL, e.g. http://localhost:20128/v1' });
@@ -93,6 +135,8 @@ export const CreateApprovedModelInput = z.object({
   modelId: Model,
   displayName: DisplayName,
   note: Note.optional(),
+  /** Tokens; left out, it is prefilled for a known model, else the server's default. */
+  contextWindow: ContextWindow.optional(),
   isDefault: z.boolean().optional(),
 });
 export type CreateApprovedModelInput = z.infer<typeof CreateApprovedModelInput>;
@@ -106,6 +150,7 @@ export const UpdateApprovedModelInput = z.object({
   modelId: Model.optional(),
   displayName: DisplayName.optional(),
   note: Note.optional(),
+  contextWindow: ContextWindow.optional(),
   isDefault: z.literal(true).optional(),
 });
 export type UpdateApprovedModelInput = z.infer<typeof UpdateApprovedModelInput>;
@@ -118,6 +163,8 @@ export const ApprovedModelSettingsView = z.object({
   modelId: z.string(),
   displayName: z.string(),
   note: z.string().nullable(),
+  /** Tokens one call may hold, prompt and reply together: every AI task's budget is a share of it. */
+  contextWindow: z.number().int(),
   position: z.number().int(),
   isDefault: z.boolean(),
 });

@@ -25,18 +25,21 @@ import {
   type GrillingAnswerForAi,
   type GuidelineForAi,
 } from '../ai/ai.port.ts';
-import { emptyMemory, rememberRound, type WorkflowMemory } from '../ai/workflow-memory.ts';
+import { ContextBudgets, projectBudget } from '../ai/context-budget.ts';
+import {
+  emptyMemory,
+  rememberRound,
+  renderMemory,
+  type WorkflowMemory,
+} from '../ai/workflow-memory.ts';
 import { assertCanEditProject, type ProjectAccess, projectAccess } from '../brief/brief-access.ts';
 import { toConversationMessageView } from '../conversations/conversation.view.ts';
 import { FeatureGuidelinesService } from '../feature-guidelines/feature-guidelines.service.ts';
 import { EventBus } from '../inbox/event-bus.ts';
 import { NotificationsService, type Tx } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
-import {
-  CONTEXT_BUDGET,
-  ContextRetriever,
-  splitProjectBrief,
-} from '../retrieval/context-retriever.ts';
+import { ContextRetriever, splitProjectBrief } from '../retrieval/context-retriever.ts';
+import { estimateTokens } from '../retrieval/token-estimate.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { awaitingGrillingsWhere } from './awaiting.ts';
 import {
@@ -120,6 +123,7 @@ export class GrillingService {
     @InjectPrisma() private readonly db: PrismaClient,
     @Inject(AI_PORT) private readonly ai: AiPort,
     private readonly retriever: ContextRetriever,
+    private readonly budgets: ContextBudgets,
     private readonly guidelines: FeatureGuidelinesService,
     private readonly notifications: NotificationsService,
     private readonly bus: EventBus,
@@ -377,21 +381,27 @@ export class GrillingService {
         });
         continue;
       }
+      const { model, budget } = await this.budgets.forTask('grillingQuestions', 'grilling', {
+        fixed: estimateTokens(renderMemory(known)),
+      });
       const projectContext = await this.retriever.forProject(
         project.id,
         `${project.name}\n${ROUND_QUERY[kind]}`,
-        CONTEXT_BUDGET.grilling,
+        projectBudget(budget),
       );
       const memoryNow = known;
       const drafted = await this.callAi(() =>
-        this.ai.grillingQuestions({
-          project: { name: project.name },
-          round: kind,
-          role,
-          projectContext,
-          guidelines,
-          memory: memoryNow,
-        }),
+        this.ai.grillingQuestions(
+          {
+            project: { name: project.name },
+            round: kind,
+            role,
+            projectContext,
+            guidelines,
+            memory: memoryNow,
+          },
+          { model },
+        ),
       );
       const questions = distinct(drafted.questions).slice(0, MAX_GRILLING_QUESTIONS);
       if (!questions.length) {
@@ -412,24 +422,35 @@ export class GrillingService {
       orderBy: { version: 'desc' },
       select: { id: true, markdown: true },
     });
+    // The whole Brief, the memory and the answers are sent besides the context (0060).
+    const briefMarkdown = base?.markdown ?? BRIEF_TEMPLATE;
+    const { model, budget } = await this.budgets.forTask('draftBriefFromGrilling', 'grilling', {
+      fixed:
+        estimateTokens(briefMarkdown) +
+        estimateTokens(renderMemory(known)) +
+        estimateTokens(JSON.stringify(answers)),
+    });
     const { context } = splitProjectBrief(
       await this.retriever.forProject(
         project.id,
         `${project.name}\n${DRAFT_QUERY}`,
-        CONTEXT_BUDGET.grilling,
+        projectBudget(budget),
       ),
     );
     const memoryNow = known;
     const draft = await this.callAi(() =>
-      this.ai.draftBriefFromGrilling({
-        project: { name: project.name },
-        // The whole current Brief: it is the base the draft edits, never shortened.
-        briefMarkdown: base?.markdown ?? BRIEF_TEMPLATE,
-        projectContext: context,
-        guidelines,
-        memory: memoryNow,
-        answers,
-      }),
+      this.ai.draftBriefFromGrilling(
+        {
+          project: { name: project.name },
+          // The whole current Brief: it is the base the draft edits, never shortened.
+          briefMarkdown,
+          projectContext: context,
+          guidelines,
+          memory: memoryNow,
+          answers,
+        },
+        { model },
+      ),
     );
     return {
       memory: known,

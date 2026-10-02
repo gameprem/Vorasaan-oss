@@ -16,12 +16,12 @@ import { NestFactory } from '@nestjs/core';
 import type { PrismaClient } from '@vorasaan/db';
 import { SEED_SPEC_V1 } from '@vorasaan/db/seed';
 import { AI_PORT, type AiPort } from '../src/ai/ai.port.ts';
+import { CONTEXT_CEILINGS } from '../src/ai/context-budget.ts';
 import { AppModule } from '../src/app.module.ts';
 import { AttachmentFilesService } from '../src/attachments/attachment-files.service.ts';
 import { PRISMA } from '../src/prisma/prisma.module.ts';
 import {
   blockTokens,
-  CONTEXT_BUDGET,
   ContextRetriever,
   splitFeatureSpec,
 } from '../src/retrieval/context-retriever.ts';
@@ -104,11 +104,11 @@ try {
 
   // Case 1: Choices for a question whose answer is one paragraph of the handbook.
   const query = `${NEEDLE_QUESTION.title}\n\n${NEEDLE_QUESTION.description}`;
-  const blocks = await retriever.forFeature(feature.id, query, CONTEXT_BUDGET.decisionRequest);
+  const blocks = await retriever.forFeature(feature.id, query, CONTEXT_CEILINGS.decisionRequest);
   const used = blocks.reduce((n, b) => n + blockTokens(b), 0);
   const needleAt = blocks.findIndex((b) => b.text.includes(NEEDLE_PARAGRAPH));
   console.log(`━━ Choices: "${NEEDLE_QUESTION.title}"`);
-  console.log(`   ${blocks.length} blocks, ${used}/${CONTEXT_BUDGET.decisionRequest} tokens`);
+  console.log(`   ${blocks.length} blocks, ${used}/${CONTEXT_CEILINGS.decisionRequest} tokens`);
   for (const [i, b] of blocks.entries()) {
     console.log(`   ${i + 1}. [${b.scope}] ${b.source.kind} ${b.source.title} (${b.source.id})`);
   }
@@ -132,7 +132,7 @@ try {
   const draftBlocks = await retriever.forFeature(
     feature.id,
     `${feature.title}\n\n${feature.description}`,
-    CONTEXT_BUDGET.specFromAttachments,
+    CONTEXT_CEILINGS.specFromAttachments,
   );
   started = performance.now();
   const draft = await ai.draftSpecFromAttachments({

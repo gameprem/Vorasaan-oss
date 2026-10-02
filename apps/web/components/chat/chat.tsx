@@ -97,6 +97,12 @@ export function Chat({
   /** The model picked in this Conversation (the server's), and one picked since, sent with the next message. */
   const [savedModelId, setSavedModelId] = useState<string | null>(initial?.modelId ?? null);
   const [pickedModelId, setPickedModelId] = useState<string | null>(null);
+  /**
+   * How many of the oldest messages the AI now reads only through the Conversation
+   * Summary (ticket 0060). They stay stored, folded behind a quiet marker.
+   */
+  const [summarizedThrough, setSummarizedThrough] = useState(initial?.summarizedThrough ?? 0);
+  const [showEarlier, setShowEarlier] = useState(false);
   const conversationId = useRef<string | null>(initial?.id ?? null);
   /** A new Conversation is being started: its id comes with the first event. */
   const starting = useRef(false);
@@ -110,6 +116,7 @@ export function Chat({
     setSeen(initial);
     if (initial) {
       setSavedModelId(initial.modelId);
+      setSummarizedThrough(initial.summarizedThrough);
       setMessages((prev) => mergeMessages(initial.messages, prev));
       setCards((prev) => mergeCards(initial.actionCards, prev));
       const lastUser = initial.messages.findLast((m) => m.role === 'USER');
@@ -254,6 +261,7 @@ export function Chat({
       if (res.ok) {
         conversationId.current = res.data.id;
         setSavedModelId(res.data.modelId);
+        setSummarizedThrough(res.data.summarizedThrough);
         setPickedModelId(null);
         setMessages(res.data.messages);
         setCards(res.data.actionCards);
@@ -287,6 +295,7 @@ export function Chat({
     setSending(false);
     if (res.ok) {
       setSavedModelId(res.data.conversation.modelId);
+      setSummarizedThrough(res.data.conversation.summarizedThrough);
       setPickedModelId(null);
       addMessages([res.data.message, ...res.data.steps, res.data.reply]);
       putCards(res.data.actionCards);
@@ -312,6 +321,7 @@ export function Chat({
     const res = await postJson<ConversationTurnView>(`/api/conversations/${id}/retry`);
     setSending(false);
     if (res.ok) {
+      setSummarizedThrough(res.data.conversation.summarizedThrough);
       addMessages([...res.data.steps, res.data.reply]);
       putCards(res.data.actionCards);
       setPending(null);
@@ -358,7 +368,11 @@ export function Chat({
   for (const card of cards) {
     cardsByMessage.set(card.messageId, [...(cardsByMessage.get(card.messageId) ?? []), card]);
   }
-  const visible = messages.filter((m) => m.role !== 'TOOL');
+  const summarized = new Set(messages.slice(0, summarizedThrough).map((m) => m.id));
+  const visible = messages.filter(
+    (m) => m.role !== 'TOOL' && (showEarlier || !summarized.has(m.id)),
+  );
+  const hasEarlier = messages.some((m) => m.role !== 'TOOL' && summarized.has(m.id));
   const nothingYet = visible.length === 0 && pending === null && drafts.length === 0;
   const grilling = initial?.grilling ?? null;
   const progress = initial?.grillingProgress ?? null;
@@ -430,10 +444,26 @@ export function Chat({
               aria-relevant="additions text"
               aria-busy={writing}
             >
+              {hasEarlier && (
+                <div className="summary-marker">
+                  <button
+                    type="button"
+                    aria-expanded={showEarlier}
+                    onClick={() => setShowEarlier((s) => !s)}
+                  >
+                    <span aria-hidden className="chev">
+                      {showEarlier ? '▾' : '▸'}
+                    </span>
+                    Earlier messages were summarized
+                  </button>
+                </div>
+              )}
               {visible.map((m, i) => {
                 const prev = visible[i - 1];
                 const startsTurn =
                   i === 0 || prev?.role !== 'ASSISTANT' || (prev ? endsWithNotice(prev) : false);
+                const earlier = summarized.has(m.id);
+                const lastEarlier = earlier && !summarized.has(visible[i + 1]?.id ?? '');
                 return (
                   <Fragment key={m.id}>
                     {m.role === 'USER' ? (
@@ -449,6 +479,9 @@ export function Chat({
                     {(cardsByMessage.get(m.id) ?? []).map((card) => (
                       <ActionCard key={card.id} card={card} meId={me.id} onChange={onCardChange} />
                     ))}
+                    {lastEarlier && (
+                      <p className="summary-end">The AI reads the messages above as a summary</p>
+                    )}
                   </Fragment>
                 );
               })}

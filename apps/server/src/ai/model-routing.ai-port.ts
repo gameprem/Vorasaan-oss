@@ -41,6 +41,11 @@ export class ModelRoutingAiPort implements AiPort {
     );
   }
 
+  /** Counts on the caller's model (a Conversation's turn passes it); else the chat model. */
+  async countTokens(input: Parameters<AiPort['countTokens']>[0], options?: AiCallOptions) {
+    return this.engine.countTokens(input, await this.options('chat', options));
+  }
+
   async generateChoices(input: Parameters<AiPort['generateChoices']>[0], options?: AiCallOptions) {
     return this.engine.generateChoices(input, await this.options('generateChoices', options));
   }
