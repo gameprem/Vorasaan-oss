@@ -246,7 +246,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [x] Response Windows and escalation (0055).
    - [x] Decision Lead Time (0056).
    - [x] Link a LINE, Slack or Teams account (0057).
-   - [ ] Decide from LINE, Slack and Teams (0058).
+   - [x] Decide from LINE, Slack and Teams (0058).
 4. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why (Spec section, someone to ask, open Blockers, QA ready), using the checks each Platform switches on. The AI fills or asks about the gaps.
    - [ ] Platforms per Project, targeted by Features (0050).
    - [ ] Coverage per Platform, used by the AI (0051).

@@ -34,7 +34,7 @@ const FIELDS: Record<ChatProvider, FieldSpec[]> = {
 const WHERE: Record<ChatProvider, string> = {
   LINE: 'LINE Developers console → your Messaging API channel. Set its webhook URL to the address below and turn "Use webhook" on.',
   SLACK:
-    'api.slack.com → your app. Subscribe to the message.im bot event at the address below, and give the bot the chat:write and im:history scopes.',
+    'api.slack.com → your app. Subscribe to the message.im bot event at the address below, turn on Interactivity with the same address as its request URL (for card buttons), and give the bot the chat:write and im:history scopes.',
   TEAMS:
     'Azure Bot resource (multi-tenant) with the Microsoft Teams channel. Set its messaging endpoint to the address below.',
 };

@@ -1,9 +1,12 @@
 import { createPublicKey, verify as verifySignature } from 'node:crypto';
 import type {
+  Card,
+  CardInput,
   ChatAppAdapter,
   ChatInbound,
   ChatMessage,
   InboundRequest,
+  MessageRef,
   ParsedCallback,
   TeamsCredentials,
 } from './adapter.ts';
@@ -131,30 +134,47 @@ export class TeamsAdapter implements ChatAppAdapter<TeamsCredentials> {
       events.push({ kind: 'unlinked', eventId, userId });
     } else if (activity.type === 'message') {
       const replyTo = eventId ?? undefined;
-      events.push({
-        kind: 'message',
-        eventId,
-        user: {
-          id: userId,
-          displayName: str(from?.name) ?? null,
-          address: {
-            serviceUrl,
-            conversationId,
-            tenantId:
-              str(conversation?.tenantId) ??
-              str(jsonObject(jsonObject(activity.channelData)?.tenant)?.id) ??
-              '',
-            botId: str(recipient?.id) ?? '',
-          },
+      const user = {
+        id: userId,
+        displayName: str(from?.name) ?? null,
+        address: {
+          serviceUrl,
+          conversationId,
+          tenantId:
+            str(conversation?.tenantId) ??
+            str(jsonObject(jsonObject(activity.channelData)?.tenant)?.id) ??
+            '',
+          botId: str(recipient?.id) ?? '',
         },
-        text: teamsText(str(activity.text) ?? ''),
-        reply: (message) =>
-          this.post(credentials, activitiesUrl(serviceUrl, conversationId, replyTo), {
-            type: 'message',
-            text: message.text,
-            ...(replyTo ? { replyToId: replyTo } : {}),
-          }),
-      });
+      };
+      const reply = async (message: ChatMessage) => {
+        await this.post(credentials, activitiesUrl(serviceUrl, conversationId, replyTo), {
+          ...teamsActivity(message),
+          ...(replyTo ? { replyToId: replyTo } : {}),
+        });
+      };
+      // A card's Action.Submit (ticket 0058): its data and any input come as `value`.
+      const value = jsonObject(activity.value);
+      const token = str(value?.vorasaan);
+      if (token) {
+        const typed = value?.text;
+        events.push({
+          kind: 'action',
+          eventId,
+          user,
+          token,
+          text: typeof typed === 'string' ? typed : null,
+          reply,
+        });
+      } else {
+        events.push({
+          kind: 'message',
+          eventId,
+          user,
+          text: teamsText(str(activity.text) ?? ''),
+          reply,
+        });
+      }
     }
     return { events };
   }
@@ -163,17 +183,40 @@ export class TeamsAdapter implements ChatAppAdapter<TeamsCredentials> {
     credentials: TeamsCredentials,
     account: { address: Record<string, string> },
     message: ChatMessage,
-  ): Promise<void> {
+  ): Promise<MessageRef | null> {
     const { serviceUrl, conversationId } = account.address;
     if (!serviceUrl || !conversationId) throw new ChatApiError('TEAMS', null);
-    await this.post(credentials, activitiesUrl(serviceUrl, conversationId), {
-      type: 'message',
-      text: message.text,
-    });
+    const result = jsonObject(
+      await this.post(
+        credentials,
+        activitiesUrl(serviceUrl, conversationId),
+        teamsActivity(message),
+      ),
+    );
+    const activityId = str(result?.id);
+    return activityId ? { serviceUrl, conversationId, activityId } : null;
   }
 
-  private async post(credentials: TeamsCredentials, url: string, activity: object) {
-    await providerPost('TEAMS', url, {
+  /** Replaces the card in place (the Bot Framework's "update activity"). */
+  async update(credentials: TeamsCredentials, ref: MessageRef, message: ChatMessage) {
+    const { serviceUrl, conversationId, activityId } = ref;
+    if (!serviceUrl || !conversationId || !activityId) return;
+    await this.post(
+      credentials,
+      activitiesUrl(serviceUrl, conversationId, activityId),
+      { ...teamsActivity(message), id: activityId },
+      'PUT',
+    );
+  }
+
+  private async post(
+    credentials: TeamsCredentials,
+    url: string,
+    activity: object,
+    method: 'POST' | 'PUT' = 'POST',
+  ) {
+    return providerPost('TEAMS', url, {
+      method,
       headers: {
         'content-type': 'application/json',
         authorization: `Bearer ${await this.accessToken(credentials)}`,
@@ -218,4 +261,102 @@ function teamsText(text: string): string {
     .replace(/&nbsp;/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** A text message, or a card as an Adaptive Card attachment with `text` as its summary. */
+export function teamsActivity(message: ChatMessage): Record<string, unknown> {
+  if (!message.card) return { type: 'message', text: message.text };
+  return {
+    type: 'message',
+    summary: message.text,
+    attachments: [
+      {
+        contentType: 'application/vnd.microsoft.card.adaptive',
+        content: adaptiveCard(message.card),
+      },
+    ],
+  };
+}
+
+const block = (text: string, extra: Record<string, unknown> = {}) => ({
+  type: 'TextBlock',
+  text,
+  wrap: true,
+  ...extra,
+});
+
+/** Action.Submit sends `data` back as the activity's `value`, with any inputs merged in. */
+const submit = (title: string, token: string, style?: 'positive') => ({
+  type: 'Action.Submit',
+  title,
+  data: { vorasaan: token },
+  ...(style && { style }),
+});
+
+const inputCard = (input: CardInput) => ({
+  type: 'Action.ShowCard',
+  title: input.label,
+  card: {
+    type: 'AdaptiveCard',
+    body: [
+      {
+        type: 'Input.Text',
+        id: 'text',
+        label: input.inputLabel,
+        placeholder: input.placeholder,
+        isMultiline: true,
+        isRequired: true,
+        maxLength: 3000,
+      },
+    ],
+    actions: [submit(input.submit, input.token)],
+  },
+});
+
+/** Teams' "attention" style is its red: the seal red of a Blocker. */
+export function adaptiveCard(card: Card): object {
+  const blocker = card.accent === 'blocker';
+  const body: object[] = [
+    {
+      type: 'Container',
+      style: blocker ? 'attention' : 'emphasis',
+      bleed: true,
+      items: [
+        block(card.eyebrow, {
+          size: 'small',
+          weight: 'bolder',
+          color: blocker ? 'attention' : 'default',
+        }),
+      ],
+    },
+    block(card.title, { size: 'medium', weight: 'bolder' }),
+    ...card.lines.map((line) => block(line, { size: 'small', isSubtle: true, spacing: 'small' })),
+  ];
+  for (const choice of card.choices) {
+    body.push({
+      type: 'Container',
+      separator: true,
+      items: [
+        block(`${choice.label}. ${choice.title}`, { weight: 'bolder' }),
+        ...choice.impact.map((line) =>
+          block(line, { size: 'small', isSubtle: true, spacing: 'none' }),
+        ),
+        {
+          type: 'ActionSet',
+          actions: [submit(choice.button.label, choice.button.token, 'positive')],
+        },
+      ],
+    });
+  }
+  const actions: object[] = [];
+  if (card.ask) actions.push(inputCard(card.ask));
+  if (card.own) actions.push(inputCard(card.own));
+  actions.push({ type: 'Action.OpenUrl', title: card.link.label, url: card.link.url });
+  return {
+    type: 'AdaptiveCard',
+    $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+    version: '1.4',
+    body,
+    actions,
+  };
 }

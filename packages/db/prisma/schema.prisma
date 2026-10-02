@@ -189,6 +189,23 @@ enum DeciderChangeKind {
   REASSIGNED // the Decider handed it to someone else holding the role
 }
 
+// Where a Decision was made (ticket 0058): the web app, the CLI, or a button in a Chat App.
+enum DecisionSource {
+  WEB
+  CLI
+  LINE
+  SLACK
+  TEAMS
+}
+
+// A card for a person's Chat Account (ticket 0058).
+enum ChatCardStatus {
+  PENDING // waiting for the person's Quiet Hours to end
+  SENT
+  SKIPPED // no longer relevant when its turn came (decided, withdrawn, unlinked, preference off)
+  FAILED // the chat app refused it; the Inbox still has it
+}
+
 // ─── Identity & access ──────────────────────────────────────────────────────
 
 model User {
@@ -207,6 +224,7 @@ model User {
   chatAccounts    ChatAccount[]
   chatLinkCodes   ChatLinkCode[]
   chatPreference  ChatPreference?
+  chatCards       ChatCard[]
   notifications   Notification[]
   invitationsSent Invitation[]
   attachments     Attachment[]
@@ -711,6 +729,7 @@ model DecisionRequest {
   notifications  Notification[]
   history        RequestHistoryEntry[]
   deciderChanges DeciderChange[]
+  chatCards      ChatCard[]
 
   @@index([featureId, kind, status])
   @@index([status, dueAt])
@@ -814,6 +833,7 @@ model Decision {
   choiceId     String?
   customAnswer String?
   rationale    String?
+  source       DecisionSource  @default(WEB) // the web app, the CLI or a Chat App button
   createdAt    DateTime        @default(now())
   request      DecisionRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   decidedBy    User            @relation("DecisionDecidedBy", fields: [decidedById], references: [id])
@@ -1175,6 +1195,32 @@ model ChatPreference {
   quietStartMinute Int? // minutes after local midnight; both set or both null
   quietEndMinute   Int? // may be before the start: quiet hours across midnight
   timeZone         String? // IANA; null: the Organization's time zone
+  language         String? // "en" or "th": the language of cards and bot replies; null: English
   updatedAt        DateTime        @updatedAt
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A card for one person's Chat Account (ticket 0058): a Decision Request to decide, a
+// NEEDS_INFO question to answer, an escalation notice, or a link to a Spec Proposal. Its
+// buttons carry this row's id, signed, so a press is matched to the card and to the person
+// it was sent to. Held back as PENDING during the person's Quiet Hours.
+model ChatCard {
+  id             String           @id @default(uuid())
+  userId         String // who it is for; only their linked Chat Account may press it
+  provider       ChatProvider
+  event          ChatEventKind // which of the person's chat preferences it falls under
+  requestId      String?
+  specProposalId String?
+  escalationStep Int? // 1-3 for an escalation card
+  status         ChatCardStatus   @default(PENDING)
+  // Where the chat app put it, to update it after a press: Slack { channel, ts };
+  // Teams { serviceUrl, conversationId, activityId }. LINE can't edit a sent message.
+  messageRef     Json?
+  createdAt      DateTime
+  sentAt         DateTime?
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  request        DecisionRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([requestId])
 }

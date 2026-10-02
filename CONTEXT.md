@@ -133,7 +133,7 @@ One of two to four AI-suggested, Raiser-reviewed options for a Decision Request,
 _Avoid_: Option, answer, suggestion
 
 **Decision**:
-The outcome of a Decision Request: a picked Choice or a free-text answer. It records who decided, and on whose behalf if acting as Delegate.
+The outcome of a Decision Request: a picked Choice or a free-text answer. It records who decided, on whose behalf if acting as Delegate, and where: the web app, the CLI or a Chat App.
 _Avoid_: Resolution, verdict
 
 **Decision Log**:
@@ -180,8 +180,12 @@ _Avoid_: Connected account, chat user, chat identity
 A one-time code Vorasaan shows a person, which they send to the Chat App's bot to link their Chat Account. It is valid for 10 minutes and works once.
 _Avoid_: Pairing code, OTP, token
 
+**Chat Card**:
+What a person gets in their Chat App: a Decision Request with a button for each Choice, Ask for more info, Write your own answer and Open in Vorasaan; or a NEEDS_INFO question, an escalation notice, or a link to review a Spec Proposal. It shows only the title, the Choices and short status lines, never Attachment contents. Its buttons work only for the person it was sent to, from their linked Chat Account.
+_Avoid_: Action Card (that is a Conversation's proposal), notification, chat message
+
 **Quiet Hours**:
-The hours of the day, in a person's time zone, when nothing is sent to their Chat Apps. Their Inbox still has everything.
+The hours of the day, in a person's time zone, when nothing is sent to their Chat Apps. Chat Cards wait until they end, and are sent then only if they still matter. Their Inbox has everything meanwhile.
 _Avoid_: Do not disturb, mute
 
 ### Conversations

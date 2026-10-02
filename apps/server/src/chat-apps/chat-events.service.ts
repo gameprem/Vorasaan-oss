@@ -1,11 +1,13 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
-import { CHAT_LINK_CODE_MINUTES, CHAT_PROVIDER_LABEL, type ChatProvider } from '@vorasaan/shared';
+import { type ChatLanguage, type ChatProvider, DEFAULT_CHAT_LANGUAGE } from '@vorasaan/shared';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import type { ChatInbound, InboundRequest } from './adapters/adapter.ts';
-import { ChatApiError } from './adapters/http.ts';
 import { ChatAccountsService, type LinkResult } from './chat-accounts.service.ts';
+import { ChatActionsService } from './chat-actions.service.ts';
 import { ChatAdapters } from './chat-adapters.ts';
 import { ChatAppSettingsService } from './chat-app-settings.service.ts';
+import { failure } from './chat-cards.service.ts';
+import { CANCEL_WORDS, type ChatText, chatText } from './chat-text.ts';
 import { linkCodeIn, SeenEvents } from './link-code.ts';
 
 type Message = Extract<ChatInbound, { kind: 'message' }>;
@@ -15,19 +17,23 @@ const UNLINK_COMMANDS = new Set(['unlink', '/unlink', 'unlink vorasaan']);
 /**
  * `POST /chat-apps/:provider/events` (ADR 0011): checks the callback's signature with
  * the Organization's secret for that chat app before anything reads the body, then
- * handles what the person wrote. In 0057 that is a link code, "unlink", or anything
- * else (a short help). Ticket 0058 adds button presses.
+ * handles what the person did: a link code, "unlink", anything else (a short help), or
+ * a card's button (ticket 0058). Presses are answered in the background, so the
+ * provider gets its acknowledgement at once (Slack wants one within 3 seconds) while a
+ * Decision drafts its Spec Proposal.
  */
 @Injectable()
 export class ChatEventsService {
   private readonly logger = new Logger(ChatEventsService.name);
   private readonly seen = new SeenEvents();
+  private readonly running = new Set<Promise<void>>();
 
   constructor(
     @InjectClock() private readonly clock: Clock,
     private readonly settings: ChatAppSettingsService,
     private readonly accounts: ChatAccountsService,
     private readonly adapters: ChatAdapters,
+    private readonly actions: ChatActionsService,
   ) {}
 
   /** Returns the body the provider expects back, if any. Unsigned: 401, nothing else. */
@@ -40,6 +46,7 @@ export class ChatEventsService {
     if (verified === null) throw new UnauthorizedException();
     const parsed = adapter.parse(request, verified, connection.credentials);
     if (!parsed) throw new UnauthorizedException();
+    const { organizationId } = connection;
 
     for (const event of parsed.events) {
       // A redelivered or replayed event (same id, still validly signed) does nothing twice.
@@ -47,56 +54,108 @@ export class ChatEventsService {
         continue;
       }
       if (event.kind === 'unlinked') {
-        await this.accounts.unlinkFromChat(connection.organizationId, provider, event.userId);
+        await this.accounts.unlinkFromChat(organizationId, provider, event.userId);
+      } else if (event.kind === 'action') {
+        this.background(() => this.actions.press({ organizationId, provider, ...event }));
       } else {
-        await this.message(connection.organizationId, provider, event);
+        // LINE: the text behind "Ask for more info" or "Write your own answer".
+        // "unlink" or a link code is still that, even with a prompt waiting.
+        const command =
+          UNLINK_COMMANDS.has(event.text.trim().toLowerCase()) || linkCodeIn(event.text);
+        const prompt = this.actions.takePrompt(provider, event.user.id);
+        if (prompt && command) {
+          await this.message(organizationId, provider, event);
+        } else if (prompt && !CANCEL_WORDS.has(event.text.trim().toLowerCase())) {
+          this.background(() =>
+            this.actions.press({
+              organizationId,
+              provider,
+              user: event.user,
+              token: prompt,
+              text: event.text,
+              reply: event.reply,
+            }),
+          );
+        } else if (prompt) {
+          await this.say(
+            event,
+            provider,
+            chatText(await this.languageOf(organizationId, provider, event)).cancelled,
+          );
+        } else {
+          await this.message(organizationId, provider, event);
+        }
       }
     }
     return parsed.response;
   }
 
+  private background(work: () => Promise<void>) {
+    const run = work()
+      .catch((error) => this.logger.error(failure(error, 'A chat app press failed')))
+      .finally(() => this.running.delete(run));
+    this.running.add(run);
+  }
+
+  /** Waits for presses being answered (tests, shutdown). */
+  async drain(): Promise<void> {
+    while (this.running.size) await Promise.all([...this.running]);
+  }
+
+  private async languageOf(
+    organizationId: string,
+    provider: ChatProvider,
+    event: Message,
+  ): Promise<ChatLanguage> {
+    const account = await this.accounts.accountFor(organizationId, provider, event.user.id);
+    return account ? this.accounts.languageOf(account.userId) : DEFAULT_CHAT_LANGUAGE;
+  }
+
   private async message(organizationId: string, provider: ChatProvider, event: Message) {
-    const label = CHAT_PROVIDER_LABEL[provider];
     const text = event.text.trim();
     let reply: string;
     if (UNLINK_COMMANDS.has(text.toLowerCase())) {
+      const t = chatText(await this.languageOf(organizationId, provider, event));
       const unlinked = await this.accounts.unlinkFromChat(organizationId, provider, event.user.id);
-      reply = unlinked
-        ? "Unlinked from Vorasaan. You won't get Decision Requests here any more."
-        : `This ${label} account isn't linked to Vorasaan.`;
+      reply = unlinked ? t.unlinkedFromChat : t.notLinked(provider);
     } else {
       const code = linkCodeIn(text);
       if (code) {
+        const result = await this.accounts.linkFromChat(organizationId, provider, event.user, code);
         reply = linkReply(
-          await this.accounts.linkFromChat(organizationId, provider, event.user, code),
-          label,
+          result,
+          chatText(await this.languageOf(organizationId, provider, event)),
+          provider,
         );
       } else {
         const account = await this.accounts.accountFor(organizationId, provider, event.user.id);
-        reply = account
-          ? `You're linked to Vorasaan as ${account.user.name}. Send "unlink" to disconnect.`
-          : `To link this ${label} account to Vorasaan, open Settings → Notifications in Vorasaan, choose "Link ${label}", and send the code here.`;
+        const t = chatText(
+          account ? await this.accounts.languageOf(account.userId) : DEFAULT_CHAT_LANGUAGE,
+        );
+        reply = account ? t.linkedAs(account.user.name) : t.howToLink(provider);
       }
     }
+    await this.say(event, provider, reply);
+  }
+
+  private async say(event: Message, provider: ChatProvider, text: string) {
     try {
-      await event.reply({ text: reply });
+      await event.reply({ text });
     } catch (error) {
-      this.logger.warn(
-        error instanceof ChatApiError ? error.message : `Could not reply on ${provider}`,
-      );
+      this.logger.warn(failure(error, `Could not reply on ${provider}`));
     }
   }
 }
 
-function linkReply(result: LinkResult, label: string): string {
+function linkReply(result: LinkResult, t: ChatText, provider: ChatProvider): string {
   switch (result.kind) {
     case 'linked':
-      return `Linked to Vorasaan as ${result.name}. Decision Requests sent to you can arrive here. Send "unlink" to disconnect.`;
+      return t.linked(result.name);
     case 'too-many-tries':
-      return 'Too many wrong codes. Wait 15 minutes, then send a new code from Vorasaan.';
+      return t.tooManyTries;
     case 'linked-to-someone-else':
-      return `This ${label} account is already linked to another person in Vorasaan. Send "unlink" first, then your code again.`;
+      return t.linkedToSomeoneElse(provider);
     case 'invalid':
-      return `That code didn't work. It may be mistyped, already used or expired (a code lasts ${CHAT_LINK_CODE_MINUTES} minutes). Get a new one in Vorasaan under Settings → Notifications.`;
+      return t.invalidCode;
   }
 }

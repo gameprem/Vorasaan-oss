@@ -507,6 +507,7 @@ describe('Chat apps: setup and linking accounts (ticket 0057)', () => {
         quietHours: null,
         timeZone: null,
         effectiveTimeZone: 'UTC',
+        language: null,
       });
     });
 
@@ -522,6 +523,7 @@ describe('Chat apps: setup and linking accounts (ticket 0057)', () => {
         quietHours: { start: '22:00', end: '07:00' },
         timeZone: 'Asia/Bangkok',
         effectiveTimeZone: 'Asia/Bangkok',
+        language: null,
       });
       const pims = await asPim<ChatPreferencesView>('GET', '/me/chat-preferences');
       expect(pims.body.events).toEqual(['DECISION_REQUEST', 'NEEDS_INFO']);

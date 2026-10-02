@@ -1,9 +1,10 @@
 import type { ChatProvider } from '@vorasaan/shared';
 
 // One adapter per chat app (ADR 0011). Each knows how its provider signs callbacks,
-// what a callback says, and how to send a message. The rest of Vorasaan sees only
-// these shapes, so ticket 0058 adds cards (a richer ChatMessage) and button presses
-// (a new ChatInbound kind) without touching how callbacks are verified.
+// what a callback says, and how to send a message or a card. The rest of Vorasaan sees
+// only these shapes: a provider-neutral Card (ticket 0058) that each adapter renders as
+// a LINE Flex Message, Slack Block Kit or a Teams Adaptive Card, and button presses as
+// `action` events.
 
 export type LineCredentials = { channelAccessToken: string; channelSecret: string };
 export type SlackCredentials = { botToken: string; signingSecret: string };
@@ -33,8 +34,50 @@ export type ChatUser = {
   address: ChatAddress;
 };
 
-/** What Vorasaan sends. Ticket 0058 adds cards (Flex Message, Block Kit, Adaptive Card). */
-export type ChatMessage = { text: string };
+/** A button on a card. `token` is a signed ActionToken (see action-token.ts). */
+export type CardButton = { label: string; token: string };
+
+/** A text input behind a button: a Slack modal, a Teams card input, a LINE reply prompt. */
+export type CardInput = CardButton & {
+  title: string;
+  inputLabel: string;
+  placeholder: string;
+  submit: string;
+  cancel: string;
+};
+
+/**
+ * A card, before a provider renders it. It carries only what ADR 0011 allows: the
+ * request's title, its Choices with their impact, short status lines and a link to
+ * Vorasaan, never a description or Attachment contents.
+ */
+export type Card = {
+  /** Seal red for a Blocker. */
+  accent: 'blocker' | 'default';
+  /** Above the title: "Blocker · Checkout", "Reminder: waiting for your decision". */
+  eyebrow: string;
+  title: string;
+  /** Short lines under the title: who raised it, the due time, a question or answer. */
+  lines: string[];
+  choices: {
+    label: string;
+    title: string;
+    /** "Scope: …", "Time: …", "Risk: …". */
+    impact: string[];
+    button: CardButton;
+  }[];
+  ask: CardInput | null;
+  own: CardInput | null;
+  /** A shorter label for "Write your own answer" where buttons are narrow (LINE: 20). */
+  ownShortLabel: string;
+  link: { label: string; url: string };
+};
+
+/** What Vorasaan sends: text, or a card with `text` as its notification and fallback. */
+export type ChatMessage = { text: string; card?: Card };
+
+/** Where a provider put a sent message, to update it later (Slack and Teams). */
+export type MessageRef = Record<string, string>;
 
 export type ChatInbound =
   /** The person wrote to the bot (a link code, "unlink", anything else). */
@@ -48,8 +91,26 @@ export type ChatInbound =
       reply: (message: ChatMessage) => Promise<void>;
     }
   /** The person removed or blocked the bot: their link ends. */
-  | { kind: 'unlinked'; eventId: string | null; userId: string };
-// Ticket 0058: | { kind: 'action'; eventId; user; action: { requestId, choiceId, ... }; reply }
+  | { kind: 'unlinked'; eventId: string | null; userId: string }
+  /**
+   * The person pressed a card's button, or sent the text input behind one. Only the
+   * signed token comes from the card; who pressed is `user.id`, as the provider verified.
+   */
+  | {
+      kind: 'action';
+      eventId: string | null;
+      user: ChatUser;
+      /** The button's ActionToken, unverified until ActionTokens.verify. */
+      token: string;
+      /** Typed into the card's input or modal (Teams, Slack), else null. */
+      text: string | null;
+      reply: (message: ChatMessage) => Promise<void>;
+      /**
+       * Opens the provider's text input for this button (Slack: a modal). Absent where
+       * the text arrives with the press (Teams) or as the next message (LINE).
+       */
+      openInput?: (input: CardInput) => Promise<void>;
+    };
 
 /** A verified, parsed callback. */
 export type ParsedCallback = {
@@ -74,12 +135,18 @@ export interface ChatAppAdapter<C> {
    */
   parse(request: InboundRequest, verified: unknown, credentials: C): ParsedCallback | null;
 
-  /** Sends to a linked account, outside any conversation turn (unlink notices; 0058 cards). */
+  /**
+   * Sends to a linked account, outside any conversation turn (cards, unlink notices).
+   * Returns where the message went when the provider can update it later.
+   */
   send(
     credentials: C,
     account: { providerUserId: string; address: ChatAddress },
     message: ChatMessage,
-  ): Promise<void>;
+  ): Promise<MessageRef | null>;
+
+  /** Replaces a sent card (after a press), where the provider allows it. LINE can't. */
+  update(credentials: C, ref: MessageRef, message: ChatMessage): Promise<void>;
 }
 
 export const header = (request: InboundRequest, name: string): string | undefined => {

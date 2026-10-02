@@ -2,10 +2,13 @@
 
 import {
   CHAT_EVENT_LABEL,
+  CHAT_LANGUAGE_LABEL,
   CHAT_PROVIDER_LABEL,
   ChatEventKind,
+  ChatLanguage,
   type ChatLinkCodeView,
   type ChatPreferencesView,
+  DEFAULT_CHAT_LANGUAGE,
   type MyChatAppsView,
 } from '@vorasaan/shared';
 import { useRouter } from 'next/navigation';
@@ -15,7 +18,8 @@ import { relativeTime } from './bits';
 import { field, primaryButton, secondaryButton } from './ui';
 
 // Settings → Notifications (ticket 0057): link a LINE, Slack or Teams account with a
-// one-time code, unlink it, and choose what goes there and when not.
+// one-time code, unlink it, and choose what goes there, when not, and in which language
+// (ticket 0058).
 
 /** While a code is shown, look for the link every few seconds (the event stream also says). */
 const POLL_MS = 3_000;
@@ -137,6 +141,9 @@ function PreferencesForm({
   const [start, setStart] = useState(preferences.quietHours?.start ?? '22:00');
   const [end, setEnd] = useState(preferences.quietHours?.end ?? '07:00');
   const [timeZone, setTimeZone] = useState(preferences.timeZone ?? '');
+  const [language, setLanguage] = useState<ChatLanguage>(
+    preferences.language ?? DEFAULT_CHAT_LANGUAGE,
+  );
   const [message, setMessage] = useState<{ ok: boolean; text: string }>();
   const [pending, run] = useTransition();
   const touched = () => setMessage(undefined);
@@ -147,6 +154,7 @@ function PreferencesForm({
         events,
         quietHours: quiet ? { start, end } : null,
         timeZone: timeZone || null,
+        language,
       });
       setMessage(result.error ? { ok: false, text: result.error } : { ok: true, text: 'Saved' });
     });
@@ -186,7 +194,8 @@ function PreferencesForm({
               setQuiet(e.target.checked);
             }}
           />
-          Hold chat messages during quiet hours (they wait in your Inbox)
+          Hold cards during quiet hours: they arrive when quiet hours end, and your Inbox has them
+          meanwhile
         </label>
         {quiet && (
           <div className="mt-2 flex flex-wrap gap-4">
@@ -236,6 +245,24 @@ function PreferencesForm({
           </select>
         </label>
       </fieldset>
+      <label className="block max-w-sm" htmlFor={`${id}-lang`}>
+        <span className="font-medium">Language of cards and bot replies</span>
+        <select
+          id={`${id}-lang`}
+          value={language}
+          onChange={(e) => {
+            touched();
+            setLanguage(e.target.value as ChatLanguage);
+          }}
+          className={field}
+        >
+          {ChatLanguage.options.map((lang) => (
+            <option key={lang} value={lang}>
+              {CHAT_LANGUAGE_LABEL[lang]}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending} className={primaryButton}>
           Save chat preferences

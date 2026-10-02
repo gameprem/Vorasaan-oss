@@ -7,6 +7,7 @@ import type {
   SpecVersionView,
   TeamView,
 } from '@vorasaan/shared';
+import { DECISION_SOURCE_LABEL } from '@vorasaan/shared';
 import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { AttachmentsPanel } from '@/components/attachments-panel';
@@ -305,7 +306,8 @@ export default async function FeaturePage({
                   <DraftedWith model={entry.choicesDraftedWith} what="Choices" />
                   <p className="mt-2 text-sm text-fg-soft">
                     Decided by {entry.decidedBy.name}
-                    {entry.onBehalfOf && ` on behalf of ${entry.onBehalfOf.name}`}{' '}
+                    {entry.onBehalfOf && ` on behalf of ${entry.onBehalfOf.name}`}
+                    {entry.source !== 'WEB' && ` in ${DECISION_SOURCE_LABEL[entry.source]}`}{' '}
                     {relativeTime(entry.createdAt)}.{' '}
                     {entry.specVersion ? (
                       <Link

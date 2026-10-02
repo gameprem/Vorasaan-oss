@@ -159,6 +159,7 @@ describe('vorasaan TUI', () => {
         choiceId: '00000000-0000-4000-8000-000000000401',
         customAnswer: null,
         rationale: 'Good enough for now',
+        source: 'CLI',
         createdAt: '2026-09-30T10:00:00.000Z',
       },
     });

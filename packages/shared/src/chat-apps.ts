@@ -2,9 +2,9 @@ import { z } from 'zod';
 import { ChatEventKind, ChatProvider } from './enums.ts';
 import { minutesOfDay, TimeOfDay, TimeZone } from './response-window.ts';
 
-// Chat apps (ADR 0011, ticket 0057): an Admin turns on LINE, Slack or Microsoft Teams,
-// and each person links their own account with a one-time code. Cards and buttons
-// that decide arrive with ticket 0058.
+// Chat apps (ADR 0011, tickets 0057 and 0058): an Admin turns on LINE, Slack or Teams,
+// and each person links their own account with a one-time code. Then Decision Requests
+// arrive there as cards whose buttons decide (ticket 0058).
 
 const Timestamp = z.iso.datetime();
 
@@ -96,6 +96,18 @@ export const QuietHours = z
   });
 export type QuietHours = z.infer<typeof QuietHours>;
 
+/** The language of a person's cards and bot replies (ticket 0058). */
+export const ChatLanguage = z.enum(['en', 'th']);
+export type ChatLanguage = z.infer<typeof ChatLanguage>;
+
+/** Cards and bot replies are in English until a person picks Thai. */
+export const DEFAULT_CHAT_LANGUAGE: ChatLanguage = 'en';
+
+export const CHAT_LANGUAGE_LABEL: Record<ChatLanguage, string> = {
+  en: 'English',
+  th: 'ไทย (Thai)',
+};
+
 /** `PUT /me/chat-preferences`: what goes to my chat apps, and when not. */
 export const ChatPreferencesInput = z.strictObject({
   events: z
@@ -105,6 +117,8 @@ export const ChatPreferencesInput = z.strictObject({
   quietHours: QuietHours.nullable(),
   /** null: the Organization's time zone. */
   timeZone: TimeZone.nullable(),
+  /** The language of cards and bot replies; null: English. Left out: unchanged. */
+  language: ChatLanguage.nullable().optional(),
 });
 export type ChatPreferencesInput = z.infer<typeof ChatPreferencesInput>;
 
@@ -114,6 +128,8 @@ export const ChatPreferencesView = z.object({
   timeZone: z.string().nullable(),
   /** The time zone quiet hours are counted in: the person's own, or the Organization's. */
   effectiveTimeZone: z.string(),
+  /** The language of cards and bot replies; null: English. */
+  language: ChatLanguage.nullable(),
 });
 export type ChatPreferencesView = z.infer<typeof ChatPreferencesView>;
 

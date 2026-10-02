@@ -4,6 +4,8 @@ import { AI_CONNECTION_TESTER, type AiConnectionTester } from '../ai/ai-settings
 import { FakeAiPort } from '../ai/fake-ai.port.ts';
 import { AI_ENGINE } from '../ai/mastra.module.ts';
 import { AppModule } from '../app.module.ts';
+import { ChatCardsService } from '../chat-apps/chat-cards.service.ts';
+import { ChatEventsService } from '../chat-apps/chat-events.service.ts';
 import { CLOCK } from '../clock/clock.ts';
 import { installVerbatimBody } from '../http/verbatim-body.ts';
 import { EscalationJob } from '../response-windows/escalation.job.ts';
@@ -36,6 +38,7 @@ export async function createTestApp(): Promise<TestApp> {
   // Most API tests act as seeded users via the dev header; auth tests turn it off.
   process.env.VORASAAN_DEV_AUTH = 'true';
   process.env.VORASAAN_ESCALATION_JOB = 'off';
+  process.env.VORASAAN_CHAT_CARDS_JOB = 'off';
   const clock = new FakeClock();
   const ai = new FakeAiPort();
   const embeddings = new FakeEmbeddings();
@@ -62,6 +65,13 @@ export async function createTestApp(): Promise<TestApp> {
   await app.getHttpAdapter().getInstance().ready();
   const indexing = app.get(IndexingService);
   beforeTruncate.add(() => indexing.drain());
+  // Chat cards and presses run in the background too (ticket 0058).
+  const chatCards = app.get(ChatCardsService);
+  const chatEvents = app.get(ChatEventsService);
+  beforeTruncate.add(async () => {
+    await chatEvents.drain();
+    await chatCards.drain();
+  });
   return {
     app,
     ai,

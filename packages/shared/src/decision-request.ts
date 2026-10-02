@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   DecisionRequestKind,
   DecisionRequestStatus,
+  DecisionSource,
   ProposalStatus,
   RequestMessageKind,
   TeamRole,
@@ -110,6 +111,8 @@ export const DecisionView = z.object({
   choiceId: Id.nullable(),
   customAnswer: z.string().nullable(),
   rationale: z.string().nullable(),
+  /** Where it was decided: the web app, the CLI, or a Chat App button (ticket 0058). */
+  source: DecisionSource,
   createdAt: Timestamp,
 });
 export type DecisionView = z.infer<typeof DecisionView>;
@@ -157,3 +160,12 @@ export const DecisionRequestView = z.object({
   createdAt: Timestamp,
 });
 export type DecisionRequestView = z.infer<typeof DecisionRequestView>;
+
+/** "decided in Slack": where a Decision was made, for the Decision Log (ticket 0058). */
+export const DECISION_SOURCE_LABEL: Record<DecisionSource, string> = {
+  WEB: 'the web app',
+  CLI: 'the CLI',
+  LINE: 'LINE',
+  SLACK: 'Slack',
+  TEAMS: 'Microsoft Teams',
+};

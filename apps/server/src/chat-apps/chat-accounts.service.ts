@@ -10,11 +10,13 @@ import {
   CHAT_LINK_CODE_MINUTES,
   CHAT_PROVIDER_LABEL,
   type ChatEventKind,
+  ChatLanguage,
   type ChatLinkCodeView,
   type ChatPreferencesInput,
   type ChatPreferencesView,
   ChatProvider,
   DEFAULT_CHAT_EVENTS,
+  DEFAULT_CHAT_LANGUAGE,
   DEFAULT_RESPONSE_WINDOW_SETTINGS,
   type MyChatAppsView,
   minutesOfDay,
@@ -27,6 +29,7 @@ import type { ChatAddress, ChatUser } from './adapters/adapter.ts';
 import { ChatApiError } from './adapters/http.ts';
 import { ChatAdapters } from './chat-adapters.ts';
 import { ChatAppSettingsService } from './chat-app-settings.service.ts';
+import { chatText } from './chat-text.ts';
 import type { ChatDeliveryPreferences } from './delivery.ts';
 import { hashLinkCode, LinkAttempts, newLinkCode } from './link-code.ts';
 
@@ -56,7 +59,7 @@ export class ChatAccountsService {
   ) {}
 
   /** The instance's Organization, which the person must belong to. */
-  private async organizationOf(user: User): Promise<string> {
+  private async organizationOf(user: Pick<User, 'id'>): Promise<string> {
     const organizationId = await this.settings.organizationId();
     const member =
       organizationId &&
@@ -135,9 +138,8 @@ export class ChatAccountsService {
     }
     await this.db.chatAccount.delete({ where: { id: account.id } });
     this.changed(user.id, provider, false);
-    await this.notify(provider, account, {
-      text: `Unlinked from Vorasaan by ${user.name}. You won't get Decision Requests here any more.`,
-    });
+    const t = chatText(await this.languageOf(user.id));
+    await this.notify(provider, account, { text: t.unlinkedBy(user.name) });
   }
 
   private async notify(
@@ -285,7 +287,7 @@ export class ChatAccountsService {
     return settings?.timeZone ?? DEFAULT_RESPONSE_WINDOW_SETTINGS.timeZone;
   }
 
-  async preferences(user: User): Promise<ChatPreferencesView> {
+  async preferences(user: Pick<User, 'id'>): Promise<ChatPreferencesView> {
     const organizationId = await this.organizationOf(user);
     const [row, orgTimeZone] = await Promise.all([
       this.db.chatPreference.findUnique({ where: { userId: user.id } }),
@@ -300,6 +302,7 @@ export class ChatAccountsService {
       quietHours: quiet,
       timeZone: row?.timeZone ?? null,
       effectiveTimeZone: row?.timeZone ?? orgTimeZone,
+      language: chatLanguage(row?.language),
     };
   }
 
@@ -310,6 +313,8 @@ export class ChatAccountsService {
       quietStartMinute: input.quietHours ? minutesOfDay(input.quietHours.start) : null,
       quietEndMinute: input.quietHours ? minutesOfDay(input.quietHours.end) : null,
       timeZone: input.timeZone,
+      // Left out (an older client): unchanged.
+      ...(input.language !== undefined && { language: input.language }),
     };
     await this.db.chatPreference.upsert({
       where: { userId: user.id },
@@ -319,19 +324,34 @@ export class ChatAccountsService {
     return this.preferences(user);
   }
 
-  /** What ticket 0058 asks before sending a card (see delivery.ts). */
-  async deliveryPreferences(user: User): Promise<ChatDeliveryPreferences> {
+  /** What is asked before sending a card (see delivery.ts), and the card's language. */
+  async deliveryPreferences(user: Pick<User, 'id'>): Promise<ChatDeliveryPreferences> {
     const view = await this.preferences(user);
     return {
       events: view.events,
       quietStartMinute: view.quietHours ? minutesOfDay(view.quietHours.start) : null,
       quietEndMinute: view.quietHours ? minutesOfDay(view.quietHours.end) : null,
       timeZone: view.effectiveTimeZone,
+      language: view.language ?? DEFAULT_CHAT_LANGUAGE,
     };
+  }
+
+  /** The language a person reads cards and bot replies in. */
+  async languageOf(userId: string): Promise<ChatLanguage> {
+    const row = await this.db.chatPreference.findUnique({
+      where: { userId },
+      select: { language: true },
+    });
+    return chatLanguage(row?.language) ?? DEFAULT_CHAT_LANGUAGE;
   }
 }
 
-function toAddress(value: Prisma.JsonValue): ChatAddress {
+function chatLanguage(value: string | null | undefined): ChatLanguage | null {
+  const parsed = ChatLanguage.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+export function toAddress(value: Prisma.JsonValue): ChatAddress {
   const out: ChatAddress = {};
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     for (const [k, v] of Object.entries(value)) if (typeof v === 'string') out[k] = v;

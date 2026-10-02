@@ -94,6 +94,7 @@ export function toDecisionRequestView(
       choiceId: r.decision.choiceId,
       customAnswer: r.decision.customAnswer,
       rationale: r.decision.rationale,
+      source: r.decision.source,
       createdAt: r.decision.createdAt.toISOString(),
     },
     specProposal: r.decision?.specProposal ?? null,
