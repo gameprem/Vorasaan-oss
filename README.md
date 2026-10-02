@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🐘 Vorasaan
+# <img src="apps/web/app/icon.svg" width="44" height="44" alt="" align="top" /> Vorasaan
 
 ### The open-source alignment engine for software teams
 
@@ -14,6 +14,15 @@
 [How it works](#-how-it-works) · [Features](#-features) · [Getting started](#-getting-started) · [Architecture](#-architecture) · [Roadmap](#-roadmap) · [Contributing](#-contributing)
 
 </div>
+
+<br />
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/conversation-dark.webp" />
+  <img src="docs/images/conversation.webp" alt="A Feature Conversation: the AI has drafted a Blocker as a Decision Request Action Card with three Choices, each with its impact on scope, time and risk, next to the Feature's Spec v2" />
+</picture>
+
+<p align="center"><sub>A developer asks about a timeout in a <b>Feature Conversation</b>. The AI drafts a <b>Blocker</b> with three <b>Choices</b> as an <b>Action Card</b>; nothing is sent until they press Send. The approved <b>Spec</b> sits beside the chat.</sub></p>
 
 ---
 
@@ -38,7 +47,7 @@ The real bottleneck isn't writing code. It's the gap between what the business m
 sequenceDiagram
     autonumber
     participant Dev as 👩‍💻 Developer (CLI)
-    participant V as 🐘 Vorasaan
+    participant V as Vorasaan
     participant PO as 🧑‍💼 Product Owner (Web)
 
     Dev->>V: vorasaan raise "Payment API is too slow for sync checkout"
@@ -66,6 +75,18 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 | 💻 **Terminal-native** | Raise from the `vorasaan` CLI with AI-drafted Choices you review first, and keep your Inbox, requests and Specs open in the `vorasaan` TUI: it updates live, pops OS notifications, and lets you decide, Claim, ask for info, withdraw and approve Spec Proposals without leaving the terminal. |
 | 🤝 **Agent handoff** | `vorasaan run --ai claude` hands your coding agent the approved Spec, not a guess *(planned)*. |
 | 🏠 **Self-hosted** | One `docker compose up`. Your data stays on your infrastructure. Bring your own model: Claude API, OpenAI API, or any OpenAI-compatible URL + token. |
+
+| | |
+| --- | --- |
+| <img src="docs/images/spec-proposal.webp" alt="A Spec Proposal Action Card showing the added lines of the Spec as a diff, with Approve Spec change and Reject" /> | <img src="docs/images/grilling.webp" alt="A Grilling Conversation: the round header, a follow-up question, and a question collapsed because another PO answered it" /> |
+| **Spec Proposal**: the AI drafts the change, a person approves the diff, and it becomes the next Spec Version. | **Grilling**: business, UX and technical rounds, each person in their own Grilling Conversation, with follow-ups. |
+| <img src="docs/images/inbox.webp" alt="The Inbox: Decision Requests waiting for a decision or a Claim, Spec Proposals to approve and Grilling questions" /> | <img src="docs/images/settings-ai-models.webp" alt="Settings, AI models: the Approved Models Best and Fast, and the model per AI task" /> |
+| **Inbox**: Decision Requests to decide or Claim, Spec Proposals to approve, Grilling questions for your Team Role. | **Settings → AI models**: Approved Models with names people recognize ("Best", "Fast"), and a model per AI task. |
+
+<p align="center">
+  <img src="docs/images/phone.webp" width="300" alt="The same Decision Request draft on a phone" /><br />
+  <sub>The web app on a phone.</sub>
+</p>
 
 ## 🚀 Getting started
 
@@ -101,7 +122,21 @@ Then create a **Project** and a **Team**, **invite your team** with a link, crea
 
 ### Raise from your terminal
 
-In the web app, open **Access tokens** and create a token. Then:
+```console
+$ vorasaan login --url https://vorasaan.example.com   # paste an access token from Settings → Access tokens
+$ vorasaan init                                       # bind this repository to a Project
+$ vorasaan raise                                      # pick a Feature, describe it, review the AI's Choices, send
+```
+
+<img src="docs/images/cli-raise.svg" alt="vorasaan raise: picking the Feature, a Question with its title and description, three AI-drafted Choices, then Send to PO" />
+
+`vorasaan` on its own opens the TUI: your Inbox, your Decision Requests and your Features, updated live.
+
+<img src="docs/images/cli-tui.svg" alt="The vorasaan TUI: the Inbox tab with Decision Requests to decide and a Spec Proposal to approve" />
+
+<img src="docs/images/cli-tui-request.svg" alt="The vorasaan TUI: a Blocker opened, with its Choices and the keys to decide, ask for info, reassign or add a note" />
+
+From a checkout of this repository, without the single binary: in the web app, open **Access tokens** and create a token. Then:
 
 ```bash
 bun apps/cli/src/index.ts login --url http://localhost:4000   # paste the token
@@ -137,6 +172,14 @@ bun run db:seed               # demo data: pim@acme.test / beam@acme.test, passw
 VORASAAN_AI=fake bun run --filter @vorasaan/server dev   # API on :4000; drop VORASAAN_AI to use your provider
 bun run --filter @vorasaan/web dev                       # web on :3000
 ```
+
+#### README screenshots
+
+```bash
+bun run screenshots           # needs the database (docker compose up -d db) and a Chromium
+```
+
+It creates a fresh `vorasaan_screens` database (it refuses any name that doesn't end in `_screens`), builds the web app, starts the API on :4099 and the web on :3099 without dev sign-in, and writes a Mobile Banking story through the API. The AI is a scripted stand-in for an OpenAI-compatible model, so every Choice, Spec Proposal and Grilling question on screen goes through the real AI path. It signs in through `/login`, captures the Web UI with Playwright and the CLI in a pseudo-terminal, writes `docs/images/`, then stops what it started and drops the database. Set `SCREENS_CHROMIUM` to a Chromium binary if Playwright's own isn't installed; the story is in [`apps/web/scripts/screenshots/story.ts`](./apps/web/scripts/screenshots/story.ts).
 
 ### Useful commands
 
