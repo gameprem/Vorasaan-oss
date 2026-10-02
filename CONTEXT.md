@@ -166,6 +166,24 @@ _Avoid_: Task, todo, notification
 An informational message a person only needs to read, such as a new Spec Version.
 _Avoid_: Alert, inbox item
 
+### Chat apps
+
+**Chat App**:
+LINE, Slack or Microsoft Teams, turned on by an Admin with the Organization's own bot, so people can get Decision Requests and answer them there.
+_Avoid_: Messenger, channel, chat integration
+
+**Chat Account**:
+A person's account in a Chat App, linked to them with a Link Code. A message or button press counts as that person only when it comes from their Chat Account. A person has at most one per Chat App, and either side can unlink it.
+_Avoid_: Connected account, chat user, chat identity
+
+**Link Code**:
+A one-time code Vorasaan shows a person, which they send to the Chat App's bot to link their Chat Account. It is valid for 10 minutes and works once.
+_Avoid_: Pairing code, OTP, token
+
+**Quiet Hours**:
+The hours of the day, in a person's time zone, when nothing is sent to their Chat Apps. Their Inbox still has everything.
+_Avoid_: Do not disturb, mute
+
 ### Conversations
 
 **Conversation**:

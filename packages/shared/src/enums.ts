@@ -106,3 +106,14 @@ export type ResponseWindowUnit = z.infer<typeof ResponseWindowUnit>;
 
 export const RequestHistoryKind = z.enum(['REMINDED', 'DELEGATES_ADDED', 'OVERDUE_REPORTED']);
 export type RequestHistoryKind = z.infer<typeof RequestHistoryKind>;
+
+export const ChatProvider = z.enum(['LINE', 'SLACK', 'TEAMS']);
+export type ChatProvider = z.infer<typeof ChatProvider>;
+
+export const ChatEventKind = z.enum([
+  'DECISION_REQUEST',
+  'NEEDS_INFO',
+  'SPEC_PROPOSAL',
+  'ESCALATION',
+]);
+export type ChatEventKind = z.infer<typeof ChatEventKind>;

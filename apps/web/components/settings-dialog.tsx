@@ -17,8 +17,10 @@ import { SETTINGS_BUTTON_ID } from './shell';
 export const SETTINGS_SECTIONS = [
   { href: '/settings/members', label: 'Members' },
   { href: '/settings/delegations', label: 'Delegations' },
+  { href: '/settings/notifications', label: 'Notifications' },
   { href: '/settings/feature-guidelines', label: 'Feature Guidelines' },
   { href: '/settings/response-windows', label: 'Response Windows' },
+  { href: '/settings/chat-apps', label: 'Chat apps' },
   { href: '/settings/ai', label: 'AI models' },
   { href: '/settings/tokens', label: 'Access tokens' },
 ] as const;

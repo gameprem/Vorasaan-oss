@@ -20,9 +20,9 @@ export const ResponseWindow = z.strictObject({
 export type ResponseWindow = z.infer<typeof ResponseWindow>;
 
 /** `HH:MM`, 24-hour, in the Organization's time zone. */
-const TimeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM, such as 09:00');
+export const TimeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM, such as 09:00');
 
-const TimeZone = z
+export const TimeZone = z
   .string()
   .trim()
   .min(1)

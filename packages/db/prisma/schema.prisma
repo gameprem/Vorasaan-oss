@@ -44,6 +44,24 @@ enum IntegrationProvider {
   OPENAI_COMPATIBLE // any OpenAI-compatible URL + token, e.g. 9Router
   ATLASSIAN
   EMBEDDINGS // OpenAI-compatible embeddings endpoint for retrieval (ADR 0007)
+  LINE // LINE Messaging API channel (ADR 0011): channel access token + channel secret
+  SLACK // Slack app: bot token + signing secret
+  TEAMS // Microsoft Teams bot: app id (in appId) + password
+}
+
+// A chat app a person can link to their account (ADR 0011, ticket 0057).
+enum ChatProvider {
+  LINE
+  SLACK
+  TEAMS
+}
+
+// What a person may receive in their linked chat app (ticket 0057; cards arrive with 0058).
+enum ChatEventKind {
+  DECISION_REQUEST // a Decision Request sent to them, to decide
+  NEEDS_INFO // a request for more info on a Decision Request they raised
+  SPEC_PROPOSAL // a Spec Proposal to approve (only a link: a diff needs a real screen)
+  ESCALATION // Response Window reminders and overdue notices
 }
 
 enum AttachmentSource {
@@ -186,6 +204,9 @@ model User {
   roleOwnerships  RoleOwner[]
   sessions        Session[]
   accessTokens    PersonalAccessToken[]
+  chatAccounts    ChatAccount[]
+  chatLinkCodes   ChatLinkCode[]
+  chatPreference  ChatPreference?
   notifications   Notification[]
   invitationsSent Invitation[]
   attachments     Attachment[]
@@ -260,6 +281,8 @@ model Organization {
   projects       Project[]
   chunks         ContentChunk[]
   guidelines     GuidelineCriterion[]
+  chatAccounts   ChatAccount[]
+  chatLinkCodes  ChatLinkCode[]
   responseWindow ResponseWindowSettings?
   holidays       OrgHoliday[]
 }
@@ -329,6 +352,8 @@ model OrgIntegration {
   baseUrl         String?
   accountEmail    String? // Atlassian API tokens are paired with an email
   model           String? // EMBEDDINGS: the embedding model. LLM models are Approved Models.
+  appId           String? // TEAMS: the bot's Microsoft app id (the JWT audience); not a secret
+  // Chat apps: a JSON object of the provider's secrets, encrypted as one value.
   secretEncrypted String
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -336,7 +361,8 @@ model OrgIntegration {
   approvedModels  ApprovedModel[]
 
   // An Organization may connect several LLM providers (ADR 0010), but at most one
-  // ATLASSIAN and one EMBEDDINGS integration (partial unique index in the migration).
+  // ATLASSIAN, EMBEDDINGS, LINE, SLACK and TEAMS integration (partial unique indexes
+  // in the migrations).
   @@index([organizationId, provider])
 }
 
@@ -1100,4 +1126,55 @@ model ActionCard {
   @@unique([kind, targetId])
   @@index([conversationId, createdAt])
   @@index([messageId])
+}
+
+// ─── Chat apps (ADR 0011, ticket 0057) ──────────────────────────────────────
+
+// A person's account in a chat app, linked with a one-time code. Messages and button
+// presses from it count as that person; nothing else does.
+model ChatAccount {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  provider       ChatProvider
+  providerUserId String // LINE userId, Slack user id, Teams from.id
+  // Where to send that person messages: Slack { teamId, channelId }; Teams
+  // { serviceUrl, conversationId, tenantId, botId }; LINE {} (the user id is enough).
+  address        Json
+  displayName    String? // as the chat app reported it, when it does (Teams)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider, providerUserId]) // one person per chat account
+  @@unique([userId, provider]) // one chat account per person per chat app
+}
+
+// A one-time code a person sends to the bot to link their chat account. Only the
+// SHA-256 of the code is stored; it is valid for 10 minutes and used once.
+model ChatLinkCode {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  provider       ChatProvider
+  codeHash       String       @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, provider])
+}
+
+// What a person receives in their chat apps, and when not. No row: the defaults
+// (Decision Requests and NEEDS_INFO, no quiet hours).
+model ChatPreference {
+  userId           String          @id
+  events           ChatEventKind[]
+  quietStartMinute Int? // minutes after local midnight; both set or both null
+  quietEndMinute   Int? // may be before the start: quiet hours across midnight
+  timeZone         String? // IANA; null: the Organization's time zone
+  updatedAt        DateTime        @updatedAt
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -10,6 +10,7 @@ import { AuthService } from './auth/auth.service.ts';
 import { DevUsersController } from './auth/dev-users.controller.ts';
 import { IdentityGuard } from './auth/identity.guard.ts';
 import { BriefModule } from './brief/brief.module.ts';
+import { ChatAppsModule } from './chat-apps/chat-apps.module.ts';
 import { ClockModule } from './clock/clock.ts';
 import { ConversationsModule } from './conversations/conversations.module.ts';
 import { DecisionRequestsModule } from './decision-requests/decision-requests.module.ts';
@@ -53,6 +54,7 @@ import { SpecModule } from './spec/spec.module.ts';
     SpecModule,
     BriefModule,
     ConversationsModule,
+    ChatAppsModule,
   ],
   controllers: [
     HealthController,
