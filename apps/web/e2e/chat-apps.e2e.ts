@@ -120,7 +120,7 @@ test('an Admin turns LINE on, and a person links and unlinks their LINE account'
   // Quiet hours.
   const prefs = member.getByRole('form', { name: 'Chat app preferences' });
   await expect(prefs.getByLabel(/Decision Requests sent to me/)).toBeChecked();
-  await prefs.getByLabel(/Hold chat messages during quiet hours/).check();
+  await prefs.getByLabel(/Hold cards during quiet hours/).check();
   await prefs.getByLabel('From').fill('22:00');
   await prefs.getByLabel('Until').fill('07:00');
   await prefs.getByRole('button', { name: 'Save chat preferences' }).click();
