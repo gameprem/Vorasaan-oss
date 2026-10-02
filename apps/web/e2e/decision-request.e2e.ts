@@ -74,8 +74,11 @@ test('raise → send to all POs → Claim → ask for info → answer → decide
 
   await expect(decider).toHaveURL(new RegExp(`/features/${SEED.featureId}\\?approved=\\d+$`));
   await expect(decider.getByText(/^Spec v\d+ approved\./)).toBeVisible();
-  await expect(decider.getByRole('heading', { name: 'Decisions' })).toBeVisible();
-  await expect(decider.getByText(new RegExp(`${title.replace(/[()?]/g, '\\$&')}: `))).toBeVisible();
+  // The fake AI appends a "Decisions" section per Decision, so earlier Decisions on this
+  // Feature (another spec, an earlier run) add their own: this one is the last.
+  const spec = decider.locator('.spec');
+  await expect(spec.getByRole('heading', { name: 'Decisions' }).last()).toBeVisible();
+  await expect(spec.getByText(new RegExp(`${title.replace(/[()?]/g, '\\$&')}: `))).toBeVisible();
 
   // The Raiser sees it decided and the Spec updated.
   await raiser.reload();
