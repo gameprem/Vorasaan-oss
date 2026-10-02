@@ -235,7 +235,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [x] App shell with the Sidebar and the Settings modal (0045).
    - [x] Chat view, Action Cards and the document panel (0046).
    - [x] Grilling in the chat view (0047).
-   - [ ] End-to-end tests for the chat UI (0048).
+   - [x] End-to-end tests for the chat UI (0048).
    - [x] Several AI providers and Approved Models chosen by an Admin, with a model per AI task (0053, [ADR 0010](./docs/adr/0010-approved-models-and-the-chat-picker.md)).
    - [x] A model picker in the chat: each Conversation remembers its model, and every reply records the model that wrote it (0054).
 2. **Context management** ([ADR 0012](./docs/adr/0012-context-budgets-and-auto-compaction.md)): token counts that are right for Thai, context budgets as shares of each model's window, and Conversations that auto-compact into a structured summary (goal, agreed points, open questions, pending Action Cards, preferences) instead of forgetting. Compact and retry once when a provider says the prompt is too long. Prompt caching for the stable prefix.
