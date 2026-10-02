@@ -12,6 +12,7 @@ import type {
   DecideInput,
   DecideResult,
   DecisionRequestView,
+  DecisionSource,
   ListDecisionRequestsQuery,
   PostRequestMessageInput,
   RaiseDecisionRequestInput,
@@ -224,8 +225,12 @@ export class DecisionRequestsService {
         include: decisionRequestInclude,
       });
     });
+    const to = recipients.map((r) => r.userId);
     await this.notifications.publish(
-      this.notifications.outbox().inboxChanged(recipients.map((r) => r.userId)),
+      this.notifications
+        .outbox()
+        .inboxChanged(to)
+        .chatCard({ kind: 'DECISION_REQUEST', requestId: id, to }),
     );
     return toDecisionRequestView(updated, await this.viewer(user));
   }
@@ -361,6 +366,13 @@ export class DecisionRequestsService {
       if (deciderId !== request.deciderId) await this.claimed(tx, outbox, user, request);
       // A QUESTION or ANSWER moves the item between the Decider's and the Raiser's Inbox.
       if (status !== request.status) outbox.inboxChanged(request.raiserId, deciderId);
+      // ...and to their chat apps: the question to the Raiser, the request back to the
+      // Decider with the answer (ticket 0058).
+      if (status === 'NEEDS_INFO') {
+        outbox.chatCard({ kind: 'NEEDS_INFO', requestId: id, to: [request.raiserId] });
+      } else if (input.kind === 'ANSWER' && deciderId) {
+        outbox.chatCard({ kind: 'DECISION_REQUEST', requestId: id, to: [deciderId] });
+      }
       return tx.decisionRequest.findUniqueOrThrow({
         where: { id },
         include: decisionRequestInclude,
@@ -419,7 +431,12 @@ export class DecisionRequestsService {
    * Records the Decider's Decision and the AI-drafted Spec Proposal together.
    * The AI runs first, so a failed draft writes nothing and the Decider can retry.
    */
-  async decide(user: User, id: string, input: DecideInput): Promise<DecideResult> {
+  async decide(
+    user: User,
+    id: string,
+    input: DecideInput,
+    source: DecisionSource = 'WEB',
+  ): Promise<DecideResult> {
     const request = await this.findOrThrow(id);
     // A recipient deciding a request nobody has Claimed yet Claims it implicitly.
     const impliedClaim = this.isImpliedClaim(user, request);
@@ -518,6 +535,7 @@ export class DecisionRequestsService {
           choiceId: 'choiceId' in input ? input.choiceId : null,
           customAnswer: 'customAnswer' in input ? input.customAnswer : null,
           rationale: input.rationale ?? null,
+          source,
           // On the clock: it ends the request's Decision Lead Time.
           createdAt: this.clock.now(),
         },
@@ -532,6 +550,13 @@ export class DecisionRequestsService {
           decisionId: created.id,
         },
         include: specProposalInclude,
+      });
+      // A link to review it, for whoever decided away from the web app (ticket 0058).
+      outbox.chatCard({
+        kind: 'SPEC_PROPOSAL',
+        specProposalId: proposal.id,
+        requestId: id,
+        to: [user.id],
       });
       const updated = await tx.decisionRequest.findUniqueOrThrow({
         where: { id },

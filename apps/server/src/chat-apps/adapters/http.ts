@@ -37,12 +37,12 @@ const TIMEOUT_MS = 5_000;
 export async function providerPost(
   provider: ChatProvider,
   url: string,
-  init: { headers: Record<string, string>; body: string },
+  init: { headers: Record<string, string>; body: string; method?: 'POST' | 'PUT' },
 ): Promise<unknown> {
   let res: Response;
   try {
     res = await fetch(url, {
-      method: 'POST',
+      method: init.method ?? 'POST',
       headers: init.headers,
       body: init.body,
       redirect: 'error',

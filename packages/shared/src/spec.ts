@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { RecordedModel } from './ai-settings.ts';
 import { DecisionRequestView, PersonRef } from './decision-request.ts';
-import { DecisionRequestKind, ProposalStatus, SpecVersionSource } from './enums.ts';
+import { DecisionRequestKind, DecisionSource, ProposalStatus, SpecVersionSource } from './enums.ts';
 
 const Id = z.uuid();
 const Timestamp = z.iso.datetime();
@@ -86,6 +86,8 @@ export const DecisionLogEntry = z.object({
   choice: z.object({ label: z.string(), title: z.string() }).nullable(),
   customAnswer: z.string().nullable(),
   rationale: z.string().nullable(),
+  /** Where it was decided: the web app, the CLI, or a Chat App button (ticket 0058). */
+  source: DecisionSource,
   /** The Spec Version this Decision produced, if its proposal was approved. */
   specVersion: z.int().positive().nullable(),
   /** The model that drafted the request's AI Choices in a Conversation (ticket 0054); null otherwise. */

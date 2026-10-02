@@ -8,7 +8,8 @@ import {
   ReassignInput,
   SubmitDecisionRequestInput,
 } from '@vorasaan/shared';
-import { CurrentUser } from '../auth/identity.guard.ts';
+import { CurrentToken, CurrentUser } from '../auth/identity.guard.ts';
+import { PAT_PREFIX } from '../auth/tokens.ts';
 import { DecisionRequestsService } from './decision-requests.service.ts';
 
 @Controller('decision-requests')
@@ -71,10 +72,12 @@ export class DecisionRequestsController {
   @Post(':id/decision')
   decide(
     @CurrentUser() user: User,
+    @CurrentToken() token: string | undefined,
     @Param('id', ParseUUIDPipe) id: string,
     @Body({ schema: DecideInput }) body: DecideInput,
   ) {
-    return this.service.decide(user, id, body);
+    // The CLI signs in with a Personal Access Token; the web app with a session.
+    return this.service.decide(user, id, body, token?.startsWith(PAT_PREFIX) ? 'CLI' : 'WEB');
   }
 
   @Post(':id/withdraw')

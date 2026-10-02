@@ -164,6 +164,7 @@ export class EscalationJob {
     }
 
     outbox.inboxChanged(to);
+    outbox.chatCard({ kind: 'ESCALATION', requestId: request.id, step, to });
     await this.notifications.notify(tx, outbox, {
       type: kind.notification,
       to,

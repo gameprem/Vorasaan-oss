@@ -369,6 +369,7 @@ export class SpecService {
       choice: d.choice,
       customAnswer: d.customAnswer,
       rationale: d.rationale,
+      source: d.source,
       specVersion: d.specProposal?.resultVersion?.version ?? null,
       choicesDraftedWith: fromRecordedModelColumns({
         approvedModelId: d.request.choicesApprovedModelId,

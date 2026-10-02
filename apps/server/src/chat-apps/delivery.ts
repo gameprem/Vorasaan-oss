@@ -1,7 +1,7 @@
-import type { ChatEventKind } from '@vorasaan/shared';
+import type { ChatEventKind, ChatLanguage } from '@vorasaan/shared';
 
-// Whether something may go to a person's chat apps now (ticket 0057). Ticket 0058
-// asks this before sending each card; what is held back stays in the Inbox.
+// Whether something may go to a person's chat apps now (ticket 0057). ChatCardsService
+// asks this before sending each card (ticket 0058); during Quiet Hours a card waits.
 
 export type ChatDeliveryPreferences = {
   events: readonly ChatEventKind[];
@@ -10,6 +10,8 @@ export type ChatDeliveryPreferences = {
   quietEndMinute: number | null;
   /** The time zone quiet hours are counted in. */
   timeZone: string;
+  /** The language of cards and bot replies. */
+  language: ChatLanguage;
 };
 
 export type ChatDelivery = 'send' | 'not-chosen' | 'quiet-hours';

@@ -7,6 +7,7 @@ import type {
   ReadAllNotificationsResult,
 } from '@vorasaan/shared';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { type ChatCardSignal, ChatCardSignals } from './chat-card-signals.ts';
 import { EventBus } from './event-bus.ts';
 
 /** The client a `$transaction` callback receives. */
@@ -21,10 +22,18 @@ type MaybeId = string | null | undefined;
 export class Outbox {
   readonly inbox = new Set<string>();
   readonly notificationIds: string[] = [];
+  readonly chatCards: ChatCardSignal[] = [];
 
   /** These people's Inbox Items may have changed. */
   inboxChanged(...userIds: (MaybeId | readonly MaybeId[])[]): this {
     for (const id of userIds.flat()) if (id) this.inbox.add(id);
+    return this;
+  }
+
+  /** Cards for these people's chat apps (ticket 0058), sent only once committed. */
+  chatCard(signal: ChatCardSignal): this {
+    const to = [...new Set(signal.to.filter(Boolean))];
+    if (to.length) this.chatCards.push({ ...signal, to });
     return this;
   }
 }
@@ -53,6 +62,7 @@ export class NotificationsService {
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
     private readonly bus: EventBus,
+    private readonly chatSignals: ChatCardSignals,
   ) {}
 
   outbox(): Outbox {
@@ -105,6 +115,8 @@ export class NotificationsService {
 
   /** Pushes the Outbox to connected clients. Call only after the transaction commits. */
   async publish(outbox: Outbox): Promise<void> {
+    // Queued, never awaited: a slow or failing chat app never holds up the change.
+    this.chatSignals.dispatch(outbox.chatCards);
     try {
       for (const userId of outbox.inbox) {
         this.bus.emit(userId, { event: 'inbox.changed', data: {} });

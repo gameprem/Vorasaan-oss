@@ -4,7 +4,12 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 // Fake LINE, Slack and Bot Framework (Teams) servers for chat app tests, and the
 // signatures each real provider puts on its callbacks.
 
-export type ProviderHit = { path: string; authorization: string | null; body: string };
+export type ProviderHit = {
+  method: string;
+  path: string;
+  authorization: string | null;
+  body: string;
+};
 
 export const LINE_CREDENTIALS = {
   channelAccessToken: 'line-access-token-SECRET-0001',
@@ -37,6 +42,9 @@ export class FakeChatProviders {
   readonly hits: ProviderHit[] = [];
   /** Status to answer API calls with (not the JWKS), to simulate failures. */
   status = 200;
+  /** A status for one path only (e.g. an expired LINE reply token: 400 on /reply). */
+  readonly statusFor = new Map<string, number>();
+  private sent = 0;
   readonly teamsKey: { privateKey: KeyObject; publicJwk: Record<string, unknown> };
   private server: ReturnType<typeof Bun.serve> | undefined;
 
@@ -72,15 +80,25 @@ export class FakeChatProviders {
         if (url.pathname === '/keys') return Response.json({ keys: [this.teamsKey.publicJwk] });
         const body = await req.text();
         this.hits.push({
+          method: req.method,
           path: url.pathname,
           authorization: req.headers.get('authorization'),
           body,
         });
-        if (this.status !== 200) return new Response('nope', { status: this.status });
+        const status = this.statusFor.get(url.pathname) ?? this.status;
+        if (status !== 200) return new Response('nope', { status });
         if (url.pathname === '/teams/token') {
           return Response.json({ access_token: TEAMS_ACCESS_TOKEN, expires_in: 3600 });
         }
+        if (url.pathname === '/api/chat.postMessage') {
+          const { channel } = JSON.parse(body) as { channel: string };
+          return Response.json({ ok: true, channel, ts: `1700000000.${++this.sent}` });
+        }
         if (url.pathname.startsWith('/api/')) return Response.json({ ok: true });
+        // Teams connector: a new activity gets an id (to update it later).
+        if (req.method === 'POST' && url.pathname.endsWith('/activities')) {
+          return Response.json({ id: `bot-act-${++this.sent}` });
+        }
         return Response.json({});
       },
     });
@@ -95,17 +113,25 @@ export class FakeChatProviders {
     this.server?.stop(true);
   }
 
-  /** The messages sent to people, as text, in order. */
-  texts(): string[] {
+  /** The messages sent to people (or those `include` keeps), as text, in order. */
+  texts(include: (hit: ProviderHit) => boolean = () => true): string[] {
     return this.hits
-      .filter((h) => !h.path.startsWith('/teams/token'))
+      .filter((h) => !h.path.startsWith('/teams/token') && include(h))
       .map((h) => {
         const body = JSON.parse(h.body) as {
           text?: string;
-          messages?: { text: string }[];
+          summary?: string;
+          messages?: { text?: string; altText?: string }[];
         };
-        return body.text ?? body.messages?.[0]?.text ?? '';
+        const line = body.messages?.[0];
+        return body.text ?? body.summary ?? line?.text ?? line?.altText ?? '';
       });
+  }
+
+  /** The JSON bodies sent to a path (e.g. '/api/chat.postMessage'), in order. */
+  sentTo<T = Record<string, unknown>>(path: string | ((path: string) => boolean)): T[] {
+    const match = typeof path === 'string' ? (p: string) => p === path : path;
+    return this.hits.filter((h) => match(h.path)).map((h) => JSON.parse(h.body) as T);
   }
 
   /** A Bot Framework JWT for the activity, signed with the fake JWKS key unless overridden. */
@@ -247,3 +273,77 @@ export const fromSlack = (app: NestFastifyApplication, body: string, at = Date.n
 /** A callback from Teams with a valid Bot Framework token. */
 export const fromTeams = (app: NestFastifyApplication, fake: FakeChatProviders, body: string) =>
   postCallback(app, 'teams', body, { authorization: `Bearer ${fake.teamsToken()}` });
+
+// ─── Button presses (ticket 0058) ──────────────────────────────────────────
+
+/** A LINE postback: a Flex Message button pressed by `userId`. */
+export function linePostback(userId: string, data: string, eventId = `line-${++lineEvent}`) {
+  return JSON.stringify({
+    destination: 'Ubot',
+    events: [
+      {
+        type: 'postback',
+        mode: 'active',
+        webhookEventId: eventId,
+        timestamp: Date.now(),
+        source: { type: 'user', userId },
+        replyToken: `reply-${eventId}`,
+        postback: { data },
+      },
+    ],
+  });
+}
+
+let slackTrigger = 0;
+
+/** Slack block_actions: a Block Kit button pressed by `user`, form-encoded as Slack sends it. */
+export function slackAction(user: string, value: string, over: { triggerId?: string } = {}) {
+  const payload = {
+    type: 'block_actions',
+    user: { id: user, team_id: 'T0001' },
+    team: { id: 'T0001' },
+    api_app_id: 'A0001',
+    trigger_id: over.triggerId ?? `trigger-${++slackTrigger}`,
+    container: { type: 'message', channel_id: `D-${user}`, message_ts: '1.1' },
+    channel: { id: `D-${user}` },
+    actions: [{ type: 'button', action_id: 'choice_B', value, action_ts: '1.2' }],
+  };
+  return new URLSearchParams({ payload: JSON.stringify(payload) }).toString();
+}
+
+/** Slack view_submission: the modal behind a button, sent with `text`. */
+export function slackViewSubmission(user: string, privateMetadata: string, text: string) {
+  const payload = {
+    type: 'view_submission',
+    user: { id: user, team_id: 'T0001' },
+    team: { id: 'T0001' },
+    trigger_id: `trigger-${++slackTrigger}`,
+    view: {
+      id: `V${slackTrigger}`,
+      callback_id: 'vorasaan_input',
+      private_metadata: privateMetadata,
+      state: { values: { input: { text: { type: 'plain_text_input', value: text } } } },
+    },
+  };
+  return new URLSearchParams({ payload: JSON.stringify(payload) }).toString();
+}
+
+/** A Teams Action.Submit from an Adaptive Card: its data (and input) as `value`. */
+export function teamsSubmit(
+  fromId: string,
+  value: Record<string, unknown>,
+  serviceUrl: string,
+  replyToId = 'bot-act-1',
+) {
+  return teamsMessage(fromId, '', serviceUrl, { value, replyToId });
+}
+
+/** A Slack interactive payload, form-encoded and signed now. */
+export const fromSlackForm = (app: NestFastifyApplication, body: string, at = Date.now()) => {
+  const timestamp = Math.floor(at / 1000);
+  return postCallback(app, 'slack', body, {
+    'content-type': 'application/x-www-form-urlencoded',
+    'x-slack-request-timestamp': String(timestamp),
+    'x-slack-signature': slackSignature(body, timestamp),
+  });
+};

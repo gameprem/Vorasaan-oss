@@ -6,6 +6,7 @@ const prefs = (over: Partial<ChatDeliveryPreferences> = {}): ChatDeliveryPrefere
   quietStartMinute: null,
   quietEndMinute: null,
   timeZone: 'Asia/Bangkok',
+  language: 'en',
   ...over,
 });
 

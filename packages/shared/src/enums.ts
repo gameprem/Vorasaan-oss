@@ -117,3 +117,9 @@ export const ChatEventKind = z.enum([
   'ESCALATION',
 ]);
 export type ChatEventKind = z.infer<typeof ChatEventKind>;
+
+export const DecisionSource = z.enum(['WEB', 'CLI', 'LINE', 'SLACK', 'TEAMS']);
+export type DecisionSource = z.infer<typeof DecisionSource>;
+
+export const ChatCardStatus = z.enum(['PENDING', 'SENT', 'SKIPPED', 'FAILED']);
+export type ChatCardStatus = z.infer<typeof ChatCardStatus>;
