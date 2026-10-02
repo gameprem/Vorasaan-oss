@@ -121,6 +121,7 @@ describe('AI providers and Approved Models', () => {
       integrationId: null,
       provider: null,
       name: process.env.VORASAAN_MODEL ?? DEFAULT_MODEL,
+      contextWindow: expect.any(Number),
     });
   });
 
@@ -354,6 +355,7 @@ describe('AI providers and Approved Models', () => {
         baseUrl: null,
       },
       name: 'claude-opus-5-5',
+      contextWindow: 1_000_000,
     } satisfies ModelChoice);
     expect(modelOf('chat')).toEqual({
       source: 'APPROVED_MODEL',
@@ -366,6 +368,7 @@ describe('AI providers and Approved Models', () => {
         baseUrl: LOCAL_URL,
       },
       name: 'qwen-3-coder',
+      contextWindow: 32_000,
     } satisfies ModelChoice);
 
     // Every AI task maps to its Settings task.
@@ -434,6 +437,7 @@ describe('AI providers and Approved Models', () => {
         baseUrl: null,
       },
       name: 'anthropic/claude-haiku-4-5',
+      contextWindow: 200_000,
     });
     // No OpenAI provider connected: the env key applies, as before.
     expect(await choose('generateChoices')).toEqual({
@@ -442,6 +446,7 @@ describe('AI providers and Approved Models', () => {
       integrationId: null,
       provider: null,
       name: 'openai/gpt-5.6-sol',
+      contextWindow: 400_000,
     });
     const view = await asAdmin<AiSettingsView>('GET', '/settings/ai');
     expect(view.body.tasks.find((t) => t.task === 'CHAT')?.envOverrides).toEqual([

@@ -24,6 +24,7 @@ import {
   MAX_FEATURE_SUGGESTIONS,
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort, type ContextBlock } from '../ai/ai.port.ts';
+import { ContextBudgets, projectBudget } from '../ai/context-budget.ts';
 import { clipForAi } from '../attachments/attachment-context.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
 import {
@@ -32,7 +33,7 @@ import {
 } from '../feature-guidelines/project-foundation.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
-import { CONTEXT_BUDGET, ContextRetriever } from '../retrieval/context-retriever.ts';
+import { ContextRetriever } from '../retrieval/context-retriever.ts';
 import { decisionText } from '../retrieval/source-text.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specProposalInclude, toSpecProposalView } from '../spec/spec.view.ts';
@@ -72,6 +73,7 @@ export class FeatureSuggestionsService {
     private readonly retriever: ContextRetriever,
     private readonly foundation: ProjectFoundation,
     private readonly notifications: NotificationsService,
+    private readonly budgets: ContextBudgets,
   ) {}
 
   /** The Project's POs and Admins ask for up to `count` (default 5, at most 10) new suggestions. */
@@ -86,12 +88,13 @@ export class FeatureSuggestionsService {
       where: { id: projectId },
       select: { name: true },
     });
+    const { model, budget } = await this.budgets.forTask('suggestFeatures', 'featureSuggestions');
     const [guidelines, projectContext, decisions, earlier, features] = await Promise.all([
       this.foundation.referencedGuidelines(projectId),
       this.retriever.forProject(
         projectId,
         `${project.name}\n${SUGGEST_QUERY}`,
-        CONTEXT_BUDGET.featureSuggestions,
+        projectBudget(budget),
       ),
       this.decisionLog(projectId),
       this.db.featureSuggestion.findMany({
@@ -112,15 +115,18 @@ export class FeatureSuggestionsService {
     const pending = earlier.filter((s) => s.status === 'PENDING').map((s) => s.title);
 
     const drafted = await this.callAi(() =>
-      this.ai.suggestFeatures({
-        project: { name: project.name },
-        count,
-        projectContext,
-        guidelines: guidelines.map(({ criterion: _, ...g }) => g),
-        decisions,
-        dismissed,
-        pending,
-      }),
+      this.ai.suggestFeatures(
+        {
+          project: { name: project.name },
+          count,
+          projectContext,
+          guidelines: guidelines.map(({ criterion: _, ...g }) => g),
+          decisions,
+          dismissed,
+          pending,
+        },
+        { model },
+      ),
     );
 
     // Never the same title twice, nor one that exists, waits or was dismissed.
@@ -222,27 +228,34 @@ export class FeatureSuggestionsService {
       where: { id: suggestion.projectId },
       select: { name: true },
     });
+    const { model, budget } = await this.budgets.forTask(
+      'draftSpecFromSuggestion',
+      'featureSuggestions',
+    );
     const [guidelines, projectContext] = await Promise.all([
       this.foundation.referencedGuidelines(suggestion.projectId),
       this.retriever.forProject(
         suggestion.projectId,
         `${suggestion.title}\n\n${suggestion.rationale}\n\n${suggestion.businessValue}`,
-        CONTEXT_BUDGET.featureSuggestions,
+        projectBudget(budget),
       ),
     ]);
     const draft = await this.callAi(() =>
-      this.ai.draftSpecFromSuggestion({
-        project: { name: project.name },
-        suggestion: {
-          title: suggestion.title,
-          rationale: suggestion.rationale,
-          businessValue: suggestion.businessValue,
-          effort: suggestion.effort,
-          risk: suggestion.risk,
+      this.ai.draftSpecFromSuggestion(
+        {
+          project: { name: project.name },
+          suggestion: {
+            title: suggestion.title,
+            rationale: suggestion.rationale,
+            businessValue: suggestion.businessValue,
+            effort: suggestion.effort,
+            risk: suggestion.risk,
+          },
+          projectContext,
+          guidelines: guidelines.map(({ ref: _, criterion: __, ...g }) => g),
         },
-        projectContext,
-        guidelines: guidelines.map(({ ref: _, criterion: __, ...g }) => g),
-      }),
+        { model },
+      ),
     );
 
     const { feature, proposal } = await this.db.$transaction(async (tx) => {
@@ -319,18 +332,22 @@ export class FeatureSuggestionsService {
       select: { name: true },
     });
     const feature = { title: input.title, description: input.description ?? '' };
+    const { model, budget } = await this.budgets.forTask('checkFeatureFit', 'featureFit');
     const projectContext = await this.retriever.forProject(
       projectId,
       `${feature.title}\n\n${feature.description}`,
-      CONTEXT_BUDGET.featureFit,
+      projectBudget(budget),
     );
     const checked = await this.callAi(() =>
-      this.ai.checkFeatureFit({
-        project: { name: project.name },
-        feature,
-        projectContext,
-        guidelines: guidelines.map(({ criterion: _, ...g }) => g),
-      }),
+      this.ai.checkFeatureFit(
+        {
+          project: { name: project.name },
+          feature,
+          projectContext,
+          guidelines: guidelines.map(({ criterion: _, ...g }) => g),
+        },
+        { model },
+      ),
     );
     return { projectId, ...fitOf(guidelines, checked.results) };
   }

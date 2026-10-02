@@ -4,9 +4,10 @@ import type { PrismaClient } from '@vorasaan/db';
 import { SEED, seed } from '@vorasaan/db/seed';
 import type { DecisionRequestView, SpecProposalView, SpecVersionView } from '@vorasaan/shared';
 import { AiOutputError, type ContextBlock } from '../ai/ai.port.ts';
+import { CONTEXT_CEILINGS } from '../ai/context-budget.ts';
 import type { FakeAiPort } from '../ai/fake-ai.port.ts';
 import { CONTEXT_TRUNCATION_MARKER } from '../attachments/attachment-context.ts';
-import { blockTokens, CONTEXT_BUDGET } from '../retrieval/context-retriever.ts';
+import { blockTokens } from '../retrieval/context-retriever.ts';
 import { estimateTokens } from '../retrieval/token-estimate.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
@@ -178,7 +179,7 @@ describe('Spec Proposal from Attachments', () => {
   });
 
   test('Choice generation and Spec Proposal drafting get retrieved context within budget', async () => {
-    await attach('Old page', 'o '.repeat(4 * CONTEXT_BUDGET.decisionRequest), 30);
+    await attach('Old page', 'o '.repeat(4 * CONTEXT_CEILINGS.decisionRequest), 30);
     await attach('Provider API', 'Full Snapshot text.', 10, 'Summary: polling only.');
     await attach('Kickoff notes', 'Retry must be one tap.', 1);
 
@@ -208,8 +209,8 @@ describe('Spec Proposal from Attachments', () => {
     const used =
       estimateTokens(choicesInput.specMarkdown) +
       choicesInput.context.reduce((n, b) => n + blockTokens(b), 0);
-    expect(used).toBeLessThanOrEqual(CONTEXT_BUDGET.decisionRequest);
-    expect(used).toBeGreaterThan(CONTEXT_BUDGET.decisionRequest - 100);
+    expect(used).toBeLessThanOrEqual(CONTEXT_CEILINGS.decisionRequest);
+    expect(used).toBeGreaterThan(CONTEXT_CEILINGS.decisionRequest - 100);
 
     await asBeam('POST', `/decision-requests/${raised.id}/submit`, { deciderRole: 'PO' });
     const choice = raised.choices[0];

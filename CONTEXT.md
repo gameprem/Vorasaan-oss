@@ -176,6 +176,14 @@ _Avoid_: LLM integration, backend, vendor
 An AI model an Admin allows people to use, with a recognizable name (such as "Fast" or "Best") and the provider it runs on. One is the Organization default. Each AI task (Choices, Spec Proposals, summaries, Grilling, Feature Suggestions, the fit check, chat) uses the Approved Model the Admin set for it, or the default.
 _Avoid_: Engine, LLM option, model preset
 
+**Context Window**:
+How much one call to an Approved Model can hold, the prompt and the reply together, counted in tokens. Every AI task takes its context, its history and its room for the reply as shares of it.
+_Avoid_: Context length, max tokens, token limit
+
+**Conversation Summary**:
+The older part of a Conversation folded into fixed sections (the goal, what was agreed, open questions, pending Action Cards, the person's preferences, and names, numbers and ids) once the Conversation grows too long for its model. The AI then reads those messages only through it; the messages themselves stay in the Conversation.
+_Avoid_: Memory, compaction note, recap
+
 **Action Card**:
 A proposal the AI makes inside a Conversation (a Decision Request draft, a Spec Proposal, a Brief Proposal, a Feature Suggestion), shown with the buttons to approve, edit or decline it. Only the Conversation's owner acts on it. It goes stale when what it proposes changes elsewhere (for example the proposal is approved from the Inbox), and can then no longer be approved.
 _Avoid_: Tool result, command, auto-action

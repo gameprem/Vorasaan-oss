@@ -6,8 +6,6 @@ import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { clipToTokens, estimateTokens } from '../retrieval/token-estimate.ts';
 import { FeatureGuidelinesService } from './feature-guidelines.service.ts';
 
-/** How much of a Feature task's budget the Project Brief may take, at most. */
-export const FOUNDATION_BRIEF_TOKENS = 1_500;
 /** A Guideline's description is shortened to this many tokens in a Feature task's prompt. */
 const GUIDELINE_DESCRIPTION_TOKENS = 75;
 /** What a Guideline's line costs beyond its text, roughly. */
@@ -44,20 +42,23 @@ export class ProjectFoundation {
   }
 
   /**
-   * The Brief (shortened to FOUNDATION_BRIEF_TOKENS) and the effective Guidelines
-   * (descriptions shortened) for a task on this Feature, and how many tokens of
-   * `budget` are left for retrieved context. The retrieval keeps at least half
-   * the budget, so only very long Guidelines can push the total over it.
+   * The effective Guidelines (descriptions shortened) and the Brief, shortened to
+   * what the foundation's budget (ticket 0060) leaves after the Guidelines, for a
+   * task on this Feature, and how many tokens are left for retrieved context:
+   * `budget.context`, less whatever the Guidelines took beyond the foundation's
+   * budget, so the total never goes over.
    */
   async forFeature(
     featureId: string,
-    budget: number,
+    budget: { foundation: number; context: number },
   ): Promise<{ foundation: ProjectFoundationForAi; contextBudget: number }> {
     const feature = await this.db.feature.findUnique({
       where: { id: featureId },
       select: { team: { select: { projectId: true } } },
     });
-    if (!feature) return { foundation: { brief: null, guidelines: [] }, contextBudget: budget };
+    if (!feature) {
+      return { foundation: { brief: null, guidelines: [] }, contextBudget: budget.context };
+    }
     const { projectId } = feature.team;
     const [latest, criteria] = await Promise.all([
       this.db.briefVersion.findFirst({
@@ -78,16 +79,14 @@ export class ProjectFoundation {
         sum + estimateTokens(g.title) + estimateTokens(g.description) + GUIDELINE_OVERHEAD_TOKENS,
       0,
     );
+    const briefBudget = Math.max(0, budget.foundation - guidelineTokens);
     const brief = latest
-      ? {
-          version: latest.version,
-          markdown: clipToTokens(latest.markdown.trim(), FOUNDATION_BRIEF_TOKENS),
-        }
+      ? { version: latest.version, markdown: clipToTokens(latest.markdown.trim(), briefBudget) }
       : null;
-    const used = guidelineTokens + (brief ? estimateTokens(brief.markdown) : 0);
+    const overflow = Math.max(0, guidelineTokens - budget.foundation);
     return {
       foundation: { brief, guidelines },
-      contextBudget: Math.max(Math.floor(budget / 2), budget - used),
+      contextBudget: Math.max(0, Math.floor(budget.context - overflow)),
     };
   }
 }

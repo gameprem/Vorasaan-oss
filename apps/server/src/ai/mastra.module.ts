@@ -5,6 +5,7 @@ import {
   type AiConnectionTester,
   AiSettingsService,
 } from './ai-settings.service.ts';
+import { ContextBudgets } from './context-budget.ts';
 import { FakeAiPort } from './fake-ai.port.ts';
 import { MastraAiPort, pingModel } from './mastra-ai.port.ts';
 import { toMastraModel } from './model-config.ts';
@@ -28,6 +29,7 @@ export const AI_ENGINE = Symbol('AI_ENGINE');
       useValue: ((provider) => pingModel(toMastraModel(provider))) satisfies AiConnectionTester,
     },
     AiSettingsService,
+    ContextBudgets,
     {
       provide: AI_ENGINE,
       useFactory: (): AiPort => {
@@ -47,6 +49,6 @@ export const AI_ENGINE = Symbol('AI_ENGINE');
         ),
     },
   ],
-  exports: [AI_PORT, AI_ENGINE, AiSettingsService],
+  exports: [AI_PORT, AI_ENGINE, AiSettingsService, ContextBudgets],
 })
 export class MastraModule {}

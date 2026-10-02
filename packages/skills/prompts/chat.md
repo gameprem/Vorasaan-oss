@@ -45,7 +45,7 @@ The most relevant material for this Conversation, most important first.
 
 ## Earlier in this Conversation
 
-A summary of the turns before the most recent messages (the recent messages follow as the chat itself).
+The Conversation Summary of the turns before the most recent messages (the recent messages follow as the chat itself): the goal, what was agreed, open questions, pending Action Cards, the person's preferences, and names, numbers and ids to keep exactly. Treat what it lists as agreed as settled in this Conversation. When it lists something agreed that the Spec or the Brief in the context doesn't say yet, you may offer to record it with an Action Card.
 
 <summary>
 {{summary}}

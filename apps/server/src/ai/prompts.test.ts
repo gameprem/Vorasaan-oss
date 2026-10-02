@@ -12,6 +12,7 @@ import {
   grillingQuestionsPrompt,
   renderAttachments,
   renderContext,
+  renderConversationSummary,
   suggestFeaturesPrompt,
   summarizeAttachmentPrompt,
   summarizeConversationPrompt,
@@ -412,5 +413,48 @@ describe('Conversation prompts', () => {
     expect(prompt).not.toMatch(/\{\{\w+\}\}/);
     expect(prompt).toContain('<message index="2" from="assistant">\nNoted.\n</message>');
     expectOnlyOurTags(prompt, { summary: 1, message: 2 });
+  });
+
+  test('summary: the Action Cards are listed with their state, titles fenced (0060)', async () => {
+    const prompt = await summarizeConversationPrompt({
+      scope,
+      summary: '',
+      messages: [{ role: 'USER', content: 'Hi' }],
+      actionCards: [{ kind: 'SPEC_PROPOSAL', title: HOSTILE_WORDS, status: 'PROPOSED' }],
+    });
+    expect(prompt).toContain('- SPEC_PROPOSAL (PROPOSED): ');
+    expectOnlyOurTags(prompt, { summary: 1, message: 1 });
+    for (const section of [
+      'goal',
+      'agreed',
+      'openQuestions',
+      'pendingActionCards',
+      'preferences',
+      'keyFacts',
+    ]) {
+      expect(prompt).toContain(`\`${section}\``);
+    }
+  });
+
+  test('a Conversation Summary renders every section in order, "(none)" when empty', () => {
+    expect(
+      renderConversationSummary({
+        goal: 'Async checkout',
+        agreed: ['Wait 24 hours\n(PAY-142)'],
+        openQuestions: [],
+        pendingActionCards: [],
+        preferences: ['ตอบเป็นภาษาไทย'],
+        keyFacts: ['PAY-142'],
+      }),
+    ).toBe(
+      [
+        '## Goal\n- Async checkout',
+        '## Agreed\n- Wait 24 hours (PAY-142)',
+        '## Open questions\n- (none)',
+        '## Pending Action Cards\n- (none)',
+        '## Preferences\n- ตอบเป็นภาษาไทย',
+        '## Names, numbers and ids\n- PAY-142',
+      ].join('\n\n'),
+    );
   });
 });

@@ -17,7 +17,9 @@ import {
   type GuidelineForAi,
   type ProjectFoundationForAi,
 } from '../ai/ai.port.ts';
+import { BUDGET_CONFIG } from '../ai/context-budget.ts';
 import type { FakeAiPort } from '../ai/fake-ai.port.ts';
+import { estimateTokens } from '../retrieval/token-estimate.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 import { as } from '../test/http.ts';
@@ -536,8 +538,9 @@ describe('Feature Suggestions', () => {
     const choices = ai.calls.find((c) => c.method === 'generateChoices')?.input as {
       foundation?: ProjectFoundationForAi;
     };
-    const markdown = choices.foundation?.brief?.markdown ?? '';
-    expect(markdown.length).toBeLessThanOrEqual(6_000);
-    expect(markdown.length).toBeGreaterThan(5_000);
+    // Cut to the foundation's share of the model's window (0060), less the Guidelines.
+    const tokens = estimateTokens(choices.foundation?.brief?.markdown ?? '');
+    expect(tokens).toBeLessThanOrEqual(BUDGET_CONFIG.ceilings.foundation);
+    expect(tokens).toBeGreaterThan(BUDGET_CONFIG.ceilings.foundation - 500);
   });
 });

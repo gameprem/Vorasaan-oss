@@ -18,16 +18,14 @@ import {
   type SpecVersionView,
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort } from '../ai/ai.port.ts';
+import { ContextBudgets } from '../ai/context-budget.ts';
 import { fromRecordedModelColumns, toRecordedModelColumns } from '../ai/recorded-model.ts';
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
-import {
-  CONTEXT_BUDGET,
-  ContextRetriever,
-  splitFeatureSpec,
-} from '../retrieval/context-retriever.ts';
+import { ContextRetriever, splitFeatureSpec } from '../retrieval/context-retriever.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
+import { estimateTokens } from '../retrieval/token-estimate.ts';
 import { normalizeMarkdown } from './markdown.ts';
 import {
   type SpecProposalWithRelations,
@@ -52,6 +50,7 @@ export class SpecService {
     @Inject(AI_PORT) private readonly ai: AiPort,
     private readonly indexing: IndexingService,
     private readonly retriever: ContextRetriever,
+    private readonly budgets: ContextBudgets,
   ) {}
 
   /**
@@ -81,22 +80,31 @@ export class SpecService {
       orderBy: { version: 'desc' },
       select: { id: true, markdown: true },
     });
+    // A share of the drafting model's window (0060); the current Spec is sent whole besides.
+    const { model, budget } = await this.budgets.forTask(
+      'draftSpecFromAttachments',
+      'specFromAttachments',
+      { fixed: estimateTokens(base?.markdown ?? '') },
+    );
     const { context } = splitFeatureSpec(
       await this.retriever.forFeature(
         featureId,
         `${feature.title}\n\n${feature.description ?? ''}`,
-        CONTEXT_BUDGET.specFromAttachments,
+        budget.context,
       ),
     );
 
     let draft: Awaited<ReturnType<AiPort['draftSpecFromAttachments']>>;
     try {
-      draft = await this.ai.draftSpecFromAttachments({
-        feature: { title: feature.title, description: feature.description ?? '' },
-        // The whole current Spec: it is the base the draft edits, never shortened.
-        specMarkdown: base?.markdown ?? '',
-        context,
-      });
+      draft = await this.ai.draftSpecFromAttachments(
+        {
+          feature: { title: feature.title, description: feature.description ?? '' },
+          // The whole current Spec: it is the base the draft edits, never shortened.
+          specMarkdown: base?.markdown ?? '',
+          context,
+        },
+        { model },
+      );
     } catch (error) {
       if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
       throw error;

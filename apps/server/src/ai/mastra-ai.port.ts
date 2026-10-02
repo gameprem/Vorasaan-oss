@@ -1,9 +1,12 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { Agent } from '@mastra/core/agent';
 import { createTool } from '@mastra/core/tools';
+import { Logger } from '@nestjs/common';
 import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
 import { z } from 'zod';
 import type { AiTask } from './ai.config.ts';
 import {
+  type ActionCardForAi,
   type AiCallOptions,
   type AiPort,
   type AttachmentForAi,
@@ -13,6 +16,7 @@ import {
   type ChatMessageForAi,
   type ChatTool,
   type ContextBlock,
+  ContextTooLongError,
   type ConversationScopeForAi,
   ConversationSummaryDraft,
   type DecisionForAi,
@@ -26,6 +30,7 @@ import {
   type GrillingFollowUpForAi,
   GrillingQuestionDrafts,
   type GuidelineForAi,
+  isContextTooLong,
   type ModelChoice,
   type ProjectForAi,
   type ProjectFoundationForAi,
@@ -49,6 +54,7 @@ import {
   summarizeConversationPrompt,
 } from './prompts.ts';
 import { generateStructured, type StructuredGenerate } from './structured.ts';
+import { estimateChatTokens, messagesAsText } from './token-count.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
 
 const INSTRUCTIONS =
@@ -291,7 +297,45 @@ export class MastraAiPort implements AiPort {
   ): AsyncIterable<ChatChunk> {
     const instructions = await chatPrompt(input);
     const model = await this.resolveModel('chat', options?.model);
-    yield* streamChat(model, instructions, input.recentMessages, input.tools, input.signal);
+    try {
+      yield* streamChat(model, instructions, input.recentMessages, input.tools, input.signal);
+    } catch (error) {
+      // A request longer than the model's window: the Conversation compacts and retries once.
+      if (isContextTooLong(error)) throw new ContextTooLongError(error);
+      throw error;
+    }
+  }
+
+  /**
+   * Anthropic's counting API (`messages.countTokens`) for an Anthropic model;
+   * the script-aware estimate for every other provider, and whenever counting
+   * fails (it must never fail a turn). The messages are counted as one text.
+   */
+  async countTokens(
+    input: { system: string; messages: ChatMessageForAi[] },
+    options?: AiCallOptions,
+  ): Promise<number> {
+    const target = anthropicTarget(options?.model);
+    if (!target) return estimateChatTokens(input);
+    try {
+      const client = new Anthropic({
+        apiKey: target.apiKey,
+        ...(target.baseUrl ? { baseURL: target.baseUrl } : {}),
+        maxRetries: 1,
+        timeout: 10_000,
+      });
+      const counted = await client.messages.countTokens({
+        model: target.model,
+        ...(input.system.trim() ? { system: input.system } : {}),
+        messages: [{ role: 'user', content: messagesAsText(input.messages) || '(No messages.)' }],
+      });
+      return counted.input_tokens;
+    } catch (error) {
+      new Logger('MastraAiPort').warn(
+        `Counting tokens failed, using the estimate: ${(error as Error)?.message ?? error}`,
+      );
+      return estimateChatTokens(input);
+    }
   }
 
   async summarizeConversation(
@@ -299,6 +343,7 @@ export class MastraAiPort implements AiPort {
       scope: ConversationScopeForAi;
       summary: string;
       messages: ChatMessageForAi[];
+      actionCards: ActionCardForAi[];
     },
     options?: AiCallOptions,
   ) {
@@ -442,6 +487,26 @@ async function* streamChat(
         : new Error(`The chat stream failed: ${String(chunk.payload.error)}`);
     }
   }
+}
+
+/** The Anthropic model and key to count with, when the call runs on Anthropic. */
+function anthropicTarget(
+  choice: ModelChoice | undefined,
+): { model: string; apiKey: string; baseUrl: string | null } | null {
+  if (!choice) return null;
+  if (choice.provider) {
+    if (choice.provider.provider !== 'ANTHROPIC') return null;
+    return {
+      model: choice.provider.model,
+      apiKey: choice.provider.apiKey,
+      baseUrl: choice.provider.baseUrl,
+    };
+  }
+  // An env model ("anthropic/…") with the env key.
+  const [prefix, ...rest] = choice.name.split('/');
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (prefix !== 'anthropic' || !rest.length || !apiKey) return null;
+  return { model: rest.join('/'), apiKey, baseUrl: null };
 }
 
 const PingResult = z.object({ reply: z.string() });

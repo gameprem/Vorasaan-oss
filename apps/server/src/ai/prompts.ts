@@ -1,10 +1,14 @@
 import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
-import { renderSkill } from '@vorasaan/skills';
+import { loadSkill, renderSkill, type SkillName } from '@vorasaan/skills';
+import { estimateTokens } from '../retrieval/token-estimate.ts';
+import type { AiTask } from './ai.config.ts';
 import type {
+  ActionCardForAi,
   AttachmentForAi,
   ChatMessageForAi,
   ContextBlock,
   ConversationScopeForAi,
+  ConversationSummaryDraft,
   DecisionForAi,
   DismissedSuggestionForAi,
   FeatureForAi,
@@ -17,6 +21,37 @@ import type {
   SuggestionForAi,
 } from './ai.port.ts';
 import { renderMemory, type WorkflowMemory } from './workflow-memory.ts';
+
+/** The prompt (skill) each AI task renders. */
+export const TASK_SKILLS: Record<AiTask, SkillName> = {
+  generateChoices: 'generate-choices',
+  draftSpecProposal: 'draft-spec-proposal',
+  summarizeAttachment: 'summarize-attachment',
+  draftSpecFromAttachments: 'draft-spec-from-attachments',
+  grillingQuestions: 'grilling-questions',
+  grillingFollowUp: 'grilling-follow-up',
+  draftBriefFromGrilling: 'draft-brief-from-grilling',
+  suggestFeatures: 'suggest-features',
+  draftSpecFromSuggestion: 'draft-spec-from-suggestion',
+  checkFeatureFit: 'check-feature-fit',
+  chat: 'chat',
+  summarizeConversation: 'summarize-conversation',
+};
+
+const skillCosts = new Map<SkillName, Promise<number>>();
+
+/**
+ * What a prompt's own instructions cost, before its data is filled in: the
+ * fixed part of every call that renders it (ticket 0060's budgets).
+ */
+export function skillTokens(name: SkillName): Promise<number> {
+  let cost = skillCosts.get(name);
+  if (!cost) {
+    cost = loadSkill(name).then((template) => estimateTokens(template));
+    skillCosts.set(name, cost);
+  }
+  return cost;
+}
 
 const KIND_MEANING = {
   BLOCKER: "the Raiser's work is stopped until this is decided",
@@ -393,10 +428,40 @@ export function summarizeConversationPrompt(input: {
   scope: ConversationScopeForAi;
   summary: string;
   messages: ChatMessageForAi[];
+  actionCards?: ActionCardForAi[];
 }) {
+  const cards = input.actionCards ?? [];
   return renderSkill('summarize-conversation', {
     scope: describeConversationScope(input.scope),
     summary: input.summary.trim() ? fence(input.summary) : '(Empty: this is the first fold.)',
+    actionCards: cards.length
+      ? cards.map((c) => `- ${c.kind} (${c.status}): ${attribute(c.title)}`).join('\n')
+      : '(No Action Cards.)',
     messages: renderConversationMessages(input.messages),
   });
+}
+
+/** The headings of a Conversation Summary, in order (ticket 0060). */
+export const SUMMARY_SECTIONS = [
+  ['goal', 'Goal'],
+  ['agreed', 'Agreed'],
+  ['openQuestions', 'Open questions'],
+  ['pendingActionCards', 'Pending Action Cards'],
+  ['preferences', 'Preferences'],
+  ['keyFacts', 'Names, numbers and ids'],
+] as const satisfies readonly (readonly [keyof ConversationSummaryDraft, string])[];
+
+/**
+ * A Conversation Summary as the Markdown stored on the Conversation and given to
+ * the chat prompt: every section, in order, "(none)" when empty.
+ */
+export function renderConversationSummary(draft: ConversationSummaryDraft): string {
+  return SUMMARY_SECTIONS.map(([key, heading]) => {
+    const value = draft[key];
+    const items = (Array.isArray(value) ? value : [value]).map((v) => v.trim()).filter(Boolean);
+    const body = items.length
+      ? items.map((v) => `- ${v.replace(/\s*\n\s*/g, ' ')}`).join('\n')
+      : '- (none)';
+    return `## ${heading}\n${body}`;
+  }).join('\n\n');
 }

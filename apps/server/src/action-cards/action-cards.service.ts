@@ -16,13 +16,15 @@ import type {
 } from '@vorasaan/shared';
 import type { z } from 'zod';
 import type { ChatTool, ChatToolCall, ModelChoice } from '../ai/ai.port.ts';
+import { searchContextBudget } from '../ai/context-budget.ts';
+import { DEFAULT_CONTEXT_WINDOW } from '../ai/context-window.ts';
 import { BriefService } from '../brief/brief.service.ts';
 import { projectAccess } from '../brief/brief-access.ts';
 import { DecisionRequestsService } from '../decision-requests/decision-requests.service.ts';
 import { FeatureSuggestionsService } from '../feature-suggestions/feature-suggestions.service.ts';
 import { EventBus } from '../inbox/event-bus.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
-import { CONTEXT_BUDGET, ContextRetriever } from '../retrieval/context-retriever.ts';
+import { ContextRetriever } from '../retrieval/context-retriever.ts';
 import { SpecService } from '../spec/spec.service.ts';
 import { type ActionCardRow, briefProposalDetail, toActionCardView } from './action-card.view.ts';
 import {
@@ -148,9 +150,11 @@ export class ActionCardsService {
     switch (name) {
       case 'searchContext': {
         const { query } = args as z.infer<typeof SearchContextArgs>;
+        // A share of the turn's model's window (0060), so a small model's prompt still fits.
+        const budget = searchContextBudget(model?.choice.contextWindow ?? DEFAULT_CONTEXT_WINDOW);
         const blocks = scope.featureId
-          ? await this.retriever.forFeature(scope.featureId, query, CONTEXT_BUDGET.searchContext)
-          : await this.retriever.forProject(scope.projectId, query, CONTEXT_BUDGET.searchContext);
+          ? await this.retriever.forFeature(scope.featureId, query, budget)
+          : await this.retriever.forProject(scope.projectId, query, budget);
         return {
           ok: true,
           results: blocks.map((b) => ({

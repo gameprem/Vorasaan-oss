@@ -3,16 +3,12 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@vorasaan/db';
 import { SEED, seed } from '@vorasaan/db/seed';
 import type { ContextBlock } from '../ai/ai.port.ts';
+import { CONTEXT_CEILINGS } from '../ai/context-budget.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 import { as } from '../test/http.ts';
 import { ContentChunkRepository, keywordTerms } from './content-chunk.repository.ts';
-import {
-  blockTokens,
-  CONTEXT_BUDGET,
-  ContextRetriever,
-  splitFeatureSpec,
-} from './context-retriever.ts';
+import { blockTokens, ContextRetriever, splitFeatureSpec } from './context-retriever.ts';
 import { EmbeddingError } from './embedding.port.ts';
 import type { FakeEmbeddings } from './fake-embedding.port.ts';
 import { IndexingService } from './indexing.service.ts';
@@ -174,7 +170,15 @@ describe('ContextRetriever (real Postgres with pgvector)', () => {
     await buildProject();
     const spec = await db.specVersion.findFirstOrThrow({ where: { featureId: SEED.featureId } });
 
-    for (const budget of [150, 400, 1_000, 2_500, CONTEXT_BUDGET.decisionRequest, 15_000, 60_000]) {
+    for (const budget of [
+      150,
+      400,
+      1_000,
+      2_500,
+      CONTEXT_CEILINGS.decisionRequest,
+      15_000,
+      60_000,
+    ]) {
       const blocks = await retriever.forFeature(SEED.featureId, QUERY, budget);
       expect(total(blocks)).toBeLessThanOrEqual(budget);
       expect(blocks[0]?.source).toEqual({
@@ -242,7 +246,7 @@ describe('ContextRetriever (real Postgres with pgvector)', () => {
     const blocks = await retriever.forFeature(
       SEED.featureId,
       QUERY,
-      CONTEXT_BUDGET.decisionRequest,
+      CONTEXT_CEILINGS.decisionRequest,
     );
     expect(embeddings.calls.at(-1)?.texts).toEqual([QUERY]);
     const attachments = blocks.filter((b) => b.source.kind === 'ATTACHMENT');
@@ -251,7 +255,7 @@ describe('ContextRetriever (real Postgres with pgvector)', () => {
     // Only the relevant part of the handbook, not the whole of it.
     const fromHandbook = attachments.filter((b) => b.source.id === fixture.handbookId);
     expect(fromHandbook.length).toBeLessThan(handbook.length);
-    expect(total(blocks)).toBeLessThanOrEqual(CONTEXT_BUDGET.decisionRequest);
+    expect(total(blocks)).toBeLessThanOrEqual(CONTEXT_CEILINGS.decisionRequest);
     expectNoLeak(blocks);
   });
 
@@ -263,7 +267,7 @@ describe('ContextRetriever (real Postgres with pgvector)', () => {
     const blocks = await retriever.forFeature(
       SEED.featureId,
       QUERY,
-      CONTEXT_BUDGET.decisionRequest,
+      CONTEXT_CEILINGS.decisionRequest,
     );
     expect(embeddings.calls).toHaveLength(0);
     const attachments = blocks.filter((b) => b.source.kind === 'ATTACHMENT');
@@ -280,7 +284,7 @@ describe('ContextRetriever (real Postgres with pgvector)', () => {
     const blocks = await retriever.forFeature(
       SEED.featureId,
       QUERY,
-      CONTEXT_BUDGET.decisionRequest,
+      CONTEXT_CEILINGS.decisionRequest,
     );
     const attachments = blocks.filter((b) => b.source.kind === 'ATTACHMENT');
     expect(attachments[0]?.text).toContain(NEEDLE_PARAGRAPH);
@@ -349,7 +353,7 @@ describe('ContextRetriever (real Postgres with pgvector)', () => {
     test('the Brief first, then the Features and Project Attachments; never a Feature Attachment or another Project', async () => {
       await configureEmbeddings();
       const { briefId, repoScanId } = await projectMaterial();
-      for (const budget of [150, 1_000, CONTEXT_BUDGET.grilling, 60_000]) {
+      for (const budget of [150, 1_000, CONTEXT_CEILINGS.grilling, 60_000]) {
         const blocks = await retriever.forProject(SEED.projectId, QUERY, budget);
         expect(total(blocks)).toBeLessThanOrEqual(budget);
         expect(blocks[0]?.source).toEqual({
@@ -365,7 +369,7 @@ describe('ContextRetriever (real Postgres with pgvector)', () => {
         // The Feature's own Attachments belong to it, not to the Project.
         expect(blocks.some((b) => b.source.id === fixture.handbookId)).toBe(false);
       }
-      const blocks = await retriever.forProject(SEED.projectId, QUERY, CONTEXT_BUDGET.grilling);
+      const blocks = await retriever.forProject(SEED.projectId, QUERY, CONTEXT_CEILINGS.grilling);
       const titles = blocks.map((b) => b.source.title);
       expect(titles).toContain('Spec: Async checkout');
       for (const other of OTHER_FEATURES) expect(titles).toContain(`Spec: ${other.title}`);

@@ -17,6 +17,7 @@
     "tokens:fixture": "bun scripts/token-fixture.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@fastify/multipart": "^10.1.0",
     "@mastra/core": "1.72.0",
     "@nestjs/common": "12.1.2",

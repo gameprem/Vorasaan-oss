@@ -16,7 +16,6 @@ import { IndexingService } from '../retrieval/indexing.service.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 import { as } from '../test/http.ts';
-import { CONVERSATION_LIMITS } from './conversations.service.ts';
 
 const { pim, beam } = SEED.users;
 const SECRET = 'CARD-ISSUING-SECRET';
@@ -84,6 +83,8 @@ describe('Conversations', () => {
     await seed(db);
     ai.calls.length = 0;
     ai.chatScript.length = 0;
+    ai.tokenCounts.length = 0;
+    ai.tokenScale = 1;
 
     const decided = await db.decisionRequest.create({
       data: {
@@ -306,46 +307,55 @@ describe('Conversations', () => {
     expect(await db.conversationMessage.count({ where: { conversationId: id } })).toBe(2);
   });
 
-  test('past N turns the summary is updated, and older turns are not sent again', async () => {
-    const { maxRecentMessages, keepRecentMessages } = CONVERSATION_LIMITS;
+  test('once the history passes 70% of its share, older turns fold into the Conversation Summary and are not sent again', async () => {
     const started = await startFeature(pim.id, 'Turn 1');
     const id = started.body.id;
-    // Each turn adds two messages; the first fold comes once the unsummarized ones pass the limit.
-    const turnsBeforeFold = Math.floor(maxRecentMessages / 2);
-    for (let turn = 2; turn <= turnsBeforeFold; turn++) {
-      expect((await send(pim.id, id, `Turn ${turn}`)).status).toBe(201);
-    }
+    for (const turn of [2, 3]) expect((await send(pim.id, id, `Turn ${turn}`)).status).toBe(201);
+    // Short turns stay far below the share: nothing is folded. The history is counted once a
+    // turn, from the second (before it there is nothing to fold).
     expect(summarizeCalls()).toEqual([]);
-    expect(chatCalls().at(-1)?.recentMessages).toHaveLength(maxRecentMessages - 1);
+    expect(ai.tokenCounts).toHaveLength(2);
+    expect(chatCalls().at(-1)?.recentMessages).toHaveLength(5);
 
-    const foldTurn = turnsBeforeFold + 1;
-    expect((await send(pim.id, id, `Turn ${foldTurn}`)).status).toBe(201);
+    // A denser tokenizer: the same history now counts past 70% of its share.
+    ai.tokenScale = 1_000;
+    expect((await send(pim.id, id, 'Turn 4')).status).toBe(201);
+    expect(ai.tokenCounts).toHaveLength(3);
     const [fold] = summarizeCalls();
-    const folded = maxRecentMessages + 1 - keepRecentMessages;
     expect(fold?.summary).toBe('');
-    expect(fold?.messages).toHaveLength(folded);
+    expect(fold?.messages).toHaveLength(6);
     expect(fold?.messages[0]).toEqual({ role: 'USER', content: 'Turn 1' });
 
+    // The newest turn is kept word for word; the summary has its fixed sections.
     const after = chatCalls().at(-1);
+    expect(after?.recentMessages).toEqual([{ role: 'USER', content: 'Turn 4' }]);
+    for (const heading of [
+      '## Goal',
+      '## Agreed',
+      '## Open questions',
+      '## Pending Action Cards',
+      '## Preferences',
+      '## Names, numbers and ids',
+    ]) {
+      expect(after?.summary).toContain(heading);
+    }
     expect(after?.summary).toContain('USER: Turn 1');
-    expect(after?.recentMessages).toHaveLength(keepRecentMessages);
-    expect(after?.recentMessages.at(-1)).toEqual({ role: 'USER', content: `Turn ${foldTurn}` });
-    const sent = (after?.recentMessages ?? []).map((m) => m.content).join('\n');
-    expect(sent).not.toContain('Turn 1\n');
-    expect(after?.recentMessages.some((m) => m.content === 'Turn 1')).toBe(false);
     const row = await db.conversation.findUniqueOrThrow({ where: { id } });
-    expect(row.summarizedThrough).toBe(folded);
+    expect(row.summarizedThrough).toBe(6);
     expect(row.summary).toBe(after?.summary ?? '');
 
     // The next turn keeps the summary and sends only what came after it.
-    expect((await send(pim.id, id, `Turn ${foldTurn + 1}`)).status).toBe(201);
+    ai.tokenScale = 1;
+    const next = await send(pim.id, id, 'Turn 5');
+    expect(next.status).toBe(201);
+    expect(next.body.conversation.summarizedThrough).toBe(6);
     expect(summarizeCalls()).toHaveLength(1);
-    const next = chatCalls().at(-1);
-    expect(next?.summary).toBe(row.summary);
-    expect(next?.recentMessages).toHaveLength(keepRecentMessages + 2);
-    // Every message is still stored and shown to the owner.
+    expect(chatCalls().at(-1)?.summary).toBe(row.summary);
+    expect(chatCalls().at(-1)?.recentMessages).toHaveLength(3);
+    // Every message is still stored and shown to the owner, with where the summary ends.
     const all = await asPim()<ConversationView>('GET', `/conversations/${id}`);
-    expect(all.body.messages).toHaveLength((foldTurn + 1) * 2);
+    expect(all.body.messages).toHaveLength(10);
+    expect(all.body.summarizedThrough).toBe(6);
   });
 
   test("an AI failure stores no half reply and returns 502; the person's message stays, so they can retry", async () => {
@@ -411,9 +421,8 @@ describe('Conversations', () => {
   test('a failed summary is a 502 too, and the message stays', async () => {
     const started = await startFeature(pim.id, 'Turn 1');
     const id = started.body.id;
-    for (let turn = 2; turn <= CONVERSATION_LIMITS.maxRecentMessages / 2; turn++) {
-      await send(pim.id, id, `Turn ${turn}`);
-    }
+    for (const turn of [2, 3]) await send(pim.id, id, `Turn ${turn}`);
+    ai.tokenScale = 1_000;
     const original = ai.summarizeConversation;
     ai.summarizeConversation = async () => {
       throw new Error('provider unreachable');
@@ -422,6 +431,7 @@ describe('Conversations', () => {
       expect((await send(pim.id, id, 'One more')).status).toBe(502);
     } finally {
       ai.summarizeConversation = original;
+      ai.tokenScale = 1;
     }
     const row = await db.conversation.findUniqueOrThrow({
       where: { id },

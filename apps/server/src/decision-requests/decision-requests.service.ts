@@ -27,17 +27,15 @@ import {
   type DecisionForAi,
   type ModelChoice,
 } from '../ai/ai.port.ts';
+import { ContextBudgets } from '../ai/context-budget.ts';
 import { describeDecision } from '../ai/prompts.ts';
 import { activeDelegates } from '../delegations/active-delegations.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
 import { NotificationsService, type Outbox, type Tx } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
-import {
-  CONTEXT_BUDGET,
-  ContextRetriever,
-  splitFeatureSpec,
-} from '../retrieval/context-retriever.ts';
+import { ContextRetriever, splitFeatureSpec } from '../retrieval/context-retriever.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
+import { estimateTokens } from '../retrieval/token-estimate.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specProposalInclude, toSpecProposalView } from '../spec/spec.view.ts';
 import {
@@ -63,6 +61,7 @@ export class DecisionRequestsService {
     private readonly indexing: IndexingService,
     private readonly retriever: ContextRetriever,
     private readonly foundation: ProjectFoundation,
+    private readonly budgets: ContextBudgets,
   ) {}
 
   /**
@@ -89,10 +88,13 @@ export class DecisionRequestsService {
     const withChoices = input.withChoices ?? true;
     let generated: Awaited<ReturnType<AiPort['generateChoices']>> | undefined;
     if (withChoices) {
-      // The Brief and Guidelines come out of the same budget as the retrieved context.
+      // The budgets are shares of the window of the model the Choices are generated on (0060).
+      const { model, budget } = await this.budgets.forTask('generateChoices', 'decisionRequest', {
+        model: drafting?.choice,
+      });
       const { foundation, contextBudget } = await this.foundation.forFeature(
         input.featureId,
-        CONTEXT_BUDGET.decisionRequest,
+        budget,
       );
       const { spec, context } = splitFeatureSpec(
         await this.retriever.forFeature(
@@ -114,7 +116,7 @@ export class DecisionRequestsService {
               raiserRole: raiserRole.role,
             },
           },
-          drafting ? { model: drafting.choice } : undefined,
+          { model },
         );
       } catch (error) {
         if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
@@ -382,9 +384,13 @@ export class DecisionRequestsService {
       orderBy: { role: 'asc' },
       select: { role: true },
     });
+    // The whole current Spec is sent besides the context, so it is part of the fixed cost.
+    const { model, budget } = await this.budgets.forTask('draftSpecProposal', 'decisionRequest', {
+      fixed: estimateTokens(base?.markdown ?? ''),
+    });
     const { foundation, contextBudget } = await this.foundation.forFeature(
       request.featureId,
-      CONTEXT_BUDGET.decisionRequest,
+      budget,
     );
     const { context } = splitFeatureSpec(
       await this.retriever.forFeature(
@@ -397,19 +403,22 @@ export class DecisionRequestsService {
 
     let draft: Awaited<ReturnType<AiPort['draftSpecProposal']>>;
     try {
-      draft = await this.ai.draftSpecProposal({
-        // The whole current Spec: it is the base the draft edits, never shortened.
-        specMarkdown: base?.markdown ?? '',
-        context: withoutBrief(context),
-        foundation,
-        request: {
-          kind: request.kind,
-          title: request.title,
-          description: request.description,
-          raiserRole: raiserRole?.role ?? request.deciderRole,
+      draft = await this.ai.draftSpecProposal(
+        {
+          // The whole current Spec: it is the base the draft edits, never shortened.
+          specMarkdown: base?.markdown ?? '',
+          context: withoutBrief(context),
+          foundation,
+          request: {
+            kind: request.kind,
+            title: request.title,
+            description: request.description,
+            raiserRole: raiserRole?.role ?? request.deciderRole,
+          },
+          decision,
         },
-        decision,
-      });
+        { model },
+      );
     } catch (error) {
       if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
       throw error;
