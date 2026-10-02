@@ -1,4 +1,9 @@
-import type { DecisionRequestKind, DecisionRequestStatus } from '@vorasaan/shared';
+import {
+  type DecisionRequestKind,
+  type DecisionRequestStatus,
+  type ResponseWindowState,
+  responseWindowLabels,
+} from '@vorasaan/shared';
 import type { ReactNode } from 'react';
 
 export function KindBadge({ kind }: { kind: DecisionRequestKind }) {
@@ -37,6 +42,31 @@ export function BlockedBadge({ openBlockers }: { openBlockers: number }) {
       className="inline-flex items-center rounded-full bg-lacquer px-2.5 py-0.5 text-sm font-medium text-on-ink"
     >
       Blocked<span className="sr-only"> by {count}</span>
+    </span>
+  );
+}
+
+/**
+ * "due in 2h", "overdue 1h" and "escalated" for a sent Decision Request (ticket 0055).
+ * Nothing while it waits in NEEDS_INFO, when its clock is paused.
+ */
+export function ResponseWindowLabels({ state }: { state: ResponseWindowState }) {
+  const labels = responseWindowLabels(state);
+  if (labels.length === 0) return null;
+  const overdue = state.dueAt !== null && Date.parse(state.dueAt) <= Date.now();
+  return (
+    <span className="inline-flex flex-wrap gap-1.5" data-testid="response-window">
+      {labels.map((label) => (
+        <span
+          key={label}
+          title={state.dueAt ? `Due ${new Date(state.dueAt).toLocaleString('en-GB')}` : undefined}
+          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+            overdue ? 'bg-lacquer-wash text-lacquer' : 'bg-surface text-fg-soft'
+          }`}
+        >
+          {label}
+        </span>
+      ))}
     </span>
   );
 }

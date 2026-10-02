@@ -60,6 +60,9 @@ export const NotificationType = z.enum([
   'REQUEST_WITHDRAWN',
   'SPEC_VERSION_CREATED',
   'DELEGATION_STARTED',
+  'REQUEST_REMINDER',
+  'REQUEST_ESCALATED',
+  'REQUEST_OVERDUE',
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 
@@ -97,3 +100,9 @@ export type ActionCardKind = z.infer<typeof ActionCardKind>;
 
 export const ActionCardStatus = z.enum(['PROPOSED', 'APPROVED', 'DECLINED', 'STALE']);
 export type ActionCardStatus = z.infer<typeof ActionCardStatus>;
+
+export const ResponseWindowUnit = z.enum(['WORKING_HOURS', 'WORKING_DAYS']);
+export type ResponseWindowUnit = z.infer<typeof ResponseWindowUnit>;
+
+export const RequestHistoryKind = z.enum(['REMINDED', 'DELEGATES_ADDED', 'OVERDUE_REPORTED']);
+export type RequestHistoryKind = z.infer<typeof RequestHistoryKind>;

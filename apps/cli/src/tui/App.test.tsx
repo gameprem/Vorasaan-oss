@@ -123,6 +123,32 @@ describe('vorasaan TUI', () => {
     expect(frame()).not.toContain('with context from this repository');
   });
 
+  test('the Inbox shows how a Decision Request stands against its Response Window', async () => {
+    const overdue = new Date(Date.now() - 3 * 60 * 60_000 - 60_000).toISOString();
+    const { frame } = open({
+      inbox: [
+        {
+          kind: 'DECIDE',
+          feature: { id: request().featureId, title: 'Async checkout' },
+          since: overdue,
+          decisionRequest: {
+            id: request().id,
+            title: 'Provider has no webhook',
+            kind: 'BLOCKER',
+            raiser: { id: request().raiser.id, name: 'Beam' },
+            deciderRole: 'PO',
+            onBehalfOf: null,
+            responseWindow: { dueAt: overdue, paused: false, escalationStep: 2 },
+          },
+        },
+      ],
+    });
+    await waitFor(
+      frame,
+      'Decide Blocker: Provider has no webhook · Async checkout · overdue 3h · escalated',
+    );
+  });
+
   test('My Requests opens the request with its status and Choices', async () => {
     const decided = request({
       status: 'DECIDED',

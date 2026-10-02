@@ -1,5 +1,5 @@
 import type { Prisma } from '@vorasaan/db';
-import type { DecisionRequestView, TeamRole } from '@vorasaan/shared';
+import type { DecisionRequestView, ResponseWindowState, TeamRole } from '@vorasaan/shared';
 
 const person = { select: { id: true, name: true } } as const;
 
@@ -21,6 +21,7 @@ export const decisionRequestInclude = {
       specProposal: { select: { id: true, status: true } },
     },
   },
+  history: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.DecisionRequestInclude;
 
 export type DecisionRequestWithRelations = Prisma.DecisionRequestGetPayload<{
@@ -97,6 +98,25 @@ export function toDecisionRequestView(
     },
     specProposal: r.decision?.specProposal ?? null,
     submittedAt: r.submittedAt?.toISOString() ?? null,
+    responseWindow: responseWindowState(r),
+    history: r.history.map((h) => ({
+      kind: h.kind,
+      people: h.people as { id: string; name: string }[],
+      createdAt: h.createdAt.toISOString(),
+    })),
     createdAt: r.createdAt.toISOString(),
+  };
+}
+
+/** Where a request stands against its Response Window; paused while NEEDS_INFO. */
+export function responseWindowState(r: {
+  dueAt: Date | null;
+  pausedAt: Date | null;
+  escalationStep: number;
+}): ResponseWindowState {
+  return {
+    dueAt: r.dueAt?.toISOString() ?? null,
+    paused: r.pausedAt !== null,
+    escalationStep: r.escalationStep,
   };
 }

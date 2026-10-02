@@ -13,6 +13,12 @@ export function notificationText(n: NotificationView): string {
       return `${title} was Claimed.`;
     case 'REQUEST_WITHDRAWN':
       return `${title} was withdrawn.`;
+    case 'REQUEST_REMINDER':
+      return `${title} is past its Response Window and waits for your decision.`;
+    case 'REQUEST_ESCALATED':
+      return `${title} is overdue and was sent to you as a Delegate. You can Claim it.`;
+    case 'REQUEST_OVERDUE':
+      return `${title} is overdue. Reassign it, or decide whether to wait.`;
     case 'SPEC_VERSION_CREATED':
       return n.specVersion
         ? `Spec v${n.specVersion.version}${n.feature ? ` of ${n.feature.title}` : ''} was approved by ${n.specVersion.approvedBy.name}.`

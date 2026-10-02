@@ -4,6 +4,8 @@ import {
   diffLines,
   type InboxItem,
   type NotificationView,
+  type ResponseWindowState,
+  responseWindowLabels,
 } from '@vorasaan/shared';
 import { ApiError } from '../api.ts';
 import { ROLE_LABEL } from '../commands/raise-flow.ts';
@@ -20,12 +22,19 @@ export function errorMessage(error: unknown): string {
 
 const kindLabel = (kind: 'BLOCKER' | 'QUESTION') => (kind === 'BLOCKER' ? 'Blocker' : 'Question');
 
-export function inboxItemLine(item: InboxItem): string {
+/** " · due in 2h", " · overdue 1h · escalated", or nothing (ticket 0055). */
+export function windowSuffix(state: ResponseWindowState, now: Date = new Date()): string {
+  return responseWindowLabels(state, now)
+    .map((label) => ` · ${label}`)
+    .join('');
+}
+
+export function inboxItemLine(item: InboxItem, now: Date = new Date()): string {
   switch (item.kind) {
     case 'DECIDE':
-      return `Decide ${kindLabel(item.decisionRequest.kind)}: ${item.decisionRequest.title} · ${item.feature.title}${item.decisionRequest.onBehalfOf ? ` (for ${item.decisionRequest.onBehalfOf.name})` : ''}`;
+      return `Decide ${kindLabel(item.decisionRequest.kind)}: ${item.decisionRequest.title} · ${item.feature.title}${item.decisionRequest.onBehalfOf ? ` (for ${item.decisionRequest.onBehalfOf.name})` : ''}${windowSuffix(item.decisionRequest.responseWindow, now)}`;
     case 'CLAIM':
-      return `Claim ${kindLabel(item.decisionRequest.kind)}: ${item.decisionRequest.title} · ${item.feature.title} (${ROLE_LABEL[item.decisionRequest.deciderRole]})`;
+      return `Claim ${kindLabel(item.decisionRequest.kind)}: ${item.decisionRequest.title} · ${item.feature.title} (${ROLE_LABEL[item.decisionRequest.deciderRole]})${windowSuffix(item.decisionRequest.responseWindow, now)}`;
     case 'ANSWER':
       return `Answer: ${item.decisionRequest.title} · ${item.feature.title}`;
     case 'APPROVE_PROPOSAL':
@@ -85,6 +94,12 @@ export function notificationLine(n: NotificationView): string {
       return `${unread}Withdrawn: ${n.decisionRequest?.title ?? 'a Decision Request'}${feature}`;
     case 'SPEC_VERSION_CREATED':
       return `${unread}New Spec Version v${n.specVersion?.version ?? '?'} by ${n.specVersion?.approvedBy.name ?? 'someone'}${feature}`;
+    case 'REQUEST_REMINDER':
+      return `${unread}Past its Response Window: ${n.decisionRequest?.title ?? 'a Decision Request'}${feature}`;
+    case 'REQUEST_ESCALATED':
+      return `${unread}Overdue, sent to you as Delegate: ${n.decisionRequest?.title ?? 'a Decision Request'}${feature}`;
+    case 'REQUEST_OVERDUE':
+      return `${unread}Overdue: ${n.decisionRequest?.title ?? 'a Decision Request'}${feature}`;
     case 'DELEGATION_STARTED':
       return `${unread}You are now the Delegate of ${n.delegation?.delegator.name ?? 'someone'} (${n.delegation ? ROLE_LABEL[n.delegation.role] : ''})`;
   }
@@ -99,8 +114,9 @@ export const STATUS_LABEL: Record<DecisionRequestStatus, string> = {
   WITHDRAWN: 'Withdrawn',
 };
 
-export function requestLine(r: DecisionRequestView): string {
-  return `[${STATUS_LABEL[r.status]}] ${kindLabel(r.kind)}: ${r.title} · ${r.featureTitle}`;
+export function requestLine(r: DecisionRequestView, now: Date = new Date()): string {
+  const window = r.status === 'OPEN' ? windowSuffix(r.responseWindow, now) : '';
+  return `[${STATUS_LABEL[r.status]}] ${kindLabel(r.kind)}: ${r.title} · ${r.featureTitle}${window}`;
 }
 
 /** The lines of a Decision Request's detail view. */

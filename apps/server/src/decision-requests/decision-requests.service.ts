@@ -29,10 +29,18 @@ import {
 } from '../ai/ai.port.ts';
 import { ContextBudgets } from '../ai/context-budget.ts';
 import { describeDecision } from '../ai/prompts.ts';
+import { type Clock, InjectClock } from '../clock/clock.ts';
 import { activeDelegates } from '../delegations/active-delegations.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
 import { NotificationsService, type Outbox, type Tx } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { ResponseWindowsService } from '../response-windows/response-windows.service.ts';
+import {
+  addWorkingTime,
+  MINUTE,
+  windowLength,
+  workingTimeBetween,
+} from '../response-windows/working-time.ts';
 import { ContextRetriever, splitFeatureSpec } from '../retrieval/context-retriever.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import { estimateTokens } from '../retrieval/token-estimate.ts';
@@ -62,6 +70,8 @@ export class DecisionRequestsService {
     private readonly retriever: ContextRetriever,
     private readonly foundation: ProjectFoundation,
     private readonly budgets: ContextBudgets,
+    private readonly windows: ResponseWindowsService,
+    @InjectClock() private readonly clock: Clock,
   ) {}
 
   /**
@@ -164,7 +174,24 @@ export class DecisionRequestsService {
       throw new UnprocessableEntityException('This Question was raised without Choices');
     }
 
-    const submittedAt = new Date();
+    const submittedAt = this.clock.now();
+    // The Response Window starts now (ADR 0011): the Project's default for this kind,
+    // or a shorter one the Raiser picked. Never a longer one.
+    const { calendar, window } = await this.windows.forFeature(
+      this.db,
+      request.featureId,
+      request.kind,
+    );
+    let windowMs = windowLength(window, calendar);
+    if (input.responseWindow) {
+      const asked = windowLength(input.responseWindow, calendar);
+      if (asked > windowMs) {
+        throw new UnprocessableEntityException(
+          `The Response Window can only be shortened: this Project gives a ${request.kind === 'BLOCKER' ? 'Blocker' : 'Question'} ${window.value} ${window.unit === 'WORKING_HOURS' ? 'working hour' : 'working day'}${window.value === 1 ? '' : 's'}`,
+        );
+      }
+      windowMs = asked;
+    }
     const recipients = await this.chooseRecipients(request, input, submittedAt);
     // Sent to one person → they decide. Sent to several → nobody until one Claims it.
     const deciderId = recipients.length === 1 ? (recipients[0]?.userId ?? null) : null;
@@ -188,6 +215,10 @@ export class DecisionRequestsService {
           deciderRole: input.deciderRole,
           deciderId,
           submittedAt,
+          responseWindowMinutes: Math.round(windowMs / MINUTE),
+          dueAt: addWorkingTime(submittedAt, windowMs, calendar),
+          pausedAt: null,
+          escalationStep: 0,
           recipients: { create: recipients },
         },
         include: decisionRequestInclude,
@@ -299,10 +330,11 @@ export class DecisionRequestsService {
     const deciderId = impliedClaim && input.kind === 'QUESTION' ? user.id : request.deciderId;
 
     const outbox = this.notifications.outbox();
+    const clock = await this.pauseOrResume(request, status);
     const updated = await this.db.$transaction(async (tx) => {
       const moved = await tx.decisionRequest.updateMany({
         where: { id, status: request.status, deciderId: request.deciderId },
-        data: { status, deciderId },
+        data: { status, deciderId, ...clock },
       });
       if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
       await tx.requestMessage.create({
@@ -318,6 +350,23 @@ export class DecisionRequestsService {
     });
     await this.notifications.publish(outbox);
     return toDecisionRequestView(updated, await this.viewer(user));
+  }
+
+  /**
+   * NEEDS_INFO stops the Response Window's clock; the answer restarts it, moving `dueAt`
+   * later by the working time spent waiting for the Raiser (ticket 0055).
+   */
+  private async pauseOrResume(
+    request: DecisionRequestWithRelations,
+    to: DecisionRequestWithRelations['status'],
+  ): Promise<{ pausedAt?: Date | null; dueAt?: Date }> {
+    if (!request.dueAt || to === request.status) return {};
+    const now = this.clock.now();
+    if (to === 'NEEDS_INFO') return { pausedAt: now };
+    if (request.status !== 'NEEDS_INFO' || !request.pausedAt) return {};
+    const { calendar } = await this.windows.forFeature(this.db, request.featureId, request.kind);
+    const waited = workingTimeBetween(request.pausedAt, now, calendar);
+    return { pausedAt: null, dueAt: addWorkingTime(request.dueAt, waited, calendar) };
   }
 
   async withdraw(user: User, id: string): Promise<DecisionRequestView> {

@@ -1,7 +1,13 @@
 import type { DecisionRequestStatus, DecisionRequestView } from '@vorasaan/shared';
 import Link from 'next/link';
 import { unstable_rethrow } from 'next/navigation';
-import { KindBadge, Notice, relativeTime, statusText } from '@/components/bits';
+import {
+  KindBadge,
+  Notice,
+  ResponseWindowLabels,
+  relativeTime,
+  statusText,
+} from '@/components/bits';
 import { ApiError, api } from '@/lib/api';
 
 export const metadata = { title: 'My Requests' };
@@ -75,6 +81,11 @@ function RequestGroup({
                   {r.featureTitle}. {statusText(r.status)}
                   {r.decider && r.status !== 'DRAFT' ? `, Decider ${r.decider.name}` : ''}
                 </span>
+                {r.status === 'OPEN' && (
+                  <span className="mt-1 block">
+                    <ResponseWindowLabels state={r.responseWindow} />
+                  </span>
+                )}
               </span>
               <span className="shrink-0 text-sm text-fg-soft">
                 {relativeTime(r.submittedAt ?? r.createdAt)}

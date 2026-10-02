@@ -6,6 +6,7 @@ import {
   RequestMessageKind,
   TeamRole,
 } from './enums.ts';
+import { RequestHistoryEntryView, ResponseWindow, ResponseWindowState } from './response-window.ts';
 
 const Id = z.uuid();
 const Timestamp = z.iso.datetime();
@@ -56,6 +57,11 @@ export const SubmitDecisionRequestInput = z.object({
   deciderRole: TeamRole,
   recipients: Recipients.default('ALL'),
   choices: ChoiceDrafts.optional(),
+  /**
+   * A shorter Response Window than the Project's default for this kind (ADR 0011).
+   * Never longer: a longer one is refused. Left out: the default.
+   */
+  responseWindow: ResponseWindow.optional(),
 });
 export type SubmitDecisionRequestInput = z.input<typeof SubmitDecisionRequestInput>;
 
@@ -144,6 +150,10 @@ export const DecisionRequestView = z.object({
   /** The Spec Proposal drafted from the Decision, if any. */
   specProposal: z.object({ id: Id, status: ProposalStatus }).nullable(),
   submittedAt: Timestamp.nullable(),
+  /** Where it stands against its Response Window (ticket 0055). */
+  responseWindow: ResponseWindowState,
+  /** Its escalation steps, oldest first. */
+  history: z.array(RequestHistoryEntryView),
   createdAt: Timestamp,
 });
 export type DecisionRequestView = z.infer<typeof DecisionRequestView>;

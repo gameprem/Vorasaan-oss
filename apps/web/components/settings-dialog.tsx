@@ -18,6 +18,7 @@ export const SETTINGS_SECTIONS = [
   { href: '/settings/members', label: 'Members' },
   { href: '/settings/delegations', label: 'Delegations' },
   { href: '/settings/feature-guidelines', label: 'Feature Guidelines' },
+  { href: '/settings/response-windows', label: 'Response Windows' },
   { href: '/settings/ai', label: 'AI models' },
   { href: '/settings/tokens', label: 'Access tokens' },
 ] as const;

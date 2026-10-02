@@ -6,7 +6,7 @@ import type { PrismaClient, TeamRole } from '@vorasaan/db';
  * Overlaps are refused on create; should two exist anyway, the earliest start wins.
  */
 export async function activeDelegates(
-  db: PrismaClient,
+  db: Pick<PrismaClient, 'delegation'>,
   where: { teamId: string; role: TeamRole; delegatorIds: string[]; at: Date },
 ): Promise<Map<string, string>> {
   const rows = await db.delegation.findMany({

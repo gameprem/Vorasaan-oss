@@ -66,7 +66,8 @@ export class NotificationsService {
     notification: {
       type: NotificationType;
       to: readonly MaybeId[];
-      actorId: string;
+      /** Who acted, never notified; null when the system acted (escalation). */
+      actorId: string | null;
       featureId?: string;
       requestId?: string;
       specVersionId?: string;

@@ -146,6 +146,14 @@ _Avoid_: Audit log, changelog
 How long a Decision Request may wait for a decision before it escalates: reminders first, then the Delegate, then the Raiser and Tech Leads. It never changes who decides.
 _Avoid_: SLA, deadline, timeout
 
+**Working Time**:
+The Organization's working days and working hours in its time zone, minus the public holidays an Admin lists. Response Windows count only Working Time; a working day is one day of working hours.
+_Avoid_: Business hours, office hours, calendar time
+
+**Escalation**:
+The steps a Decision Request goes through once its Response Window runs out, each one written to its history: remind the Recipients; half a window later, add each Recipient's active Delegate as a Recipient; half a window after that, tell the Raiser and the Team's Tech Leads it is overdue. It never decides, Claims or reassigns.
+_Avoid_: Auto-reassign, SLA breach, timeout
+
 **Decision Lead Time**:
 How long a Decision Request took from being sent to being decided, and how long it waited at each person.
 _Avoid_: Cycle time, turnaround

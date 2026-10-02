@@ -8,7 +8,7 @@ import type {
 import Link from 'next/link';
 import { unstable_rethrow } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { KindBadge, Notice, relativeTime } from '@/components/bits';
+import { KindBadge, Notice, ResponseWindowLabels, relativeTime } from '@/components/bits';
 import { LocalDate } from '@/components/delegation-list';
 import { MarkAllReadButton, MarkReadButton } from '@/components/notification-actions';
 import { notificationHref, notificationText } from '@/components/notification-text';
@@ -50,6 +50,7 @@ function describe(item: InboxItem): {
   badge: ReactNode;
   title: string;
   meta: string;
+  labels?: ReactNode;
 } {
   switch (item.kind) {
     case 'DECIDE':
@@ -62,6 +63,7 @@ function describe(item: InboxItem): {
         badge: <KindBadge kind={r.kind} />,
         title: r.title,
         meta: `${item.feature.title}, raised by ${r.raiser.name}${behalf}`,
+        labels: <ResponseWindowLabels state={r.responseWindow} />,
       };
     }
     case 'ANSWER': {
@@ -214,6 +216,7 @@ export default async function InboxPage({
                               {d.title}
                             </span>
                             <span className="block text-sm text-fg-soft">{d.meta}</span>
+                            {d.labels && <span className="mt-1 block">{d.labels}</span>}
                           </span>
                           <span className="shrink-0 text-sm text-fg-soft">
                             {relativeTime(item.since)}

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { PrismaClient } from '@vorasaan/db';
 import type { InboxItem } from '@vorasaan/shared';
+import { responseWindowState } from '../decision-requests/decision-request.view.ts';
 import { awaitingGrillingsWhere } from '../grilling/awaiting.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 
@@ -103,6 +104,7 @@ export class InboxService {
             raiser: r.raiser,
             deciderRole: r.deciderRole,
             onBehalfOf: r.recipients[0]?.onBehalfOf ?? null,
+            responseWindow: responseWindowState(r),
           },
         }),
       ),

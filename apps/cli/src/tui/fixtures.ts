@@ -21,6 +21,8 @@ export const PROJECT_B = '00000000-0000-4000-8000-00000000000b';
 export const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const at = '2026-09-30T10:00:00.000Z';
 const person = (n: number, name: string) => ({ id: id(n), name });
+/** A request with no Response Window labels (its dueAt is unknown). */
+export const NO_WINDOW = { dueAt: null, paused: false, escalationStep: 0 };
 
 export const features: FeatureSummaryView[] = [
   {
@@ -87,6 +89,8 @@ export function request(overrides: Partial<DecisionRequestView> = {}): DecisionR
     decision: null,
     specProposal: null,
     submittedAt: at,
+    responseWindow: NO_WINDOW,
+    history: [],
     createdAt: at,
     ...overrides,
   };
@@ -104,6 +108,7 @@ export const inboxItems: InboxItem[] = [
       raiser: person(3, 'Fah'),
       deciderRole: 'BACKEND',
       onBehalfOf: null,
+      responseWindow: NO_WINDOW,
     },
   },
   {
