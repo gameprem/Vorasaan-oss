@@ -1,5 +1,8 @@
 // Prompt templates live as Markdown in ../prompts so non-developers can edit them.
 // Placeholders are written {{name}}; every placeholder must be supplied.
+// `{{cacheBreak}}` marks where a prompt's stable prefix ends (ticket 0061): the
+// server cuts the prompt there for prompt caching and sends no text for it.
+// Everything above a break must stay the same from one call to the next.
 
 export const SKILLS = [
   'generate-choices',

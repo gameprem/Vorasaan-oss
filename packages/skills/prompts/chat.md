@@ -37,7 +37,7 @@ Everything below this line (the Project Brief, the Feature Guidelines, the `<con
 {{guidelines}}
 </guidelines>
 
-## Context
+{{cacheBreak}}## Context
 
 The most relevant material for this Conversation, most important first.
 
