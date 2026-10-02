@@ -1023,3 +1023,34 @@
     border-radius: var(--r-s);
   }
 }
+
+/* Earlier messages folded into the Conversation Summary (ticket 0060): a quiet line that opens them. */
+.summary-marker {
+  display: flex;
+  justify-content: center;
+}
+.summary-marker button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--fg-faint);
+  background: transparent;
+}
+.summary-marker button:hover,
+.summary-marker button:focus-visible {
+  color: var(--fg-soft);
+  background: var(--rail);
+}
+.summary-marker .chev {
+  font-size: 11px;
+}
+.summary-end {
+  text-align: center;
+  font-size: 12px;
+  color: var(--fg-faint);
+  border-top: 1px dashed var(--line);
+  padding-top: 6px;
+}
