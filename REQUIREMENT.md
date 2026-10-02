@@ -245,7 +245,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 3. **Decision speed** ([ADR 0011](./docs/adr/0011-response-windows-and-deciding-from-chat-apps.md)): every Decision Request has a Response Window (Blocker 4 working hours, Question 2 working days by default). Past it, it escalates: reminders, then the Delegate, then the Raiser and Tech Leads. Escalation never decides or reassigns by itself. Decision Lead Time is measured per Project. Recipients can link LINE, Slack or Teams and decide from a card there.
    - [x] Response Windows and escalation (0055).
    - [x] Decision Lead Time (0056).
-   - [ ] Link a LINE, Slack or Teams account (0057).
+   - [x] Link a LINE, Slack or Teams account (0057).
    - [ ] Decide from LINE, Slack and Teams (0058).
 4. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why (Spec section, someone to ask, open Blockers, QA ready), using the checks each Platform switches on. The AI fills or asks about the gaps.
    - [ ] Platforms per Project, targeted by Features (0050).
