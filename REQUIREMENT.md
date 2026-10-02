@@ -39,7 +39,7 @@
 The MVP is built around the differentiating feature: **Decision Request → Choices → Decision → Spec Version**.
 
 ### 3.1. Onboarding
-1. **First-boot `/setup`:** create the Organization. The first user becomes org `ADMIN` and enters the LLM API key.
+1. **First-boot `/setup`:** create the Organization. The first user becomes org `ADMIN` and enters the LLM API key. Setup needs the one-time Setup Token the server prints to its log, so whoever reaches a fresh install first can't claim it.
 2. ADMIN creates **Project → Team → Feature** and invites members by email.
 3. Members get Team Roles. Each Feature gets Role Owners; a Team Role can have several Role Owners on one Feature.
 
@@ -257,6 +257,8 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 8. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.
 9. Browser-based `vorasaan login`.
 10. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.
+    - [x] First-run setup requires a Setup Token from the server log (0062). Required before the first public release.
+    - [ ] Setup asks for the time zone, working days and hours, and language; a Getting started checklist follows (0063).
 
 ### Later (recorded, not scheduled)
 - **Drift check:** a GitHub App reads a PR, compares it with the Feature's Spec and Decisions, and comments or opens a Question when they disagree. It builds on `vorasaan run`.

@@ -41,6 +41,8 @@ Goal: install from scratch, choose an AI provider, sign in, and set up your own 
 | 0012 | [Projects, Teams, members and Features in the web app](./0012-onboarding.md) | 0011 |
 | 0013 | [One-command install with Docker](./0013-docker-install.md) | 0011 |
 | 0014 | [CLI sign-in with a Personal Access Token](./0014-cli-login.md) | 0010 |
+| 0062 | [Protect first-run setup with a Setup Token](./0062-setup-token.md) | 0011, 0013 |
+| 0063 | [Setup asks for the calendar and language, then a Getting started checklist](./0063-first-run-setup-calendar-and-getting-started.md) | 0011, 0055, 0062 |
 
 ## Foundation
 
