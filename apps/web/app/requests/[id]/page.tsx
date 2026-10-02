@@ -2,7 +2,10 @@ import type {
   DecisionRequestView,
   FeatureSummaryView,
   PersonRef,
+  ProjectResponseWindowsView,
+  RequestHistoryKind,
   RequestMessageKind,
+  ResponseWindow,
   RoleOwnerView,
   SpecProposalView,
   TeamRole,
@@ -10,7 +13,13 @@ import type {
 } from '@vorasaan/shared';
 import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
-import { KindBadge, Notice, relativeTime, statusText } from '@/components/bits';
+import {
+  KindBadge,
+  Notice,
+  ResponseWindowLabels,
+  relativeTime,
+  statusText,
+} from '@/components/bits';
 import { DecideForm } from '@/components/decide-form';
 import { DraftReview } from '@/components/draft-review';
 import {
@@ -31,6 +40,14 @@ const MESSAGE_LABEL: Record<RequestMessageKind, string> = {
   QUESTION: 'asked for more info',
   ANSWER: 'answered',
   NOTE: 'added a note',
+};
+
+/** One line per escalation step (ticket 0055), given who it reached. */
+const ESCALATION_TEXT: Record<RequestHistoryKind, (who: string) => string> = {
+  REMINDED: (who) => `Response Window ran out: ${who || 'nobody'} reminded`,
+  DELEGATES_ADDED: (who) =>
+    who ? `Sent to ${who} as Delegate` : 'No active Delegate to send it to',
+  OVERDUE_REPORTED: (who) => `Overdue: ${who || 'nobody'} told`,
 };
 
 const names = (people: PersonRef[]) =>
@@ -64,9 +81,18 @@ function candidatesByRole(owners: RoleOwnerView[], team: TeamView, raiserId: str
   return byRole;
 }
 
-async function loadTeam(featureId: string) {
+/** The request's Team and, for the draft review, the Response Window it gets by default. */
+async function loadTeam(featureId: string, kind: DecisionRequestView['kind'], withWindow: boolean) {
   const feature = await api<FeatureSummaryView>(`/features/${featureId}`);
-  return api<TeamView>(`/teams/${feature.teamId}`);
+  const [team, windows] = await Promise.all([
+    api<TeamView>(`/teams/${feature.teamId}`),
+    withWindow
+      ? api<ProjectResponseWindowsView>(`/projects/${feature.projectId}/response-windows`)
+      : undefined,
+  ]);
+  const window =
+    windows && (kind === 'BLOCKER' ? windows.effective.blocker : windows.effective.question);
+  return { team, window };
 }
 
 export default async function RequestPage({ params }: { params: Promise<{ id: string }> }) {
@@ -101,19 +127,21 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
 
   // Only the views that need them load the Team: the draft review and the Decider's reassign.
   let draftCandidates: Partial<Record<TeamRole, PersonRef[]>> | undefined;
+  let draftWindow: ResponseWindow | undefined;
   let reassignCandidates: PersonRef[] | undefined;
   let teamError: string | undefined;
   const needsDraft = request.status === 'DRAFT' && isRaiser;
   const needsReassign = request.status === 'OPEN' && isDecider;
   if (needsDraft || needsReassign) {
     try {
-      const [team, owners] = await Promise.all([
-        loadTeam(request.featureId),
+      const [{ team, window }, owners] = await Promise.all([
+        loadTeam(request.featureId, request.kind, needsDraft),
         needsDraft
           ? api<RoleOwnerView[]>(`/features/${request.featureId}/role-owners`)
           : Promise.resolve([]),
       ]);
       if (needsDraft) draftCandidates = candidatesByRole(owners, team, request.raiser.id);
+      draftWindow = window;
       reassignCandidates = team.members
         .filter(
           (m) =>
@@ -147,6 +175,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <KindBadge kind={request.kind} />
         <span className="text-sm text-fg-soft">{statusText(request.status)}</span>
+        {request.status === 'OPEN' && <ResponseWindowLabels state={request.responseWindow} />}
       </div>
       <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">{request.title}</h1>
       <p className="mt-2 text-sm text-fg-soft">
@@ -154,6 +183,21 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
         {routing}.
       </p>
       <p className="mt-6 max-w-[68ch] whitespace-pre-line text-lg">{request.description}</p>
+
+      {request.history.length > 0 && (
+        <section aria-labelledby="escalation-heading" className="mt-8">
+          <h2 id="escalation-heading" className="text-lg font-semibold">
+            Escalation
+          </h2>
+          <ul className="mt-2 space-y-1 text-sm text-fg-soft">
+            {request.history.map((h) => (
+              <li key={h.kind}>
+                {ESCALATION_TEXT[h.kind](names(h.people))} {relativeTime(h.createdAt)}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {teamError && (
         <div className="mt-8">
@@ -170,7 +214,11 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
                   This is a draft. Nobody sees it until you send it. Review it, then send it.
                 </Notice>
               </div>
-              <DraftReview request={request} candidatesByRole={draftCandidates} />
+              <DraftReview
+                request={request}
+                candidatesByRole={draftCandidates}
+                defaultWindow={draftWindow}
+              />
               <div className="mt-6">
                 <WithdrawButton requestId={request.id} draft />
               </div>

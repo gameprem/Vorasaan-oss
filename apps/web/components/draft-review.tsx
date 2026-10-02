@@ -5,6 +5,9 @@ import {
   type DecisionRequestView,
   type PersonRef,
   type Recipients,
+  type ResponseWindow,
+  type ResponseWindowUnit,
+  responseWindowText,
   type SubmitDecisionRequestInput,
   TeamRole,
 } from '@vorasaan/shared';
@@ -33,8 +36,11 @@ const emptyChoice = (): ChoiceDraft => ({
 export function DraftReview({
   request,
   candidatesByRole,
+  defaultWindow,
 }: {
   request: DecisionRequestView;
+  /** The Project's Response Window for this kind; the Raiser may only shorten it. */
+  defaultWindow?: ResponseWindow;
   /** Who can receive it for each Team Role: the Feature's Role Owners, else the Team's holders. */
   candidatesByRole: Partial<Record<TeamRole, PersonRef[]>>;
 }) {
@@ -56,6 +62,7 @@ export function DraftReview({
     })),
   );
   const [edited, setEdited] = useState(false);
+  const [responseWindow, setResponseWindow] = useState<ResponseWindow | undefined>(defaultWindow);
   const [focusChoice, setFocusChoice] = useState<number | null>(null);
   const choiceList = useRef<HTMLOListElement>(null);
 
@@ -97,6 +104,13 @@ export function DraftReview({
       recipients,
       // Letters follow the order on screen, so an added or removed Choice relabels the rest.
       choices: edited ? choices.map((c, i) => ({ ...c, label: LABELS[i] ?? c.label })) : undefined,
+      // Only a changed window is sent; the server refuses one longer than the default.
+      responseWindow:
+        responseWindow &&
+        (responseWindow.value !== defaultWindow?.value ||
+          responseWindow.unit !== defaultWindow?.unit)
+          ? responseWindow
+          : undefined,
     });
   };
 
@@ -170,6 +184,50 @@ export function DraftReview({
           </fieldset>
         )}
       </section>
+
+      {defaultWindow && responseWindow && (
+        <section aria-labelledby="response-window">
+          <h2 id="response-window" className="text-lg font-semibold">
+            Response Window
+          </h2>
+          <p className="mt-1 text-fg-soft">
+            How long it may wait for a decision before reminders and escalation start. This Project
+            gives a {request.kind === 'BLOCKER' ? 'Blocker' : 'Question'}{' '}
+            {responseWindowText(defaultWindow)}. You can shorten it, not lengthen it.
+          </p>
+          <div className="mt-4 flex max-w-sm gap-3">
+            <label className="block w-24">
+              <span className="text-sm">Within</span>
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                value={responseWindow.value}
+                onChange={(e) =>
+                  setResponseWindow({ ...responseWindow, value: Number(e.target.value) || 1 })
+                }
+                className={field}
+              />
+            </label>
+            <label className="block flex-1">
+              <span className="text-sm">Unit</span>
+              <select
+                value={responseWindow.unit}
+                onChange={(e) =>
+                  setResponseWindow({
+                    ...responseWindow,
+                    unit: e.target.value as ResponseWindowUnit,
+                  })
+                }
+                className={field}
+              >
+                <option value="WORKING_HOURS">working hours</option>
+                <option value="WORKING_DAYS">working days</option>
+              </select>
+            </label>
+          </div>
+        </section>
+      )}
 
       {request.withChoices ? (
         <section aria-labelledby="choices">
