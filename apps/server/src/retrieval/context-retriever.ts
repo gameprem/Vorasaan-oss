@@ -1,9 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { PrismaClient } from '@vorasaan/db';
 import type { ContextBlock, ContextSource } from '../ai/ai.port.ts';
-import { clipForAi } from '../attachments/attachment-context.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
-import { CHARS_PER_TOKEN, CHUNKING, estimateTokens } from './chunker.ts';
+import { CHUNKING } from './chunker.ts';
 import {
   ContentChunkRepository,
   type KeywordMatch,
@@ -13,6 +12,7 @@ import {
 import { assertVectors } from './embedding.port.ts';
 import { EmbeddingSettingsService } from './embedding-settings.service.ts';
 import { decisionText } from './source-text.ts';
+import { clipToTokens, estimateTokens } from './token-estimate.ts';
 
 /** Token budgets of the AI tasks that get retrieved context (ADR 0007). */
 export const CONTEXT_BUDGET = {
@@ -35,15 +35,15 @@ export const CONTEXT_BUDGET = {
 } as const;
 
 /** What a block's tag and attributes (kind, id, title...) cost in the prompt, roughly. */
-const BLOCK_OVERHEAD_TOKENS = 30;
+export const BLOCK_OVERHEAD_TOKENS = 30;
 /** A leftover smaller than this isn't worth a shortened block. */
 const MIN_FRAGMENT_TOKENS = 50;
 const OPEN_REQUESTS = 10;
 const RECENT_DECISIONS = 5;
 /** Project-level retrieval lists this many Features, most recently changed first... */
 const FEATURE_OVERVIEW = 25;
-/** ...each with the start of its latest Spec, this many characters long. */
-const FEATURE_SPEC_EXCERPT_CHARS = 800;
+/** ...each with the start of its latest Spec, this many tokens long. */
+const FEATURE_SPEC_EXCERPT_TOKENS = 200;
 
 /** What one block costs against the budget: its text, its title and its tag. */
 export function blockTokens(block: ContextBlock): number {
@@ -267,7 +267,7 @@ export class ContextRetriever {
       }
       return whole(
         { kind: 'SPEC_VERSION', id: spec.id, title: `Spec: ${f.title}`, version: spec.version },
-        `${header}\n\n${clipForAi(spec.markdown.trim(), FEATURE_SPEC_EXCERPT_CHARS)}`,
+        `${header}\n\n${clipToTokens(spec.markdown.trim(), FEATURE_SPEC_EXCERPT_TOKENS)}`,
         'PROJECT',
       );
     });
@@ -568,7 +568,7 @@ function fit(candidates: Candidate[], budget: number, anchoredFirst: boolean): C
     } else if (clippable) {
       const room = remaining - (cost - estimateTokens(block.text));
       if (room >= MIN_FRAGMENT_TOKENS) {
-        taken = { ...block, text: clipForAi(block.text, room * CHARS_PER_TOKEN) };
+        taken = { ...block, text: clipToTokens(block.text, room) };
       }
     }
     if (!taken) {

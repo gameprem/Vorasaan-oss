@@ -1,0 +1,125 @@
+{
+  "tokenizer": "cl100k_base (js-tiktoken); o200k = o200k_base, for comparison",
+  "counts": {
+    "th-checkout-goal": {
+      "chars": 175,
+      "tokens": 158,
+      "o200k": 69
+    },
+    "th-refund-rules": {
+      "chars": 182,
+      "tokens": 166,
+      "o200k": 67
+    },
+    "th-notifications": {
+      "chars": 195,
+      "tokens": 176,
+      "o200k": 71
+    },
+    "th-spec-inventory": {
+      "chars": 342,
+      "tokens": 296,
+      "o200k": 142
+    },
+    "th-spec-login": {
+      "chars": 315,
+      "tokens": 293,
+      "o200k": 120
+    },
+    "th-decision-shipping": {
+      "chars": 197,
+      "tokens": 189,
+      "o200k": 76
+    },
+    "th-acceptance": {
+      "chars": 265,
+      "tokens": 246,
+      "o200k": 114
+    },
+    "en-checkout-goal": {
+      "chars": 205,
+      "tokens": 37,
+      "o200k": 37
+    },
+    "en-refund-rules": {
+      "chars": 235,
+      "tokens": 42,
+      "o200k": 42
+    },
+    "en-spec-inventory": {
+      "chars": 395,
+      "tokens": 86,
+      "o200k": 86
+    },
+    "en-spec-login": {
+      "chars": 337,
+      "tokens": 79,
+      "o200k": 79
+    },
+    "en-decision-shipping": {
+      "chars": 224,
+      "tokens": 41,
+      "o200k": 41
+    },
+    "en-api": {
+      "chars": 224,
+      "tokens": 74,
+      "o200k": 75
+    },
+    "mixed-webhook": {
+      "chars": 206,
+      "tokens": 119,
+      "o200k": 55
+    },
+    "mixed-spec-search": {
+      "chars": 323,
+      "tokens": 226,
+      "o200k": 114
+    },
+    "mixed-decision": {
+      "chars": 143,
+      "tokens": 87,
+      "o200k": 42
+    },
+    "mixed-question": {
+      "chars": 150,
+      "tokens": 120,
+      "o200k": 51
+    },
+    "th-title-1": {
+      "chars": 27,
+      "tokens": 20,
+      "o200k": 10
+    },
+    "th-title-2": {
+      "chars": 13,
+      "tokens": 9,
+      "o200k": 4
+    },
+    "th-title-3": {
+      "chars": 18,
+      "tokens": 12,
+      "o200k": 7
+    },
+    "th-title-4": {
+      "chars": 17,
+      "tokens": 12,
+      "o200k": 7
+    },
+    "th-title-5": {
+      "chars": 25,
+      "tokens": 17,
+      "o200k": 9
+    },
+    "th-title-6": {
+      "chars": 15,
+      "tokens": 10,
+      "o200k": 5
+    },
+    "th-title-7": {
+      "chars": 31,
+      "tokens": 22,
+      "o200k": 14
+    }
+  }
+}

@@ -63,6 +63,11 @@ export type StoredChunk = {
 export const HNSW_MAX_DIMS = 2_000;
 export const MAX_SEARCH_K = 100;
 
+/** A Thai character, as a Postgres regular expression. */
+const THAI_CHARACTER = '[\u0E00-\u0E7F]';
+/** Below this many Thai characters, a chunk's old and new estimates may round alike. */
+const OLD_THAI_ESTIMATE_MIN_CHARS = 8;
+
 /**
  * The only code that reads or writes ContentChunk (ADR 0007): Prisma has no vector
  * type, so this is raw SQL, with every value passed as a parameter. The one
@@ -247,17 +252,25 @@ export class ContentChunkRepository {
 
   /**
    * Sources of the Organization whose chunks were all embedded by `model` (or, when
-   * `model` is null, indexed at all), as `SOURCE:id` keys. Everything else is stale.
+   * `model` is null, indexed at all), as `SOURCE:id` keys. Everything else is stale,
+   * including Thai chunks still sized and counted at four characters per token
+   * (before ticket 0059): re-indexing cuts them again by the script-aware estimate.
    */
   async upToDateSources(organizationId: string, model: string | null): Promise<Set<string>> {
     const condition = model
       ? Prisma.sql`bool_and("embeddingModel" IS NOT DISTINCT FROM ${model}::text)`
       : Prisma.sql`true`;
+    // With this many Thai characters, today's estimate is always above the old one.
+    const countedAsLatin = Prisma.sql`(
+      char_length("text") - char_length(regexp_replace("text", ${THAI_CHARACTER}, '', 'g'))
+        >= ${OLD_THAI_ESTIMATE_MIN_CHARS}::int
+      AND "tokenCount" <= ceil(char_length("text") / 4.0)
+    )`;
     const rows = await this.db.$queryRaw<{ source: ChunkSource; sourceId: string }[]>`
       SELECT "source", "sourceId" FROM "ContentChunk"
       WHERE "organizationId" = ${organizationId}
       GROUP BY "source", "sourceId"
-      HAVING ${condition}`;
+      HAVING ${condition} AND bool_and(NOT ${countedAsLatin})`;
     return new Set(rows.map((r) => sourceKey(r)));
   }
 

@@ -6,8 +6,8 @@ import type { DecisionRequestView, SpecProposalView, SpecVersionView } from '@vo
 import { AiOutputError, type ContextBlock } from '../ai/ai.port.ts';
 import type { FakeAiPort } from '../ai/fake-ai.port.ts';
 import { CONTEXT_TRUNCATION_MARKER } from '../attachments/attachment-context.ts';
-import { estimateTokens } from '../retrieval/chunker.ts';
 import { blockTokens, CONTEXT_BUDGET } from '../retrieval/context-retriever.ts';
+import { estimateTokens } from '../retrieval/token-estimate.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 import { as } from '../test/http.ts';

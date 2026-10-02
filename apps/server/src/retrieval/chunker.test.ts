@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { CHUNKING, chunkMarkdown, estimateTokens } from './chunker.ts';
+import { CHUNKING, chunkMarkdown } from './chunker.ts';
+import { estimateTokens } from './token-estimate.ts';
+import { THAI_SAMPLES } from './token-fixture.ts';
 
 const words = (n: number, word = 'lorem') =>
   Array.from({ length: n }, (_, i) => `${word}${i}`).join(' ');
@@ -82,5 +84,25 @@ describe('chunkMarkdown', () => {
 
   test('normalizes Windows line endings', () => {
     expect(chunkMarkdown('# A\r\n\r\nb')[0]?.text).toBe('# A\n\nb');
+  });
+
+  test('Thai is cut by its own token estimate: no chunk is over the target', () => {
+    const thai = THAI_SAMPLES.map((s) => s.text).join('\n\n');
+    // One long Thai section, and one long Thai line without blank lines or headings.
+    for (const md of [`## ข้อกำหนด\n\n${thai}\n\n${thai}`, thai.replace(/\s+/g, ' ')]) {
+      const chunks = chunkMarkdown(md, { targetTokens: 120, overlapTokens: 15 });
+      expect(chunks.length).toBeGreaterThan(5);
+      for (const chunk of chunks) {
+        expect(chunk.tokenCount).toBe(estimateTokens(chunk.text));
+        expect(chunk.tokenCount).toBeLessThanOrEqual(120);
+        // A vowel or tone mark is never cut off from its consonant.
+        expect(chunk.text).not.toMatch(/^[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/);
+      }
+    }
+    // Thai with no spaces at all is still cut to size.
+    const unbroken = 'การชำระเงินผ่านพร้อมเพย์'.repeat(200);
+    const chunks = chunkMarkdown(unbroken, { targetTokens: 100, overlapTokens: 10 });
+    for (const chunk of chunks) expect(chunk.tokenCount).toBeLessThanOrEqual(100);
+    expect(chunks.map((c) => c.text).join('')).toBe(unbroken);
   });
 });

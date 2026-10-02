@@ -19,10 +19,13 @@ import { DEV_USER_HEADER } from '../auth/identity.guard.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 import { as } from '../test/http.ts';
+import { CHUNKING } from './chunker.ts';
 import { ContentChunkRepository } from './content-chunk.repository.ts';
 import { ContextRetriever } from './context-retriever.ts';
 import { EmbeddingError } from './embedding.port.ts';
 import { type FakeEmbeddings, fakeEmbedding } from './fake-embedding.port.ts';
+import { estimateTokens } from './token-estimate.ts';
+import { THAI_SAMPLES } from './token-fixture.ts';
 
 const { pim, beam } = SEED.users;
 const API_KEY = 'sk-embeddings-secret-key-0036';
@@ -404,6 +407,41 @@ describe('Indexing and search (pgvector)', () => {
     expect(
       (await chunks.chunksOf({ source: 'SPEC_VERSION', sourceId: v1.id })).length,
     ).toBeGreaterThan(0);
+  });
+
+  test('the stale re-index re-cuts Thai chunks counted at four characters per token (0059)', async () => {
+    await configure();
+    const thai = THAI_SAMPLES.map((s) => s.text).join('\n\n');
+    const attachment = await upload(SEED.featureId, 'thai.md', `${thai}\n\n${thai}`);
+    await drain();
+    const ref = { source: 'ATTACHMENT' as const, sourceId: attachment.id };
+    const current = await chunks.chunksOf(ref);
+    for (const chunk of current) {
+      expect(chunk.tokenCount).toBe(estimateTokens(chunk.text));
+      expect(chunk.tokenCount).toBeLessThanOrEqual(CHUNKING.targetTokens);
+    }
+    // As the index was before ticket 0059: one big chunk, counted at four characters per token.
+    const old = `${thai}\n\n${thai}`;
+    await db.$executeRaw`DELETE FROM "ContentChunk" WHERE "sourceId" = ${attachment.id}`;
+    await chunks.replace(
+      { organizationId: SEED.organizationId, projectId: SEED.projectId, featureId: SEED.featureId },
+      ref,
+      [{ position: 0, text: old, tokenCount: Math.ceil(old.length / 4) }],
+      { model: PROVIDER.model, vectors: [fakeEmbedding(old, embeddings.dims)] },
+    );
+
+    // The Thai Attachment, and the seeded Spec v1 that was never indexed.
+    const res = await asPim<ReindexResult>('POST', '/settings/embeddings/reindex', {
+      scope: 'stale',
+    });
+    expect(res.body.queued).toBe(2);
+    await drain();
+    expect(await chunks.chunksOf(ref)).toEqual(current);
+    // Chunks cut by today's estimate are up to date.
+    expect(
+      (await asPim<ReindexResult>('POST', '/settings/embeddings/reindex', { scope: 'stale' })).body
+        .queued,
+    ).toBe(0);
   });
 
   test('each new Spec Version replaces the Feature’s Spec chunks', async () => {
