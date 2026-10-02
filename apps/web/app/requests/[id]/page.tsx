@@ -11,6 +11,7 @@ import type {
   TeamRole,
   TeamView,
 } from '@vorasaan/shared';
+import { DECISION_SOURCE_LABEL } from '@vorasaan/shared';
 import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import {
@@ -353,7 +354,9 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
             )}
             <p className="mt-2 text-sm text-fg-soft">
               Decided by {request.decision.decidedBy.name}
-              {request.decision.onBehalfOf && ` on behalf of ${request.decision.onBehalfOf.name}`}{' '}
+              {request.decision.onBehalfOf && ` on behalf of ${request.decision.onBehalfOf.name}`}
+              {request.decision.source !== 'WEB' &&
+                ` in ${DECISION_SOURCE_LABEL[request.decision.source]}`}{' '}
               {relativeTime(request.decision.createdAt)}
             </p>
           </div>
