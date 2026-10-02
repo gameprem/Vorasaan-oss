@@ -280,11 +280,22 @@ export class DecisionRequestsService {
       );
     }
 
-    const moved = await this.db.decisionRequest.updateMany({
-      where: { id, status: request.status, deciderId: user.id },
-      data: { deciderId: input.userId },
+    await this.db.$transaction(async (tx) => {
+      const moved = await tx.decisionRequest.updateMany({
+        where: { id, status: request.status, deciderId: user.id },
+        data: { deciderId: input.userId },
+      });
+      if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
+      // Decision Lead Time attributes the wait from now on to the new Decider (0056).
+      await tx.deciderChange.create({
+        data: {
+          requestId: id,
+          deciderId: input.userId,
+          kind: 'REASSIGNED',
+          createdAt: this.clock.now(),
+        },
+      });
     });
-    if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
     await this.notifications.publish(
       this.notifications.outbox().inboxChanged(user.id, input.userId),
     );
@@ -337,8 +348,15 @@ export class DecisionRequestsService {
         data: { status, deciderId, ...clock },
       });
       if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
+      // On the clock: NEEDS_INFO spells are rebuilt from these times (Decision Lead Time).
       await tx.requestMessage.create({
-        data: { requestId: id, authorId: user.id, kind: input.kind, body: input.body },
+        data: {
+          requestId: id,
+          authorId: user.id,
+          kind: input.kind,
+          body: input.body,
+          createdAt: this.clock.now(),
+        },
       });
       if (deciderId !== request.deciderId) await this.claimed(tx, outbox, user, request);
       // A QUESTION or ANSWER moves the item between the Decider's and the Raiser's Inbox.
@@ -381,7 +399,7 @@ export class DecisionRequestsService {
     const updated = await this.db.$transaction(async (tx) => {
       const updated = await tx.decisionRequest.update({
         where: { id, status: request.status },
-        data: { status, closedAt: new Date() },
+        data: { status, closedAt: this.clock.now() },
         include: decisionRequestInclude,
       });
       await this.notifications.notify(tx, outbox, {
@@ -500,6 +518,8 @@ export class DecisionRequestsService {
           choiceId: 'choiceId' in input ? input.choiceId : null,
           customAnswer: 'customAnswer' in input ? input.customAnswer : null,
           rationale: input.rationale ?? null,
+          // On the clock: it ends the request's Decision Lead Time.
+          createdAt: this.clock.now(),
         },
       });
       const proposal = await tx.specProposal.create({
@@ -656,9 +676,18 @@ export class DecisionRequestsService {
 
   /**
    * `user` just became the Decider: REQUEST_CLAIMED to the other recipients and to the
-   * Decider it replaced, whose Inbox Items all change.
+   * Decider it replaced, whose Inbox Items all change. The Claim is recorded with its
+   * time, for Decision Lead Time (ticket 0056).
    */
   private async claimed(tx: Tx, outbox: Outbox, user: User, request: DecisionRequestWithRelations) {
+    await tx.deciderChange.create({
+      data: {
+        requestId: request.id,
+        deciderId: user.id,
+        kind: 'CLAIMED',
+        createdAt: this.clock.now(),
+      },
+    });
     const others = [request.deciderId, ...request.recipients.map((r) => r.user.id)];
     outbox.inboxChanged(user.id, others);
     await this.notifications.notify(tx, outbox, {

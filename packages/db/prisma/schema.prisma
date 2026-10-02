@@ -165,6 +165,12 @@ enum RequestHistoryKind {
   OVERDUE_REPORTED // 3: the Raiser and the Team's Tech Leads were told it is overdue
 }
 
+// How someone became the Decider of a Decision Request after it was sent (ticket 0056).
+enum DeciderChangeKind {
+  CLAIMED // a Claim, explicit or implied by asking a QUESTION or deciding
+  REASSIGNED // the Decider handed it to someone else holding the role
+}
+
 // ─── Identity & access ──────────────────────────────────────────────────────
 
 model User {
@@ -191,6 +197,7 @@ model User {
   requestMessages          RequestMessage[]
   decisionsMade            Decision[]         @relation("DecisionDecidedBy")
   decisionsDelegated       Decision[]         @relation("DecisionOnBehalfOf")
+  deciderChanges           DeciderChange[]
 
   proposalsToApprove SpecProposal[] @relation("ProposalApprover")
   specVersions       SpecVersion[]  @relation("SpecVersionApprovedBy")
@@ -670,13 +677,14 @@ model DecisionRequest {
   raiser                  User                  @relation("RequestRaiser", fields: [raiserId], references: [id])
   decider                 User?                 @relation("RequestDecider", fields: [deciderId], references: [id])
 
-  recipients    RequestRecipient[]
-  contexts      RequestContext[]
-  choices       Choice[]
-  messages      RequestMessage[]
-  decision      Decision?
-  notifications Notification[]
-  history       RequestHistoryEntry[]
+  recipients     RequestRecipient[]
+  contexts       RequestContext[]
+  choices        Choice[]
+  messages       RequestMessage[]
+  decision       Decision?
+  notifications  Notification[]
+  history        RequestHistoryEntry[]
+  deciderChanges DeciderChange[]
 
   @@index([featureId, kind, status])
   @@index([status, dueAt])
@@ -711,6 +719,21 @@ model RequestHistoryEntry {
   request   DecisionRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@unique([requestId, kind])
+}
+
+// Each time a sent Decision Request got a new Decider, and when (ticket 0056). Decision
+// Lead Time attributes the wait to the routed Recipients until the first one, then to
+// whoever it names. A request may be Claimed or reassigned several times.
+model DeciderChange {
+  id        String            @id @default(uuid())
+  requestId String
+  deciderId String // the new Decider
+  kind      DeciderChangeKind
+  createdAt DateTime
+  request   DecisionRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  decider   User              @relation(fields: [deciderId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
 }
 
 // Local context sent from the CLI (--file, --diff) or pasted text.
