@@ -4,6 +4,7 @@ import {
   type BriefProposalView,
   type BriefVersionView,
   DEFAULT_FEATURE_SUGGESTIONS,
+  type DecisionStatsView,
   type EffectiveFeatureGuidelinesView,
   type FeatureSuggestionStatus,
   type FeatureSuggestionView,
@@ -22,6 +23,7 @@ import { ActionForm } from '@/components/action-form';
 import { AttachmentsPanel } from '@/components/attachments-panel';
 import { Notice, relativeTime } from '@/components/bits';
 import { BriefPanel } from '@/components/brief-panel';
+import { DecisionSpeedPanel } from '@/components/decision-speed-panel';
 import { DraftedWith } from '@/components/drafted-with';
 import { GrillingSection } from '@/components/grilling-section';
 import { ProjectGuidelinesEditor } from '@/components/guidelines-editor';
@@ -104,7 +106,10 @@ export default async function ProjectPage({
     );
   }
   if (!project) notFound();
-  const me = await currentUser();
+  const [me, stats] = await Promise.all([
+    currentUser(),
+    load(() => api<DecisionStatsView>(`/projects/${id}/decision-stats`)),
+  ]);
   const canEdit = brief.canEdit;
 
   return (
@@ -136,6 +141,14 @@ export default async function ProjectPage({
             ))}
         {project.jiraKey && ` · Jira ${project.jiraKey}`}
       </p>
+
+      {stats.data ? (
+        <DecisionSpeedPanel stats={stats.data} />
+      ) : (
+        <div className="mt-6">
+          <Notice tone="error">{stats.error}</Notice>
+        </div>
+      )}
 
       <nav aria-label="Project sections" className="mt-6 flex gap-2 overflow-x-auto pb-1">
         {TABS.map((t) => (
