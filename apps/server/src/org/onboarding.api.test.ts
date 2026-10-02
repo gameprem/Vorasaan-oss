@@ -12,6 +12,8 @@ import type {
   SpecVersionView,
   TeamView,
 } from '@vorasaan/shared';
+import { SETUP_TOKEN_HEADER } from '@vorasaan/shared';
+import { SetupTokenService } from '../setup/setup-token.service.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 
@@ -43,11 +45,19 @@ describe('Onboarding from an empty install', () => {
 
   /** Setup as Nok (Admin), then invite and accept Beam (Backend). */
   async function world() {
-    const setup = await call<LoginResult>('POST', '/setup', undefined, {
-      organizationName: 'Acme Bank',
-      admin: { name: 'Nok', email: 'nok@acme.test', password: 'long-enough-pass' },
-      ai: { provider: 'ANTHROPIC', model: 'claude-opus-5-5', apiKey: 'sk-ant-x' },
+    // A fresh install, with the Setup Token from the server log.
+    const setupToken = app.get(SetupTokenService).arm() as string;
+    const setupRes = await app.inject({
+      method: 'POST',
+      url: '/setup',
+      headers: { [SETUP_TOKEN_HEADER]: setupToken },
+      payload: {
+        organizationName: 'Acme Bank',
+        admin: { name: 'Nok', email: 'nok@acme.test', password: 'long-enough-pass' },
+        ai: { provider: 'ANTHROPIC', model: 'claude-opus-5-5', apiKey: 'sk-ant-x' },
+      },
     });
+    const setup = { body: setupRes.json() as LoginResult };
     const admin = setup.body.token;
 
     const project = await call<{ id: string }>('POST', '/projects', admin, {

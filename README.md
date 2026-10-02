@@ -101,9 +101,17 @@ echo "VORASAAN_SECRET_KEY=$(openssl rand -base64 32)" > .env
 docker compose up -d
 ```
 
-Open **http://localhost:3000**. The setup wizard walks you through:
+Get the one-time **setup token** from the server log. It's printed with a ready-made link, so whoever finds your server before you do can't claim it:
 
-1. **Your organization**: its name, and your account as the first Admin.
+```bash
+docker compose logs server | grep -i setup
+#   Setup token: 3q2J…
+#   Open:        http://localhost:3000/setup?token=3q2J…
+```
+
+Open that link (or **http://localhost:3000** and paste the token). The token works once; a new one is printed each time the server restarts until setup is done. The setup wizard walks you through:
+
+1. **Your organization**: the setup token, the organization's name, and your account as the first Admin.
 2. **AI provider**: Claude API, OpenAI API, or Custom URL + token. **Test connection** checks it before you continue. It becomes your first provider, and its model the default Approved Model; **Settings → AI models** adds more providers and models, and sets the model of each AI task.
 
 Then create a **Project** and a **Team**, **invite your team** with a link, create a **Feature**, choose its **Role Owners**, and write **Spec v1**.
@@ -114,6 +122,8 @@ Then create a **Project** and a **Team**, **invite your team** with a link, crea
 | Setting (`.env`) | Default | What it does |
 | --- | --- | --- |
 | `VORASAAN_SECRET_KEY` | *(required)* | Encrypts provider keys at rest |
+| `VORASAAN_SETUP_TOKEN` | *(printed at start)* | Your own setup token (at least 20 characters) instead of the printed one |
+| `VORASAAN_WEB_URL` | `http://localhost:3000` | Where people open the web app: the setup link and chat app card links |
 | `VORASAAN_WEB_PORT` / `VORASAAN_API_PORT` | `3000` / `4000` | Host ports |
 | `VORASAAN_INSECURE_COOKIES` | `false` | Set `true` only when serving over plain HTTP on a non-localhost address |
 

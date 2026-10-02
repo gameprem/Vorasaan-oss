@@ -42,6 +42,10 @@ _Avoid_: Completeness score, progress
 One of the people responsible for a given Team Role on a specific Feature. A Feature may have several Role Owners for the same Team Role.
 _Avoid_: Assignee, owner
 
+**Setup Token**:
+A one-time secret that first-run setup requires, so only whoever runs the server can create the Organization and become its first Admin. The server prints it to its log while setup is needed, or the operator chooses it. It stops working once setup is done.
+_Avoid_: Install key, admin password, invite code
+
 ### Spec
 
 **Spec**:

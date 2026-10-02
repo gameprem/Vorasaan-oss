@@ -241,6 +241,8 @@ describe('Deciding from LINE, Slack and Teams (ticket 0058)', () => {
 
   describe('Slack', () => {
     test('a sent request arrives as a Block Kit card: title, Blocker red, Choices with impact, buttons, a link; never the description', async () => {
+      // A Wednesday morning, so the Blocker's 4 working hours end the same day.
+      clock.set('2026-09-30T09:00:00Z');
       await link(pim.id, 'SLACK', 'UPIM');
       const sent = await sendBlocker();
 

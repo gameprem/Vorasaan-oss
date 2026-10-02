@@ -49,6 +49,8 @@ const chromiumPath =
   ((await Bun.file('/opt/pw-browsers/chromium').exists()) ? '/opt/pw-browsers/chromium' : '');
 
 const started: Subprocess[] = [];
+/** The API's Setup Token (ticket 0062), so the story can run first-run setup. */
+const setupToken = randomBytes(24).toString('base64url');
 const step = (text: string) => console.log(`\n▸ ${text}`);
 
 /** Only what a child needs: no dev auth, no provider keys, no model overrides. */
@@ -167,6 +169,7 @@ try {
       PORT: String(apiPort),
       DATABASE_URL: databaseUrl,
       VORASAAN_SECRET_KEY: randomBytes(32).toString('base64'),
+      VORASAAN_SETUP_TOKEN: setupToken,
       FILE_STORAGE_DRIVER: 'local',
       FILE_STORAGE_LOCAL_DIR: filesDir,
     }),
@@ -185,7 +188,7 @@ try {
 
   step('Writing the story through the API');
   const api = apiClient(apiUrl);
-  const seeded = await seedStory(api, model, SEED_PASSWORD);
+  const seeded = await seedStory(api, model, SEED_PASSWORD, setupToken);
   const screensDb = new SQL(databaseUrl);
   await ageStory(screensDb);
   await screensDb.close();

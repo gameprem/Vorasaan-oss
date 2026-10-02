@@ -1,15 +1,16 @@
 'use client';
 
 import { DEFAULT_MODELS } from '@vorasaan/shared';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { completeSetup, testAiDuringSetup } from '@/lib/setup-actions';
 import { inputClass } from './login-form';
 import { type ProviderDraft, ProviderFields, toSettingsInput } from './provider-fields';
 
 const STEPS = ['Your organization', 'AI provider'] as const;
 
-export function SetupWizard() {
+export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
   const [step, setStep] = useState<0 | 1>(0);
+  const [setupToken, setSetupToken] = useState(initialToken);
   const [org, setOrg] = useState({ organizationName: '', name: '', email: '', password: '' });
   const [provider, setProvider] = useState<ProviderDraft>({
     provider: 'ANTHROPIC',
@@ -20,24 +21,36 @@ export function SetupWizard() {
   const [error, setError] = useState<string>();
   const [finishing, startFinish] = useTransition();
 
-  const stepOneError = !org.organizationName.trim()
-    ? 'Name your organization.'
-    : !org.name.trim()
-      ? 'Enter your name.'
-      : !/^\S+@\S+\.\S+$/.test(org.email)
-        ? 'Enter a valid email.'
-        : org.password.length < 10
-          ? 'Use a password of at least 10 characters.'
-          : undefined;
+  // The token came in the link from the server log: keep it out of the address bar (and so
+  // out of bookmarks and screenshots) once it's in the field.
+  useEffect(() => {
+    if (window.location.search.includes('token=')) window.history.replaceState(null, '', '/setup');
+  }, []);
+
+  const stepOneError = !setupToken.trim()
+    ? 'Enter the setup token from the server log.'
+    : !org.organizationName.trim()
+      ? 'Name your organization.'
+      : !org.name.trim()
+        ? 'Enter your name.'
+        : !/^\S+@\S+\.\S+$/.test(org.email)
+          ? 'Enter a valid email.'
+          : org.password.length < 10
+            ? 'Use a password of at least 10 characters.'
+            : undefined;
 
   const finish = () =>
     startFinish(async () => {
       setError(undefined);
-      const result = await completeSetup({
-        organizationName: org.organizationName,
-        admin: { name: org.name, email: org.email, password: org.password },
-        ai: toSettingsInput(provider),
-      });
+      const result = await completeSetup(
+        {
+          organizationName: org.organizationName,
+          admin: { name: org.name, email: org.email, password: org.password },
+          ai: toSettingsInput(provider),
+        },
+        setupToken,
+      );
+      if (result?.tokenRejected) setStep(0);
       if (result?.error) setError(result.error);
     });
 
@@ -75,6 +88,21 @@ export function SetupWizard() {
       >
         {step === 0 ? (
           <div className="space-y-5">
+            <label className="block">
+              <span className="text-sm">Setup token</span>
+              <input
+                value={setupToken}
+                onChange={(e) => setSetupToken(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                aria-describedby="setup-token-hint"
+                className={`${inputClass} font-mono`}
+              />
+              <span id="setup-token-hint" className="mt-1 block text-sm text-fg-soft">
+                Printed in the server log when it starts:{' '}
+                <code className="font-mono">docker compose logs server</code>
+              </span>
+            </label>
             <label className="block">
               <span className="text-sm">Organization name</span>
               <input
@@ -124,7 +152,11 @@ export function SetupWizard() {
               provider and default Approved Model; you can add more providers and models later in
               Settings → AI models.
             </p>
-            <ProviderFields value={provider} onChange={setProvider} test={testAiDuringSetup} />
+            <ProviderFields
+              value={provider}
+              onChange={setProvider}
+              test={(input) => testAiDuringSetup(input, setupToken)}
+            />
           </>
         )}
 
