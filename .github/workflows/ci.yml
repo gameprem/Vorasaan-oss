@@ -85,9 +85,23 @@ jobs:
         run: |
           bun run --filter @vorasaan/db db:deploy
           bun run db:seed
+      # The browser download is cached per Playwright version; the system packages are not.
+      # Both steps get a time limit and retries, since a stalled download once hung the job.
+      - name: Cache the Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - name: Install Chromium for Playwright
         working-directory: apps/web
-        run: bunx playwright install --with-deps chromium
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2 3; do
+            timeout 240 bunx playwright install --with-deps chromium && exit 0
+            echo "Playwright install attempt $attempt failed or stalled; retrying"
+            sleep 10
+          done
+          exit 1
       - name: Build the web app
         working-directory: apps/web
         run: bun --bun next build

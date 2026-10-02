@@ -50,8 +50,16 @@ test('the Sidebar reaches every page, and Ctrl+K starts a new Conversation', asy
 test('Settings opens as a modal over the page, and Back and Esc return to it', async ({ as }) => {
   const page = await as(pim);
   await page.goto(featurePath);
-  await page.mouse.wheel(0, 500);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  // Wheel over the main area: at (0, 0) the mouse is over the Sidebar, which scrolls on its
+  // own, so the page might not. Scroll again on each poll in case the page wasn't ready yet.
+  const main = page.locator('main');
+  await main.hover();
+  await expect
+    .poll(async () => {
+      await page.mouse.wheel(0, 500);
+      return page.evaluate(() => window.scrollY);
+    })
+    .toBeGreaterThan(0);
   const scrollY = await page.evaluate(() => window.scrollY);
 
   const settingsButton = page.getByRole('link', { name: 'Settings', exact: true });
