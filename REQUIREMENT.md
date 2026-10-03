@@ -254,7 +254,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 6. **UI kit** ([ADR 0016](./docs/adr/0016-ui-kit-on-react-aria-components.md)): our own accessible components on React Aria, styled with the ADR 0008 tokens in light and dark, in `apps/web/components/ui/`. Searchable pickers for models, Team Roles, people, Features and time zones (in English and Thai), and date and time pickers with an optional Buddhist-era year. They replace every browser-native select, checkbox, radio, date and time input.
    - [x] UI kit, and replace browser-native controls (0077).
 7. **Context meter, `/compact` and chat history:** a meter under the composer shows how full the Conversation is for its model's Context Window, and a person can compact it themselves, with a focus that steers the Conversation Summary. Older messages stay readable, with a thin divider where the AI switched to the summary. Long Conversations open at the latest messages and load older ones as you scroll up.
-   - [ ] Context meter, /compact, chat history and cursor pagination (0066).
+   - [x] Context meter, /compact, chat history and cursor pagination (0066).
 8. **Decision Graph:** a graph like a git network graph on the Feature page. The Spec's versions are the main lane; each Decision Request branches off where it was raised and merges back at the Spec Version it produced, and open ones show their Response Window state.
    - [ ] Decision Graph of a Feature (0067).
 9. **Language:** prompts keep domain terms, ids, numbers, names and quoted words as written, and reply in the person's language, else the Organization's. Every eval set gets Thai and mixed Thai-English cases, and answering directly is measured against reasoning in English first.

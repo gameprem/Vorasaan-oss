@@ -10,12 +10,21 @@ import {
 import type { Prisma, PrismaClient, User } from '@vorasaan/db';
 import {
   type ActionCardView,
+  type CompactConversationInput,
+  type CompactConversationResult,
+  type ConversationCompactionSummary,
+  type ConversationCompactionTrigger,
+  type ConversationCompactionView,
   type ConversationList,
   type ConversationListItem,
+  type ConversationMessagePage,
   type ConversationMessageView,
   type ConversationScopeInput,
   type ConversationTurnView,
+  type ConversationUsage,
   type ConversationView,
+  type GetConversationQuery,
+  type ListConversationMessagesQuery,
   type ListConversationsQuery,
   MAX_CONVERSATION_TITLE_CHARS,
   type RecordedModel,
@@ -33,16 +42,25 @@ import {
   type ConversationScopeForAi,
   type ModelChoice,
   type ProjectFoundationForAi,
+  type RecordForAi,
 } from '../ai/ai.port.ts';
 import { AiSettingsService } from '../ai/ai-settings.service.ts';
 import { BUDGET_CONFIG, type Budget, ContextBudgets, projectBudget } from '../ai/context-budget.ts';
-import { renderConversationSummary } from '../ai/prompts.ts';
+import {
+  parseConversationSummary,
+  renderConversationSummary,
+  SUMMARY_SECTIONS,
+} from '../ai/prompts.ts';
 import {
   fromRecordedModelColumns,
   modelLabel,
   toRecordedModelColumns,
 } from '../ai/recorded-model.ts';
-import { estimateMessageTokens, MESSAGE_OVERHEAD_TOKENS } from '../ai/token-count.ts';
+import {
+  estimateChatTokens,
+  estimateMessageTokens,
+  MESSAGE_OVERHEAD_TOKENS,
+} from '../ai/token-count.ts';
 import { projectAccess } from '../brief/brief-access.ts';
 import { FeatureGuidelinesService } from '../feature-guidelines/feature-guidelines.service.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
@@ -55,14 +73,18 @@ import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { ContextRetriever, splitProjectBrief } from '../retrieval/context-retriever.ts';
 import { clipToTokens, estimateTokens } from '../retrieval/token-estimate.ts';
 import {
+  type CompactionRow,
   type ConversationWithScope,
+  compactionInclude,
   conversationInclude,
+  toCompactionView,
   toConversationListItem,
   toConversationMessageView,
   toConversationView,
 } from './conversation.view.ts';
 import { conversationNotFound as notFound, replyFailed } from './conversation-errors.ts';
 import { ConversationLocks } from './conversation-locks.ts';
+import { loadMessagePage } from './message-pages.ts';
 
 /**
  * The most rounds of tool calls in one turn (Action Cards, 0043). After them the
@@ -81,6 +103,23 @@ type Turn = {
   steps: MessageRow[];
   reply: MessageRow;
   actionCards: ActionCardView[];
+  /** How full the Conversation is after the turn (0066); null in a Grilling Conversation. */
+  usage: ConversationUsage | null;
+};
+/** The provider's usage of a turn's steps, summed (0061, 0066); null where it said nothing. */
+type StepUsage = { inputTokens: number | null; cacheReadTokens: number | null };
+const NO_USAGE: StepUsage = { inputTokens: null, cacheReadTokens: null };
+/**
+ * What the context meter of a turn needs (ticket 0066): its model and plan, the
+ * provider's count over the estimate (1 when the turn didn't count), and the
+ * provider's usage of the turn's steps.
+ */
+type Meter = { model: TurnModel; budget: Budget; scale: number; usage: StepUsage };
+/** What a fold records besides its summary: why it happened, who asked, and what to keep. */
+type FoldRecord = {
+  trigger: ConversationCompactionTrigger;
+  focus?: string | null;
+  createdById?: string | null;
 };
 
 /**
@@ -182,15 +221,179 @@ export class ConversationsService {
     return { conversations: rows.map(toConversationListItem) };
   }
 
-  async get(user: User, id: string): Promise<ConversationView> {
+  /**
+   * The Conversation with its latest page of messages, or the page `around` a
+   * message (a deep link; ticket 0066), and all its Action Cards and compactions.
+   */
+  async get(user: User, id: string, query: GetConversationQuery = {}): Promise<ConversationView> {
     const conversation = await this.owned(user, id);
-    const messages = await this.db.conversationMessage.findMany({
-      where: { conversationId: id },
-      orderBy: { position: 'asc' },
-    });
+    const page = await loadMessagePage(this.db, id, query);
     const actionCards = await this.cards.forConversation(user, id);
+    const compactions = await this.compactionViews(
+      id,
+      await this.db.conversationCompaction.findMany({
+        where: { conversationId: id },
+        orderBy: { number: 'asc' },
+        include: compactionInclude,
+      }),
+    );
     const progress = conversation.grillingRoundId ? await this.grilling.progress(id) : null;
-    return toConversationView(conversation, messages, actionCards, progress);
+    return toConversationView(conversation, page, actionCards, compactions, progress);
+  }
+
+  /** `GET /conversations/:id/messages`: one page of the owner's messages (ticket 0066). */
+  async messages(
+    user: User,
+    id: string,
+    query: ListConversationMessagesQuery,
+  ): Promise<ConversationMessagePage> {
+    await this.owned(user, id);
+    const page = await loadMessagePage(this.db, id, query);
+    return { ...page, messages: page.messages.map(toConversationMessageView) };
+  }
+
+  /**
+   * How full the Conversation is (ticket 0066): for the model its next reply runs
+   * on, or for `approvedModelId` (the model picker; 422 unless approved), which
+   * stays a question only: the Conversation keeps its model until a message is
+   * sent with the new one. The history is counted on that model, once.
+   */
+  async usage(user: User, id: string, approvedModelId?: string): Promise<ConversationUsage> {
+    const conversation = await this.owned(user, id);
+    if (conversation.grillingRoundId) {
+      throw new UnprocessableEntityException(
+        "A Grilling Conversation's questions come from the server, so it has no context to meter",
+      );
+    }
+    if (approvedModelId) await this.models.assertPickable(approvedModelId);
+    const choice = await this.models.chooseModel(
+      'chat',
+      approvedModelId ?? conversation.modelId ?? undefined,
+    );
+    const record = await this.models.record(choice);
+    const budget = await this.planFor(conversation, choice);
+    const { summary, messages } = await this.history(id);
+    const used =
+      summary || messages.length
+        ? await this.ai.countTokens({ system: summary, messages }, { model: choice })
+        : 0;
+    return toUsage(conversation, record, budget, used);
+  }
+
+  /**
+   * "View summary" (ticket 0066): the Conversation Summary as one compaction left
+   * it, in its sections. Read-only (see ConversationCompactionSummary).
+   */
+  async compactionSummary(
+    user: User,
+    id: string,
+    compactionId: string,
+  ): Promise<ConversationCompactionSummary> {
+    await this.owned(user, id);
+    const row = await this.db.conversationCompaction.findFirst({
+      where: { id: compactionId, conversationId: id },
+      include: compactionInclude,
+    });
+    if (!row) throw new NotFoundException('Compaction not found');
+    const [view] = await this.compactionViews(id, [row]);
+    const latest = await this.db.conversationCompaction.findFirst({
+      where: { conversationId: id },
+      orderBy: { number: 'desc' },
+      select: { id: true },
+    });
+    const draft = parseConversationSummary(row.summary);
+    const sections = SUMMARY_SECTIONS.map(([key, heading]) => {
+      const value = draft[key];
+      const items = (Array.isArray(value) ? value : [value]).map((v) => v.trim()).filter(Boolean);
+      return { heading, items };
+    });
+    return {
+      ...(view as ConversationCompactionView),
+      summary: row.summary,
+      sections,
+      current: latest?.id === row.id,
+    };
+  }
+
+  /**
+   * Compacts now (ticket 0066): "Compact now" in the context meter, or `/compact
+   * [focus]`. Everything before the last turn is folded into the Conversation
+   * Summary, which keeps `focus` in full; the last turn stays word for word.
+   *
+   * Unless `skipRecordCheck`, the fold is first checked against the Spec (a
+   * Feature Conversation) or the Project Brief: when something agreed isn't
+   * recorded there yet, the AI offers an Action Card that records it, and nothing
+   * is folded (RECORD_FIRST). The person approves, declines or skips it, then
+   * compacts again with `skipRecordCheck`. Someone who may not propose a change
+   * there gets no card, and the fold goes on.
+   *
+   * 409 with nothing to fold (one turn so far); 422 in a Grilling Conversation.
+   */
+  async compactNow(
+    user: User,
+    id: string,
+    input: CompactConversationInput,
+  ): Promise<CompactConversationResult> {
+    const conversation = await this.ownedWithAccess(user, id);
+    if (conversation.grillingRoundId) {
+      throw new UnprocessableEntityException(
+        'A Grilling Conversation keeps its questions and answers whole, so it is never compacted',
+      );
+    }
+    const focus = input.focus?.trim() || null;
+    return this.exclusively(id, async () => {
+      const current = await this.db.conversation.findUniqueOrThrow({
+        where: { id },
+        include: {
+          ...conversationInclude,
+          feature: { select: { id: true, title: true, description: true } },
+        },
+      });
+      const rows = await this.db.conversationMessage.findMany({
+        where: { conversationId: id, position: { gte: current.summarizedThrough } },
+        orderBy: { position: 'asc' },
+      });
+      const last = rows.findLastIndex((m) => m.role === 'USER');
+      if (last <= 0) {
+        throw new ConflictException(
+          'Nothing to compact yet: only the latest turn comes after the last summary',
+        );
+      }
+      const older = rows.slice(0, last);
+      const recent = rows.slice(last);
+      const model = await this.modelFor(current);
+      const budget = await this.planFor(current, model.choice);
+      const record = input.skipRecordCheck ? null : await this.recordFor(current);
+      const folded = await this.summarize(user, current, older, {
+        scope: scopeForAi(current),
+        budget,
+        focus,
+        record,
+      });
+
+      if (record && folded.unrecorded.length) {
+        const offer = await this.offerRecord(user, current, record, folded.unrecorded, model);
+        if (offer) return { status: 'RECORD_FIRST', unrecorded: folded.unrecorded, ...offer };
+      }
+
+      const compaction = await this.saveFold(user, current, folded.summary, recent, {
+        trigger: 'MANUAL',
+        focus,
+        createdById: user.id,
+      });
+      const after = await this.db.conversation.findUniqueOrThrow({
+        where: { id },
+        include: conversationInclude,
+      });
+      const usage = await this.usageAfter(after, { model, budget, scale: null, usage: NO_USAGE });
+      this.bus.emit(user.id, { event: 'conversation.usage', data: { conversationId: id, usage } });
+      return {
+        status: 'COMPACTED',
+        conversation: toConversationListItem(after),
+        compaction,
+        usage,
+      };
+    });
   }
 
   /** `POST /grillings/:id/conversation`: my Grilling Conversation for the round being asked. */
@@ -288,6 +491,7 @@ export class ConversationsService {
       steps: [],
       reply: turn.reply,
       actionCards: [],
+      usage: null,
     };
   }
 
@@ -338,7 +542,7 @@ export class ConversationsService {
       { model: model.choice, tools },
     );
     const compacting = { user, scope, budget, model: model.choice };
-    let { summary, recent } = await this.compact(conversation, rows, compacting);
+    let { summary, recent, scale } = await this.compact(conversation, rows, compacting);
     const { context, foundation } = await this.contextFor(conversation, recent, budget);
 
     let recentMessages = forAi(recent, budget.history - estimateTokens(summary));
@@ -346,6 +550,9 @@ export class ConversationsService {
     const steps: MessageRow[] = [];
     const actionCards: ActionCardView[] = [];
     const emit = (event: ServerEvent) => this.bus.emit(user.id, event);
+    const meter: Meter = { model, budget, scale, usage: { ...NO_USAGE } };
+    const finish = (replyId: string, text: string) =>
+      this.finish(user, id, replyId, text, message, steps, actionCards, meter);
 
     for (let round = 0; ; round++) {
       // Past the last tool round the AI gets no tools, so it must answer in words.
@@ -374,6 +581,8 @@ export class ConversationsService {
               event: 'conversation.delta',
               data: { conversationId: id, messageId: replyId, delta: chunk.delta },
             });
+          } else if (chunk.type === 'usage') {
+            meter.usage = addUsage(meter.usage, chunk.usage);
           } else if (!offered.some((t) => t.name === chunk.call.name)) {
             this.logger.warn(
               `Dropped a call to the tool "${chunk.call.name}", which wasn't offered`,
@@ -385,8 +594,7 @@ export class ConversationsService {
           }
         }
       } catch (error) {
-        if (stopped.aborted)
-          return this.finish(user, id, replyId, text, message, steps, actionCards, model);
+        if (stopped.aborted) return finish(replyId, text);
         if (error instanceof ContextTooLongError && !retried) {
           // Too long for the model after all: compact at once, then try this step once more.
           retried = true;
@@ -400,6 +608,7 @@ export class ConversationsService {
             ...compacting,
             force: true,
           }));
+          // The count before the fold stays this turn's scale; the meter needs no new count.
           recentMessages = forAi(recent, budget.history - estimateTokens(summary));
           round--;
           continue;
@@ -414,9 +623,7 @@ export class ConversationsService {
       }
 
       // Stopped, or nothing more to do: the text is the reply. A stopped step's calls never run.
-      if (!toolCalls.length || stopped.aborted) {
-        return this.finish(user, id, replyId, text, message, steps, actionCards, model);
-      }
+      if (!toolCalls.length || stopped.aborted) return finish(replyId, text);
 
       // A round of tool calls: store the calls, then run each and store its result.
       const step = await this.store(id, {
@@ -455,7 +662,10 @@ export class ConversationsService {
     }
   }
 
-  /** Stores the turn's final reply and tells the owner it is done. */
+  /**
+   * Stores the turn's final reply and the provider's usage of the turn, tells the
+   * owner it is done, then how full the Conversation is now (ticket 0066).
+   */
   private async finish(
     user: User,
     id: string,
@@ -464,8 +674,9 @@ export class ConversationsService {
     message: MessageRow,
     steps: MessageRow[],
     actionCards: ActionCardView[],
-    model: TurnModel,
+    meter: Meter,
   ): Promise<Turn> {
+    const { model } = meter;
     const saved = await this.store(id, {
       id: replyId,
       role: 'ASSISTANT',
@@ -477,13 +688,69 @@ export class ConversationsService {
       event: 'conversation.done',
       data: { conversationId: id, message: toConversationMessageView(saved.message) },
     });
+    const conversation = await this.db.conversation.update({
+      where: { id },
+      data: {
+        lastInputTokens: meter.usage.inputTokens,
+        lastCacheReadTokens: meter.usage.cacheReadTokens,
+      },
+      include: conversationInclude,
+    });
+    const usage = await this.usageAfter(conversation, meter);
+    this.bus.emit(user.id, { event: 'conversation.usage', data: { conversationId: id, usage } });
     return {
-      conversation: toConversationListItem(saved.conversation),
+      conversation: toConversationListItem(conversation),
       message,
       steps,
       reply: saved.message,
       actionCards,
+      usage,
     };
+  }
+
+  // ─── The context meter (ticket 0066) ───────────────────────────────────────
+
+  /** A turn's plan on `choice`: the same call the turn itself makes (0060). */
+  private async planFor(
+    conversation: { featureId: string | null },
+    choice: ModelChoice,
+  ): Promise<Budget> {
+    const { budget } = await this.budgets.forTask(
+      'chat',
+      conversation.featureId ? 'conversationFeature' : 'conversationProject',
+      { model: choice, tools: this.cards.toolsFor(conversation) },
+    );
+    return budget;
+  }
+
+  /** The history the next turn sends: the Conversation Summary and the messages after it. */
+  private async history(id: string): Promise<{ summary: string; messages: ChatMessageForAi[] }> {
+    const conversation = await this.db.conversation.findUniqueOrThrow({
+      where: { id },
+      select: { summary: true, summarizedThrough: true },
+    });
+    const rows = await this.db.conversationMessage.findMany({
+      where: { conversationId: id, position: { gte: conversation.summarizedThrough } },
+      orderBy: { position: 'asc' },
+    });
+    return { summary: conversation.summary, messages: rows.map(toChatMessage) };
+  }
+
+  /**
+   * How full the Conversation is after a turn or a fold. A turn doesn't count again
+   * (0060 counts once per turn): its own count scales the estimate. Without a scale
+   * (a fold by hand) the history is counted on the model.
+   */
+  private async usageAfter(
+    conversation: ConversationWithScope,
+    meter: Omit<Meter, 'scale'> & { scale: number | null },
+  ): Promise<ConversationUsage> {
+    const { summary, messages } = await this.history(conversation.id);
+    const used =
+      meter.scale === null
+        ? await this.ai.countTokens({ system: summary, messages }, { model: meter.model.choice })
+        : Math.ceil(estimateChatTokens({ system: summary, messages }) * meter.scale);
+    return toUsage(conversation, meter.model.record, meter.budget, used);
   }
 
   /** Appends a message to the Conversation, which counts as activity. */
@@ -554,13 +821,12 @@ export class ConversationsService {
       model: ModelChoice;
       force?: boolean;
     },
-  ): Promise<{ summary: string; recent: MessageRow[] }> {
-    const { at, keep, summary: summaryShare } = BUDGET_CONFIG.compaction;
+  ): Promise<{ summary: string; recent: MessageRow[]; scale: number }> {
+    const { at, keep } = BUDGET_CONFIG.compaction;
     const share = turn.budget.history;
-    const unchanged = { summary: conversation.summary, recent: rows };
     // The current turn starts at the person's last message; it is never folded.
     const current = rows.findLastIndex((m) => m.role === 'USER');
-    if (current <= 0) return unchanged;
+    if (current <= 0) return { summary: conversation.summary, recent: rows, scale: 1 };
 
     // The provider's count over the script-aware estimate: scales each message's estimate.
     let scale = 1;
@@ -570,12 +836,11 @@ export class ConversationsService {
         { system: conversation.summary, messages },
         { model: turn.model },
       );
-      if (counted <= at * share) return unchanged;
-      const estimated =
-        estimateTokens(conversation.summary) +
-        messages.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
+      const estimated = estimateChatTokens({ system: conversation.summary, messages });
       scale = Math.max(0.25, counted / Math.max(1, estimated));
+      if (counted <= at * share) return { summary: conversation.summary, recent: rows, scale };
     }
+    const unchanged = { summary: conversation.summary, recent: rows, scale };
 
     // Keep the newest whole turns word for word while they fit in `keep` of the share.
     let start = current;
@@ -592,32 +857,188 @@ export class ConversationsService {
     const older = rows.slice(0, start);
     const recent = rows.slice(start);
 
-    let summary: string;
+    const { summary } = await this.summarize(turn.user, conversation, older, turn);
+    await this.saveFold(turn.user, conversation, summary, recent, {
+      trigger: turn.force ? 'TOO_LONG' : 'AUTO',
+    });
+    return { summary, recent, scale };
+  }
+
+  /**
+   * The Conversation Summary with `older` folded in, cut to `compaction.summary`
+   * of the history's share; and, when given a Spec or Brief to check against, the
+   * agreed points it doesn't record yet. A failing summarizer is a 502.
+   */
+  private async summarize(
+    user: User,
+    conversation: { id: string; summary: string },
+    older: MessageRow[],
+    turn: {
+      scope: ConversationScopeForAi;
+      budget: Budget;
+      focus?: string | null;
+      record?: RecordForAi | null;
+    },
+  ): Promise<{ summary: string; unrecorded: string[] }> {
     try {
-      const cards = await this.cards.forConversation(turn.user, conversation.id);
+      const cards = await this.cards.forConversation(user, conversation.id);
       const folded = await this.ai.summarizeConversation({
         scope: turn.scope,
         summary: conversation.summary,
         messages: older.map(toChatMessage),
         actionCards: cards.map((c) => ({ kind: c.kind, title: c.title, status: c.status })),
+        ...(turn.focus ? { focus: turn.focus } : {}),
+        ...(turn.record ? { record: turn.record } : {}),
       });
-      summary = clipToTokens(
-        renderConversationSummary(folded),
-        Math.max(200, Math.floor(summaryShare * share)),
+      const room = Math.max(
+        200,
+        Math.floor(BUDGET_CONFIG.compaction.summary * turn.budget.history),
       );
+      return {
+        summary: clipToTokens(renderConversationSummary(folded), room),
+        unrecorded: folded.unrecorded ?? [],
+      };
     } catch (error) {
       this.logger.error('Folding a Conversation into its summary failed', error as Error);
       throw replyFailed(
         conversation.id,
-        'The AI failed while summarizing earlier messages, so no reply was saved. Try again.',
+        'The AI failed while summarizing earlier messages, so nothing was saved. Try again.',
       );
     }
+  }
+
+  /**
+   * Saves a fold: the Conversation's summary and where it now starts, and a
+   * compaction (ticket 0066) holding the summary as it is now, so its divider can
+   * show it later. The owner is told (`conversation.compacted`).
+   */
+  private async saveFold(
+    user: User,
+    conversation: { id: string; summarizedThrough: number },
+    summary: string,
+    recent: MessageRow[],
+    record: FoldRecord,
+  ): Promise<ConversationCompactionView> {
     const through = recent[0]?.position ?? conversation.summarizedThrough;
-    await this.db.conversation.update({
-      where: { id: conversation.id },
-      data: { summary, summarizedThrough: through },
+    const row = await this.db.$transaction(async (tx) => {
+      await tx.conversation.update({
+        where: { id: conversation.id },
+        data: { summary, summarizedThrough: through },
+      });
+      const { _max } = await tx.conversationCompaction.aggregate({
+        where: { conversationId: conversation.id },
+        _max: { number: true },
+      });
+      return tx.conversationCompaction.create({
+        data: {
+          conversationId: conversation.id,
+          number: (_max.number ?? 0) + 1,
+          trigger: record.trigger,
+          focus: record.focus ?? null,
+          createdById: record.createdById ?? null,
+          summarizedThrough: through,
+          summary,
+        },
+        include: compactionInclude,
+      });
     });
-    return { summary, recent };
+    const compaction = toCompactionView(row, recent[0]?.id ?? null);
+    this.bus.emit(user.id, {
+      event: 'conversation.compacted',
+      data: { conversationId: conversation.id, compaction, summarizedThrough: through },
+    });
+    return compaction;
+  }
+
+  /** Compactions as views, each with the message its divider goes above. */
+  private async compactionViews(
+    conversationId: string,
+    rows: CompactionRow[],
+  ): Promise<ConversationCompactionView[]> {
+    if (!rows.length) return [];
+    const firsts = await this.db.conversationMessage.findMany({
+      where: { conversationId, position: { in: rows.map((r) => r.summarizedThrough) } },
+      select: { id: true, position: true },
+    });
+    const byPosition = new Map(firsts.map((m) => [m.position, m.id]));
+    return rows.map((r) => toCompactionView(r, byPosition.get(r.summarizedThrough) ?? null));
+  }
+
+  /** What a fold checks agreed points against: the Feature's Spec, else the Project Brief. */
+  private async recordFor(conversation: {
+    projectId: string;
+    featureId: string | null;
+  }): Promise<RecordForAi> {
+    if (conversation.featureId) {
+      const spec = await this.db.specVersion.findFirst({
+        where: { featureId: conversation.featureId },
+        orderBy: { version: 'desc' },
+        select: { markdown: true },
+      });
+      return { kind: 'SPEC', markdown: spec?.markdown ?? '' };
+    }
+    const brief = await this.db.briefVersion.findFirst({
+      where: { projectId: conversation.projectId },
+      orderBy: { version: 'desc' },
+      select: { markdown: true },
+    });
+    return { kind: 'BRIEF', markdown: brief?.markdown ?? '' };
+  }
+
+  /**
+   * Before a fold by hand (ticket 0066, closing 0060's open point): the AI's
+   * message that lists the agreed points not recorded yet, and the Spec or Brief
+   * Proposal that adds them, as an Action Card under it. The proposal adds them
+   * as a section at the end; the person approves it, declines it, or asks for
+   * changes (a Redraft, 0065) to work them in elsewhere. Null when no card could
+   * be made (the person may not propose a change there): then nothing is kept.
+   */
+  private async offerRecord(
+    user: User,
+    conversation: ConversationWithScope,
+    record: RecordForAi,
+    points: string[],
+    model: TurnModel,
+  ): Promise<{ messages: ConversationMessageView[]; card: ActionCardView } | null> {
+    const name = record.kind === 'SPEC' ? 'Spec' : 'Project Brief';
+    const list = points.map((p) => `- ${p}`).join('\n');
+    const call: ChatToolCall = {
+      id: `record-${randomUUID()}`,
+      name: record.kind === 'SPEC' ? 'draftSpecProposal' : 'draftBriefProposal',
+      args: {
+        proposedMarkdown:
+          `${record.markdown.trimEnd()}\n\n## Agreed in a Conversation\n\n${list}\n`.trimStart(),
+        summary: `Record what was agreed in "${conversation.title}"`.slice(0, 300),
+      },
+    };
+    const step = await this.store(conversation.id, {
+      role: 'ASSISTANT',
+      content:
+        `Before I compact this Conversation: we agreed on these, but the ${name} doesn't record them yet.\n\n${list}\n\n` +
+        `I drafted a change to the ${name} that adds them. Approve it, decline it, or skip it, and compaction goes on.`,
+      toolCalls: [call] as Prisma.InputJsonValue,
+    });
+    const run = await this.cards.run(user, conversation, step.message.id, call, model);
+    const card = run.cards[0];
+    if (!card) {
+      await this.db.conversationMessage.delete({ where: { id: step.message.id } });
+      return null;
+    }
+    const result = await this.store(conversation.id, {
+      role: 'TOOL',
+      content: run.content,
+      toolCallId: call.id,
+    });
+    const messages = [step.message, result.message].map(toConversationMessageView);
+    this.bus.emit(user.id, {
+      event: 'conversation.step',
+      data: { conversationId: conversation.id, messages },
+    });
+    this.bus.emit(user.id, {
+      event: 'conversation.actionCard.created',
+      data: { conversationId: conversation.id, card },
+    });
+    return { messages, card };
   }
 
   /**
@@ -782,5 +1203,50 @@ function toTurnView(turn: Turn): ConversationTurnView {
     steps: turn.steps.map(toConversationMessageView),
     reply: toConversationMessageView(turn.reply),
     actionCards: turn.actionCards,
+    usage: turn.usage,
+  };
+}
+
+/** One step's usage added to the turn's: a number the provider gave counts, null adds nothing. */
+function addUsage(total: StepUsage, step: StepUsage): StepUsage {
+  const add = (a: number | null, b: number | null) => (b === null ? a : (a ?? 0) + b);
+  return {
+    inputTokens: add(total.inputTokens, step.inputTokens),
+    cacheReadTokens: add(total.cacheReadTokens, step.cacheReadTokens),
+  };
+}
+
+/** The context meter's numbers (ticket 0066): the plan of `budget`, and `used` of the history. */
+function toUsage(
+  conversation: { id: string; lastInputTokens: number | null; lastCacheReadTokens: number | null },
+  model: RecordedModel,
+  budget: Budget,
+  used: number,
+): ConversationUsage {
+  const share = budget.history;
+  const { at, warn } = BUDGET_CONFIG.compaction;
+  const { lastInputTokens, lastCacheReadTokens } = conversation;
+  return {
+    conversationId: conversation.id,
+    model,
+    contextWindow: budget.window,
+    plan: {
+      system: budget.system,
+      foundation: budget.foundation,
+      context: budget.context,
+      history: budget.history,
+      reply: budget.reply,
+    },
+    history: {
+      used,
+      share,
+      compactAt: Math.floor(at * share),
+      warnAt: Math.floor(warn * share),
+      fraction: share > 0 ? used / share : 0,
+    },
+    lastTurn:
+      lastInputTokens === null && lastCacheReadTokens === null
+        ? null
+        : { inputTokens: lastInputTokens, cacheReadTokens: lastCacheReadTokens },
   };
 }

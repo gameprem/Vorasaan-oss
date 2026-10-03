@@ -154,7 +154,10 @@ describe('OpenRouter calls', () => {
   test('an anthropic/… chat: system blocks marked up to the Spec; the history is not', async () => {
     fake.requests.length = 0;
     const chunks = await collect(port('anthropic/example-model').chat(chatInput));
-    expect(chunks).toEqual([{ type: 'text', delta: 'Retry three times.' }]);
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Retry three times.' },
+      { type: 'usage', usage: { inputTokens: 1840, cacheReadTokens: 1500 } },
+    ]);
     const messages = fake.requests[0]?.body?.messages as Message[];
     const prompt = await chatPrompt(chatInput);
     const system = messages.filter((m) => m.role === 'system');

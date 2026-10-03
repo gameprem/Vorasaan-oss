@@ -238,6 +238,10 @@ _Avoid_: Context length, max tokens, token limit
 The older part of a Conversation folded into fixed sections (the goal, what was agreed, open questions, pending Action Cards, the person's preferences, and names, numbers and ids) once the Conversation grows too long for its model. The AI then reads those messages only through it; the messages themselves stay in the Conversation.
 _Avoid_: Memory, compaction note, recap
 
+**Compaction**:
+One fold of a Conversation's older messages into its Conversation Summary: on its own when the history nears its share of the Context Window, or when the person asks for it (`/compact`), optionally saying what the summary must keep (its focus). The chat marks each one with a divider; the messages above it stay readable.
+_Avoid_: Truncation, reset, clearing the chat
+
 **Action Card**:
 A proposal the AI makes inside a Conversation (a Decision Request draft, a Spec Proposal, a Brief Proposal, a Feature Suggestion), shown with the buttons to approve, edit, Request changes or decline it. A Request changes turns it into its next Redraft, in the same card. Only the Conversation's owner acts on it. It goes stale when what it proposes changes elsewhere (for example the proposal is approved from the Inbox), and can then no longer be approved or redrafted.
 _Avoid_: Tool result, command, auto-action

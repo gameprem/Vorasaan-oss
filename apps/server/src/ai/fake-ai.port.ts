@@ -8,8 +8,8 @@ import type {
   ChatMessageForAi,
   ChatTool,
   ContextBlock,
+  ConversationFoldDraft,
   ConversationScopeForAi,
-  ConversationSummaryDraft,
   DecisionForAi,
   DismissedSuggestionForAi,
   FeatureFitDraft,
@@ -22,6 +22,7 @@ import type {
   ModelChoice,
   ProjectForAi,
   ProjectFoundationForAi,
+  RecordForAi,
   RedraftedChoices,
   RedraftedMarkdown,
   RedraftedSuggestion,
@@ -174,6 +175,11 @@ export class FakeAiPort implements AiPort {
   }[] = [];
   /** The fake's counter is the estimate times this: above 1 plays a denser tokenizer. */
   tokenScale = 1;
+  /**
+   * What each chat step reports as read from the provider's cache (ticket 0066); its
+   * input is the prompt by the fake's counter. Null reports no usage at all.
+   */
+  cacheReadTokens: number | null = 0;
 
   /**
    * Decisions the next grillingFollowUp calls return, in order, instead of the
@@ -220,6 +226,13 @@ export class FakeAiPort implements AiPort {
       yield chunk;
     }
     if (scripted?.error) throw scripted.error;
+    if (this.cacheReadTokens !== null) {
+      const inputTokens = Math.ceil((await chatPromptTokens(input)) * this.tokenScale);
+      yield {
+        type: 'usage',
+        usage: { inputTokens, cacheReadTokens: Math.min(inputTokens, this.cacheReadTokens) },
+      };
+    }
   }
 
   /** The script-aware estimate (ticket 0059) times `tokenScale`: deterministic. */
@@ -241,9 +254,11 @@ export class FakeAiPort implements AiPort {
       summary: string;
       messages: ChatMessageForAi[];
       actionCards: ActionCardForAi[];
+      focus?: string | null;
+      record?: RecordForAi | null;
     },
     options?: AiCallOptions,
-  ): Promise<ConversationSummaryDraft> {
+  ): Promise<ConversationFoldDraft> {
     this.calls.push({ method: 'summarizeConversation', input, model: options?.model ?? null });
     const before = (key: (typeof SUMMARY_SECTIONS)[number][0]) =>
       summarySection(input.summary, SUMMARY_SECTIONS.find(([k]) => k === key)?.[1] ?? '');
@@ -254,12 +269,26 @@ export class FakeAiPort implements AiPort {
         .filter(Boolean),
     );
     const firstUser = input.messages.find((m) => m.role === 'USER')?.content ?? '';
+    const personLines = input.messages
+      .filter((m) => m.role === 'USER')
+      .flatMap((m) => m.content.split(/\n+|(?<=[.!?])\s+/).map((l) => l.trim()))
+      .filter(Boolean);
     const unique = (items: string[]) => [...new Set(items)];
+    const agreed = unique([...before('agreed'), ...lines.filter((l) => AGREED.test(l))]).map((l) =>
+      l.slice(0, 300),
+    );
+    // The focus is kept word for word, as the person asked (ticket 0066).
+    const focus = input.focus?.trim();
+    const recorded = input.record?.markdown.toLowerCase() ?? '';
     return {
       goal: before('goal')[0] ?? firstUser.slice(0, 120),
-      agreed: unique([...before('agreed'), ...lines.filter((l) => AGREED.test(l))]).map((l) =>
-        l.slice(0, 300),
-      ),
+      agreed,
+      // The person's own agreed lines, unless the Spec or Brief holds them word for word.
+      unrecorded: input.record
+        ? unique(personLines.filter((l) => AGREED.test(l)))
+            .map((l) => l.slice(0, 300))
+            .filter((l) => !recorded.includes(l.toLowerCase().replace(/[.!]+$/, '')))
+        : [],
       openQuestions: unique([
         ...before('openQuestions'),
         ...lines.filter((l) => l.endsWith('?')).map((l) => l.slice(0, 300)),
@@ -267,7 +296,7 @@ export class FakeAiPort implements AiPort {
       pendingActionCards: input.actionCards
         .filter((c) => c.status === 'PROPOSED')
         .map((c) => `${c.kind}: ${c.title}`),
-      preferences: before('preferences'),
+      preferences: unique([...before('preferences'), ...(focus ? [`Keep: ${focus}`] : [])]),
       keyFacts: unique([
         ...before('keyFacts'),
         ...input.messages.flatMap((m) => m.content.match(KEY_FACT) ?? []),

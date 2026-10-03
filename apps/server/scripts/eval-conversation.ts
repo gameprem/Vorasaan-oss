@@ -110,7 +110,8 @@ async function reply(
     recentMessages,
     tools: tools ? TOOLS : [],
   })) {
-    if (chunk.type !== 'text') {
+    if (chunk.type === 'usage') continue;
+    if (chunk.type === 'tool-call') {
       text += `\n[tool call] ${chunk.call.name} ${JSON.stringify(chunk.call.args).slice(0, 400)}\n`;
       continue;
     }

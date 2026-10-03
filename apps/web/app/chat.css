@@ -83,6 +83,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Pages loading above keep the view in place by hand (ticket 0066), not by the browser. */
+  overflow-anchor: none;
   padding: 16px 24px 12px;
 }
 .chat-col {
@@ -1021,33 +1023,197 @@
   }
 }
 
-/* Earlier messages folded into the Conversation Summary (ticket 0060): a quiet line that opens them. */
-.summary-marker {
+/* Where the history was compacted (ticket 0066): a thin divider. The messages above it
+   stay as they are; "View summary" opens the Conversation Summary of that compaction. */
+.compaction-divider {
   display: flex;
-  justify-content: center;
-}
-.summary-marker button {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 13px;
+  gap: 10px;
+  font-size: 12px;
   color: var(--fg-faint);
-  background: transparent;
 }
-.summary-marker button:hover,
-.summary-marker button:focus-visible {
-  color: var(--fg-soft);
+.compaction-divider::before,
+.compaction-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+.compaction-divider .text {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 6px;
+  text-align: center;
+}
+.compaction-divider button {
+  color: var(--ink);
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+.compaction-divider button:hover {
   background: var(--rail);
 }
-.summary-marker .chev {
-  font-size: 11px;
+
+/* Older messages loading at the top of the thread (ticket 0066). */
+.older-loading {
+  display: grid;
+  gap: 18px;
 }
-.summary-end {
+.older-end {
   text-align: center;
   font-size: 12px;
   color: var(--fg-faint);
-  border-top: 1px dashed var(--line);
-  padding-top: 6px;
+}
+
+/* "↓ New messages" while the person reads further up (ticket 0066). */
+.thread-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.new-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--on-ink);
+  font: 600 13px / 1 var(--font);
+  box-shadow: var(--shadow);
+}
+
+/* The context meter (ticket 0066), next to the model picker. */
+.meter-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px;
+  border-radius: 999px;
+  font: 600 12px / 1 var(--font);
+  color: var(--fg-soft);
+  background: transparent;
+}
+.meter-btn:hover,
+.meter-btn[aria-expanded="true"] {
+  background: var(--bg);
+}
+.meter-ring {
+  --fill: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: conic-gradient(var(--meter) calc(var(--fill) * 1turn), var(--line) 0);
+  -webkit-mask: radial-gradient(circle, transparent 4px, #000 4.5px);
+  mask: radial-gradient(circle, transparent 4px, #000 4.5px);
+}
+.meter-btn,
+.meter-panel {
+  --meter: var(--jade);
+}
+.meter-btn[data-level="warn"],
+.meter-panel[data-level="warn"] {
+  --meter: var(--saffron);
+}
+.meter-btn[data-level="full"],
+.meter-panel[data-level="full"] {
+  --meter: var(--lacquer);
+}
+.meter-btn[data-level="warn"] {
+  color: var(--saffron);
+}
+.meter-btn[data-level="full"] {
+  color: var(--lacquer);
+}
+.meter-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 250px;
+  font-size: 13px;
+}
+.meter-panel h3 {
+  font-size: 13px;
+  font-weight: 600;
+}
+.meter-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-hi);
+  overflow: hidden;
+}
+.meter-bar span {
+  display: block;
+  height: 100%;
+  background: var(--meter);
+}
+.meter-rows {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 16px;
+}
+.meter-rows dt {
+  color: var(--fg-soft);
+}
+.meter-rows dd {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.meter-note {
+  font-size: 12px;
+  color: var(--fg-soft);
+}
+.compact-wait {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 13px;
+  color: var(--fg-soft);
+  padding: 8px 12px;
+  border-radius: var(--r-s);
+  background: var(--saffron-wash);
+}
+
+/* "View summary": the Conversation Summary of one compaction. */
+.summary-sections {
+  display: grid;
+  gap: 12px;
+  max-height: 60vh;
+  overflow: auto;
+}
+.summary-sections h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-soft);
+}
+.summary-sections ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+  display: grid;
+  gap: 2px;
+}
+
+/* A deep link's message (ticket 0066). */
+.msg.focused {
+  border-radius: var(--r-s);
+  box-shadow: 0 0 0 6px var(--ink-wash);
+  background: var(--ink-wash);
+}
+
+/* The meter hover hint sits on the inverted tooltip surface. */
+.meter-tip dt,
+.meter-tip .meter-note {
+  color: inherit;
+  opacity: 0.75;
+}
+.meter-tip {
+  padding: 4px 2px;
 }

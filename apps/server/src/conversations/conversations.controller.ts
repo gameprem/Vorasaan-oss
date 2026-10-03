@@ -11,6 +11,10 @@ import {
 } from '@nestjs/common';
 import type { User } from '@vorasaan/db';
 import {
+  CompactConversationInput,
+  ConversationUsageQuery,
+  GetConversationQuery,
+  ListConversationMessagesQuery,
   ListConversationsQuery,
   SendConversationMessageInput,
   StartConversationInput,
@@ -44,9 +48,54 @@ export class ConversationsController {
     return this.conversations.list(user, query);
   }
 
+  /** With the latest page of messages, or the page `around` a message (ticket 0066). */
   @Get(':id')
-  get(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
-    return this.conversations.get(user, id);
+  get(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query({ schema: GetConversationQuery }) query: GetConversationQuery,
+  ) {
+    return this.conversations.get(user, id, query);
+  }
+
+  /** A page of messages: `before` or `after` a cursor, or `around` a message (ticket 0066). */
+  @Get(':id/messages')
+  messages(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query({ schema: ListConversationMessagesQuery }) query: ListConversationMessagesQuery,
+  ) {
+    return this.conversations.messages(user, id, query);
+  }
+
+  /** How full the Conversation is, for its model or `approvedModelId` (the context meter, 0066). */
+  @Get(':id/usage')
+  usage(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query({ schema: ConversationUsageQuery }) query: ConversationUsageQuery,
+  ) {
+    return this.conversations.usage(user, id, query.approvedModelId);
+  }
+
+  /** "Compact now" and `/compact [focus]` (ticket 0066). */
+  @Post(':id/compact')
+  compact(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: CompactConversationInput }) body: CompactConversationInput,
+  ) {
+    return this.conversations.compactNow(user, id, body ?? {});
+  }
+
+  /** "View summary": the Conversation Summary as one compaction left it (ticket 0066). */
+  @Get(':id/compactions/:compactionId')
+  compaction(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('compactionId', ParseUUIDPipe) compactionId: string,
+  ) {
+    return this.conversations.compactionSummary(user, id, compactionId);
   }
 
   @Post(':id/messages')

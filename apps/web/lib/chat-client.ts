@@ -42,3 +42,34 @@ export async function postJson<T>(url: string, body?: unknown): Promise<PostResu
     body: data,
   };
 }
+
+/** A GET to one of the same-origin route handlers, read the same way as `postJson`. */
+export async function getJson<T>(url: string): Promise<PostResult<T>> {
+  let res: Response;
+  try {
+    res = await fetch(url, { cache: 'no-store' });
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      message: "Can't reach Vorasaan. Check your connection and try again.",
+      body: null,
+    };
+  }
+  let data: unknown = null;
+  try {
+    const text = await res.text();
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+  if (res.ok) return { ok: true, status: res.status, data: data as T };
+  if (res.status === 401) window.location.assign('/login');
+  const message = (data as { message?: unknown } | null)?.message;
+  return {
+    ok: false,
+    status: res.status,
+    message: typeof message === 'string' ? message : `Something went wrong (${res.status}).`,
+    body: data,
+  };
+}

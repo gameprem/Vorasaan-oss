@@ -205,7 +205,11 @@ describe('the Anthropic adapter marks the stable prefix', () => {
   test('a chat turn: the system prompt is marked up to the Spec; context, summary and messages are not', async () => {
     bodies.length = 0;
     const chunks = await collect(port.chat(chatInput));
-    expect(chunks).toEqual([{ type: 'text', delta: 'Retry three times.' }]);
+    // The step's usage comes last, for the context meter (ticket 0066).
+    expect(chunks).toEqual([
+      { type: 'text', delta: 'Retry three times.' },
+      { type: 'usage', usage: { inputTokens: 1840, cacheReadTokens: 1500 } },
+    ]);
     const body = bodies[0] as {
       system: { text: string; cache_control?: unknown }[];
       messages: { content: { cache_control?: unknown }[] }[];
