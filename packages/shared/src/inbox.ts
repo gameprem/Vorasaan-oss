@@ -3,10 +3,12 @@ import { ActionCardEvent } from './action-card.ts';
 import { ChatAccountChangedEvent } from './chat-apps.ts';
 import {
   ConversationAppendedEvent,
+  ConversationCompactedEvent,
   ConversationDeltaEvent,
   ConversationDoneEvent,
   ConversationFailedEvent,
   ConversationStepEvent,
+  ConversationUsageEvent,
 } from './conversation.ts';
 import { PersonRef } from './decision-request.ts';
 import {
@@ -174,6 +176,10 @@ export const ServerEvent = z.discriminatedUnion('event', [
   z.object({ event: z.literal('conversation.failed'), data: ConversationFailedEvent }),
   z.object({ event: z.literal('conversation.step'), data: ConversationStepEvent }),
   z.object({ event: z.literal('conversation.appended'), data: ConversationAppendedEvent }),
+  /** How full the Conversation is now, after a turn or a compaction (0066). */
+  z.object({ event: z.literal('conversation.usage'), data: ConversationUsageEvent }),
+  /** Its history was folded into the Conversation Summary (0066). */
+  z.object({ event: z.literal('conversation.compacted'), data: ConversationCompactedEvent }),
   z.object({ event: z.literal('conversation.actionCard.created'), data: ActionCardEvent }),
   z.object({ event: z.literal('conversation.actionCard.updated'), data: ActionCardEvent }),
   z.object({ event: z.literal('chatAccount.changed'), data: ChatAccountChangedEvent }),

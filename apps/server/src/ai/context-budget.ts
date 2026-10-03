@@ -67,6 +67,8 @@ export const BUDGET_CONFIG = {
     keep: 0.35,
     /** The Conversation Summary is cut to this part of the share. */
     summary: 0.25,
+    /** The context meter (ticket 0066) warns from this part of the share: compaction is near. */
+    warn: 0.6,
   },
   /**
    * What filling a prompt in adds besides its data and its template: names,

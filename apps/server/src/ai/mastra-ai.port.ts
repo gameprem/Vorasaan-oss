@@ -19,8 +19,8 @@ import {
   type ChatTool,
   type ContextBlock,
   ContextTooLongError,
+  ConversationFoldDraft,
   type ConversationScopeForAi,
-  ConversationSummaryDraft,
   type DecisionForAi,
   type DismissedSuggestionForAi,
   FeatureFitDraft,
@@ -36,6 +36,7 @@ import {
   type ModelChoice,
   type ProjectForAi,
   type ProjectFoundationForAi,
+  type RecordForAi,
   RedraftedChoices,
   RedraftedMarkdown,
   RedraftedSuggestion,
@@ -45,6 +46,7 @@ import {
 } from './ai.port.ts';
 import { type MastraModel, mastraModelOf } from './model-config.ts';
 import {
+  type CacheUsage,
   cacheMarkOf,
   logCacheUsage,
   markedSystem,
@@ -83,11 +85,15 @@ const INSTRUCTIONS_TOKENS = estimateTokens(INSTRUCTIONS);
 export type { AiTask };
 
 /** Logs a call's usage and cache hits (ticket 0061); a missing usage never fails the call. */
-async function logUsage(task: string, usage: PromiseLike<unknown> | unknown): Promise<void> {
+async function logUsage(
+  task: string,
+  usage: PromiseLike<unknown> | unknown,
+): Promise<CacheUsage | null> {
   try {
-    logCacheUsage(task, await usage);
+    return logCacheUsage(task, await usage);
   } catch {
-    // Usage is for the log only.
+    // Usage is for the log (and the context meter) only.
+    return null;
   }
 }
 
@@ -497,6 +503,8 @@ export class MastraAiPort implements AiPort {
       summary: string;
       messages: ChatMessageForAi[];
       actionCards: ActionCardForAi[];
+      focus?: string | null;
+      record?: RecordForAi | null;
     },
     options?: AiCallOptions,
   ) {
@@ -505,7 +513,7 @@ export class MastraAiPort implements AiPort {
       'summarize-conversation',
       await this.resolveModel('summarizeConversation', options?.model),
     );
-    return generateStructured(generate, 'summarize-conversation', prompt, ConversationSummaryDraft);
+    return generateStructured(generate, 'summarize-conversation', prompt, ConversationFoldDraft);
   }
 }
 
@@ -652,7 +660,14 @@ async function* streamChat(
         : new Error(`The chat stream failed: ${String(chunk.payload.error)}`);
     }
   }
-  await logUsage('chat', output.usage);
+  const usage = await logUsage('chat', output.usage);
+  // The context meter shows the last turn's cache reads (ticket 0066).
+  if (usage && (usage.inputTokens !== null || usage.cacheReadTokens !== null)) {
+    yield {
+      type: 'usage',
+      usage: { inputTokens: usage.inputTokens, cacheReadTokens: usage.cacheReadTokens },
+    };
+  }
 }
 
 /** The Anthropic model and key to count with, when the call runs on Anthropic. */

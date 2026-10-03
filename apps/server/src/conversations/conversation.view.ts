@@ -1,12 +1,14 @@
 import type { Prisma } from '@vorasaan/db';
 import {
   type ActionCardView,
+  type ConversationCompactionView,
   type ConversationListItem,
   type ConversationMessageView,
   ConversationToolCall,
   type ConversationView,
   type GrillingConversationProgress,
   GrillingNote,
+  type MessagePageInfo,
 } from '@vorasaan/shared';
 import { z } from 'zod';
 import { fromRecordedModelColumns } from '../ai/recorded-model.ts';
@@ -48,6 +50,7 @@ export function toConversationMessageView(m: MessageRow): ConversationMessageVie
   const notes = m.grillingNotes === null ? null : StoredGrillingNotes.safeParse(m.grillingNotes);
   return {
     id: m.id,
+    position: m.position,
     role: m.role,
     content: m.content,
     toolCalls: toolCalls?.success ? toolCalls.data : null,
@@ -61,14 +64,42 @@ export function toConversationMessageView(m: MessageRow): ConversationMessageVie
 
 export function toConversationView(
   c: ConversationWithScope,
-  messages: MessageRow[],
+  page: MessagePageInfo & { messages: MessageRow[] },
   actionCards: ActionCardView[],
+  compactions: ConversationCompactionView[],
   grillingProgress: GrillingConversationProgress | null = null,
 ): ConversationView {
   return {
     ...toConversationListItem(c),
-    messages: messages.map(toConversationMessageView),
+    messages: page.messages.map(toConversationMessageView),
+    page: { olderCursor: page.olderCursor, newerCursor: page.newerCursor },
     actionCards,
+    compactions,
     grillingProgress,
+  };
+}
+
+export const compactionInclude = {
+  createdBy: { select: { id: true, name: true } },
+} satisfies Prisma.ConversationCompactionInclude;
+
+export type CompactionRow = Prisma.ConversationCompactionGetPayload<{
+  include: typeof compactionInclude;
+}>;
+
+/** `beforeMessageId`: the message at `summarizedThrough`, the first one kept word for word. */
+export function toCompactionView(
+  c: CompactionRow,
+  beforeMessageId: string | null,
+): ConversationCompactionView {
+  return {
+    id: c.id,
+    number: c.number,
+    trigger: c.trigger,
+    focus: c.focus,
+    summarizedThrough: c.summarizedThrough,
+    beforeMessageId,
+    createdBy: c.createdBy,
+    createdAt: c.createdAt.toISOString(),
   };
 }

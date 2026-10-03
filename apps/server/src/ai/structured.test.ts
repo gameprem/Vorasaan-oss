@@ -288,6 +288,8 @@ describe('FakeAiPort', () => {
     expect(await collect(ai.chat(chatInput))).toEqual([
       { type: 'text', delta: 'Drafting.' },
       { type: 'tool-call', call },
+      // Last, the step's usage as the fake counts it (ticket 0066).
+      { type: 'usage', usage: { inputTokens: expect.any(Number), cacheReadTokens: 0 } },
     ]);
     const seen: ChatChunk[] = [];
     await expect(

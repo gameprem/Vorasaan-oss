@@ -223,8 +223,21 @@ export type ChatMessageForAi =
  */
 export type ChatTool = { name: string; description: string; inputSchema: z.ZodType };
 
-/** What a chat reply streams: pieces of its text, and the tools it calls. */
-export type ChatChunk = { type: 'text'; delta: string } | { type: 'tool-call'; call: ChatToolCall };
+/**
+ * One step's token usage, as the provider reported it (tickets 0061, 0066): the
+ * input, and the part of it read from the provider's prompt cache. Either is null
+ * when the provider doesn't say.
+ */
+export type ChatUsage = { inputTokens: number | null; cacheReadTokens: number | null };
+
+/**
+ * What a chat reply streams: pieces of its text, the tools it calls, and, last,
+ * the step's usage when the provider reports it.
+ */
+export type ChatChunk =
+  | { type: 'text'; delta: string }
+  | { type: 'tool-call'; call: ChatToolCall }
+  | { type: 'usage'; usage: ChatUsage };
 
 const SummaryItems = z.array(z.string().trim().min(1).max(1_000)).max(60);
 
@@ -248,6 +261,19 @@ export const ConversationSummaryDraft = z.object({
   keyFacts: SummaryItems,
 });
 export type ConversationSummaryDraft = z.infer<typeof ConversationSummaryDraft>;
+
+/**
+ * A fold (ticket 0066): the Conversation Summary, and the agreed points the Spec or
+ * the Brief it was given doesn't record yet (none when it was given neither).
+ */
+export const ConversationFoldDraft = ConversationSummaryDraft.extend({
+  /** Agreed points not yet in the Spec or the Brief given, each as it should be recorded. */
+  unrecorded: SummaryItems,
+});
+export type ConversationFoldDraft = z.infer<typeof ConversationFoldDraft>;
+
+/** The Spec (Feature) or the Project Brief (Project) a fold checks agreed points against. */
+export type RecordForAi = { kind: 'SPEC' | 'BRIEF'; markdown: string };
 
 // ─── Request changes (ADR 0013, ticket 0065) ────────────────────────────────
 
@@ -368,9 +394,13 @@ export interface AiPort {
       messages: ChatMessageForAi[];
       /** The Conversation's Action Cards and their state, for "pending Action Cards". */
       actionCards: ActionCardForAi[];
+      /** What the person asked the summary to keep (`/compact <focus>`, ticket 0066). Untrusted. */
+      focus?: string | null;
+      /** Check agreed points against this Spec or Brief (`unrecorded`); left out, none are checked. */
+      record?: RecordForAi | null;
     },
     options?: AiCallOptions,
-  ): Promise<ConversationSummaryDraft>;
+  ): Promise<ConversationFoldDraft>;
 
   /**
    * How many tokens `system` and `messages` cost on the call's model (ticket

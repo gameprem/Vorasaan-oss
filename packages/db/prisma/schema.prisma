@@ -251,7 +251,8 @@ model User {
   featureSuggestionsGenerated FeatureSuggestion[] @relation("FeatureSuggestionGeneratedBy")
   featureSuggestionsDecided   FeatureSuggestion[] @relation("FeatureSuggestionDecidedBy")
 
-  conversations Conversation[] @relation("ConversationOwner")
+  conversations Conversation[]           @relation("ConversationOwner")
+  compactions   ConversationCompaction[] @relation("ConversationCompactedBy")
 
   redraftsRequested Redraft[] @relation("RedraftRequestedBy")
 
@@ -1061,31 +1062,36 @@ enum ConversationMessageRole {
 // it. Each turn the AI gets `summary` (the messages before `summarizedThrough`,
 // folded together) plus the messages from it on, never the whole history (ADR 0007).
 model Conversation {
-  id                String                @id @default(uuid())
-  ownerId           String
-  projectId         String
-  featureId         String?
-  title             String
-  summary           String                @default("")
-  summarizedThrough Int                   @default(0) // messages with a lower position are in `summary`
+  id                  String                   @id @default(uuid())
+  ownerId             String
+  projectId           String
+  featureId           String?
+  title               String
+  summary             String                   @default("")
+  summarizedThrough   Int                      @default(0) // messages with a lower position are in `summary`
   // Set on a Grilling Conversation (ticket 0044): the round its owner answers here.
   // One per person and round; always a Project Conversation.
-  grillingRoundId   String?
+  grillingRoundId     String?
   // Where a Grilling Conversation stands: the question being asked, the answer
   // and follow-ups so far, the questions its owner skipped (GrillingThreadState).
-  grillingState     Json?
+  grillingState       Json?
   // The Approved Model picked in it (ticket 0054), kept for its next messages.
   // Null until someone picks one, or once it is removed: then the chat default.
-  modelId           String?
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt // bumped by every message
-  owner             User                  @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  project           Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  feature           Feature?              @relation(fields: [featureId], references: [id], onDelete: Cascade)
-  grillingRound     GrillingRound?        @relation(fields: [grillingRoundId], references: [id], onDelete: Cascade)
-  model             ApprovedModel?        @relation(fields: [modelId], references: [id], onDelete: SetNull)
-  messages          ConversationMessage[]
-  actionCards       ActionCard[]
+  modelId             String?
+  // The last reply's input tokens and the part read from the provider's cache
+  // (tickets 0061, 0066), summed over the turn's steps; null until a provider reports them.
+  lastInputTokens     Int?
+  lastCacheReadTokens Int?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt // bumped by every message
+  owner               User                     @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  project             Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  feature             Feature?                 @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  grillingRound       GrillingRound?           @relation(fields: [grillingRoundId], references: [id], onDelete: Cascade)
+  model               ApprovedModel?           @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  messages            ConversationMessage[]
+  actionCards         ActionCard[]
+  compactions         ConversationCompaction[]
 
   @@unique([grillingRoundId, ownerId])
   @@index([ownerId, updatedAt])
@@ -1122,6 +1128,33 @@ model ConversationMessage {
   actionCards      ActionCard[] // made by this ASSISTANT message's tool calls
 
   @@unique([conversationId, position])
+}
+
+enum ConversationCompactionTrigger {
+  AUTO // a turn found the history past its threshold
+  MANUAL // a person: "Compact now" or /compact
+  TOO_LONG // the provider rejected a request as too long
+}
+
+// One fold of a Conversation's history into its Conversation Summary (tickets
+// 0060, 0066). The messages stay stored; the web draws a divider above the
+// message at `summarizedThrough`. `summary` is the Conversation Summary as this
+// fold left it, so each divider shows its own.
+model ConversationCompaction {
+  id                String                        @id @default(uuid())
+  conversationId    String
+  number            Int // 1, 2, 3… per Conversation
+  trigger           ConversationCompactionTrigger
+  focus             String? // MANUAL: what the person asked the summary to keep
+  summarizedThrough Int // messages with a lower position are in `summary`
+  summary           String
+  createdById       String? // MANUAL: who compacted
+  createdAt         DateTime                      @default(now())
+  conversation      Conversation                  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdBy         User?                         @relation("ConversationCompactedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([conversationId, number])
+  @@index([createdById])
 }
 
 // ─── Action Cards (ADR 0008, ticket 0043) ───────────────────────────────────
