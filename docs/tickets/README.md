@@ -179,7 +179,7 @@ No Decision Request waits silently: Response Windows with escalation, Decision L
 
 ## Next (Post-MVP 4–9)
 
-In this order: OpenRouter as a provider and Request changes on every AI proposal (ADR 0013), both done; then our own UI kit (ADR 0016), a context meter with `/compact`, a readable chat history and cursor pagination, the Decision Graph of a Feature, and language rules with Thai eval cases.
+In this order: OpenRouter as a provider and Request changes on every AI proposal (ADR 0013), both done; then our own UI kit (ADR 0016), done; then a context meter with `/compact`, a readable chat history and cursor pagination, the Decision Graph of a Feature, and language rules with Thai eval cases.
 
 | # | Ticket | Depends on |
 | --- | --- | --- |

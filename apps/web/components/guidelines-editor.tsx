@@ -8,10 +8,13 @@ import type {
   ProjectGuidelineOverrideView,
 } from '@vorasaan/shared';
 import { MAX_GUIDELINE_CRITERIA } from '@vorasaan/shared';
-import { useId, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { saveOrgGuidelines, saveProjectGuidelines } from '@/lib/project-actions';
 import { GuidelineKindLabel } from './guidelines-list';
 import { field, primaryButton, secondaryButton } from './ui';
+import { Checkbox } from './ui/checkbox';
+import { Radio, RadioGroup } from './ui/radio-group';
+import { Select } from './ui/select';
 
 // Editors for the Feature Guidelines: the Organization default (Settings, Admins) and a
 // Project's overrides (its POs and Admins). Both lists are saved whole; the API replaces them
@@ -43,7 +46,6 @@ function move<T>(list: T[], from: number, to: number): T[] {
 
 /** Title, description, kind and required, for one criterion. */
 function CriterionFields({ value, onChange }: { value: Text; onChange: (next: Text) => void }) {
-  const id = useId();
   return (
     <div className="grid gap-3 sm:grid-cols-[1fr_12rem]">
       <label className="block">
@@ -57,20 +59,12 @@ function CriterionFields({ value, onChange }: { value: Text; onChange: (next: Te
           className={field}
         />
       </label>
-      <label className="block">
-        <span className="text-sm">Kind</span>
-        <select
-          value={value.kind}
-          onChange={(e) => onChange({ ...value, kind: e.target.value as GuidelineCriterionKind })}
-          className={field}
-        >
-          {KINDS.map((k) => (
-            <option key={k} value={k}>
-              {GuidelineKindLabel[k]}
-            </option>
-          ))}
-        </select>
-      </label>
+      <Select
+        label="Kind"
+        options={KINDS.map((k) => ({ id: k, label: GuidelineKindLabel[k] }))}
+        value={value.kind}
+        onChange={(kind) => onChange({ ...value, kind: kind as GuidelineCriterionKind })}
+      />
       <label className="block sm:col-span-2">
         <span className="text-sm">Description (optional)</span>
         <textarea
@@ -81,18 +75,13 @@ function CriterionFields({ value, onChange }: { value: Text; onChange: (next: Te
           className={field}
         />
       </label>
-      <div className="flex items-center gap-2 sm:col-span-2">
-        <input
-          id={`${id}-required`}
-          type="checkbox"
-          checked={value.required}
-          onChange={(e) => onChange({ ...value, required: e.target.checked })}
-          className="size-4"
-        />
-        <label htmlFor={`${id}-required`} className="text-sm">
-          Required (a Feature that doesn't meet it doesn't fit)
-        </label>
-      </div>
+      <Checkbox
+        className="text-sm sm:col-span-2"
+        isSelected={value.required}
+        onChange={(required) => onChange({ ...value, required })}
+      >
+        Required (a Feature that doesn't meet it doesn't fit)
+      </Checkbox>
     </div>
   );
 }
@@ -347,25 +336,27 @@ export function ProjectGuidelinesEditor({
                   {c.original.description && c.mode !== 'EDIT' && (
                     <p className="mt-1 text-sm text-fg-soft">{c.original.description}</p>
                   )}
-                  <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                    {(
-                      [
-                        ['INHERIT', 'Use as is'],
-                        ['EDIT', 'Edit for this Project'],
-                        ['DISABLE', 'Hide in this Project'],
-                      ] as const
-                    ).map(([mode, text]) => (
-                      <label key={mode} className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name={`mode-${c.defaultId}`}
-                          checked={c.mode === mode}
-                          onChange={() => setOne(c.defaultId, { mode })}
-                        />
-                        {text}
-                      </label>
-                    ))}
-                  </div>
+                  <RadioGroup
+                    aria-label={`${c.original.title}: in this Project`}
+                    orientation="horizontal"
+                    value={c.mode}
+                    onChange={(mode) => setOne(c.defaultId, { mode: mode as typeof c.mode })}
+                    className="mt-3"
+                  >
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                      {(
+                        [
+                          ['INHERIT', 'Use as is'],
+                          ['EDIT', 'Edit for this Project'],
+                          ['DISABLE', 'Hide in this Project'],
+                        ] as const
+                      ).map(([mode, text]) => (
+                        <Radio key={mode} value={mode}>
+                          {text}
+                        </Radio>
+                      ))}
+                    </div>
+                  </RadioGroup>
                   {c.mode === 'EDIT' && (
                     <div className="mt-3">
                       <CriterionFields

@@ -10,6 +10,7 @@ import {
   withdrawRequest,
 } from '@/lib/request-actions';
 import { field, primaryButton, secondaryButton } from './ui';
+import { PersonPicker } from './ui/person-picker';
 
 function ErrorText({ state }: { state: RequestActionState }) {
   return state.error ? (
@@ -108,19 +109,14 @@ export function ReassignForm({
   return (
     <form action={run}>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="min-w-56">
-          <span className="text-sm">New Decider</span>
-          <select name="userId" required defaultValue="" className={field}>
-            <option value="" disabled>
-              Choose a {roleLabel}
-            </option>
-            {candidates.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <PersonPicker
+          label="New Decider"
+          name="userId"
+          className="min-w-56"
+          placeholder={`Choose a ${roleLabel}`}
+          people={candidates.map((p) => ({ id: p.id, name: p.name }))}
+          isRequired
+        />
         <button type="submit" disabled={pending} className={secondaryButton}>
           {pending ? 'Reassigning…' : 'Reassign'}
         </button>

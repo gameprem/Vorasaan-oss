@@ -13,6 +13,9 @@ export const API_URL = process.env.VORASAAN_API_URL ?? 'http://localhost:4000';
 
 export const devAuth = () => process.env.VORASAAN_DEV_AUTH === 'true';
 
+/** Dev-only pages (the UI kit gallery, /dev/ui): in `next dev`, or with VORASAAN_DEV_AUTH. */
+export const devPages = () => process.env.NODE_ENV !== 'production' || devAuth();
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,

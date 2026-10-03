@@ -1,4 +1,4 @@
-import { beam, expect, pim, SEED, test, unique } from './fixtures';
+import { beam, expect, pim, SEED, test, tick, unique } from './fixtures';
 
 test('the Inbox updates live, without a reload', async ({ as }) => {
   const title = unique('Retry a failed payment automatically?');
@@ -25,12 +25,12 @@ test('the Inbox updates live, without a reload', async ({ as }) => {
   // Meanwhile Beam raises a Question and sends it to Pim only.
   const raiser = await as(beam);
   await raiser.goto(`/features/${SEED.featureId}/raise`);
-  await raiser.getByLabel('Question').check();
+  await tick(raiser.getByLabel('Question'));
   await raiser.getByLabel('Title').fill(title);
   await raiser.getByLabel('Description').fill('The provider allows one retry per order.');
   await raiser.getByRole('button', { name: 'Continue to review' }).click();
   await expect(raiser).toHaveURL(/\/requests\/[0-9a-f-]{36}$/);
-  await raiser.getByLabel('Only Pim').check();
+  await tick(raiser.getByLabel('Only Pim'));
   await raiser.getByRole('button', { name: 'Send now' }).click();
   await expect(raiser.getByText(/for Pim to decide\./)).toBeVisible();
 

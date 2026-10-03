@@ -14,8 +14,11 @@ import {
   saveProjectResponseWindows,
   saveResponseWindowSettings,
 } from '@/lib/response-window-actions';
-import { timeZones } from '@/lib/time-zones';
 import { field, primaryButton, secondaryButton } from './ui';
+import { Checkbox } from './ui/checkbox';
+import { DatePicker, TimeField } from './ui/date-picker';
+import { Select } from './ui/select';
+import { TimeZoneComboBox } from './ui/time-zone-combo-box';
 
 // Settings → Response Windows (ticket 0055, Admins): the Organization's working calendar,
 // its default windows, and each Project's own windows.
@@ -30,6 +33,11 @@ const WEEKDAYS = [
   [7, 'Sun'],
 ] as const;
 
+const UNITS = [
+  { id: 'WORKING_HOURS', label: 'working hours' },
+  { id: 'WORKING_DAYS', label: 'working days' },
+];
+
 /** The time zone, working days and working hours: here and in the setup wizard (0063). */
 export function WorkingTimeFields({
   value,
@@ -40,61 +48,43 @@ export function WorkingTimeFields({
 }) {
   return (
     <>
-      <label className="block max-w-sm">
-        <span className="text-sm">Time zone</span>
-        <select
-          value={value.timeZone}
-          onChange={(e) => onChange({ timeZone: e.target.value })}
-          className={field}
-        >
-          {timeZones(value.timeZone).map((tz) => (
-            <option key={tz} value={tz}>
-              {tz}
-            </option>
-          ))}
-        </select>
-      </label>
+      <TimeZoneComboBox
+        label="Time zone"
+        className="max-w-sm"
+        value={value.timeZone}
+        onChange={(timeZone) => timeZone && onChange({ timeZone })}
+      />
       <fieldset>
         <legend className="text-sm">Working days</legend>
         <div className="mt-2 flex flex-wrap gap-4">
           {WEEKDAYS.map(([day, label]) => (
-            <label key={day} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                className="size-4"
-                checked={value.workingDays.includes(day)}
-                onChange={(e) =>
-                  onChange({
-                    workingDays: e.target.checked
-                      ? [...value.workingDays, day].sort((a, b) => a - b)
-                      : value.workingDays.filter((d) => d !== day),
-                  })
-                }
-              />
+            <Checkbox
+              key={day}
+              isSelected={value.workingDays.includes(day)}
+              onChange={(on) =>
+                onChange({
+                  workingDays: on
+                    ? [...value.workingDays, day].sort((a, b) => a - b)
+                    : value.workingDays.filter((d) => d !== day),
+                })
+              }
+            >
               {label}
-            </label>
+            </Checkbox>
           ))}
         </div>
       </fieldset>
       <div className="flex flex-wrap gap-4">
-        <label className="block">
-          <span className="text-sm">Working hours start</span>
-          <input
-            type="time"
-            value={value.workStart}
-            onChange={(e) => onChange({ workStart: e.target.value })}
-            className={field}
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm">Working hours end</span>
-          <input
-            type="time"
-            value={value.workEnd}
-            onChange={(e) => onChange({ workEnd: e.target.value })}
-            className={field}
-          />
-        </label>
+        <TimeField
+          label="Working hours start"
+          value={value.workStart}
+          onChange={(workStart) => onChange({ workStart })}
+        />
+        <TimeField
+          label="Working hours end"
+          value={value.workEnd}
+          onChange={(workEnd) => onChange({ workEnd })}
+        />
       </div>
     </>
   );
@@ -122,15 +112,13 @@ function WindowFields({
           onChange={(e) => onChange({ ...value, value: Number(e.target.value) || 1 })}
           className={`${field} w-24`}
         />
-        <select
+        <Select
           aria-label={`${label}: unit`}
+          className="min-w-44"
+          options={UNITS}
           value={value.unit}
-          onChange={(e) => onChange({ ...value, unit: e.target.value as ResponseWindowUnit })}
-          className={field}
-        >
-          <option value="WORKING_HOURS">working hours</option>
-          <option value="WORKING_DAYS">working days</option>
-        </select>
+          onChange={(unit) => onChange({ ...value, unit: unit as ResponseWindowUnit })}
+        />
       </div>
     </fieldset>
   );
@@ -198,12 +186,11 @@ export function ResponseWindowSettingsEditor({
             {form.holidays.map((h, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: rows have no id until saved
               <li key={i} className="flex flex-wrap items-end gap-2">
-                <input
-                  type="date"
+                <DatePicker
                   aria-label={`Holiday ${i + 1} date`}
+                  className="w-48"
                   value={h.date}
-                  onChange={(e) => setHoliday(i, { date: e.target.value })}
-                  className={`${field} w-44`}
+                  onChange={(date) => setHoliday(i, { date })}
                 />
                 <input
                   aria-label={`Holiday ${i + 1} name`}
@@ -289,18 +276,15 @@ export function ProjectResponseWindowsEditor({
     fallback: ResponseWindow,
   ) => (
     <div className="space-y-2">
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          className="size-4"
-          checked={value !== null}
-          onChange={(e) => {
-            set(e.target.checked ? fallback : null);
-            setSaved(false);
-          }}
-        />
+      <Checkbox
+        isSelected={value !== null}
+        onChange={(on) => {
+          set(on ? fallback : null);
+          setSaved(false);
+        }}
+      >
         {label}: {value ? 'own window' : `Organization default (${responseWindowText(fallback)})`}
-      </label>
+      </Checkbox>
       {value && (
         <WindowFields
           label={`${projectName} ${label}`}

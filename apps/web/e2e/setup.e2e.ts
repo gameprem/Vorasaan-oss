@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import { E2E } from './env';
+import { chooseOption, expectNoViolations, fillTime, selectButton, timeValue } from './kit';
 
 // First-run setup from an empty database (ticket 0063): the wizard prefills the browser's
 // time zone, stores the calendar and language, and the first Admin lands on a Getting
@@ -85,14 +86,16 @@ test('setup from an empty database: calendar and language, then Getting started 
 
   // Calendar & language: the browser's time zone, Monday to Friday 09:00-18:00.
   await expect(page.locator('[aria-current="step"]')).toHaveText('2. Calendar & language');
-  await expect(page.getByLabel('Time zone')).toHaveValue('Asia/Bangkok');
+  await expect(page.getByRole('combobox', { name: 'Time zone' })).toHaveValue('Asia/Bangkok');
   for (const day of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']) {
     await expect(page.getByRole('checkbox', { name: day })).toBeChecked();
   }
   await expect(page.getByRole('checkbox', { name: 'Sat' })).not.toBeChecked();
-  await expect(page.getByLabel('Working hours start')).toHaveValue('09:00');
-  await page.getByLabel('Working hours end').fill('17:30');
-  await page.getByLabel('Language', { exact: true }).selectOption('th');
+  // The wizard's kit controls (ticket 0077) pass axe.
+  await expectNoViolations(page);
+  await expect.poll(() => timeValue(page, 'Working hours start')).toBe('09:00');
+  await fillTime(page, 'Working hours end', '17:30');
+  await chooseOption(page, 'Language', 'ไทย (Thai)');
   await page.getByRole('button', { name: 'Continue' }).click();
 
   await page.getByLabel('Anthropic API key').fill('sk-ant-e2e-not-a-real-key');
@@ -122,10 +125,10 @@ test('setup from an empty database: calendar and language, then Getting started 
 
   // What the wizard stored, as Settings shows it.
   await page.goto('/settings/response-windows');
-  await expect(page.getByLabel('Time zone')).toHaveValue('Asia/Bangkok');
-  await expect(page.getByLabel('Working hours end')).toHaveValue('17:30');
+  await expect(page.getByRole('combobox', { name: 'Time zone' })).toHaveValue('Asia/Bangkok');
+  await expect.poll(() => timeValue(page, 'Working hours end')).toBe('17:30');
   await page.goto('/settings/organization');
-  await expect(page.getByLabel('Language', { exact: true })).toHaveValue('th');
+  await expect(selectButton(page, 'Language')).toContainText('ไทย (Thai)');
 
   await context.close();
 });

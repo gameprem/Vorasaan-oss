@@ -3,7 +3,9 @@
 import { type OrgMemberView, TeamRole, type TeamView } from '@vorasaan/shared';
 import { useState, useTransition } from 'react';
 import { setTeamRoles } from '@/lib/org-actions';
-import { field, ROLE_LABEL, secondaryButton } from './ui';
+import { ROLE_LABEL, secondaryButton } from './ui';
+import { Checkbox } from './ui/checkbox';
+import { PersonPicker } from './ui/person-picker';
 
 /** One row per member with a checkbox per Team Role; plus "add someone to this Team". */
 export function TeamRolesEditor({
@@ -51,18 +53,17 @@ export function TeamRolesEditor({
                   const has = m.roles.includes(role);
                   return (
                     <td key={role} className="px-2 py-2 text-center">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         aria-label={`${m.name} is ${ROLE_LABEL[role]}`}
-                        checked={has}
-                        disabled={pending}
+                        className="justify-center"
+                        isSelected={has}
+                        isDisabled={pending}
                         onChange={() =>
                           save(
                             m.userId,
                             has ? m.roles.filter((r) => r !== role) : [...m.roles, role],
                           )
                         }
-                        className="size-4 accent-jade"
                       />
                     </td>
                   );
@@ -85,17 +86,14 @@ export function TeamRolesEditor({
             setAdding('');
           }}
         >
-          <label className="min-w-56 flex-1">
-            <span className="text-sm">Add someone from your organization</span>
-            <select value={adding} onChange={(e) => setAdding(e.target.value)} className={field}>
-              <option value="">Choose a person</option>
-              {candidates.map((c) => (
-                <option key={c.userId} value={c.userId}>
-                  {c.name} ({c.email})
-                </option>
-              ))}
-            </select>
-          </label>
+          <PersonPicker
+            label="Add someone from your organization"
+            className="min-w-56 flex-1"
+            placeholder="Choose a person"
+            people={candidates.map((c) => ({ id: c.userId, name: c.name, email: c.email }))}
+            value={adding}
+            onChange={setAdding}
+          />
           <button type="submit" disabled={!adding || pending} className={secondaryButton}>
             Add as Backend
           </button>

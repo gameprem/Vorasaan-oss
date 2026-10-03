@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import { E2E } from './env';
-import { expect, pim, test, unique } from './fixtures';
+import { chooseOption, expect, pim, test, unique } from './fixtures';
 
 // OpenRouter in Settings → AI models (ticket 0064): an Admin connects it with a key only,
 // searches its model list, and a picked model gets its Context Window from the list. When
@@ -41,6 +41,8 @@ test('an Admin connects OpenRouter with a key, picks a model from its list, and 
   const page = await as(pim);
   await page.goto('/settings/ai');
   const dialog = page.getByRole('dialog', { name: 'Settings' });
+  // Settings has hydrated once it has moved the focus to Back.
+  await expect(dialog.getByRole('button', { name: 'Back' })).toBeFocused();
 
   // Connect: a name and a key, no URL.
   const connect = dialog.getByRole('button', { name: 'Connect a provider' });
@@ -57,7 +59,7 @@ test('an Admin connects OpenRouter with a key, picks a model from its list, and 
   // Add a model: search the list, pick one, and its window follows.
   await dialog.getByRole('button', { name: 'Add a model' }).click();
   const add = dialog.getByRole('form', { name: 'Add model' });
-  await add.getByLabel('Provider').selectOption({ label: `${name} (OpenRouter)` });
+  await chooseOption(add, 'Provider', `${name} (OpenRouter)`);
   const models = add.getByRole('list', { name: 'OpenRouter models' });
   await expect(models.getByRole('button')).toHaveCount(2);
   await add.getByLabel('Search OpenRouter models').fill('anthropic example');
@@ -76,7 +78,7 @@ test('an Admin connects OpenRouter with a key, picks a model from its list, and 
   listStatus = 503;
   await dialog.getByRole('button', { name: 'Add a model' }).click();
   const again = dialog.getByRole('form', { name: 'Add model' });
-  await again.getByLabel('Provider').selectOption({ label: `${name} (OpenRouter)` });
+  await chooseOption(again, 'Provider', `${name} (OpenRouter)`);
   await expect(again.getByRole('status')).toContainText('Type the model id instead');
   await expect(again.getByLabel('Model id')).toBeEditable();
   await again.getByRole('button', { name: 'Cancel' }).click();

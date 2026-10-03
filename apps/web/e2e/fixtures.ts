@@ -2,6 +2,7 @@ import { test as base, type Page } from '@playwright/test';
 import { SEED } from '@vorasaan/db/seed';
 
 export { expect } from '@playwright/test';
+export * from './kit';
 export { SEED };
 
 type SeedUser = { id: string; name: string };

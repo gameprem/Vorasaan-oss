@@ -1,7 +1,7 @@
 import type { APIRequestContext } from '@playwright/test';
 import type { DecisionRequestView, SpecVersionView } from '@vorasaan/shared';
 import { E2E } from './env';
-import { beam, expect, pim, SEED, test, unique } from './fixtures';
+import { beam, chooseOption, expect, pim, SEED, test, unique } from './fixtures';
 
 // Request changes and Redrafts (ticket 0065), against the real server with VORASAAN_AI=fake:
 // the fake's Redraft of a Markdown proposal adds "- Changed as asked: <feedback>", and its
@@ -73,7 +73,7 @@ test('Request changes on a Spec Proposal card: Redraft 2, its diff, then approve
   }).toPass();
   const feedback = unique('Also email the customer when it fails');
   await form.getByLabel('What should the AI change?').fill(feedback);
-  await form.getByLabel('About').selectOption({ label: 'Section: Timeouts' });
+  await chooseOption(form, 'About', 'Section: Timeouts');
   await form.getByRole('button', { name: 'Ask for a Redraft' }).click();
 
   // Redraft 2 is shown, in the same card, still waiting for approval.
@@ -121,7 +121,7 @@ test('Request changes on Choices, pointing at one: the Raiser sees Redraft 2 bef
   await section
     .getByLabel('What should the AI change?')
     .fill('B should keep the old status codes.');
-  await section.getByLabel('About').selectOption({ label: `Choice B: Option B for "${title}"` });
+  await chooseOption(section, 'About', `Choice B: Option B for "${title}"`);
   await section.getByRole('button', { name: 'Ask for a Redraft' }).click();
 
   await expect(section.getByRole('button', { name: 'Redraft 2 (current)' })).toBeVisible();
@@ -131,7 +131,7 @@ test('Request changes on Choices, pointing at one: the Raiser sees Redraft 2 bef
   const diff = section.getByRole('figure', { name: 'Changes from Redraft 1 to Redraft 2' });
   await expect(diff).toContainText(`B. Option B for "${title}" (redraft 2)`);
   // Redraft 1 is still there to look at.
-  await section.getByRole('button', { name: 'Redraft 1' }).click();
+  await section.getByRole('button', { name: 'Redraft 1', exact: true }).click();
   await expect(section).toContainText('The proposal as the AI first drafted it.');
 
   // Sending sends Redraft 2's Choices.

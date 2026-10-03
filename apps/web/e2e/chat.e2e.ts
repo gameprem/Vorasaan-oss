@@ -1,7 +1,7 @@
 import type { APIRequestContext } from '@playwright/test';
 import type { SpecVersionView } from '@vorasaan/shared';
 import { E2E } from './env';
-import { expect, pim, SEED, test, unique } from './fixtures';
+import { expect, pim, SEED, searchAndChoose, test, unique } from './fixtures';
 
 // The chat view (ticket 0046) against the real server with VORASAAN_AI=fake. The fake AI's
 // next replies are scripted through the dev-only POST /dev/fake-ai/chat-script, which
@@ -42,7 +42,7 @@ test('a Feature Conversation streams its reply as it is written', async ({ as, r
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Pim');
 
   // Picking the Feature turns the starters into chips.
-  await page.getByLabel('Project or Feature').selectOption({ label: 'Async checkout' });
+  await searchAndChoose(page, 'Project or Feature', 'Async', 'Async checkout');
   await expect(page.getByRole('button', { name: 'Raise a Blocker' })).toBeVisible();
 
   const reply = 'Payments wait for the provider for up to 24 hours, then they fail.';

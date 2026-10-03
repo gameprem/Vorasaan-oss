@@ -32,6 +32,7 @@ import { RedraftsSection } from '@/components/redrafts-section';
 import { RevertButton } from '@/components/revert-button';
 import { VersionDiff } from '@/components/spec-diff';
 import { field, secondaryButton } from '@/components/ui';
+import { Select } from '@/components/ui/select';
 import { ApiError, api, currentUser } from '@/lib/api';
 import { isId } from '@/lib/ids';
 import {
@@ -547,16 +548,14 @@ async function SuggestionsTab({
                             submitLabel="Accept"
                             pendingLabel="Accepting… (the AI drafts the first Spec)"
                           >
-                            <label className="min-w-48 flex-1">
-                              <span className="text-sm">Team</span>
-                              <select name="teamId" required className={field}>
-                                {acceptTeams.map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                            <Select
+                              label="Team"
+                              name="teamId"
+                              className="min-w-48 flex-1"
+                              options={acceptTeams.map((t) => ({ id: t.id, label: t.name }))}
+                              defaultValue={acceptTeams[0]?.id}
+                              isRequired
+                            />
                           </ActionForm>
                         ) : (
                           <p className="text-sm text-fg-soft">

@@ -4,6 +4,8 @@ import type { DecisionRequestKind } from '@vorasaan/shared';
 import { useActionState, useState } from 'react';
 import { type RequestActionState, raiseRequest } from '@/lib/request-actions';
 import { field, primaryButton } from './ui';
+import { Checkbox } from './ui/checkbox';
+import { Radio, RadioGroup } from './ui/radio-group';
 
 const KINDS: { kind: DecisionRequestKind; title: string; hint: string }[] = [
   { kind: 'BLOCKER', title: 'Blocker', hint: 'Your work stops until it is decided.' },
@@ -25,32 +27,21 @@ export function RaiseForm({ featureId }: { featureId: string }) {
 
   return (
     <form action={run} className="max-w-[72ch] space-y-6">
-      <fieldset>
-        <legend className="text-sm font-medium">What kind of request is it?</legend>
+      <RadioGroup
+        label="What kind of request is it?"
+        labelClassName="text-sm font-medium"
+        name="kind"
+        value={kind}
+        onChange={(k) => setKind(k as DecisionRequestKind)}
+      >
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {KINDS.map((k) => (
-            <label
-              key={k.kind}
-              className={`flex cursor-pointer gap-3 rounded-card p-4 has-[:focus-visible]:outline-2 ${
-                kind === k.kind ? 'bg-ink-wash text-fg' : 'bg-rail'
-              }`}
-            >
-              <input
-                type="radio"
-                name="kind"
-                value={k.kind}
-                checked={kind === k.kind}
-                onChange={() => setKind(k.kind)}
-                className="mt-1 accent-jade"
-              />
-              <span>
-                <span className="block font-medium">{k.title}</span>
-                <span className="block text-sm text-fg-soft">{k.hint}</span>
-              </span>
-            </label>
+            <Radio key={k.kind} value={k.kind} variant="card" description={k.hint}>
+              <span className="font-medium">{k.title}</span>
+            </Radio>
           ))}
         </div>
-      </fieldset>
+      </RadioGroup>
 
       <label className="block">
         <span className="text-sm font-medium">Title</span>
@@ -79,21 +70,14 @@ export function RaiseForm({ featureId }: { featureId: string }) {
       </label>
 
       {kind === 'QUESTION' && (
-        <label className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            name="plainText"
-            checked={plainText}
-            onChange={(e) => setPlainText(e.target.checked)}
-            className="mt-1 accent-jade"
-          />
-          <span>
-            Ask as plain text, without Choices
-            <span className="block text-sm text-fg-soft">
-              The Decider answers in their own words.
-            </span>
-          </span>
-        </label>
+        <Checkbox
+          name="plainText"
+          isSelected={plainText}
+          onChange={setPlainText}
+          description="The Decider answers in their own words."
+        >
+          Ask as plain text, without Choices
+        </Checkbox>
       )}
 
       {state.error && (

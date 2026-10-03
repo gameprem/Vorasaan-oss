@@ -17,6 +17,7 @@ import { browserTimeZone } from '@/lib/time-zones';
 import { inputClass } from './login-form';
 import { type ProviderDraft, ProviderFields, toSettingsInput } from './provider-fields';
 import { WorkingTimeFields } from './response-windows-settings';
+import { Select } from './ui/select';
 
 const STEPS = ['Your organization', 'Calendar & language', 'AI provider'] as const;
 type Step = 0 | 1 | 2;
@@ -192,27 +193,17 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
               value={workingTime}
               onChange={(patch) => setWorkingTime((w) => ({ ...w, ...patch }))}
             />
-            <div className="max-w-sm">
-              <label htmlFor="setup-language" className="text-sm">
-                Language
-              </label>
-              <select
-                id="setup-language"
-                aria-describedby="setup-language-hint"
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as ChatLanguage)}
-                className={inputClass}
-              >
-                {ChatLanguage.options.map((lang) => (
-                  <option key={lang} value={lang}>
-                    {CHAT_LANGUAGE_LABEL[lang]}
-                  </option>
-                ))}
-              </select>
-              <span id="setup-language-hint" className="mt-1 block text-sm text-fg-soft">
-                For chat app cards and bot replies, unless someone picks their own.
-              </span>
-            </div>
+            <Select
+              label="Language"
+              className="max-w-sm"
+              description="For chat app cards and bot replies, unless someone picks their own."
+              options={ChatLanguage.options.map((lang) => ({
+                id: lang,
+                label: CHAT_LANGUAGE_LABEL[lang],
+              }))}
+              value={language}
+              onChange={(lang) => setLanguage(lang as ChatLanguage)}
+            />
           </div>
         ) : (
           <>

@@ -13,6 +13,7 @@ import { draftSpecFromAttachments, type FeatureActionState } from '@/lib/feature
 import type { AttachmentOwner } from '@/lib/ids';
 import { relativeTime } from './bits';
 import { field, primaryButton, secondaryButton } from './ui';
+import { Select } from './ui/select';
 
 const SOURCE_LABEL: Record<AttachmentView['source'], string> = {
   FILE: 'File',
@@ -221,19 +222,18 @@ function LinkForm({ owner }: { owner: AttachmentOwner }) {
     <form ref={form} action={run} aria-label="Add a link">
       <h3 className="font-medium">Add a link</h3>
       <p className="text-sm text-fg-soft">A public web page, a Confluence page or a Jira issue.</p>
-      <label className="mt-3 block">
-        <span className="text-sm">Kind</span>
-        <select
-          name="source"
-          value={source}
-          onChange={(e) => setSource(e.target.value as typeof source)}
-          className={field}
-        >
-          <option value="URL">Web page</option>
-          <option value="CONFLUENCE">Confluence page</option>
-          <option value="JIRA">Jira issue</option>
-        </select>
-      </label>
+      <Select
+        label="Kind"
+        name="source"
+        className="mt-3"
+        options={[
+          { id: 'URL', label: 'Web page' },
+          { id: 'CONFLUENCE', label: 'Confluence page' },
+          { id: 'JIRA', label: 'Jira issue' },
+        ]}
+        value={source}
+        onChange={(v) => setSource(v as typeof source)}
+      />
       <label className="mt-3 block">
         <span className="text-sm">
           {source === 'URL'

@@ -43,6 +43,8 @@ test('Getting started: dismissing it is remembered', async ({ as }) => {
   const admin = await as(pim);
   // Revoke the CLI's token (from the test above) so the checklist is incomplete again.
   await admin.goto('/settings/tokens');
+  // Settings has hydrated once it has moved the focus to Back.
+  await expect(admin.getByRole('button', { name: 'Back' })).toBeFocused();
   const revoke = admin.getByRole('button', { name: 'Revoke' });
   if (await revoke.count()) {
     await revoke.first().click();
