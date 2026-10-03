@@ -1,9 +1,17 @@
 'use client';
 
-import type { ActionCardDetail, ActionCardView, PersonRef } from '@vorasaan/shared';
+import type {
+  ActionCardDetail,
+  ActionCardView,
+  PersonRef,
+  ProposalKind,
+  RequestChangesInput,
+} from '@vorasaan/shared';
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { postJson } from '@/lib/chat-client';
+import { choicePointers, type PointerOption, sectionPointers } from '@/lib/redrafts';
+import { RedraftHistory, RequestChanges, useRedrafts } from '../redrafts';
 import { SpecDiff } from '../spec-diff';
 import { ROLE_LABEL } from '../ui';
 
@@ -19,6 +27,39 @@ const KIND_LABEL: Record<ActionCardView['kind'], string> = {
 };
 
 const LEVEL = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High' } as const;
+
+/** The proposal a card's target is, for its Redrafts (ticket 0065). */
+const PROPOSAL_KIND: Record<ActionCardView['kind'], ProposalKind> = {
+  DECISION_REQUEST: 'CHOICES',
+  SPEC_PROPOSAL: 'SPEC_PROPOSAL',
+  BRIEF_PROPOSAL: 'BRIEF_PROPOSAL',
+  FEATURE_SUGGESTION: 'FEATURE_SUGGESTION',
+};
+
+/** The parts of what a card proposes that Request changes can point at. */
+function pointersOf(detail: ActionCardDetail): PointerOption[] {
+  switch (detail.kind) {
+    case 'DECISION_REQUEST':
+      return choicePointers(detail.choices);
+    case 'SPEC_PROPOSAL':
+    case 'BRIEF_PROPOSAL':
+      return sectionPointers(detail.proposedMarkdown);
+    case 'FEATURE_SUGGESTION':
+      return [];
+  }
+}
+
+/** A card's Redrafts, loaded when the person opens them. */
+function CardRedrafts({ card }: { card: ActionCardView }) {
+  const { redrafts, error } = useRedrafts(
+    PROPOSAL_KIND[card.kind],
+    card.targetId,
+    `${card.redraft?.current}:${card.redraft?.writing}`,
+  );
+  if (error) return <p className="card-error">{error}</p>;
+  if (!redrafts) return <p className="meta">Loading the Redrafts…</p>;
+  return <RedraftHistory redrafts={redrafts} />;
+}
 
 const names = (people: PersonRef[]) =>
   people.length <= 1
@@ -70,9 +111,38 @@ export function ActionCard({
   const [error, setError] = useState<string | null>(null);
   const [dismissing, setDismissing] = useState(false);
   const [reason, setReason] = useState('');
-  const { detail } = card;
+  const [showRedrafts, setShowRedrafts] = useState(false);
+  const { detail, redraft } = card;
   const proposed = card.status === 'PROPOSED';
   const waitingFor = proposed ? otherApprover(detail, meId) : null;
+  // A Redraft being written: Approve and Request changes wait for it (0065).
+  const writing = redraft?.writing === true;
+  /** Approve applies the Redraft the person sees, or nothing (409). */
+  const seen = redraft ? { redraft: redraft.current } : {};
+
+  const requestChanges = async (input: RequestChangesInput) => {
+    setError(null);
+    const res = await postJson<ActionCardView>(
+      `/api/action-cards/${card.id}/request-changes`,
+      input,
+    );
+    if (res.ok) onChange(res.data);
+    return res;
+  };
+
+  /** Request changes, for whoever may approve what the card proposes. */
+  function changes() {
+    if (!detail || !proposed || waitingFor) return null;
+    return (
+      <RequestChanges
+        send={requestChanges}
+        pointers={pointersOf(detail)}
+        left={redraft?.left}
+        disabled={busy !== null || writing}
+        buttonClassName="btn"
+      />
+    );
+  }
 
   const act = async (action: 'approve' | 'decline', body?: unknown) => {
     setBusy(action);
@@ -117,6 +187,7 @@ export function ActionCard({
               : `the first ${detail.kind === 'SPEC_PROPOSAL' ? 'Spec' : 'Project Brief'}`}
           </span>
         )}
+        {redraft && redraft.current > 1 && <span className="meta">Redraft {redraft.current}</span>}
         <span className={pillClass}>
           {waitingFor ? `Waiting for ${waitingFor.name}` : stateText(card)}
         </span>
@@ -129,6 +200,24 @@ export function ActionCard({
         )}
         {!detail && <p className="meta">What this card proposed no longer exists.</p>}
         {detail && <Body detail={detail} />}
+        {writing && (
+          <p className="meta" role="status">
+            Writing Redraft {(redraft?.current ?? 1) + 1}…
+          </p>
+        )}
+        {redraft && redraft.current > 1 && (
+          <>
+            <button
+              type="button"
+              className="btn"
+              aria-expanded={showRedrafts}
+              onClick={() => setShowRedrafts((v) => !v)}
+            >
+              {showRedrafts ? 'Hide the Redrafts' : 'Compare Redrafts'}
+            </button>
+            {showRedrafts && <CardRedrafts card={card} />}
+          </>
+        )}
         {card.status === 'STALE' && (
           <p className="meta">
             What it proposes changed elsewhere, so it can no longer be approved or declined.
@@ -164,8 +253,8 @@ export function ActionCard({
           <button
             type="button"
             className="btn primary"
-            disabled={busy !== null || nobody}
-            onClick={() => act('approve')}
+            disabled={busy !== null || nobody || writing}
+            onClick={() => act('approve', seen)}
           >
             {busy === 'approve'
               ? 'Sending…'
@@ -176,6 +265,7 @@ export function ActionCard({
           <Link className="btn" href={editHref}>
             Edit
           </Link>
+          {detail.choices.length > 0 && changes()}
           <button
             type="button"
             className="btn"
@@ -206,11 +296,16 @@ export function ActionCard({
           <button
             type="button"
             className="btn approve"
-            disabled={busy !== null}
-            onClick={() => act('approve')}
+            disabled={busy !== null || writing}
+            onClick={() => act('approve', seen)}
           >
-            {busy === 'approve' ? 'Approving…' : `Approve ${doc} change`}
+            {busy === 'approve'
+              ? 'Approving…'
+              : redraft && redraft.current > 1
+                ? `Approve Redraft ${redraft.current}`
+                : `Approve ${doc} change`}
           </button>
+          {changes()}
           <button
             type="button"
             className="btn"
@@ -275,11 +370,12 @@ export function ActionCard({
         <button
           type="button"
           className="btn primary"
-          disabled={busy !== null}
-          onClick={() => act('approve')}
+          disabled={busy !== null || writing}
+          onClick={() => act('approve', seen)}
         >
           {busy === 'approve' ? 'Accepting…' : 'Accept'}
         </button>
+        {changes()}
         <button
           type="button"
           className="btn"

@@ -250,7 +250,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 4. **OpenRouter** as an AI Provider: the Admin enters only the key, picks Approved Models from OpenRouter's model list with their Context Window prefilled, and Anthropic models routed through it get prompt caching.
    - [x] OpenRouter provider (0064).
 5. **Request changes** ([ADR 0013](./docs/adr/0013-request-changes-redrafts-proposals.md)): every AI proposal (Choices, Spec Proposals, Brief Proposals, Feature Suggestions, later Design Docs) gets Request changes next to Approve and Decline. The person explains what to change, and the AI writes a Redraft of the same proposal. Earlier Redrafts stay, with their feedback and a diff. Nothing changes until Approve. It works from Chat Cards too.
-   - [ ] Request changes and Redrafts (0065).
+   - [x] Request changes and Redrafts (0065).
 6. **Context meter and `/compact`:** a meter under the composer shows how full the Conversation is for its model's Context Window, and a person can compact it themselves, with a focus that steers the Conversation Summary.
    - [ ] Context meter and /compact (0066).
 7. **Decision Graph:** a graph like a git network graph on the Feature page. The Spec's versions are the main lane; each Decision Request branches off where it was raised and merges back at the Spec Version it produced, and open ones show their Response Window state.

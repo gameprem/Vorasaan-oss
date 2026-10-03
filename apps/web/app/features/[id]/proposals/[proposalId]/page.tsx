@@ -1,12 +1,14 @@
-import type { FeatureView, SpecProposalView } from '@vorasaan/shared';
+import type { FeatureView, ProposalRedraftsView, SpecProposalView } from '@vorasaan/shared';
 import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { Notice, relativeTime } from '@/components/bits';
+import { ProposalRedrafts } from '@/components/redrafts';
 import { ReviewProposal } from '@/components/review-proposal';
 import { SpecDiff } from '@/components/spec-diff';
 import { approveProposal, rejectProposal } from '@/lib/actions';
 import { ApiError, api, currentUser } from '@/lib/api';
 import { isId } from '@/lib/ids';
+import { sectionPointers } from '@/lib/redrafts';
 
 export const metadata = { title: 'Spec Proposal' };
 
@@ -21,18 +23,24 @@ const ORIGIN: Record<SpecProposalView['source'], string> = {
 /** Review of one Spec Proposal: the diff against the Spec it was drafted from, then approve or reject. */
 export default async function ProposalPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; proposalId: string }>;
+  /** `redraft`: the Redraft to show first, from a chat app's link (ticket 0065). */
+  searchParams: Promise<{ redraft?: string }>;
 }) {
   const { id, proposalId } = await params;
   if (!isId(id) || !isId(proposalId)) notFound();
+  const asked = Number((await searchParams).redraft);
 
   let feature: FeatureView;
   let proposal: SpecProposalView;
+  let redrafts: ProposalRedraftsView;
   try {
-    [feature, proposal] = await Promise.all([
+    [feature, proposal, redrafts] = await Promise.all([
       api<FeatureView>(`/features/${id}`),
       api<SpecProposalView>(`/spec-proposals/${proposalId}`),
+      api<ProposalRedraftsView>(`/spec-proposals/${proposalId}/redrafts`),
     ]);
   } catch (error) {
     unstable_rethrow(error);
@@ -65,6 +73,7 @@ export default async function ProposalPage({
         {proposal.baseVersion ? `against Spec v${proposal.baseVersion}` : 'as the first Spec'},{' '}
         {relativeTime(proposal.createdAt)}.
         {proposal.status === 'PENDING' && ` ${proposal.approver.name} approves it.`}
+        {redrafts.current > 1 && ` This is Redraft ${redrafts.current}.`}
       </p>
       {proposal.decisionRequestId && (
         <p className="mt-2 text-sm">
@@ -81,10 +90,28 @@ export default async function ProposalPage({
         <SpecDiff before={proposal.baseMarkdown} after={proposal.proposedMarkdown} />
       </div>
 
+      <div className="mt-6">
+        <ProposalRedrafts
+          kind="SPEC_PROPOSAL"
+          proposalId={proposal.id}
+          redrafts={redrafts}
+          pointers={sectionPointers(proposal.proposedMarkdown)}
+          initial={Number.isInteger(asked) ? asked : undefined}
+        />
+      </div>
+
       {proposal.status === 'PENDING' &&
         (me?.id === proposal.approver.id ? (
           <ReviewProposal
-            approveAction={approveProposal.bind(null, proposal.id, proposal.decisionRequestId)}
+            approveLabel={
+              redrafts.current > 1 ? `Approve Redraft ${redrafts.current}` : 'Approve Spec change'
+            }
+            approveAction={approveProposal.bind(
+              null,
+              proposal.id,
+              proposal.decisionRequestId,
+              redrafts.current,
+            )}
             rejectAction={rejectProposal.bind(null, proposal.id, proposal.decisionRequestId)}
             note={
               proposal.decisionRequestId
