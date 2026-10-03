@@ -8,12 +8,12 @@ import {
   ChatLanguage,
   type ChatLinkCodeView,
   type ChatPreferencesView,
-  DEFAULT_CHAT_LANGUAGE,
   type MyChatAppsView,
 } from '@vorasaan/shared';
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useState, useTransition } from 'react';
 import { createChatLinkCode, saveChatPreferences, unlinkChatAccount } from '@/lib/chat-app-actions';
+import { timeZones } from '@/lib/time-zones';
 import { relativeTime } from './bits';
 import { field, primaryButton, secondaryButton } from './ui';
 
@@ -119,21 +119,14 @@ function ChatAppRow({ app }: { app: MyChatAppsView['apps'][number] }) {
   );
 }
 
-function timeZones(current: string): string[] {
-  try {
-    const all = Intl.supportedValuesOf('timeZone');
-    return all.includes(current) ? all : [current, ...all];
-  } catch {
-    return [current];
-  }
-}
-
 function PreferencesForm({
   preferences,
   organizationTimeZone,
+  organizationLanguage,
 }: {
   preferences: ChatPreferencesView;
   organizationTimeZone: string;
+  organizationLanguage: ChatLanguage;
 }) {
   const id = useId();
   const [events, setEvents] = useState(preferences.events);
@@ -141,9 +134,8 @@ function PreferencesForm({
   const [start, setStart] = useState(preferences.quietHours?.start ?? '22:00');
   const [end, setEnd] = useState(preferences.quietHours?.end ?? '07:00');
   const [timeZone, setTimeZone] = useState(preferences.timeZone ?? '');
-  const [language, setLanguage] = useState<ChatLanguage>(
-    preferences.language ?? DEFAULT_CHAT_LANGUAGE,
-  );
+  // '': the Organization's language (ticket 0063).
+  const [language, setLanguage] = useState<ChatLanguage | ''>(preferences.language ?? '');
   const [message, setMessage] = useState<{ ok: boolean; text: string }>();
   const [pending, run] = useTransition();
   const touched = () => setMessage(undefined);
@@ -154,7 +146,7 @@ function PreferencesForm({
         events,
         quietHours: quiet ? { start, end } : null,
         timeZone: timeZone || null,
-        language,
+        language: language || null,
       });
       setMessage(result.error ? { ok: false, text: result.error } : { ok: true, text: 'Saved' });
     });
@@ -252,10 +244,11 @@ function PreferencesForm({
           value={language}
           onChange={(e) => {
             touched();
-            setLanguage(e.target.value as ChatLanguage);
+            setLanguage(e.target.value as ChatLanguage | '');
           }}
           className={field}
         >
+          <option value="">The Organization's ({CHAT_LANGUAGE_LABEL[organizationLanguage]})</option>
           {ChatLanguage.options.map((lang) => (
             <option key={lang} value={lang}>
               {CHAT_LANGUAGE_LABEL[lang]}
@@ -283,9 +276,11 @@ function PreferencesForm({
 export function ChatAccountsSettings({
   view,
   organizationTimeZone,
+  organizationLanguage,
 }: {
   view: MyChatAppsView;
   organizationTimeZone: string;
+  organizationLanguage: ChatLanguage;
 }) {
   const enabled = view.apps.filter((a) => a.enabled || a.account);
   return (
@@ -318,6 +313,7 @@ export function ChatAccountsSettings({
           <PreferencesForm
             preferences={view.preferences}
             organizationTimeZone={organizationTimeZone}
+            organizationLanguage={organizationLanguage}
           />
         </div>
       </section>

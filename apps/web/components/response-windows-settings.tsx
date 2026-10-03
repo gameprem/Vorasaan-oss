@@ -7,12 +7,14 @@ import {
   type ResponseWindowSettingsView,
   type ResponseWindowUnit,
   responseWindowText,
+  type WorkingTimeInput,
 } from '@vorasaan/shared';
 import { useId, useState, useTransition } from 'react';
 import {
   saveProjectResponseWindows,
   saveResponseWindowSettings,
 } from '@/lib/response-window-actions';
+import { timeZones } from '@/lib/time-zones';
 import { field, primaryButton, secondaryButton } from './ui';
 
 // Settings → Response Windows (ticket 0055, Admins): the Organization's working calendar,
@@ -28,13 +30,74 @@ const WEEKDAYS = [
   [7, 'Sun'],
 ] as const;
 
-function timeZones(current: string): string[] {
-  try {
-    const all = Intl.supportedValuesOf('timeZone');
-    return all.includes(current) ? all : [current, ...all];
-  } catch {
-    return [current];
-  }
+/** The time zone, working days and working hours: here and in the setup wizard (0063). */
+export function WorkingTimeFields({
+  value,
+  onChange,
+}: {
+  value: WorkingTimeInput;
+  onChange: (patch: Partial<WorkingTimeInput>) => void;
+}) {
+  return (
+    <>
+      <label className="block max-w-sm">
+        <span className="text-sm">Time zone</span>
+        <select
+          value={value.timeZone}
+          onChange={(e) => onChange({ timeZone: e.target.value })}
+          className={field}
+        >
+          {timeZones(value.timeZone).map((tz) => (
+            <option key={tz} value={tz}>
+              {tz}
+            </option>
+          ))}
+        </select>
+      </label>
+      <fieldset>
+        <legend className="text-sm">Working days</legend>
+        <div className="mt-2 flex flex-wrap gap-4">
+          {WEEKDAYS.map(([day, label]) => (
+            <label key={day} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="size-4"
+                checked={value.workingDays.includes(day)}
+                onChange={(e) =>
+                  onChange({
+                    workingDays: e.target.checked
+                      ? [...value.workingDays, day].sort((a, b) => a - b)
+                      : value.workingDays.filter((d) => d !== day),
+                  })
+                }
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <div className="flex flex-wrap gap-4">
+        <label className="block">
+          <span className="text-sm">Working hours start</span>
+          <input
+            type="time"
+            value={value.workStart}
+            onChange={(e) => onChange({ workStart: e.target.value })}
+            className={field}
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm">Working hours end</span>
+          <input
+            type="time"
+            value={value.workEnd}
+            onChange={(e) => onChange({ workEnd: e.target.value })}
+            className={field}
+          />
+        </label>
+      </div>
+    </>
+  );
 }
 
 function WindowFields({
@@ -122,62 +185,7 @@ export function ResponseWindowSettingsEditor({
     <form action={save} aria-label="Working calendar and default windows" className="space-y-8">
       <section className="space-y-4">
         <h3 className="text-lg font-semibold">Working time</h3>
-        <label className="block max-w-sm">
-          <span className="text-sm">Time zone</span>
-          <select
-            value={form.timeZone}
-            onChange={(e) => change({ timeZone: e.target.value })}
-            className={field}
-          >
-            {timeZones(form.timeZone).map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
-          </select>
-        </label>
-        <fieldset>
-          <legend className="text-sm">Working days</legend>
-          <div className="mt-2 flex flex-wrap gap-4">
-            {WEEKDAYS.map(([day, label]) => (
-              <label key={day} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="size-4"
-                  checked={form.workingDays.includes(day)}
-                  onChange={(e) =>
-                    change({
-                      workingDays: e.target.checked
-                        ? [...form.workingDays, day].sort((a, b) => a - b)
-                        : form.workingDays.filter((d) => d !== day),
-                    })
-                  }
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <div className="flex flex-wrap gap-4">
-          <label className="block">
-            <span className="text-sm">Working hours start</span>
-            <input
-              type="time"
-              value={form.workStart}
-              onChange={(e) => change({ workStart: e.target.value })}
-              className={field}
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm">Working hours end</span>
-            <input
-              type="time"
-              value={form.workEnd}
-              onChange={(e) => change({ workEnd: e.target.value })}
-              className={field}
-            />
-          </label>
-        </div>
+        <WorkingTimeFields value={form} onChange={change} />
       </section>
 
       <section className="space-y-3" aria-labelledby={`${id}-holidays`}>
