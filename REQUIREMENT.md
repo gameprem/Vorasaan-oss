@@ -272,14 +272,16 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
     - [ ] Platforms per Project, targeted by Features (0050).
     - [ ] Coverage per Platform, used by the AI (0051).
     - [ ] Web and CLI: Platform chips and the Coverage matrix (0052).
-13. **Design Docs per Platform** ([ADR 0014](./docs/adr/0014-design-docs-derived-from-the-spec-per-platform.md)): once a Feature's Spec is approved and a Platform's Coverage is complete, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA) from a template the Project can edit. The Platform's Tech Lead or Role Owners approve it. When the Spec changes, the Design Docs it affects go stale and the AI proposes an update.
+13. **Agent Skills** ([ADR 0017](./docs/adr/0017-agent-skills-installable-skill-md-packages.md)): the AI can use Agent Skills in the open SKILL.md format (the same folders coding assistants use, such as [diagram-design](https://github.com/cathrynlavery/diagram-design)). An Admin installs one from a GitHub URL or a zip, pinned to the version installed, approves it and enables it per Project; an update shows a diff first. Skills are text and templates only: no script in them ever runs. The AI sees only their names and descriptions and loads a Skill or one of its files when it needs it. What it makes with a Skill (a diagram, say) is shown sandboxed and reaches a Spec or Design Doc only as a proposal a person approves. Receipts record which Skills a call used.
+    - [ ] Agent Skills (0078).
+14. **Design Docs per Platform** ([ADR 0014](./docs/adr/0014-design-docs-derived-from-the-spec-per-platform.md)): once a Feature's Spec is approved and a Platform's Coverage is complete, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA) from a template the Project can edit. The Platform's Tech Lead or Role Owners approve it. When the Spec changes, the Design Docs it affects go stale and the AI proposes an update.
     - [ ] Design Docs per Platform (0069).
-14. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything. It also hands over the Feature's approved Design Doc for the developer's Platform.
-15. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec, as per-person Conversations (ADR 0008).
-16. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
-17. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.
-18. Browser-based `vorasaan login`.
-19. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.
+15. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything. It also hands over the Feature's approved Design Doc for the developer's Platform.
+16. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec, as per-person Conversations (ADR 0008).
+17. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
+18. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.
+19. Browser-based `vorasaan login`.
+20. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.
     - [x] First-run setup requires a Setup Token from the server log (0062). Required before the first public release.
     - [x] Setup asks for the time zone, working days and hours, and language; a Getting started checklist follows (0063).
 

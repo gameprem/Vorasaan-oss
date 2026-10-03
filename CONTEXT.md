@@ -258,4 +258,10 @@ _Avoid_: Log, trace, usage record, telemetry
 
 **Prompt Version**:
 An immutable, numbered version of one of the AI's prompts held by an Organization, on top of the built-in default. The AI or an Admin proposes it, an Admin approves it after seeing its eval scores, and it can be rolled back.
-_Avoid_: Prompt template, prompt revision, prompt draft
+_Avoid_: Prompt template, prompt revision, prompt draft, skill (that is an Agent Skill)
+
+### Agent Skills
+
+**Agent Skill**:
+An installable package in the open SKILL.md format (a folder with a `SKILL.md` that has a name and a description, plus optional references and assets) that teaches the AI to do one thing in a particular way, such as drawing a diagram. An Admin installs it from GitHub or a zip, pinned to the version installed, and approves it; it is then enabled per Project. It is text and templates only: nothing in it is ever run, and it can only lead to proposals. "Skill" for short. It is not one of Vorasaan's own built-in prompts: those are prompts and Prompt Versions (the code keeps them in `packages/skills`).
+_Avoid_: Plugin, extension, add-on, tool, prompt, built-in skill

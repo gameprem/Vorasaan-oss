@@ -22,7 +22,7 @@ Each target Platform of a Feature gets an approved Design Doc, drafted by the AI
 - **Versions:** approved Design Docs are Markdown (ADR 0002), versioned with diffs and revert like Specs (0020), each version naming the Spec Version it follows.
 - **The Spec stays the source of truth:** when a new Spec Version changes what a Design Doc covers, that Design Doc is marked stale and the AI proposes an update. A Design Doc never changes the Spec.
 - **Questions:** a question found while designing is raised as a Decision Request on the Feature.
-- **Elsewhere:** `vorasaan run` hands over the approved Design Doc of the developer's Platform, and the Decision Graph (0067) shows Design Docs as a sub-lane.
+- **Elsewhere:** `vorasaan run` hands over the approved Design Doc of the developer's Platform, and the Decision Graph (0067) shows Design Docs as a sub-lane. The AI can use the Project's enabled Agent Skills (0078) while drafting, for example for a diagram.
 
 ## Acceptance criteria (test first, real Postgres + `FakeAiPort`)
 - [ ] No draft while the Spec has a Spec Proposal awaiting approval or the Platform's Coverage is missing; a draft once both hold.
