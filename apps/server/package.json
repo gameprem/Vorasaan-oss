@@ -14,6 +14,7 @@
     "eval:grilling": "bun scripts/eval-grilling.ts",
     "eval:feature-suggestions": "bun scripts/eval-feature-suggestions.ts",
     "eval:conversation": "bun scripts/eval-conversation.ts",
+    "eval:redrafts": "bun scripts/eval-redrafts.ts",
     "tokens:fixture": "bun scripts/token-fixture.ts"
   },
   "dependencies": {

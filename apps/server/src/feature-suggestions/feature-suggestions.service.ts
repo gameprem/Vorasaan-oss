@@ -33,6 +33,7 @@ import {
 } from '../feature-guidelines/project-foundation.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { assertNotRedrafting } from '../redrafts/redraft-guard.ts';
 import { ContextRetriever } from '../retrieval/context-retriever.ts';
 import { decisionText } from '../retrieval/source-text.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
@@ -223,6 +224,8 @@ export class FeatureSuggestionsService {
       throw new ForbiddenException("Only an Admin or this Team's PO can accept it");
     }
     if (suggestion.status !== 'PENDING') throw alreadyDecided(suggestion.status);
+    // A Redraft being written is about to change it: accepting waits for it (0065).
+    await assertNotRedrafting(this.db, 'FEATURE_SUGGESTION', id);
 
     const project = await this.db.project.findUniqueOrThrow({
       where: { id: suggestion.projectId },

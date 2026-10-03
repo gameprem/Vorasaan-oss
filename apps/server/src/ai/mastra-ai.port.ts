@@ -36,6 +36,9 @@ import {
   type ModelChoice,
   type ProjectForAi,
   type ProjectFoundationForAi,
+  RedraftedChoices,
+  RedraftedMarkdown,
+  RedraftedSuggestion,
   type RequestForAi,
   SpecProposalDraft,
   type SuggestionForAi,
@@ -59,6 +62,10 @@ import {
   generateChoicesPrompt,
   grillingFollowUpPrompt,
   grillingQuestionsPrompt,
+  redraftBriefProposalPrompt,
+  redraftChoicesPrompt,
+  redraftFeatureSuggestionPrompt,
+  redraftSpecProposalPrompt,
   suggestFeaturesPrompt,
   summarizeAttachmentPrompt,
   summarizeConversationPrompt,
@@ -381,6 +388,51 @@ export class MastraAiPort implements AiPort {
       await this.resolveModel('checkFeatureFit', options?.model),
     );
     return generateStructured(generate, 'check-feature-fit', prompt, FeatureFitDraft);
+  }
+
+  async redraftChoices(input: Parameters<AiPort['redraftChoices']>[0], options?: AiCallOptions) {
+    const prompt = await redraftChoicesPrompt(input);
+    const generate = agentGenerate(
+      'redraft-choices',
+      await this.resolveModel('redraftChoices', options?.model),
+    );
+    return generateStructured(generate, 'redraft-choices', prompt, RedraftedChoices);
+  }
+
+  async redraftSpecProposal(
+    input: Parameters<AiPort['redraftSpecProposal']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await redraftSpecProposalPrompt(input);
+    const generate = agentGenerate(
+      'redraft-spec-proposal',
+      await this.resolveModel('redraftSpecProposal', options?.model),
+    );
+    return generateStructured(generate, 'redraft-spec-proposal', prompt, RedraftedMarkdown);
+  }
+
+  async redraftBriefProposal(
+    input: Parameters<AiPort['redraftBriefProposal']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await redraftBriefProposalPrompt(input);
+    const generate = agentGenerate(
+      'redraft-brief-proposal',
+      await this.resolveModel('redraftBriefProposal', options?.model),
+    );
+    return generateStructured(generate, 'redraft-brief-proposal', prompt, RedraftedMarkdown);
+  }
+
+  async redraftFeatureSuggestion(
+    input: Parameters<AiPort['redraftFeatureSuggestion']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await redraftFeatureSuggestionPrompt(input);
+    const generate = agentGenerate(
+      'redraft-feature-suggestion',
+      await this.resolveModel('redraftFeatureSuggestion', options?.model),
+    );
+    return generateStructured(generate, 'redraft-feature-suggestion', prompt, RedraftedSuggestion);
   }
 
   async *chat(

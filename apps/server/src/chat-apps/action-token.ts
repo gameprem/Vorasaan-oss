@@ -16,12 +16,14 @@ export type CardAction =
   /** Ask the Raiser for more info (a QUESTION: OPEN → NEEDS_INFO). */
   | { kind: 'ask' }
   /** Decide with a free-text answer. */
-  | { kind: 'own' };
+  | { kind: 'own' }
+  /** Request changes (ticket 0065): the Choices, or the Spec Proposal, are redrafted. */
+  | { kind: 'redraft' };
 
 export type ActionToken = { cardId: string; action: CardAction };
 
 const VERSION = 'v1';
-const CODE = { choice: 'c', ask: 'a', own: 'o' } as const;
+const CODE = { choice: 'c', ask: 'a', own: 'o', redraft: 'r' } as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export class ActionTokens {
@@ -65,6 +67,7 @@ export class ActionTokens {
     if (choice !== '-') return null;
     if (code === CODE.ask) return { cardId, action: { kind: 'ask' } };
     if (code === CODE.own) return { cardId, action: { kind: 'own' } };
+    if (code === CODE.redraft) return { cardId, action: { kind: 'redraft' } };
     return null;
   }
 }

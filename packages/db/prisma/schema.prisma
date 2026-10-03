@@ -253,6 +253,8 @@ model User {
 
   conversations Conversation[] @relation("ConversationOwner")
 
+  redraftsRequested Redraft[] @relation("RedraftRequestedBy")
+
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
   delegationsCreated  Delegation[] @relation("DelegationCreatedBy")
@@ -630,6 +632,7 @@ model SpecProposal {
   decision         Decision?         @relation(fields: [decisionId], references: [id])
   approver         User              @relation("ProposalApprover", fields: [approverId], references: [id])
   resultVersion    SpecVersion?
+  redrafts         Redraft[]
 
   @@index([approverId, status])
   @@index([featureId, status])
@@ -683,6 +686,7 @@ model BriefProposal {
   approver         User               @relation("BriefProposalApprover", fields: [approverId], references: [id])
   resultVersion    BriefVersion?      @relation("BriefProposalResult")
   grilling         Grilling?
+  redrafts         Redraft[]
 
   @@index([approverId, status])
   @@index([projectId, status])
@@ -736,6 +740,7 @@ model DecisionRequest {
   history        RequestHistoryEntry[]
   deciderChanges DeciderChange[]
   chatCards      ChatCard[]
+  redrafts       Redraft[] // of its Choices (ticket 0065)
 
   @@index([featureId, kind, status])
   @@index([status, dueAt])
@@ -1038,6 +1043,7 @@ model FeatureSuggestion {
   feature            Feature?                @relation(fields: [featureId], references: [id], onDelete: SetNull)
   generatedBy        User                    @relation("FeatureSuggestionGeneratedBy", fields: [generatedById], references: [id])
   decidedBy          User?                   @relation("FeatureSuggestionDecidedBy", fields: [decidedById], references: [id])
+  redrafts           Redraft[]
 
   @@index([projectId, status, createdAt])
 }
@@ -1229,4 +1235,64 @@ model ChatCard {
 
   @@index([status, createdAt])
   @@index([requestId])
+}
+
+// ─── Request changes and Redrafts (ADR 0013, ticket 0065) ───────────────────
+
+// The AI proposals a person can Request changes on.
+enum ProposalKind {
+  CHOICES // a Decision Request's Choices (the request's id)
+  SPEC_PROPOSAL
+  BRIEF_PROPOSAL
+  FEATURE_SUGGESTION
+}
+
+enum RedraftStatus {
+  WRITING // the AI is writing it: Approve and another Request changes wait for it
+  READY // written; the proposal now holds it, and Approve applies it
+}
+
+// One Redraft of an AI proposal, numbered from 1 (the proposal as first drafted, kept
+// when the first Request changes is made). The proposal itself always holds its latest
+// READY Redraft, so Approve applies only that one. `content` is the Redraft as the
+// proposal held it (`RedraftContent` in @vorasaan/shared); `feedback` and `pointer` are
+// what caused it, kept for eval cases. Exactly one of the four proposal ids is set, and
+// matches `proposalKind` and `proposalId`.
+model Redraft {
+  id                  String             @id @default(uuid())
+  proposalKind        ProposalKind
+  proposalId          String
+  number              Int
+  status              RedraftStatus      @default(READY)
+  content             Json? // null while WRITING
+  // What the person asked to change (null for Redraft 1), and the part they pointed at:
+  // { kind: "CHOICE", label } or { kind: "LINES", from, to } or { kind: "SECTION", heading }.
+  feedback            String?
+  pointer             Json?
+  requestedById       String?
+  // What the AI says it changed, and the preferences it found in the feedback.
+  summary             String?
+  preferences         String[]
+  // The model that wrote it (ticket 0054), as it was then (see SpecProposal).
+  approvedModelId     String?
+  modelDisplayName    String?
+  modelName           String?
+  createdAt           DateTime           @default(now())
+  readyAt             DateTime?
+  requestId           String?
+  specProposalId      String?
+  briefProposalId     String?
+  featureSuggestionId String?
+  requestedBy         User?              @relation("RedraftRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  request             DecisionRequest?   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  specProposal        SpecProposal?      @relation(fields: [specProposalId], references: [id], onDelete: Cascade)
+  briefProposal       BriefProposal?     @relation(fields: [briefProposalId], references: [id], onDelete: Cascade)
+  featureSuggestion   FeatureSuggestion? @relation(fields: [featureSuggestionId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalKind, proposalId, number])
+  @@index([requestId])
+  @@index([specProposalId])
+  @@index([briefProposalId])
+  @@index([featureSuggestionId])
+  @@index([requestedById])
 }

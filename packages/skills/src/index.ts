@@ -17,6 +17,10 @@ export const SKILLS = [
   'check-feature-fit',
   'chat',
   'summarize-conversation',
+  'redraft-choices',
+  'redraft-spec-proposal',
+  'redraft-brief-proposal',
+  'redraft-feature-suggestion',
 ] as const;
 export type SkillName = (typeof SKILLS)[number];
 

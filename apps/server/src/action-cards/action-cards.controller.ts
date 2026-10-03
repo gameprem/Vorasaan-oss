@@ -1,6 +1,10 @@
 import { Body, Controller, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import type { User } from '@vorasaan/db';
-import { ApproveActionCardInput, DeclineActionCardInput } from '@vorasaan/shared';
+import {
+  ApproveActionCardInput,
+  DeclineActionCardInput,
+  RequestChangesInput,
+} from '@vorasaan/shared';
 import { CurrentUser } from '../auth/identity.guard.ts';
 import { ActionCardsService } from './action-cards.service.ts';
 
@@ -20,6 +24,19 @@ export class ActionCardsController {
     @Body({ schema: ApproveActionCardInput }) body: ApproveActionCardInput,
   ) {
     return this.cards.approve(user, id, body);
+  }
+
+  /**
+   * Request changes (ticket 0065): the AI writes the next Redraft of what the card
+   * proposes. Answers with the card once the Redraft is ready.
+   */
+  @Post(':id/request-changes')
+  requestChanges(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: RequestChangesInput }) body: RequestChangesInput,
+  ) {
+    return this.cards.requestChanges(user, id, body);
   }
 
   @Post(':id/decline')

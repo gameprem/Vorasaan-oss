@@ -187,6 +187,7 @@ export function lineBubble(card: Card): object {
   const footer: object[] = card.choices.map((c) => postback(c.button.label, c.button.token, true));
   if (card.ask) footer.push(postback(card.ask.label, card.ask.token, false));
   if (card.own) footer.push(postback(card.ownShortLabel, card.own.token, false));
+  if (card.redraft) footer.push(postback(card.redraft.label, card.redraft.token, false));
   footer.push({
     type: 'button',
     style: 'link',

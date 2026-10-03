@@ -22,6 +22,10 @@ import type {
   ModelChoice,
   ProjectForAi,
   ProjectFoundationForAi,
+  RedraftedChoices,
+  RedraftedMarkdown,
+  RedraftedSuggestion,
+  RedraftFeedbackForAi,
   RequestForAi,
   SuggestionForAi,
 } from './ai.port.ts';
@@ -126,6 +130,27 @@ function summarySection(summary: string, heading: string): string[] {
     .split('\n')
     .filter((l) => l.startsWith('- ') && l !== '- (none)')
     .map((l) => l.slice(2));
+}
+
+/**
+ * What the fake takes as a stated preference in feedback (ticket 0065): clauses about the
+ * language, length or tone, in English and Thai. Anything else is a change to the content.
+ */
+const PREFERENCE =
+  /\b(in (thai|english)|shorter|longer|brief(er)?|concise|more detail(ed)?|formal|casual|bullet points?)\b|ภาษาไทย|ภาษาอังกฤษ|สั้น|กระชับ|ละเอียด/i;
+
+/** The clauses of feedback that state a preference, as the fake finds them. */
+export function fakePreferences(feedback: string): string[] {
+  return feedback
+    .split(/[,.;\n]+|\band\b/)
+    .map((c) => c.trim())
+    .filter((c) => c && PREFERENCE.test(c))
+    .map((c) => c.slice(0, 300));
+}
+
+/** The line the fake's Markdown Redraft adds: the feedback's first line. */
+export function fakeRedraftLine(feedback: string): string {
+  return `- Changed as asked: ${feedback.split('\n')[0]?.trim().slice(0, 200) ?? ''}`;
 }
 
 /** The fake asks a follow-up when the latest reply has fewer words than this. */
@@ -471,4 +496,88 @@ export class FakeAiPort implements AiPort {
       }),
     };
   }
+
+  /**
+   * Thrown by the next redraft calls, in order, instead of answering (ticket 0065), to
+   * test a failed Redraft. A Promise in the queue is awaited first (to hold one open).
+   */
+  readonly redraftScript: (Error | Promise<unknown>)[] = [];
+
+  private async nextRedraft(): Promise<void> {
+    const next = this.redraftScript.shift();
+    if (next instanceof Error) throw next;
+    if (next) await next;
+  }
+
+  /**
+   * The current Choices, with the pointed-at Choice (or else the first) retitled
+   * "<title> (redraft N)" and its description ending in the feedback.
+   */
+  async redraftChoices(
+    input: Parameters<AiPort['redraftChoices']>[0],
+    options?: AiCallOptions,
+  ): Promise<RedraftedChoices> {
+    this.calls.push({ method: 'redraftChoices', input, model: options?.model ?? null });
+    await this.nextRedraft();
+    const n = input.current + 1;
+    const pointed = input.feedback.pointer?.match(/^Choice ([A-D])\b/)?.[1];
+    const target = pointed ?? input.choices[0]?.label;
+    return {
+      choices: input.choices.map((c) =>
+        c.label === target
+          ? {
+              ...c,
+              title: `${c.title.replace(/ \(redraft \d+\)$/, '')} (redraft ${n})`.slice(0, 200),
+              description: `${c.description} ${input.feedback.feedback.split('\n')[0]}`.trim(),
+            }
+          : c,
+      ),
+      summary: `Redraft ${n}: changed Choice ${target}.`,
+      preferences: fakePreferences(input.feedback.feedback),
+    };
+  }
+
+  /** The current Redraft with one line added: "- Changed as asked: <feedback>". */
+  async redraftSpecProposal(
+    input: Parameters<AiPort['redraftSpecProposal']>[0],
+    options?: AiCallOptions,
+  ): Promise<RedraftedMarkdown> {
+    this.calls.push({ method: 'redraftSpecProposal', input, model: options?.model ?? null });
+    await this.nextRedraft();
+    return fakeMarkdownRedraft(input, input.proposedMarkdown);
+  }
+
+  async redraftBriefProposal(
+    input: Parameters<AiPort['redraftBriefProposal']>[0],
+    options?: AiCallOptions,
+  ): Promise<RedraftedMarkdown> {
+    this.calls.push({ method: 'redraftBriefProposal', input, model: options?.model ?? null });
+    await this.nextRedraft();
+    return fakeMarkdownRedraft(input, input.proposedMarkdown);
+  }
+
+  /** The suggestion with its rationale ending in the feedback. */
+  async redraftFeatureSuggestion(
+    input: Parameters<AiPort['redraftFeatureSuggestion']>[0],
+    options?: AiCallOptions,
+  ): Promise<RedraftedSuggestion> {
+    this.calls.push({ method: 'redraftFeatureSuggestion', input, model: options?.model ?? null });
+    await this.nextRedraft();
+    const n = input.current + 1;
+    return {
+      ...input.suggestion,
+      rationale: `${input.suggestion.rationale} ${input.feedback.feedback.split('\n')[0]}`.trim(),
+      summary: `Redraft ${n} of "${input.suggestion.title}".`,
+      preferences: fakePreferences(input.feedback.feedback),
+    };
+  }
+}
+
+function fakeMarkdownRedraft(input: RedraftFeedbackForAi, markdown: string): RedraftedMarkdown {
+  const n = input.current + 1;
+  return {
+    proposedMarkdown: `${markdown.trimEnd()}\n${fakeRedraftLine(input.feedback.feedback)}\n`,
+    summary: `Redraft ${n}: ${input.feedback.feedback.split('\n')[0]?.slice(0, 80) ?? ''}`,
+    preferences: fakePreferences(input.feedback.feedback),
+  };
 }

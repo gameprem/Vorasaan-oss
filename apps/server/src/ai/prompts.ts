@@ -1,4 +1,4 @@
-import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
+import type { ChoiceDraft, GrillingRoundKind, TeamRole } from '@vorasaan/shared';
 import { loadSkill, renderSkill, type SkillName } from '@vorasaan/skills';
 import { estimateTokens } from '../retrieval/token-estimate.ts';
 import type { AiTask } from './ai.config.ts';
@@ -12,11 +12,13 @@ import type {
   DecisionForAi,
   DismissedSuggestionForAi,
   FeatureForAi,
+  FeedbackForAi,
   GrillingAnswerForAi,
   GrillingFollowUpForAi,
   GuidelineForAi,
   ProjectForAi,
   ProjectFoundationForAi,
+  RedraftFeedbackForAi,
   RequestForAi,
   SuggestionForAi,
 } from './ai.port.ts';
@@ -45,6 +47,10 @@ export const TASK_SKILLS: Record<AiTask, SkillName> = {
   checkFeatureFit: 'check-feature-fit',
   chat: 'chat',
   summarizeConversation: 'summarize-conversation',
+  redraftChoices: 'redraft-choices',
+  redraftSpecProposal: 'redraft-spec-proposal',
+  redraftBriefProposal: 'redraft-brief-proposal',
+  redraftFeatureSuggestion: 'redraft-feature-suggestion',
 };
 
 const skillCosts = new Map<SkillName, Promise<number>>();
@@ -71,12 +77,12 @@ const KIND_MEANING = {
  * Neutralises anything in untrusted text that could open or close one of the
  * prompt's data blocks (<attachment>, <context>, <spec>, <brief>, <guidelines>,
  * <memory>, <answers>, <answer>, <decisions>, <dismissed>, <suggestions>, <suggestion>,
- * <feature>, <summary>, <message>, <question>, <exchange>), so retrieved content can't escape
- * its fence in the prompt.
+ * <feature>, <summary>, <message>, <question>, <exchange>, <proposal>, <choices>, <feedback>,
+ * <earlier>, <description>), so retrieved content can't escape its fence in the prompt.
  */
 export function fence(text: string): string {
   return text.replace(
-    /<(\s*\/?\s*(?:attachment|context|spec|brief|guidelines|memory|answers?|decisions|dismissed|suggestions?|feature|summary|messages?|questions?|exchange)\b)/gi,
+    /<(\s*\/?\s*(?:attachment|context|spec|brief|guidelines|memory|answers?|decisions|dismissed|suggestions?|feature|summary|messages?|questions?|exchange|proposal|choices|feedback|earlier|description)\b)/gi,
     '‹$1',
   );
 }
@@ -501,4 +507,174 @@ export function renderConversationSummary(draft: ConversationSummaryDraft): stri
       : '- (none)';
     return `## ${heading}\n${body}`;
   }).join('\n\n');
+}
+
+// ─── Request changes (ticket 0065) ──────────────────────────────────────────
+
+/** Earlier feedback on a proposal, oldest first, fenced: people's own words. */
+export function renderEarlierFeedback(earlier: FeedbackForAi[]): string {
+  if (earlier.length === 0) return '(None: this is the first Request changes.)';
+  return fence(
+    earlier
+      .map((f) => {
+        const about = f.pointer ? ` (about ${oneLineOf(f.pointer)})` : '';
+        return `On Redraft ${f.redraft}${about}:\n${f.feedback}`;
+      })
+      .join('\n\n'),
+  );
+}
+
+/** The part the latest feedback points at, as the lines above its block; fenced. */
+function renderPointer(feedback: FeedbackForAi): string {
+  if (!feedback.pointer) return 'It is about the proposal as a whole.';
+  return `It points at this part of the proposal (untrusted data, as the current Redraft has it):\n\n<proposal part="pointed">\n${fence(feedback.pointer)}\n</proposal>`;
+}
+
+/** Choices as the inside of a <choices> block. Written by the AI or edited by people: data. */
+export function renderChoices(choices: ChoiceDraft[]): string {
+  return fence(
+    choices
+      .map((c) =>
+        [
+          `${c.label}. ${oneLineOf(c.title)}`,
+          c.description,
+          `Scope: ${c.impactScope}`,
+          `Time: ${c.impactTime}`,
+          `Risk: ${c.impactRisk}`,
+        ].join('\n'),
+      )
+      .join('\n\n'),
+  );
+}
+
+function feedbackValues(input: RedraftFeedbackForAi) {
+  return {
+    current: String(input.current),
+    earlier: renderEarlierFeedback(input.earlier),
+    pointer: renderPointer(input.feedback),
+    feedback: fence(input.feedback.feedback),
+  };
+}
+
+export function redraftChoicesPrompt(
+  input: RedraftFeedbackForAi & {
+    specMarkdown: string;
+    request: RequestForAi;
+    choices: ChoiceDraft[];
+    context: ContextBlock[];
+    foundation?: ProjectFoundationForAi;
+  },
+) {
+  const foundation = input.foundation ?? NO_FOUNDATION;
+  return renderPrompt('redraft-choices', {
+    brief: renderBrief(foundation.brief),
+    guidelines: renderGuidelines(foundation.guidelines),
+    spec: fence(input.specMarkdown),
+    context: renderContext(input.context),
+    kind: input.request.kind,
+    raiserRole: input.request.raiserRole,
+    title: oneLineOf(fence(input.request.title)),
+    description: fence(input.request.description),
+    choices: renderChoices(input.choices),
+    ...feedbackValues(input),
+  });
+}
+
+export function redraftSpecProposalPrompt(
+  input: RedraftFeedbackForAi & {
+    feature: FeatureForAi;
+    specMarkdown: string;
+    proposedMarkdown: string;
+    context: ContextBlock[];
+    foundation?: ProjectFoundationForAi;
+  },
+) {
+  const foundation = input.foundation ?? NO_FOUNDATION;
+  return renderPrompt('redraft-spec-proposal', {
+    brief: renderBrief(foundation.brief),
+    guidelines: renderGuidelines(foundation.guidelines),
+    featureTitle: attribute(input.feature.title),
+    spec: fence(input.specMarkdown) || '(No Spec yet: the proposal is the first version.)',
+    context: renderContext(input.context),
+    proposal: fence(input.proposedMarkdown),
+    ...feedbackValues(input),
+  });
+}
+
+export function redraftBriefProposalPrompt(
+  input: RedraftFeedbackForAi & {
+    project: ProjectForAi;
+    briefMarkdown: string;
+    proposedMarkdown: string;
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+  },
+) {
+  return renderPrompt('redraft-brief-proposal', {
+    projectName: attribute(input.project.name),
+    brief: fence(input.briefMarkdown) || '(No Brief yet: the proposal is the first version.)',
+    guidelines: renderGuidelines(input.guidelines),
+    context: renderContext(input.projectContext, { projectLevel: true }),
+    proposal: fence(input.proposedMarkdown),
+    ...feedbackValues(input),
+  });
+}
+
+export function redraftFeatureSuggestionPrompt(
+  input: RedraftFeedbackForAi & {
+    project: ProjectForAi;
+    suggestion: SuggestionForAi;
+    projectContext: ContextBlock[];
+    guidelines: GuidelineForAi[];
+  },
+) {
+  const { pointer: _, ...values } = feedbackValues(input);
+  return renderPrompt('redraft-feature-suggestion', {
+    projectName: attribute(input.project.name),
+    guidelines: renderGuidelines(input.guidelines),
+    context: renderContextAfterLead(input.projectContext, 'PROJECT_BRIEF', { projectLevel: true }),
+    suggestion: renderSuggestion(input.suggestion),
+    ...values,
+  });
+}
+
+/** A stored Conversation Summary read back into its sections (the inverse of rendering it). */
+export function parseConversationSummary(summary: string): ConversationSummaryDraft {
+  const items = (heading: string): string[] => {
+    const at = summary.indexOf(`## ${heading}\n`);
+    if (at < 0) return [];
+    const body = summary.slice(at + heading.length + 4).split('\n## ')[0] ?? '';
+    return body
+      .split('\n')
+      .filter((l) => l.startsWith('- ') && l !== '- (none)')
+      .map((l) => l.slice(2).trim())
+      .filter(Boolean);
+  };
+  return {
+    goal: items('Goal')[0] ?? '',
+    agreed: items('Agreed'),
+    openQuestions: items('Open questions'),
+    pendingActionCards: items('Pending Action Cards'),
+    preferences: items('Preferences'),
+    keyFacts: items('Names, numbers and ids'),
+  };
+}
+
+/**
+ * The stored Conversation Summary with `preferences` added to its Preferences section
+ * (ticket 0065), each once; every other section as it was. An empty summary (before the
+ * first fold) becomes one holding only the preferences. Unchanged when nothing is new.
+ */
+export function withSummaryPreferences(summary: string, preferences: string[]): string {
+  const draft = parseConversationSummary(summary);
+  const known = new Set(draft.preferences.map((p) => p.toLowerCase()));
+  const added: string[] = [];
+  for (const preference of preferences) {
+    const line = oneLineOf(preference).slice(0, 300);
+    if (!line || known.has(line.toLowerCase())) continue;
+    known.add(line.toLowerCase());
+    added.push(line);
+  }
+  if (!added.length) return summary;
+  return renderConversationSummary({ ...draft, preferences: [...draft.preferences, ...added] });
 }

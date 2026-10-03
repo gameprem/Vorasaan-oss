@@ -123,3 +123,14 @@ export type DecisionSource = z.infer<typeof DecisionSource>;
 
 export const ChatCardStatus = z.enum(['PENDING', 'SENT', 'SKIPPED', 'FAILED']);
 export type ChatCardStatus = z.infer<typeof ChatCardStatus>;
+
+export const ProposalKind = z.enum([
+  'CHOICES',
+  'SPEC_PROPOSAL',
+  'BRIEF_PROPOSAL',
+  'FEATURE_SUGGESTION',
+]);
+export type ProposalKind = z.infer<typeof ProposalKind>;
+
+export const RedraftStatus = z.enum(['WRITING', 'READY']);
+export type RedraftStatus = z.infer<typeof RedraftStatus>;

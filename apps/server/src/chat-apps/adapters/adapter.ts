@@ -68,6 +68,8 @@ export type Card = {
   }[];
   ask: CardInput | null;
   own: CardInput | null;
+  /** Request changes (ticket 0065): its text is the feedback the AI redrafts from. */
+  redraft: CardInput | null;
   /** A shorter label for "Write your own answer" where buttons are narrow (LINE: 20). */
   ownShortLabel: string;
   link: { label: string; url: string };

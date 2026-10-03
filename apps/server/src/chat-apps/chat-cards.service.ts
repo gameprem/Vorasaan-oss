@@ -5,6 +5,7 @@ import { type Clock, InjectClock } from '../clock/clock.ts';
 import type { ChatCardSignal } from '../inbox/chat-card-signals.ts';
 import { ChatCardSignals } from '../inbox/chat-card-signals.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { currentRedraft } from '../redrafts/redraft-guard.ts';
 import { ActionTokens } from './action-token.ts';
 import type { ChatMessage, MessageRef } from './adapters/adapter.ts';
 import { ChatApiError } from './adapters/http.ts';
@@ -79,7 +80,7 @@ export const canDecide = (r: LoadedRequest, userId: string) =>
   (r.deciderId === null || r.deciderId === userId);
 
 /** Which of a person's chat preferences a signal falls under. */
-function eventOf(signal: ChatCardSignal): ChatEventKind {
+function eventOf(signal: Exclude<ChatCardSignal, { kind: 'REDRAFTED' }>): ChatEventKind {
   // Escalation step 2 adds a Delegate as a Recipient: to them it is a new request.
   if (signal.kind === 'ESCALATION') return signal.step === 2 ? 'DECISION_REQUEST' : 'ESCALATION';
   return signal.kind;
@@ -111,7 +112,11 @@ export class ChatCardsService implements OnModuleInit {
 
   onModuleInit() {
     this.signals.listen((signals) => {
-      for (const signal of signals) this.background(() => this.deliver(signal));
+      for (const signal of signals) {
+        this.background(() =>
+          signal.kind === 'REDRAFTED' ? this.refresh(signal) : this.deliver(signal),
+        );
+      }
     });
   }
 
@@ -133,8 +138,36 @@ export class ChatCardsService implements OnModuleInit {
     while (this.running.size) await Promise.all([...this.running]);
   }
 
+  /**
+   * After a Redraft of a request's Choices (ticket 0065): the decision cards already sent
+   * to these people are rebuilt with the new Choices, where the chat app can edit a sent
+   * message (Slack, Teams). A press on an old Choice's button changes nothing anyway: its
+   * Choice is gone.
+   */
+  async refresh(signal: Extract<ChatCardSignal, { kind: 'REDRAFTED' }>): Promise<void> {
+    const cards = await this.db.chatCard.findMany({
+      where: {
+        requestId: signal.requestId,
+        userId: { in: signal.to },
+        status: 'SENT',
+        event: { in: ['DECISION_REQUEST', 'ESCALATION'] },
+        OR: [{ escalationStep: null }, { escalationStep: { in: [1, 2] } }],
+      },
+    });
+    for (const card of cards) {
+      if (!card.messageRef) continue;
+      const prefs = await this.accounts.deliveryPreferences({ id: card.userId });
+      const message = await this.build(card, {
+        lang: prefs.language,
+        timeZone: prefs.timeZone,
+        now: this.clock.now(),
+      });
+      if (message) await this.update(card, message);
+    }
+  }
+
   /** Creates the cards a signal asks for, and sends those not held by Quiet Hours. */
-  async deliver(signal: ChatCardSignal): Promise<void> {
+  async deliver(signal: Exclude<ChatCardSignal, { kind: 'REDRAFTED' }>): Promise<void> {
     const organizationId = await this.settings.organizationId();
     if (!organizationId) return;
     const enabled = [...(await this.settings.enabled(organizationId))];
@@ -153,7 +186,7 @@ export class ChatCardsService implements OnModuleInit {
 
   private async deliverTo(
     userId: string,
-    signal: ChatCardSignal,
+    signal: Exclude<ChatCardSignal, { kind: 'REDRAFTED' }>,
     event: ChatEventKind,
     organizationId: string,
     enabled: ChatProvider[],
@@ -290,14 +323,17 @@ export class ChatCardsService implements OnModuleInit {
       if (proposal?.status !== 'PENDING' || proposal.approverId !== card.userId) {
         return null;
       }
+      const redraft = await currentRedraft(this.db, 'SPEC_PROPOSAL', proposal.id);
       return specProposalCard(
         {
           id: proposal.id,
           featureId: proposal.featureId,
           featureTitle: proposal.feature.title,
           requestTitle: proposal.decision?.request.title ?? null,
+          redraft: redraft > 1 ? redraft : null,
         },
         ctx,
+        (action) => this.actionTokens().sign(card.id, action),
       );
     }
 

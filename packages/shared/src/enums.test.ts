@@ -30,6 +30,8 @@ const pairs = [
   ['ChatEventKind', shared.ChatEventKind, db.ChatEventKind],
   ['DecisionSource', shared.DecisionSource, db.DecisionSource],
   ['ChatCardStatus', shared.ChatCardStatus, db.ChatCardStatus],
+  ['ProposalKind', shared.ProposalKind, db.ProposalKind],
+  ['RedraftStatus', shared.RedraftStatus, db.RedraftStatus],
 ] as const;
 
 describe('shared enums mirror Prisma', () => {

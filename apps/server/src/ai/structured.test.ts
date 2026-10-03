@@ -84,6 +84,10 @@ describe('loadAiConfig', () => {
       checkFeatureFitModel: 'anthropic/claude-opus-5-5',
       chatModel: DEFAULT_MODEL,
       summarizeConversationModel: DEFAULT_MODEL,
+      redraftChoicesModel: DEFAULT_MODEL,
+      redraftSpecProposalModel: DEFAULT_MODEL,
+      redraftBriefProposalModel: DEFAULT_MODEL,
+      redraftFeatureSuggestionModel: DEFAULT_MODEL,
     });
   });
 
@@ -107,6 +111,10 @@ describe('loadAiConfig', () => {
       checkFeatureFitModel: 'openai/some-model',
       chatModel: 'openai/some-model',
       summarizeConversationModel: 'openai/some-model',
+      redraftChoicesModel: 'openai/some-model',
+      redraftSpecProposalModel: 'openai/some-model',
+      redraftBriefProposalModel: 'openai/some-model',
+      redraftFeatureSuggestionModel: 'openai/some-model',
     });
   });
 });
