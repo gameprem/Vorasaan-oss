@@ -1,5 +1,6 @@
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
+import { createPrismaClient } from '@vorasaan/db';
 import { AI_CONNECTION_TESTER, type AiConnectionTester } from '../ai/ai-settings.service.ts';
 import { FakeAiPort } from '../ai/fake-ai.port.ts';
 import { AI_ENGINE } from '../ai/mastra.module.ts';
@@ -8,6 +9,7 @@ import { ChatCardsService } from '../chat-apps/chat-cards.service.ts';
 import { ChatEventsService } from '../chat-apps/chat-events.service.ts';
 import { CLOCK } from '../clock/clock.ts';
 import { installVerbatimBody } from '../http/verbatim-body.ts';
+import { PRISMA } from '../prisma/prisma.module.ts';
 import { RedraftsService } from '../redrafts/redrafts.service.ts';
 import { EscalationJob } from '../response-windows/escalation.job.ts';
 import { EMBEDDING_PORT_FACTORY } from '../retrieval/embedding.port.ts';
@@ -29,6 +31,8 @@ export type TestApp = {
   clock: FakeClock;
   /** The escalation job, which tests run by hand (its every-minute timer is off). */
   escalation: EscalationJob;
+  /** The SQL statements the app sends while `run` runs, to check a read stays a fixed few. */
+  recordQueries: <T>(run: () => Promise<T>) => Promise<{ result: T; sql: string[] }>;
 };
 
 /** Boots the real app against the test database, with FakeAiPort, ready for `app.inject()`. */
@@ -44,7 +48,11 @@ export async function createTestApp(): Promise<TestApp> {
   const ai = new FakeAiPort();
   const embeddings = new FakeEmbeddings();
   const connection: TestApp['connection'] = { tester: async () => {}, calls: 0 };
+  let recording: string[] | null = null;
+  const prisma = createPrismaClient(testDatabaseUrl, { onQuery: (sql) => recording?.push(sql) });
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(PRISMA)
+    .useValue(prisma)
     .overrideProvider(CLOCK)
     .useValue(clock)
     .overrideProvider(AI_ENGINE)
@@ -84,5 +92,14 @@ export async function createTestApp(): Promise<TestApp> {
     clock,
     escalation: app.get(EscalationJob),
     drainIndexing: () => indexing.drain(),
+    recordQueries: async (run) => {
+      const sql: string[] = [];
+      recording = sql;
+      try {
+        return { result: await run(), sql };
+      } finally {
+        recording = null;
+      }
+    },
   };
 }

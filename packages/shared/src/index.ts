@@ -6,6 +6,7 @@ export * from './auth.ts';
 export * from './brief.ts';
 export * from './chat-apps.ts';
 export * from './conversation.ts';
+export * from './decision-graph.ts';
 export * from './decision-request.ts';
 export * from './decision-stats.ts';
 export * from './delegation.ts';

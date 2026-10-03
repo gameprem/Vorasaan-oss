@@ -1,5 +1,6 @@
 import type {
   AttachmentView,
+  DecisionGraphView,
   DecisionLogEntry,
   FeatureView,
   RoleOwnerView,
@@ -12,12 +13,14 @@ import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { AttachmentsPanel } from '@/components/attachments-panel';
 import { BlockedBadge, KindBadge, Notice, relativeTime } from '@/components/bits';
+import { DecisionGraph } from '@/components/decision-graph';
 import { DraftedWith } from '@/components/drafted-with';
 import { RevertButton } from '@/components/revert-button';
 import { RoleOwnersEditor } from '@/components/role-owners-editor';
 import { VersionDiff } from '@/components/spec-diff';
 import { SpecPanel } from '@/components/spec-panel';
 import { ROLE_LABEL, secondaryButton } from '@/components/ui';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ApiError, api, currentUser } from '@/lib/api';
 import { revertSpec } from '@/lib/feature-actions';
 import { isId } from '@/lib/ids';
@@ -30,6 +33,7 @@ const TABS = [
   { id: 'team', label: 'Role Owners' },
   { id: 'history', label: 'Version history' },
   { id: 'decisions', label: 'Decision Log' },
+  { id: 'graph', label: 'Decision Graph' },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
@@ -92,6 +96,10 @@ export default async function FeaturePage({
   const attachments =
     tab === 'attachments'
       ? await load(() => api<AttachmentView[]>(`/features/${id}/attachments`))
+      : null;
+  const graph =
+    tab === 'graph'
+      ? await load(() => api<DecisionGraphView>(`/features/${id}/decision-graph`))
       : null;
   // `?diff=N` compares vN with the version before it (v1 with an empty Spec).
   const diffTo = Number(rawDiff);
@@ -323,6 +331,28 @@ export default async function FeaturePage({
                 </li>
               ))}
             </ol>
+          ))}
+
+        {tab === 'graph' &&
+          graph &&
+          (!graph.data ? (
+            <Notice tone="error">{graph.error}</Notice>
+          ) : graph.data.branches.length === 0 ? (
+            <EmptyState
+              title="No Decision Requests yet"
+              action={
+                feature.myRoles.length > 0 ? (
+                  <Link href={`/features/${id}/raise`} className={secondaryButton}>
+                    Raise a Decision Request
+                  </Link>
+                ) : undefined
+              }
+            >
+              When someone raises a Blocker or a Question on this Feature, it branches off the Spec
+              here and merges back at the Spec Version it produces.
+            </EmptyState>
+          ) : (
+            <DecisionGraph graph={graph.data} />
           ))}
       </div>
     </article>

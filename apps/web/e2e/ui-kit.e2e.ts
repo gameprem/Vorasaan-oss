@@ -56,6 +56,10 @@ test('every control of the gallery form works with the keyboard alone', async ({
   await keyboard.press('ArrowDown');
   await keyboard.press('Enter');
   await expect(selectButton(form, 'Decider role')).toContainText('Designer');
+  // The popover closes and hands focus back to its button after its exit; Tab only
+  // reaches the next field once that has happened.
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+  await expect(selectButton(form, 'Decider role')).toBeFocused();
 
   // ComboBox: Tab in, type to search, arrow to the match, Enter.
   await keyboard.press('Tab');

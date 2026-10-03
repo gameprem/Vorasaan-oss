@@ -22,6 +22,8 @@ import {
 import { DelegationsService } from './delegations/delegations.service.ts';
 import { FeatureGuidelinesModule } from './feature-guidelines/feature-guidelines.module.ts';
 import { FeatureSuggestionsModule } from './feature-suggestions/feature-suggestions.module.ts';
+import { DecisionGraphController } from './features/decision-graph.controller.ts';
+import { DecisionGraphService } from './features/decision-graph.service.ts';
 import { FeaturesController } from './features/features.controller.ts';
 import { GettingStartedModule } from './getting-started/getting-started.module.ts';
 import { GrillingModule } from './grilling/grilling.module.ts';
@@ -67,6 +69,7 @@ import { SpecModule } from './spec/spec.module.ts';
     DevUsersController,
     DevFakeAiController,
     FeaturesController,
+    DecisionGraphController,
     DelegationsController,
     MyDelegationsController,
     AiSettingsController,
@@ -81,6 +84,7 @@ import { SpecModule } from './spec/spec.module.ts';
     // Validates any @Body/@Query/@Param declared with `{ schema }` (Zod via Standard Schema, ADR 0004).
     { provide: APP_PIPE, useValue: new StandardSchemaValidationPipe() },
     AuthService,
+    DecisionGraphService,
     DelegationsService,
     OrgService,
     SetupTokenService,
