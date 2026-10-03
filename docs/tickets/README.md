@@ -177,19 +177,41 @@ No Decision Request waits silently: Response Windows with escalation, Decision L
 | 0057 | [Link a LINE, Slack or Teams account](./0057-chat-app-accounts.md) | none |
 | 0058 | [Decide from LINE, Slack and Teams](./0058-decide-from-chat-apps.md) | 0057 |
 
-## Next (Post-MVP 4–8)
+## Next (Post-MVP 4–9)
 
-In this order: OpenRouter as a provider, Request changes on every AI proposal (ADR 0013), a context meter with `/compact`, the Decision Graph of a Feature, and language rules with Thai eval cases.
+In this order: OpenRouter as a provider and Request changes on every AI proposal (ADR 0013), both done; then our own UI kit (ADR 0016), a context meter with `/compact`, a readable chat history and cursor pagination, the Decision Graph of a Feature, and language rules with Thai eval cases.
 
 | # | Ticket | Depends on |
 | --- | --- | --- |
 | 0064 | [OpenRouter as an AI Provider](./0064-openrouter-provider.md) | 0053, 0060, 0061 |
 | 0065 | [Request changes: the AI redrafts from a person's explanation](./0065-request-changes.md) | 0043, 0058, 0060 |
-| 0066 | [Context meter and /compact](./0066-context-meter-and-compact.md) | 0054, 0060, 0061 |
+| 0077 | [UI kit, and replace browser-native controls](./0077-ui-kit.md) | 0045, 0046 |
+| 0066 | [Context meter, /compact, chat history and cursor pagination](./0066-context-meter-and-compact.md) | 0054, 0060, 0061, 0077 |
 | 0067 | [Decision Graph of a Feature](./0067-decision-graph.md) | 0020, 0055, 0058, 0065 |
 | 0068 | [Language: keep domain terms and quotes as written, and Thai eval cases](./0068-language.md) | 0063 |
 
-## Platforms and Coverage (Post-MVP 9)
+## Learning Loop (Post-MVP 10)
+
+Every AI call leaves a Receipt with what people did with its proposal; an Organization holds its own Prompt Versions and evaluates them in the app; the AI proposes better ones, and only an Admin's approval makes one active (ADR 0015, inspired by [Reef](https://github.com/Human-Agent-Society/reef)).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0070 | [Receipts and feedback](./0070-receipts-and-feedback.md) | 0061, 0065 |
+| 0071 | [Prompt Versions and in-app evals](./0071-prompt-versions-and-evals.md) | 0070 |
+| 0072 | [The AI proposes better prompts](./0072-ai-proposes-prompt-versions.md) | 0065, 0071 |
+
+## Optimization (Post-MVP 11)
+
+Measure first on a large seeded Organization, then make the database faster and the AI cheaper without answering worse.
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0073 | [Performance baseline](./0073-performance-baseline.md) | none |
+| 0074 | [Database optimization](./0074-database-optimization.md) | 0073 |
+| 0075 | [AI usage dashboard](./0075-ai-usage-dashboard.md) | 0070, 0077 |
+| 0076 | [Token optimization with an eval guard](./0076-token-optimization.md) | 0068, 0071, 0075 |
+
+## Platforms and Coverage (Post-MVP 12)
 
 Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anything a team adds). Features target them, and Coverage shows which are covered or missing and why (ADR 0009).
 
@@ -199,7 +221,7 @@ Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anythin
 | 0051 | [Coverage per Platform, and the AI uses it](./0051-coverage.md) | 0050 |
 | 0052 | [Web and CLI: Platforms and Coverage](./0052-web-cli-platforms.md) | 0051, 0045 |
 
-## Design Docs (Post-MVP 10)
+## Design Docs (Post-MVP 13)
 
 Once a Feature's Spec is approved and a Platform is covered, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA), and the Platform's people approve it. The Spec stays the source of truth (ADR 0014).
 
