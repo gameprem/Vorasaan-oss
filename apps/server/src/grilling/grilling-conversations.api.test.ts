@@ -602,6 +602,20 @@ describe('Grilling Conversations (0044)', () => {
     expect((await grilling(g.id)).currentRound).toBe('UX');
   });
 
+  test('when someone else answers the last question and closes the round, the other holder is told who answered it', async () => {
+    await start();
+    const olgas = await conversationOf(olga);
+    const pauls = await conversationOf(paul);
+    for (const n of [1, 2, 3]) await sayOk(olga, olgas.id, FULL(n));
+    expect((await read(paul, pauls.id)).grillingProgress?.questions[3]?.status).toBe('ASKING');
+
+    // Olga answers the question Paul was asked, which completes the round.
+    await sayOk(olga, olgas.id, FULL(41));
+    const told = (await read(paul, pauls.id)).messages.at(-1)?.content ?? '';
+    expect(told).toContain('answered question 4 meanwhile');
+    expect(told).toContain('the Business round is complete');
+  });
+
   test('two holders answering the last question at once: one answer counts, and the round moves on once', async () => {
     const g = await start();
     const olgas = await conversationOf(olga);
