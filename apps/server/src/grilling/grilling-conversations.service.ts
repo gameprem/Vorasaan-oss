@@ -185,16 +185,24 @@ export class GrillingConversationsService {
     let state = stateOf(conv.grillingState);
     const lines: GrillingNote[] = [];
 
-    if (!isOpen(round, round.grilling)) {
-      return this.finish(user, conv, message, closed(state), [closedText(round, round.grilling)]);
-    }
-
     const wasIdle = !state.questionId;
     const question = round.questions.find((q) => q.id === state.questionId);
+    // This message is a reply to the asked question, so if someone else answered it
+    // meanwhile, the reply wasn't recorded either.
+    const hadReply = state.answer !== null || text.length > 0;
+    if (!isOpen(round, round.grilling)) {
+      // Someone else may have answered the asked question and closed the round meanwhile.
+      if (question?.answeredAt && question.answeredById !== user.id) {
+        lines.push(answeredElsewhere(question, nameOf(question), hadReply));
+      }
+      lines.push(closedText(round, round.grilling));
+      return this.finish(user, conv, message, closed(state), lines);
+    }
+
     if (question?.answeredAt) {
       // Answered elsewhere since this Conversation asked it (or by the owner, before a crash).
       if (question.answeredById !== user.id) {
-        lines.push(answeredElsewhere(question, nameOf(question), state.answer !== null));
+        lines.push(answeredElsewhere(question, nameOf(question), hadReply));
       }
       state = asking(null, state.skipped);
     } else if (question) {
@@ -319,6 +327,11 @@ export class GrillingConversationsService {
     const lines: GrillingNote[] = [];
     if (!isOpen(round, round.grilling)) {
       if (state.closed) return;
+      // The round may have closed because someone else answered the question asked here.
+      const asked = round.questions.find((q) => q.id === state.questionId);
+      if (asked?.answeredAt && asked.answeredById !== conv.ownerId) {
+        lines.push(answeredElsewhere(asked, nameOf(asked), state.answer !== null));
+      }
       lines.push(closedText(round, round.grilling));
       state = closed(state);
     } else {
