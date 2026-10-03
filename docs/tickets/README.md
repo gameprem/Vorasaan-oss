@@ -221,7 +221,15 @@ Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anythin
 | 0051 | [Coverage per Platform, and the AI uses it](./0051-coverage.md) | 0050 |
 | 0052 | [Web and CLI: Platforms and Coverage](./0052-web-cli-platforms.md) | 0051, 0045 |
 
-## Design Docs (Post-MVP 13)
+## Agent Skills (Post-MVP 13)
+
+The AI can use Agent Skills in the open SKILL.md format, installed by an Admin from GitHub or a zip, pinned, approved and enabled per Project. They are text and templates only; nothing in them runs, and what the AI makes with them is only ever a proposal (ADR 0017).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0078 | [Agent Skills](./0078-agent-skills.md) | 0060, 0065, 0070 |
+
+## Design Docs (Post-MVP 14)
 
 Once a Feature's Spec is approved and a Platform is covered, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA), and the Platform's people approve it. The Spec stays the source of truth (ADR 0014).
 
