@@ -72,6 +72,18 @@ _Avoid_: Cache, copy
 An AI-drafted change to a Spec, awaiting approval. Once approved, it becomes a new Spec Version.
 _Avoid_: Revision, change request, draft
 
+**Request changes**:
+The third answer to an AI proposal, next to Approve and Decline: a person explains what to change, optionally pointing at one part of it, and the AI writes a Redraft. Only those who may approve the proposal can request changes, and nothing changes until someone approves.
+_Avoid_: Reject, change request, regenerate
+
+**Redraft**:
+The AI's rewrite of a proposal after Request changes, numbered from 2 (the first proposal is 1). It is the same proposal, not a new one. Each Redraft keeps the feedback that caused it, and Approve applies only the Redraft approved.
+_Avoid_: Revision, version, iteration, retry
+
+**Design Doc**:
+The human-approved description of how one target Platform of a Feature will build what the Spec says, such as the API contract and data model for the Back-End, screens and states for the Front-End and Mobile, or the test plan for QA. The AI drafts it from the approved Spec once that Platform's Coverage is complete, and a Tech Lead or Role Owner of the Platform approves it. It follows the Spec and goes stale when the Spec changes; it never changes the Spec.
+_Avoid_: SDD, tech spec, design spec, requirements doc
+
 ### Project context
 
 **Project Brief**:
@@ -147,6 +159,10 @@ _Avoid_: Resolution, verdict
 **Decision Log**:
 The chronological list of a Feature's Decisions, each linked to the Spec Version it produced.
 _Avoid_: Audit log, changelog
+
+**Decision Graph**:
+A Feature's Decision Log drawn like a git network graph: the Spec Versions form the main lane, and each Decision Request branches off at the Spec Version current when it was raised and merges back at the Spec Version it produced. Open requests are branches not yet merged.
+_Avoid_: Timeline, history graph, git graph
 
 ### Attention
 

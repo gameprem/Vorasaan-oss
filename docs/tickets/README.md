@@ -177,7 +177,19 @@ No Decision Request waits silently: Response Windows with escalation, Decision L
 | 0057 | [Link a LINE, Slack or Teams account](./0057-chat-app-accounts.md) | none |
 | 0058 | [Decide from LINE, Slack and Teams](./0058-decide-from-chat-apps.md) | 0057 |
 
-## Platforms and Coverage (Post-MVP 4)
+## Next (Post-MVP 4–8)
+
+In this order: OpenRouter as a provider, Request changes on every AI proposal (ADR 0013), a context meter with `/compact`, the Decision Graph of a Feature, and language rules with Thai eval cases.
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0064 | [OpenRouter as an AI Provider](./0064-openrouter-provider.md) | 0053, 0060, 0061 |
+| 0065 | [Request changes: the AI redrafts from a person's explanation](./0065-request-changes.md) | 0043, 0058, 0060 |
+| 0066 | [Context meter and /compact](./0066-context-meter-and-compact.md) | 0054, 0060, 0061 |
+| 0067 | [Decision Graph of a Feature](./0067-decision-graph.md) | 0020, 0055, 0058, 0065 |
+| 0068 | [Language: keep domain terms and quotes as written, and Thai eval cases](./0068-language.md) | 0063 |
+
+## Platforms and Coverage (Post-MVP 9)
 
 Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anything a team adds). Features target them, and Coverage shows which are covered or missing and why (ADR 0009).
 
@@ -186,3 +198,11 @@ Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anythin
 | 0050 | [Platforms per Project, targeted by Features](./0050-platforms.md) | none |
 | 0051 | [Coverage per Platform, and the AI uses it](./0051-coverage.md) | 0050 |
 | 0052 | [Web and CLI: Platforms and Coverage](./0052-web-cli-platforms.md) | 0051, 0045 |
+
+## Design Docs (Post-MVP 10)
+
+Once a Feature's Spec is approved and a Platform is covered, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA), and the Platform's people approve it. The Spec stays the source of truth (ADR 0014).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0069 | [Design Docs per Platform](./0069-design-docs.md) | 0050, 0051, 0065 |
