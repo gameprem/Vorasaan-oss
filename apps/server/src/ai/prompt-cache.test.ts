@@ -2,15 +2,18 @@ import { describe, expect, spyOn, test } from 'bun:test';
 import { Logger } from '@nestjs/common';
 import type { ContextBlock, GuidelineForAi, RequestForAi } from './ai.port.ts';
 import {
-  anthropicSystem,
-  anthropicUserMessage,
+  ANTHROPIC_CACHE_MARK,
   CACHE_BREAK,
   cacheBreakpoints,
+  cacheMarkOf,
   cacheUsageOf,
   isAnthropicModel,
   logCacheUsage,
   MAX_CACHE_BREAKPOINTS,
   MIN_CACHE_PREFIX_TOKENS,
+  markedSystem,
+  markedUserMessage,
+  OPENROUTER_CACHE_MARK,
   type Prompt,
   splitPrompt,
 } from './prompt-cache.ts';
@@ -305,13 +308,13 @@ describe('cache breaks', () => {
 
   test('Anthropic messages carry the mark on stable parts only', () => {
     const prompt = splitPrompt(`${long('stable')}${CACHE_BREAK}volatile`);
-    const message = anthropicUserMessage(prompt);
+    const message = markedUserMessage(prompt, ANTHROPIC_CACHE_MARK);
     expect(message.content.map((p) => p.text).join('')).toBe(prompt.text);
     expect(message.content[0]?.providerOptions).toEqual({
       anthropic: { cacheControl: { type: 'ephemeral' } },
     });
     expect(message.content[1]?.providerOptions).toBeUndefined();
-    const system = anthropicSystem(prompt);
+    const system = markedSystem(prompt, ANTHROPIC_CACHE_MARK);
     expect(system.map((s) => s.content).join('')).toBe(prompt.text);
     expect(system[0]?.providerOptions).toBeDefined();
     expect(system[1]?.providerOptions).toBeUndefined();
@@ -330,6 +333,35 @@ describe('cache breaks', () => {
         apiKey: 'k',
       }),
     ).toBe(false);
+  });
+
+  test('the cache mark of a model: Anthropic, Anthropic via OpenRouter, else none (ticket 0064)', () => {
+    expect(cacheMarkOf('anthropic/some-model')).toBe(ANTHROPIC_CACHE_MARK);
+    expect(cacheMarkOf({ id: 'anthropic/some-model', apiKey: 'k' })).toBe(ANTHROPIC_CACHE_MARK);
+    expect(cacheMarkOf({ id: 'openrouter/anthropic/example-model', apiKey: 'k' })).toBe(
+      OPENROUTER_CACHE_MARK,
+    );
+    expect(cacheMarkOf('openrouter/anthropic/example-model')).toBe(OPENROUTER_CACHE_MARK);
+    expect(OPENROUTER_CACHE_MARK).toEqual({
+      openrouter: { cacheControl: { type: 'ephemeral' } },
+    });
+    expect(cacheMarkOf({ id: 'openrouter/example/model', apiKey: 'k' })).toBeNull();
+    expect(cacheMarkOf({ id: 'openrouter/openai/example-model', apiKey: 'k' })).toBeNull();
+    expect(cacheMarkOf('openai/some-model')).toBeNull();
+    expect(
+      cacheMarkOf({ providerId: 'custom', modelId: 'anthropic/x', url: 'http://x', apiKey: 'k' }),
+    ).toBeNull();
+  });
+
+  test('OpenRouter messages carry its mark on stable parts only', () => {
+    const prompt = splitPrompt(`${long('stable')}${CACHE_BREAK}volatile`);
+    const message = markedUserMessage(prompt, OPENROUTER_CACHE_MARK);
+    expect(message.content.map((p) => p.providerOptions)).toEqual([
+      OPENROUTER_CACHE_MARK,
+      undefined,
+    ]);
+    const system = markedSystem(prompt, OPENROUTER_CACHE_MARK);
+    expect(system.map((s) => s.providerOptions)).toEqual([OPENROUTER_CACHE_MARK, undefined]);
   });
 });
 

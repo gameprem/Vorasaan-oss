@@ -74,7 +74,7 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 | 📎 **One place for context** | Attach Confluence pages, Jira epics, files and URLs so the AI reasons over real context *(planned)*. |
 | 💻 **Terminal-native** | Raise from the `vorasaan` CLI with AI-drafted Choices you review first, and keep your Inbox, requests and Specs open in the `vorasaan` TUI: it updates live, pops OS notifications, and lets you decide, Claim, ask for info, withdraw and approve Spec Proposals without leaving the terminal. |
 | 🤝 **Agent handoff** | `vorasaan run --ai claude` hands your coding agent the approved Spec, not a guess *(planned)*. |
-| 🏠 **Self-hosted** | One `docker compose up`. Your data stays on your infrastructure. Bring your own model: Claude API, OpenAI API, or any OpenAI-compatible URL + token. |
+| 🏠 **Self-hosted** | One `docker compose up`. Your data stays on your infrastructure. Bring your own model: Claude API, OpenAI API, OpenRouter, or any OpenAI-compatible URL + token. |
 
 | | |
 | --- | --- |
@@ -92,7 +92,7 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 
 ### Install with Docker
 
-You need [Docker](https://www.docker.com/) and an LLM provider: a **Claude API** key, an **OpenAI API** key, or any **OpenAI-compatible URL + token** (for example [9Router](https://github.com/decolua/9router), or [OpenRouter](https://openrouter.ai) as a Custom endpoint with the URL `https://openrouter.ai/api/v1`).
+You need [Docker](https://www.docker.com/) and an LLM provider: a **Claude API** key, an **OpenAI API** key, an **[OpenRouter](https://openrouter.ai)** key, or any **OpenAI-compatible URL + token** (for example [9Router](https://github.com/decolua/9router)).
 
 ```bash
 git clone https://github.com/gameprem/Vorasaan.git
@@ -113,12 +113,15 @@ Open that link (or **http://localhost:3000** and paste the token). The token wor
 
 1. **Your organization**: the setup token, the organization's name, and your account as the first Admin.
 2. **Calendar & language**: the time zone (your browser's, to start with), working days and hours (Monday to Friday, 09:00 to 18:00 by default), which Response Windows count in, and the language of chat app cards (English or Thai). Change them later in **Settings → Response Windows** and **Settings → Organization**.
-3. **AI provider**: Claude API, OpenAI API, or Custom URL + token. **Test connection** checks it before you continue. It becomes your first provider, and its model the default Approved Model; **Settings → AI models** adds more providers and models, and sets the model of each AI task.
+3. **AI provider**: Claude API, OpenAI API, OpenRouter, or Custom URL + token. **Test connection** checks it before you continue. It becomes your first provider, and its model the default Approved Model; **Settings → AI models** adds more providers and models, and sets the model of each AI task.
 
 Then a **Getting started** checklist on your Inbox leads you on, and ticks each step itself once it's done: create a **Project** and a **Team**, create a **Feature** and write **Spec v1**, **invite your team** with a link, and link the CLI (`vorasaan login`); optionally, connect a chat app. Dismiss it whenever you like.
 
 > [!TIP]
 > Running 9Router too? Start it with `docker compose --profile router up -d` and choose **Custom URL** with `http://ninerouter:20128/v1`.
+
+> [!NOTE]
+> **OpenRouter** needs only its key: its URL is fixed. When you add an Approved Model, pick it from OpenRouter's model list (searchable by name and id), and its Context Window is filled in from the list; if the list can't be loaded, type the model id. Anthropic models routed through OpenRouter (`anthropic/…`) get prompt caching, like the Claude API. Calls tell OpenRouter they come from Vorasaan at `VORASAAN_WEB_URL`. An OpenRouter set up earlier as a Custom URL keeps working as it is.
 
 | Setting (`.env`) | Default | What it does |
 | --- | --- | --- |

@@ -12,18 +12,20 @@ import {
   DEFAULT_PROVIDER_NAMES,
   knownContextWindow,
 } from '@vorasaan/shared';
-import { useState, useTransition } from 'react';
+import { useCallback, useState, useTransition } from 'react';
 import {
   type ActionResult,
   createAiProvider,
   createApprovedModel,
   deleteAiProvider,
   deleteApprovedModel,
+  listOpenRouterModels,
   setAiTaskModels,
   testApprovedModel,
   updateAiProvider,
   updateApprovedModel,
 } from '@/lib/ai-settings-actions';
+import { OpenRouterModelPicker } from './openrouter-model-picker';
 import { PROVIDERS } from './provider-fields';
 import { field, primaryButton, secondaryButton } from './ui';
 
@@ -254,7 +256,7 @@ function NewProviderForm({ onDone, canCancel }: { onDone: () => void; canCancel:
     >
       <fieldset>
         <legend className="text-sm">Kind</legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {PROVIDERS.map((p) => {
             const active = p.value === kind;
             return (
@@ -580,6 +582,8 @@ function ModelForm({
   const [draft, setDraft] = useState(initial);
   /** Until the Admin types a window, it follows the model id (a known model's window). */
   const [windowTyped, setWindowTyped] = useState(false);
+  const kind = providers.find((p) => p.id === draft.providerId)?.kind;
+  const loadModels = useCallback(() => listOpenRouterModels(draft.providerId), [draft.providerId]);
   return (
     <form
       aria-label={submitLabel}
@@ -613,6 +617,30 @@ function ModelForm({
           ))}
         </select>
       </label>
+      {kind === 'OPENROUTER' && (
+        <div className="sm:col-span-2">
+          {/* OpenRouter's list (ticket 0064): a pick fills the id and its window. */}
+          <OpenRouterModelPicker
+            key={draft.providerId}
+            load={loadModels}
+            selectedId={draft.modelId}
+            inputClass={field}
+            onPick={(m) => {
+              if (m.contextWindow) setWindowTyped(false);
+              setDraft({
+                ...draft,
+                modelId: m.id,
+                displayName: draft.displayName || m.name.slice(0, 60),
+                contextWindow: m.contextWindow
+                  ? String(m.contextWindow)
+                  : windowTyped
+                    ? draft.contextWindow
+                    : '',
+              });
+            }}
+          />
+        </div>
+      )}
       <label className="block">
         <span className="text-sm">Model id</span>
         <input

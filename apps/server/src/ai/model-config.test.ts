@@ -36,6 +36,38 @@ describe('toMastraModel', () => {
     });
   });
 
+  test('OpenRouter: its key, its fixed route and the headers it asks for (ticket 0064)', () => {
+    const previous = process.env.VORASAAN_WEB_URL;
+    process.env.VORASAAN_WEB_URL = 'https://vorasaan.example.com/app/';
+    try {
+      expect(
+        toMastraModel({
+          provider: 'OPENROUTER',
+          model: 'anthropic/example-model',
+          apiKey: 'sk-or-k',
+          baseUrl: null,
+        }),
+      ).toEqual({
+        id: 'openrouter/anthropic/example-model',
+        apiKey: 'sk-or-k',
+        headers: { 'HTTP-Referer': 'https://vorasaan.example.com', 'X-Title': 'Vorasaan' },
+      });
+    } finally {
+      if (previous === undefined) delete process.env.VORASAAN_WEB_URL;
+      else process.env.VORASAAN_WEB_URL = previous;
+    }
+  });
+
+  test('OpenRouter ignores a stored base URL: its URL is fixed', () => {
+    const model = toMastraModel({
+      provider: 'OPENROUTER',
+      model: 'example/model',
+      apiKey: 'k',
+      baseUrl: 'http://elsewhere.test/v1',
+    });
+    expect(model).not.toHaveProperty('url');
+  });
+
   test('custom provider without a URL is rejected', () => {
     expect(() =>
       toMastraModel({ provider: 'OPENAI_COMPATIBLE', model: 'm', apiKey: 'k', baseUrl: null }),
@@ -56,6 +88,21 @@ describe('mastraModelOf', () => {
         },
       }),
     ).toEqual({ providerId: 'custom', modelId: 'qwen', url: 'http://x/v1', apiKey: 't' });
+  });
+
+  test('an env OpenRouter model with the env key still sends the OpenRouter headers', () => {
+    const previous = process.env.OPENROUTER_API_KEY;
+    process.env.OPENROUTER_API_KEY = 'sk-or-env';
+    try {
+      expect(mastraModelOf({ name: 'openrouter/example/model', provider: null })).toMatchObject({
+        id: 'openrouter/example/model',
+        apiKey: 'sk-or-env',
+        headers: { 'X-Title': 'Vorasaan' },
+      });
+    } finally {
+      if (previous === undefined) delete process.env.OPENROUTER_API_KEY;
+      else process.env.OPENROUTER_API_KEY = previous;
+    }
   });
 
   test('an env model without a connected provider stays a "provider/model" string', () => {

@@ -4,6 +4,8 @@ const apiPort = Number(process.env.E2E_API_PORT ?? 4010);
 const webPort = Number(process.env.E2E_WEB_PORT ?? 3010);
 /** A fake LINE API the server sends its chat replies to (chat-apps.e2e.ts listens on it). */
 const fakeChatPort = Number(process.env.E2E_FAKE_CHAT_PORT ?? 4019);
+/** A fake OpenRouter API the server lists models from (openrouter-settings.e2e.ts listens on it). */
+const fakeOpenRouterPort = Number(process.env.E2E_FAKE_OPENROUTER_PORT ?? 4018);
 
 /** The first-run setup spec's own server and web app, on an empty database (ticket 0063). */
 const setupApiPort = Number(process.env.E2E_SETUP_API_PORT ?? apiPort + 5);
@@ -25,6 +27,8 @@ export const E2E = {
   webUrl: `http://localhost:${webPort}`,
   fakeChatPort,
   fakeChatUrl: `http://127.0.0.1:${fakeChatPort}`,
+  fakeOpenRouterPort,
+  fakeOpenRouterUrl: `http://127.0.0.1:${fakeOpenRouterPort}/api/v1`,
   /** The server's Setup Token (ticket 0062), for a run that starts on an empty database. */
   setupToken: process.env.E2E_SETUP_TOKEN ?? 'e2e-setup-token-not-a-secret',
   /** Truncated and re-seeded before every run; its name must end in _e2e. */

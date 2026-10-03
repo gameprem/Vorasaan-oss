@@ -223,7 +223,7 @@ A person's own Conversation for one Grilling round, opened for each person holdi
 _Avoid_: Interview, Grilling thread
 
 **AI Provider**:
-A service an Admin connects with its own key (Anthropic, OpenAI, or any OpenAI-compatible endpoint, such as a local model). An Organization may connect several. Approved Models run on them.
+A service an Admin connects with its own key (Anthropic, OpenAI, OpenRouter, or any OpenAI-compatible endpoint, such as a local model). An Organization may connect several. Approved Models run on them.
 _Avoid_: LLM integration, backend, vendor
 
 **Approved Model**:

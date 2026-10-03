@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Agent } from '@mastra/core/agent';
+import { ConsoleLogger } from '@mastra/core/logger';
 import { createTool } from '@mastra/core/tools';
 import { Logger } from '@nestjs/common';
 import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
@@ -41,10 +42,10 @@ import {
 } from './ai.port.ts';
 import { type MastraModel, mastraModelOf } from './model-config.ts';
 import {
-  anthropicSystem,
-  anthropicUserMessage,
-  isAnthropicModel,
+  cacheMarkOf,
   logCacheUsage,
+  markedSystem,
+  markedUserMessage,
   type Prompt,
   wholePrompt,
 } from './prompt-cache.ts';
@@ -96,22 +97,92 @@ const useChosenModel: ModelResolver = async (task, chosen) => {
 
 type AgentModel = ConstructorParameters<typeof Agent>[0]['model'];
 
+/** The key a Mastra model carries, if any. */
+function keyOf(model: MastraModel): string | null {
+  return typeof model === 'string' ? null : model.apiKey || null;
+}
+
+/** A value as logged, with every occurrence of the secret masked. Errors keep their fields. */
+function redact(value: unknown, secret: string): unknown {
+  if (typeof value === 'string') return value.replaceAll(secret, '…');
+  try {
+    const json = JSON.stringify(value, (_key, v) =>
+      v instanceof Error ? { ...v, name: v.name, message: v.message } : v,
+    );
+    return json === undefined ? value : JSON.parse(json.replaceAll(secret, '…'));
+  } catch {
+    // Not JSON (a cycle, a BigInt): its text, masked.
+    return String(value).replaceAll(secret, '…');
+  }
+}
+
+/**
+ * Mastra's console logger with the call's key masked (ticket 0064): Mastra logs a
+ * provider's error with its response body, and a provider may echo the key there.
+ */
+class RedactingLogger extends ConsoleLogger {
+  constructor(
+    name: string,
+    private readonly secret: string,
+  ) {
+    super({ name });
+  }
+
+  /** Mastra logs through children of the Agent's logger: they mask too. */
+  override child(): ConsoleLogger {
+    return this;
+  }
+
+  override debug(message: string, ...args: unknown[]) {
+    super.debug(this.mask(message), ...this.maskAll(args));
+  }
+
+  override info(message: string, ...args: unknown[]) {
+    super.info(this.mask(message), ...this.maskAll(args));
+  }
+
+  override warn(message: string, ...args: unknown[]) {
+    super.warn(this.mask(message), ...this.maskAll(args));
+  }
+
+  override error(message: string, ...args: unknown[]) {
+    super.error(this.mask(message), ...this.maskAll(args));
+  }
+
+  private mask(message: string): string {
+    return String(redact(message, this.secret));
+  }
+
+  private maskAll(args: unknown[]): unknown[] {
+    return args.map((a) => redact(a, this.secret));
+  }
+}
+
+/** The Agent, its own log lines never carrying the model's key. */
+function redactLogs<A extends { name: string; __setLogger(logger: ConsoleLogger): void }>(
+  agent: A,
+  model: MastraModel,
+): A {
+  const key = keyOf(model);
+  // A very short key would mask ordinary words; providers' keys are far longer.
+  if (key && key.length >= 8) agent.__setLogger(new RedactingLogger(`AGENT - ${agent.name}`, key));
+  return agent;
+}
+
 export function agentGenerate(task: string, model: MastraModel): StructuredGenerate {
-  const agent = new Agent({
-    id: task,
-    name: task,
-    instructions: INSTRUCTIONS,
-    model: model as AgentModel,
-  });
-  const anthropic = isAnthropicModel(model);
+  const agent = redactLogs(
+    new Agent({ id: task, name: task, instructions: INSTRUCTIONS, model: model as AgentModel }),
+    model,
+  );
+  const mark = cacheMarkOf(model);
   // Always stream: some OpenAI-compatible routers (e.g. 9Router) answer with SSE even
   // for non-streaming requests, which breaks a plain generate() call. Streaming works
   // with every provider, and we only need the final validated object.
   return async (input, schema) => {
     const prompt = typeof input === 'string' ? wholePrompt(input) : input;
-    // Anthropic: the prompt's stable parts carry cache_control (ticket 0061). Every
-    // other provider gets the whole text, exactly as before.
-    const message = anthropic ? [anthropicUserMessage(prompt, INSTRUCTIONS_TOKENS)] : prompt.text;
+    // Anthropic, directly or through OpenRouter: the prompt's stable parts carry
+    // cache_control (tickets 0061, 0064). Every other model gets the whole text, as before.
+    const message = mark ? [markedUserMessage(prompt, mark, INSTRUCTIONS_TOKENS)] : prompt.text;
     const stream = await agent.stream(message as Parameters<typeof agent.stream>[0], {
       structuredOutput: { schema },
     });
@@ -337,7 +408,8 @@ export class MastraAiPort implements AiPort {
 
   /**
    * Anthropic's counting API (`messages.countTokens`) for an Anthropic model;
-   * the script-aware estimate for every other provider, and whenever counting
+   * the script-aware estimate for every other provider (OpenRouter has no counting
+   * call, even for an Anthropic model routed through it), and whenever counting
    * fails (it must never fail a turn). The messages are counted as one text.
    */
   async countTokens(
@@ -490,14 +562,19 @@ async function* streamChat(
   tools: ChatTool[],
   signal: AbortSignal | undefined,
 ): AsyncIterable<ChatChunk> {
-  // Anthropic: the system prompt's stable parts carry cache_control (ticket 0061).
-  // Every other provider gets the whole text as one system prompt, as before.
-  const agent = new Agent({
-    id: 'chat',
-    name: 'chat',
-    instructions: isAnthropicModel(model) ? anthropicSystem(instructions) : instructions.text,
-    model: model as AgentModel,
-  });
+  // Anthropic, directly or through OpenRouter: the system prompt's stable parts carry
+  // cache_control (tickets 0061, 0064). Every other model gets the whole text as one
+  // system prompt, as before.
+  const mark = cacheMarkOf(model);
+  const agent = redactLogs(
+    new Agent({
+      id: 'chat',
+      name: 'chat',
+      instructions: mark ? markedSystem(instructions, mark) : instructions.text,
+      model: model as AgentModel,
+    }),
+    model,
+  );
   const output = await agent.stream(toAgentMessages(messages, tools.length > 0), {
     maxSteps: 1,
     ...(tools.length ? { clientTools: toAgentTools(tools) } : {}),
