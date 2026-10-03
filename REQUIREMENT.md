@@ -247,16 +247,28 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [x] Decision Lead Time (0056).
    - [x] Link a LINE, Slack or Teams account (0057).
    - [x] Decide from LINE, Slack and Teams (0058).
-4. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why (Spec section, someone to ask, open Blockers, QA ready), using the checks each Platform switches on. The AI fills or asks about the gaps.
+4. **OpenRouter** as an AI Provider: the Admin enters only the key, picks Approved Models from OpenRouter's model list with their Context Window prefilled, and Anthropic models routed through it get prompt caching.
+   - [ ] OpenRouter provider (0064).
+5. **Request changes** ([ADR 0013](./docs/adr/0013-request-changes-redrafts-proposals.md)): every AI proposal (Choices, Spec Proposals, Brief Proposals, Feature Suggestions, later Design Docs) gets Request changes next to Approve and Decline. The person explains what to change, and the AI writes a Redraft of the same proposal. Earlier Redrafts stay, with their feedback and a diff. Nothing changes until Approve. It works from Chat Cards too.
+   - [ ] Request changes and Redrafts (0065).
+6. **Context meter and `/compact`:** a meter under the composer shows how full the Conversation is for its model's Context Window, and a person can compact it themselves, with a focus that steers the Conversation Summary.
+   - [ ] Context meter and /compact (0066).
+7. **Decision Graph:** a graph like a git network graph on the Feature page. The Spec's versions are the main lane; each Decision Request branches off where it was raised and merges back at the Spec Version it produced, and open ones show their Response Window state.
+   - [ ] Decision Graph of a Feature (0067).
+8. **Language:** prompts keep domain terms, ids, numbers, names and quoted words as written, and reply in the person's language, else the Organization's. Every eval set gets Thai and mixed Thai-English cases, and answering directly is measured against reasoning in English first.
+   - [ ] Language rules and Thai eval cases (0068).
+9. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why (Spec section, someone to ask, open Blockers, QA ready), using the checks each Platform switches on. The AI fills or asks about the gaps. Design Docs wait for a Platform's Coverage.
    - [ ] Platforms per Project, targeted by Features (0050).
    - [ ] Coverage per Platform, used by the AI (0051).
    - [ ] Web and CLI: Platform chips and the Coverage matrix (0052).
-5. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything.
-6. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec, as per-person Conversations (ADR 0008).
-7. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
-8. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.
-9. Browser-based `vorasaan login`.
-10. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.
+10. **Design Docs per Platform** ([ADR 0014](./docs/adr/0014-design-docs-derived-from-the-spec-per-platform.md)): once a Feature's Spec is approved and a Platform's Coverage is complete, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA) from a template the Project can edit. The Platform's Tech Lead or Role Owners approve it. When the Spec changes, the Design Docs it affects go stale and the AI proposes an update.
+    - [ ] Design Docs per Platform (0069).
+11. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything. It also hands over the Feature's approved Design Doc for the developer's Platform.
+12. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec, as per-person Conversations (ADR 0008).
+13. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
+14. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.
+15. Browser-based `vorasaan login`.
+16. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.
     - [x] First-run setup requires a Setup Token from the server log (0062). Required before the first public release.
     - [x] Setup asks for the time zone, working days and hours, and language; a Getting started checklist follows (0063).
 

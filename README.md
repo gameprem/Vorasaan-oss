@@ -92,7 +92,7 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 
 ### Install with Docker
 
-You need [Docker](https://www.docker.com/) and an LLM provider: a **Claude API** key, an **OpenAI API** key, or any **OpenAI-compatible URL + token** (for example [9Router](https://github.com/decolua/9router)).
+You need [Docker](https://www.docker.com/) and an LLM provider: a **Claude API** key, an **OpenAI API** key, or any **OpenAI-compatible URL + token** (for example [9Router](https://github.com/decolua/9router), or [OpenRouter](https://openrouter.ai) as a Custom endpoint with the URL `https://openrouter.ai/api/v1`).
 
 ```bash
 git clone https://github.com/gameprem/Vorasaan.git
