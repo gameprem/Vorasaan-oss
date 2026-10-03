@@ -6,6 +6,7 @@ export type ActionCardRow = Prisma.ActionCardGetPayload<object>;
 export function toActionCardView(
   c: ActionCardRow,
   detail: ActionCardDetail | null,
+  redraft: ActionCardView['redraft'] = null,
 ): ActionCardView {
   return {
     id: c.id,
@@ -19,6 +20,7 @@ export function toActionCardView(
     createdAt: c.createdAt.toISOString(),
     reviewedAt: c.reviewedAt?.toISOString() ?? null,
     detail,
+    redraft: detail ? redraft : null,
   };
 }
 

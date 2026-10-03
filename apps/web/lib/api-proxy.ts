@@ -81,3 +81,23 @@ export async function forwardPost(request: Request, path: string, schema?: BodyS
   }
   return Response.json(payload, { status: res.status });
 }
+
+/** Forwards one GET to `path` on the API, with the session; only its JSON comes back. */
+export async function forwardGet(path: string) {
+  const auth = await authHeaders();
+  if (Object.keys(auth).length === 0) return json(401, 'Your session expired. Sign in again.');
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { headers: auth, cache: 'no-store' });
+  } catch {
+    return json(502, "Can't reach the Vorasaan server");
+  }
+  const text = await res.text();
+  let payload: unknown;
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    return json(502, 'The Vorasaan server sent an unexpected reply');
+  }
+  return Response.json(payload, { status: res.status });
+}

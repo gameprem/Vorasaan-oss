@@ -28,6 +28,7 @@ import { DraftedWith } from '@/components/drafted-with';
 import { GrillingSection } from '@/components/grilling-section';
 import { ProjectGuidelinesEditor } from '@/components/guidelines-editor';
 import { EffectiveGuidelinesList, Tag } from '@/components/guidelines-list';
+import { RedraftsSection } from '@/components/redrafts-section';
 import { RevertButton } from '@/components/revert-button';
 import { VersionDiff } from '@/components/spec-diff';
 import { field, secondaryButton } from '@/components/ui';
@@ -533,6 +534,11 @@ async function SuggestionsTab({
                       </p>
                     )}
 
+                    {s.status === 'PENDING' && canEdit && (
+                      <div className="mt-4">
+                        <RedraftsSection kind="FEATURE_SUGGESTION" id={s.id} />
+                      </div>
+                    )}
                     {s.status === 'PENDING' && canEdit && (
                       <div className="mt-5 grid gap-6 pt-4 md:grid-cols-2">
                         {acceptTeams.length > 0 ? (

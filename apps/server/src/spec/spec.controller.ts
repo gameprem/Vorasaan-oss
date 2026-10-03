@@ -9,7 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import type { User } from '@vorasaan/db';
-import { RevertSpecInput, SpecDiffQuery } from '@vorasaan/shared';
+import { ApproveProposalInput, RevertSpecInput, SpecDiffQuery } from '@vorasaan/shared';
 import { CurrentUser } from '../auth/identity.guard.ts';
 import { SpecService } from './spec.service.ts';
 
@@ -23,8 +23,12 @@ export class SpecController {
   }
 
   @Post('spec-proposals/:id/approve')
-  approve(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
-    return this.spec.approve(user, id);
+  approve(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: ApproveProposalInput }) body: ApproveProposalInput,
+  ) {
+    return this.spec.approve(user, id, body?.redraft);
   }
 
   @Post('spec-proposals/:id/reject')

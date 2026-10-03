@@ -249,6 +249,50 @@ export const ConversationSummaryDraft = z.object({
 });
 export type ConversationSummaryDraft = z.infer<typeof ConversationSummaryDraft>;
 
+// ─── Request changes (ADR 0013, ticket 0065) ────────────────────────────────
+
+/**
+ * One Request changes as AI input: the person's words and the part of the proposal they
+ * pointed at (rendered with its text, e.g. "Choice B: Poll every 5 s"), if any. Both are
+ * untrusted: prompts fence them as data that may only change the proposal.
+ */
+export type FeedbackForAi = { redraft: number; feedback: string; pointer: string | null };
+
+const RedraftNotes = {
+  /** What this Redraft changed from the one before. */
+  summary: z.string().trim().min(1).max(1_000),
+  /** Lasting preferences the feedback states (language, length, style); none for a content change. */
+  preferences: z.array(z.string().trim().min(1).max(300)).max(10),
+};
+
+export const RedraftedChoices = z.object({ choices: ChoiceDrafts, ...RedraftNotes });
+export type RedraftedChoices = z.infer<typeof RedraftedChoices>;
+
+export const RedraftedMarkdown = z.object({
+  proposedMarkdown: z.string().trim().min(1),
+  ...RedraftNotes,
+});
+export type RedraftedMarkdown = z.infer<typeof RedraftedMarkdown>;
+
+export const RedraftedSuggestion = z.object({
+  title: z.string().trim().min(1).max(200),
+  rationale: z.string().trim().min(1).max(4_000),
+  businessValue: z.string().trim().min(1).max(2_000),
+  effort: SuggestionLevel,
+  risk: SuggestionLevel,
+  ...RedraftNotes,
+});
+export type RedraftedSuggestion = z.infer<typeof RedraftedSuggestion>;
+
+/** What every redraft takes besides the proposal: the latest feedback and the earlier ones. */
+export type RedraftFeedbackForAi = {
+  /** The number of the Redraft being changed (the current one). */
+  current: number;
+  feedback: FeedbackForAi;
+  /** Feedback on earlier Redrafts of the same proposal, oldest first. */
+  earlier: FeedbackForAi[];
+};
+
 /** An Action Card of the Conversation, as the summary is told about it. Its title is untrusted. */
 export type ActionCardForAi = { kind: string; title: string; status: string };
 
@@ -464,6 +508,58 @@ export interface AiPort {
     },
     options?: AiCallOptions,
   ): Promise<SpecProposalDraft>;
+
+  /** A Redraft of a Decision Request's Choices from a person's feedback (ticket 0065). */
+  redraftChoices(
+    input: RedraftFeedbackForAi & {
+      specMarkdown: string;
+      request: RequestForAi;
+      /** The current Choices. */
+      choices: ChoiceDraft[];
+      context: ContextBlock[];
+      foundation?: ProjectFoundationForAi;
+    },
+    options?: AiCallOptions,
+  ): Promise<RedraftedChoices>;
+
+  /** A Redraft of a Spec Proposal: the complete proposed Spec, changed as the feedback asks. */
+  redraftSpecProposal(
+    input: RedraftFeedbackForAi & {
+      feature: FeatureForAi;
+      /** The Spec the proposal changes (empty before v1). */
+      specMarkdown: string;
+      /** The current Redraft's proposed Spec. */
+      proposedMarkdown: string;
+      context: ContextBlock[];
+      foundation?: ProjectFoundationForAi;
+    },
+    options?: AiCallOptions,
+  ): Promise<RedraftedMarkdown>;
+
+  /** A Redraft of a Brief Proposal: the complete proposed Brief, changed as the feedback asks. */
+  redraftBriefProposal(
+    input: RedraftFeedbackForAi & {
+      project: ProjectForAi;
+      /** The Brief the proposal changes (the template before v1). */
+      briefMarkdown: string;
+      proposedMarkdown: string;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<RedraftedMarkdown>;
+
+  /** A Redraft of a Feature Suggestion, changed as the feedback asks. */
+  redraftFeatureSuggestion(
+    input: RedraftFeedbackForAi & {
+      project: ProjectForAi;
+      suggestion: SuggestionForAi;
+      /** Retrieved Project context, the current Brief first. */
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<RedraftedSuggestion>;
 
   /** How a Feature about to be created meets each effective Guideline (each with its `ref`). */
   checkFeatureFit(

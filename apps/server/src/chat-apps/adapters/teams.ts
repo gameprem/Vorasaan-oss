@@ -351,6 +351,7 @@ export function adaptiveCard(card: Card): object {
   const actions: object[] = [];
   if (card.ask) actions.push(inputCard(card.ask));
   if (card.own) actions.push(inputCard(card.own));
+  if (card.redraft) actions.push(inputCard(card.redraft));
   actions.push({ type: 'Action.OpenUrl', title: card.link.label, url: card.link.url });
   return {
     type: 'AdaptiveCard',

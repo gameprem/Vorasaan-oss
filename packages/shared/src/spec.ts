@@ -58,6 +58,16 @@ export const SpecDiff = z.object({
 });
 export type SpecDiff = z.infer<typeof SpecDiff>;
 
+/**
+ * `POST /spec-proposals/:id/approve` and `POST /brief-proposals/:id/approve`. The body is
+ * optional: `redraft` is the Redraft the approver saw (ticket 0065); when another one is
+ * current by now, nothing is approved (409).
+ */
+export const ApproveProposalInput = z
+  .strictObject({ redraft: z.int().positive().optional() })
+  .optional();
+export type ApproveProposalInput = z.infer<typeof ApproveProposalInput>;
+
 /** Carries both sides so a client can render the diff without another request. */
 export const SpecProposalView = z.object({
   id: Id,

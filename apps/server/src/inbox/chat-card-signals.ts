@@ -14,7 +14,12 @@ export type ChatCardSignal =
   /** A Spec Proposal to approve: a link only. */
   | { kind: 'SPEC_PROPOSAL'; specProposalId: string; requestId: string; to: string[] }
   /** An escalation step (1 reminder, 2 Delegate added, 3 overdue) to whoever it targets. */
-  | { kind: 'ESCALATION'; requestId: string; step: number; to: string[] };
+  | { kind: 'ESCALATION'; requestId: string; step: number; to: string[] }
+  /**
+   * The request's Choices were redrafted (ticket 0065): the cards already sent to these
+   * people are rebuilt in place where the chat app can edit them. No new card is sent.
+   */
+  | { kind: 'REDRAFTED'; requestId: string; to: string[] };
 
 export type ChatCardListener = (signals: readonly ChatCardSignal[]) => void;
 

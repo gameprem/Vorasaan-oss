@@ -23,6 +23,7 @@ import { fromRecordedModelColumns, toRecordedModelColumns } from '../ai/recorded
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { assertNotRedrafting, currentRedraft } from '../redrafts/redraft-guard.ts';
 import { ContextRetriever, splitFeatureSpec } from '../retrieval/context-retriever.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import { estimateTokens } from '../retrieval/token-estimate.ts';
@@ -170,13 +171,28 @@ export class SpecService {
   /**
    * Turns a PENDING Spec Proposal into the next Spec Version, atomically:
    * new version + proposal APPROVED + Decision Request SPEC_UPDATED, or nothing.
+   * It applies the Redraft the proposal holds (0065); `redraft`, when given, must be it.
    */
-  async approve(user: User, id: string): Promise<SpecVersionView> {
-    const proposal = await this.findPendingForApprover(user, id);
+  async approve(user: User, id: string, redraft?: number): Promise<SpecVersionView> {
+    const found = await this.findPendingForApprover(user, id);
+    // A Redraft being written is about to change it: Approve waits for it (0065).
+    await assertNotRedrafting(this.db, 'SPEC_PROPOSAL', id);
     const outbox = this.notifications.outbox().inboxChanged(user.id);
 
     try {
       const version = await this.db.$transaction(async (tx) => {
+        // Read again inside: what is approved is the Redraft the proposal holds now.
+        await assertNotRedrafting(tx, 'SPEC_PROPOSAL', id);
+        const current = await currentRedraft(tx, 'SPEC_PROPOSAL', id);
+        if (redraft !== undefined && redraft !== current) {
+          throw new StaleStateError(
+            `Redraft ${current} is the current one now; review it before approving`,
+          );
+        }
+        const proposal = await tx.specProposal.findUniqueOrThrow({
+          where: { id: found.id },
+          include: specProposalInclude,
+        });
         const latest = await tx.specVersion.findFirst({
           where: { featureId: proposal.featureId },
           orderBy: { version: 'desc' },

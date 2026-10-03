@@ -62,6 +62,22 @@ const en = {
   overdueLine: (names: string) => `Still waiting on ${names}.`,
   proposalHeading: 'Spec Proposal to review',
   proposalLine: 'A diff needs a real screen: review it in Vorasaan.',
+  // Request changes (ticket 0065).
+  redraft: 'Request changes',
+  redraftTitle: 'Request changes',
+  redraftChoicesLabel: 'What should the AI change in the Choices?',
+  redraftProposalLabel: 'What should the AI change in the Spec Proposal?',
+  redraftPlaceholder: 'E.g. "Choice B should keep the old flow" or "answer in Thai, shorter"',
+  redraftNow: (n: number) => `Redraft ${n}, after your Request changes.`,
+  promptRedraft: `Send what the AI should change as your next message (within ${PROMPT_MINUTES} minutes). Send "cancel" to stop.`,
+  redraftStarted: (n: number) => `Writing Redraft ${n}. I'll send the link when it's ready.`,
+  redraftReady: (n: number, url: string) =>
+    `Redraft ${n} is ready. Nothing changes until it is approved: ${url}`,
+  redraftFailed:
+    'The AI could not write the Redraft, so nothing changed. Try again, or use Vorasaan.',
+  redraftRefused:
+    'This can’t be redrafted now: it was approved, declined or changed, a Redraft is being written, or it reached its limit. Open it in Vorasaan.',
+  redraftNotAllowed: 'Only whoever approves this can request changes to it.',
   // Replies to a press.
   decided: (choice: DecidedAs) =>
     choice ? `Decided: ${choiceText(choice)}.` : 'Decided with your own answer.',
@@ -143,6 +159,19 @@ const th: ChatText = {
   overdueLine: (names) => `ยังรอ ${names} อยู่`,
   proposalHeading: 'Spec Proposal รอตรวจ',
   proposalLine: 'การเปลี่ยนแปลงต้องดูบนจอจริง: ตรวจใน Vorasaan',
+  redraft: 'ขอให้แก้',
+  redraftTitle: 'Request changes (ขอให้แก้)',
+  redraftChoicesLabel: 'อยากให้ AI แก้อะไรใน Choice',
+  redraftProposalLabel: 'อยากให้ AI แก้อะไรใน Spec Proposal',
+  redraftPlaceholder: 'เช่น "Choice B ให้คง flow เดิมไว้" หรือ "ตอบเป็นภาษาไทย สั้นลง"',
+  redraftNow: (n) => `Redraft ${n} หลังจากคุณขอให้แก้`,
+  promptRedraft: `พิมพ์สิ่งที่อยากให้ AI แก้ในข้อความถัดไป (ภายใน ${PROMPT_MINUTES} นาที) พิมพ์ "ยกเลิก" เพื่อหยุด`,
+  redraftStarted: (n) => `กำลังเขียน Redraft ${n} จะส่งลิงก์ให้เมื่อเสร็จ`,
+  redraftReady: (n, url) => `Redraft ${n} พร้อมแล้ว ยังไม่มีอะไรเปลี่ยนจนกว่าจะอนุมัติ: ${url}`,
+  redraftFailed: 'AI เขียน Redraft ไม่สำเร็จ จึงยังไม่มีอะไรเปลี่ยน ลองอีกครั้ง หรือใช้ Vorasaan',
+  redraftRefused:
+    'ตอนนี้ขอให้แก้ไม่ได้: อาจอนุมัติ ปฏิเสธ หรือเปลี่ยนไปแล้ว มี Redraft กำลังเขียนอยู่ หรือครบจำนวนครั้งแล้ว เปิดใน Vorasaan',
+  redraftNotAllowed: 'เฉพาะผู้อนุมัติเรื่องนี้เท่านั้นที่ขอให้แก้ได้',
   decided: (choice) => (choice ? `ตัดสินใจแล้ว: ${choiceText(choice)}` : 'ตัดสินใจแล้วด้วยคำตอบของคุณเอง'),
   proposalReady: (url) => `Spec Proposal พร้อมให้ตรวจ: ${url}`,
   asked: (raiser) => `ส่งคำถามถึง ${raiser} แล้ว คำขอนี้จะรอคำตอบ`,

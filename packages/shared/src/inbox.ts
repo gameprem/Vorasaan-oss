@@ -18,6 +18,7 @@ import {
   SpecVersionSource,
   TeamRole,
 } from './enums.ts';
+import { ProposalRedraftedEvent } from './redraft.ts';
 import { ResponseWindowState } from './response-window.ts';
 
 const Id = z.uuid();
@@ -176,6 +177,8 @@ export const ServerEvent = z.discriminatedUnion('event', [
   z.object({ event: z.literal('conversation.actionCard.created'), data: ActionCardEvent }),
   z.object({ event: z.literal('conversation.actionCard.updated'), data: ActionCardEvent }),
   z.object({ event: z.literal('chatAccount.changed'), data: ChatAccountChangedEvent }),
+  /** A Redraft of a proposal the viewer may act on started, finished or failed (0065). */
+  z.object({ event: z.literal('proposal.redrafted'), data: ProposalRedraftedEvent }),
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;
 export type ServerEventName = ServerEvent['event'];

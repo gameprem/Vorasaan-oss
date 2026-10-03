@@ -302,6 +302,7 @@ export function slackBlocks(card: Card): object[] {
   for (const [id, input] of [
     ['ask', card.ask],
     ['own', card.own],
+    ['redraft', card.redraft],
   ] as const) {
     if (input) {
       actions.push({

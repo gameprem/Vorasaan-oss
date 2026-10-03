@@ -7,6 +7,7 @@ import { FeatureGuidelinesModule } from '../feature-guidelines/feature-guideline
 import { FeatureSuggestionsModule } from '../feature-suggestions/feature-suggestions.module.ts';
 import { GrillingModule } from '../grilling/grilling.module.ts';
 import { InboxModule } from '../inbox/inbox.module.ts';
+import { RedraftsModule } from '../redrafts/redrafts.module.ts';
 import { SpecModule } from '../spec/spec.module.ts';
 import { ConversationLocksModule } from './conversation-locks.ts';
 import {
@@ -31,6 +32,7 @@ import { ConversationsService } from './conversations.service.ts';
     FeatureSuggestionsModule,
     GrillingModule,
     ConversationLocksModule,
+    RedraftsModule,
   ],
   controllers: [ConversationsController, GrillingConversationsController, ActionCardsController],
   providers: [ConversationsService, ActionCardsService],

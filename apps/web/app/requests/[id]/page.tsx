@@ -3,6 +3,7 @@ import type {
   FeatureSummaryView,
   PersonRef,
   ProjectResponseWindowsView,
+  ProposalRedraftsView,
   RequestHistoryKind,
   RequestMessageKind,
   ResponseWindow,
@@ -23,6 +24,7 @@ import {
 } from '@/components/bits';
 import { DecideForm } from '@/components/decide-form';
 import { DraftReview } from '@/components/draft-review';
+import { ProposalRedrafts } from '@/components/redrafts';
 import {
   ClaimButton,
   MessageForm,
@@ -34,6 +36,7 @@ import { SpecDiff } from '@/components/spec-diff';
 import { ROLE_LABEL } from '@/components/ui';
 import { approveProposal, rejectProposal } from '@/lib/actions';
 import { ApiError, api, currentUser } from '@/lib/api';
+import { choicePointers, sectionPointers } from '@/lib/redrafts';
 
 export const metadata = { title: 'Decision Request' };
 
@@ -102,10 +105,18 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
 
   let request: DecisionRequestView;
   let proposal: SpecProposalView | undefined;
+  let choiceRedrafts: ProposalRedraftsView | undefined;
+  let proposalRedrafts: ProposalRedraftsView | undefined;
   try {
     request = await api<DecisionRequestView>(`/decision-requests/${id}`);
     if (request.specProposal) {
-      proposal = await api<SpecProposalView>(`/spec-proposals/${request.specProposal.id}`);
+      [proposal, proposalRedrafts] = await Promise.all([
+        api<SpecProposalView>(`/spec-proposals/${request.specProposal.id}`),
+        api<ProposalRedraftsView>(`/spec-proposals/${request.specProposal.id}/redrafts`),
+      ]);
+    }
+    if (request.choices.length > 0) {
+      choiceRedrafts = await api<ProposalRedraftsView>(`/decision-requests/${id}/choices/redrafts`);
     }
   } catch (error) {
     unstable_rethrow(error); // let Next's redirect()/notFound() through
@@ -215,7 +226,19 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
                   This is a draft. Nobody sees it until you send it. Review it, then send it.
                 </Notice>
               </div>
+              {choiceRedrafts && (
+                <section aria-label="Redrafts of the Choices" className="mt-6">
+                  <ProposalRedrafts
+                    kind="CHOICES"
+                    proposalId={request.id}
+                    redrafts={choiceRedrafts}
+                    pointers={choicePointers(request.choices)}
+                  />
+                </section>
+              )}
               <DraftReview
+                // A Redraft brings new Choices: the review starts again from them.
+                key={request.choices.map((c) => c.id).join()}
                 request={request}
                 candidatesByRole={draftCandidates}
                 defaultWindow={draftWindow}
@@ -248,7 +271,21 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       {request.status === 'OPEN' &&
         (canAct ? (
           <>
-            <DecideForm requestId={request.id} choices={request.choices} />
+            <DecideForm
+              key={request.choices.map((c) => c.id).join()}
+              requestId={request.id}
+              choices={request.choices}
+            />
+            {choiceRedrafts && (
+              <section aria-label="Redrafts of the Choices" className="mt-6">
+                <ProposalRedrafts
+                  kind="CHOICES"
+                  proposalId={request.id}
+                  redrafts={choiceRedrafts}
+                  pointers={choicePointers(request.choices)}
+                />
+              </section>
+            )}
             <section aria-labelledby="more" className="mt-10 space-y-8 pt-8">
               <h2 id="more" className="text-lg font-semibold">
                 Not ready to decide?
@@ -379,9 +416,29 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
           <div className="mt-4">
             <SpecDiff before={proposal.baseMarkdown} after={proposal.proposedMarkdown} />
           </div>
+          {proposalRedrafts && (
+            <div className="mt-4">
+              <ProposalRedrafts
+                kind="SPEC_PROPOSAL"
+                proposalId={proposal.id}
+                redrafts={proposalRedrafts}
+                pointers={sectionPointers(proposal.proposedMarkdown)}
+              />
+            </div>
+          )}
           {proposal.status === 'PENDING' && userId === proposal.approver.id && (
             <ReviewProposal
-              approveAction={approveProposal.bind(null, proposal.id, request.id)}
+              approveLabel={
+                proposalRedrafts && proposalRedrafts.current > 1
+                  ? `Approve Redraft ${proposalRedrafts.current}`
+                  : 'Approve Spec change'
+              }
+              approveAction={approveProposal.bind(
+                null,
+                proposal.id,
+                request.id,
+                proposalRedrafts?.current ?? null,
+              )}
               rejectAction={rejectProposal.bind(null, proposal.id, request.id)}
               note="Rejecting keeps your Decision. Only the Spec stays as it is."
             />

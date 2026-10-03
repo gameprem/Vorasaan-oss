@@ -20,6 +20,7 @@ import {
 import { toRecordedModelColumns } from '../ai/recorded-model.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { assertNotRedrafting, currentRedraft } from '../redrafts/redraft-guard.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import {
@@ -197,10 +198,21 @@ export class BriefService {
    * Turns a PENDING Brief Proposal into the next Brief Version, atomically, as
    * long as the Brief has not changed since the proposal was drafted.
    */
-  async approve(user: User, id: string): Promise<BriefVersionView> {
-    const proposal = await this.findPendingForApprover(user, id);
+  async approve(user: User, id: string, redraft?: number): Promise<BriefVersionView> {
+    const found = await this.findPendingForApprover(user, id);
+    // A Redraft being written is about to change it: Approve waits for it (0065).
+    await assertNotRedrafting(this.db, 'BRIEF_PROPOSAL', id);
     try {
       const created = await this.db.$transaction(async (tx) => {
+        // Read again inside: what is approved is the Redraft the proposal holds now.
+        await assertNotRedrafting(tx, 'BRIEF_PROPOSAL', id);
+        const current = await currentRedraft(tx, 'BRIEF_PROPOSAL', id);
+        if (redraft !== undefined && redraft !== current) {
+          throw new StaleStateError(
+            `Redraft ${current} is the current one now; review it before approving`,
+          );
+        }
+        const proposal = await tx.briefProposal.findUniqueOrThrow({ where: { id: found.id } });
         const latest = await tx.briefVersion.findFirst({
           where: { projectId: proposal.projectId },
           orderBy: { version: 'desc' },

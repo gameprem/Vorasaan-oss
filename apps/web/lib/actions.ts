@@ -46,6 +46,8 @@ export async function decide(
 export async function approveProposal(
   proposalId: string,
   requestId: string | null,
+  /** The Redraft the approver saw (ticket 0065): nothing is approved if another is current. */
+  redraft: number | null,
   _prev: ActionState,
 ): Promise<ActionState> {
   if (!isId(proposalId) || (requestId !== null && !isId(requestId))) {
@@ -55,6 +57,7 @@ export async function approveProposal(
   try {
     version = await api<SpecVersionView>(`/spec-proposals/${proposalId}/approve`, {
       method: 'POST',
+      ...(redraft && Number.isInteger(redraft) && redraft > 0 ? { body: { redraft } } : {}),
     });
   } catch (error) {
     if (error instanceof ApiError) return { error: error.message };

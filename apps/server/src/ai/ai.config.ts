@@ -20,7 +20,11 @@ export type AiTask =
   | 'draftSpecFromSuggestion'
   | 'checkFeatureFit'
   | 'chat'
-  | 'summarizeConversation';
+  | 'summarizeConversation'
+  | 'redraftChoices'
+  | 'redraftSpecProposal'
+  | 'redraftBriefProposal'
+  | 'redraftFeatureSuggestion';
 
 /** The Settings task each call belongs to, and the env var that overrides its model. */
 export const AI_TASKS: Record<AiTask, { kind: AiTaskKind; env: string }> = {
@@ -42,6 +46,14 @@ export const AI_TASKS: Record<AiTask, { kind: AiTaskKind; env: string }> = {
   checkFeatureFit: { kind: 'FIT_CHECK', env: 'VORASAAN_MODEL_CHECK_FEATURE_FIT' },
   chat: { kind: 'CHAT', env: 'VORASAAN_MODEL_CHAT' },
   summarizeConversation: { kind: 'SUMMARIES', env: 'VORASAAN_MODEL_SUMMARIZE_CONVERSATION' },
+  // Request changes (ticket 0065): a Redraft runs on the model of the task that drafted it.
+  redraftChoices: { kind: 'CHOICES', env: 'VORASAAN_MODEL_REDRAFT_CHOICES' },
+  redraftSpecProposal: { kind: 'SPEC_PROPOSAL', env: 'VORASAAN_MODEL_REDRAFT_SPEC_PROPOSAL' },
+  redraftBriefProposal: { kind: 'GRILLING', env: 'VORASAAN_MODEL_REDRAFT_BRIEF_PROPOSAL' },
+  redraftFeatureSuggestion: {
+    kind: 'FEATURE_SUGGESTIONS',
+    env: 'VORASAAN_MODEL_REDRAFT_FEATURE_SUGGESTION',
+  },
 };
 
 /** The per-task env override, or undefined when it isn't set. */

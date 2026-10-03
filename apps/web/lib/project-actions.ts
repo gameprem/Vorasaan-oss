@@ -90,6 +90,8 @@ export async function revertBrief(
 export async function approveBriefProposal(
   projectId: string,
   proposalId: string,
+  /** The Redraft the approver saw (ticket 0065): nothing is approved if another is current. */
+  redraft: number | null,
   _prev: ProjectActionState,
 ): Promise<ProjectActionState> {
   if (!isId(projectId) || !isId(proposalId)) return INVALID;
@@ -97,6 +99,7 @@ export async function approveBriefProposal(
   try {
     version = await api<BriefVersionView>(`/brief-proposals/${proposalId}/approve`, {
       method: 'POST',
+      ...(redraft && Number.isInteger(redraft) && redraft > 0 ? { body: { redraft } } : {}),
     });
   } catch (error) {
     if (error instanceof ApiError) return { error: error.message };

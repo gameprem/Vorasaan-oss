@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  type OnModuleInit,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { ActionCardKind, PrismaClient, User } from '@vorasaan/db';
@@ -12,7 +13,9 @@ import type {
   ActionCardView,
   ApproveActionCardInput,
   DeclineActionCardInput,
+  ProposalKind,
   RecordedModel,
+  RequestChangesInput,
 } from '@vorasaan/shared';
 import type { z } from 'zod';
 import type { ChatTool, ChatToolCall, ModelChoice } from '../ai/ai.port.ts';
@@ -24,6 +27,8 @@ import { DecisionRequestsService } from '../decision-requests/decision-requests.
 import { FeatureSuggestionsService } from '../feature-suggestions/feature-suggestions.service.ts';
 import { EventBus } from '../inbox/event-bus.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { currentRedraft } from '../redrafts/redraft-guard.ts';
+import { CARD_KIND, RedraftsService } from '../redrafts/redrafts.service.ts';
 import { ContextRetriever } from '../retrieval/context-retriever.ts';
 import { SpecService } from '../spec/spec.service.ts';
 import { type ActionCardRow, briefProposalDetail, toActionCardView } from './action-card.view.ts';
@@ -77,8 +82,16 @@ const SUMMARY_CHARS = 500;
  * elsewhere becomes STALE. Only the Conversation's owner sees or acts on a card;
  * anyone else gets 404.
  */
+/** The proposal an Action Card's target is, for Request changes (0065). */
+const PROPOSAL_KIND: Record<ActionCardKind, ProposalKind> = {
+  DECISION_REQUEST: 'CHOICES',
+  SPEC_PROPOSAL: 'SPEC_PROPOSAL',
+  BRIEF_PROPOSAL: 'BRIEF_PROPOSAL',
+  FEATURE_SUGGESTION: 'FEATURE_SUGGESTION',
+};
+
 @Injectable()
-export class ActionCardsService {
+export class ActionCardsService implements OnModuleInit {
   private readonly logger = new Logger(ActionCardsService.name);
   /** Cards being approved or declined in this process (one server process per Organization). */
   private readonly acting = new Set<string>();
@@ -91,7 +104,30 @@ export class ActionCardsService {
     private readonly brief: BriefService,
     private readonly suggestions: FeatureSuggestionsService,
     private readonly bus: EventBus,
+    private readonly redrafts: RedraftsService,
   ) {}
+
+  /** A Redraft started, finished or failed: the card's owner sees it change (0065). */
+  onModuleInit() {
+    this.redrafts.listen((event) => {
+      void this.redrafted(event.kind, event.proposalId).catch((error) =>
+        this.logger.warn(`Could not update an Action Card: ${(error as Error)?.message}`),
+      );
+    });
+  }
+
+  private async redrafted(kind: ProposalKind, proposalId: string) {
+    const card = await this.db.actionCard.findUnique({
+      where: { kind_targetId: { kind: CARD_KIND[kind], targetId: proposalId } },
+      include: { conversation: { select: { ownerId: true } } },
+    });
+    if (!card) return;
+    const { conversation: _, ...row } = card;
+    this.bus.emit(card.conversation.ownerId, {
+      event: 'conversation.actionCard.updated',
+      data: { conversationId: card.conversationId, card: await this.view(row) },
+    });
+  }
 
   /** The tools offered in a Conversation of this scope. */
   toolsFor(scope: { featureId: string | null }): ChatTool[] {
@@ -286,7 +322,11 @@ export class ActionCardsService {
   }
 
   private async view(row: ActionCardRow): Promise<ActionCardView> {
-    return toActionCardView(row, await this.detail(row));
+    const [detail, redraft] = await Promise.all([
+      this.detail(row),
+      this.redrafts.summary({ kind: PROPOSAL_KIND[row.kind], id: row.targetId }),
+    ]);
+    return toActionCardView(row, detail, redraft);
   }
 
   /** What the card proposes, as its target stands now; null once the target is gone. */
@@ -370,7 +410,16 @@ export class ActionCardsService {
   /** The owner approves: the target's own service sends, approves or accepts it. */
   async approve(user: User, id: string, input: ApproveActionCardInput): Promise<ActionCardView> {
     return this.act(user, id, async (card) => {
-      const { deciderRole, recipients, choices, teamId } = input ?? {};
+      const { deciderRole, recipients, choices, teamId, redraft } = input ?? {};
+      // The person approves the Redraft they saw, or nothing (0065).
+      if (redraft !== undefined) {
+        const current = await currentRedraft(this.db, PROPOSAL_KIND[card.kind], card.targetId);
+        if (current !== redraft) {
+          throw new ConflictException(
+            `Redraft ${current} is the current one now; review it before approving`,
+          );
+        }
+      }
       if ((deciderRole || recipients || choices) && card.kind !== 'DECISION_REQUEST') {
         throw new UnprocessableEntityException(
           '`deciderRole`, `recipients` and `choices` only apply to a Decision Request card',
@@ -392,10 +441,10 @@ export class ActionCardsService {
           break;
         }
         case 'SPEC_PROPOSAL':
-          await this.spec.approve(user, card.targetId);
+          await this.spec.approve(user, card.targetId, redraft);
           break;
         case 'BRIEF_PROPOSAL':
-          await this.brief.approve(user, card.targetId);
+          await this.brief.approve(user, card.targetId, redraft);
           break;
         case 'FEATURE_SUGGESTION':
           await this.suggestions.accept(user, card.targetId, {
@@ -433,6 +482,40 @@ export class ActionCardsService {
       }
       return 'DECLINED';
     });
+  }
+
+  /**
+   * Request changes (ADR 0013, ticket 0065): the AI writes the next Redraft of what the
+   * card proposes, through RedraftsService, which checks that the owner may approve it.
+   * The card stays PROPOSED and shows the new Redraft; nothing else changes. A card
+   * already reviewed, or whose target changed elsewhere (it becomes STALE), is a 409.
+   */
+  async requestChanges(
+    user: User,
+    id: string,
+    input: RequestChangesInput,
+  ): Promise<ActionCardView> {
+    const owned = await this.owned(user, id);
+    await projectAccess(this.db, user, owned.conversation.projectId);
+    if (this.acting.has(id)) {
+      throw new ConflictException('This Action Card is already being approved or declined');
+    }
+    const card = await this.db.actionCard.findUniqueOrThrow({ where: { id } });
+    if (card.status !== 'PROPOSED') {
+      throw new ConflictException(`This Action Card is already ${card.status.toLowerCase()}`);
+    }
+    if (await this.isStale(card)) {
+      await this.mark(user, card, 'STALE');
+      throw new ConflictException(
+        'What this Action Card proposes changed elsewhere, so it can no longer be redrafted',
+      );
+    }
+    await this.redrafts.requestChanges(
+      user,
+      { kind: PROPOSAL_KIND[card.kind], id: card.targetId },
+      input,
+    );
+    return this.view(await this.db.actionCard.findUniqueOrThrow({ where: { id } }));
   }
 
   /**

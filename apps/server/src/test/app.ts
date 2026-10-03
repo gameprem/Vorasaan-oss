@@ -8,6 +8,7 @@ import { ChatCardsService } from '../chat-apps/chat-cards.service.ts';
 import { ChatEventsService } from '../chat-apps/chat-events.service.ts';
 import { CLOCK } from '../clock/clock.ts';
 import { installVerbatimBody } from '../http/verbatim-body.ts';
+import { RedraftsService } from '../redrafts/redrafts.service.ts';
 import { EscalationJob } from '../response-windows/escalation.job.ts';
 import { EMBEDDING_PORT_FACTORY } from '../retrieval/embedding.port.ts';
 import { FakeEmbeddings } from '../retrieval/fake-embedding.port.ts';
@@ -66,6 +67,9 @@ export async function createTestApp(): Promise<TestApp> {
   const indexing = app.get(IndexingService);
   beforeTruncate.add(() => indexing.drain());
   // Chat cards and presses run in the background too (ticket 0058).
+  // Redrafts are written while their request waits, and a chat press doesn't wait (0065).
+  const redrafts = app.get(RedraftsService);
+  beforeTruncate.add(() => redrafts.drain());
   const chatCards = app.get(ChatCardsService);
   const chatEvents = app.get(ChatEventsService);
   beforeTruncate.add(async () => {

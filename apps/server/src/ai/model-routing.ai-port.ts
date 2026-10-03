@@ -118,4 +118,38 @@ export class ModelRoutingAiPort implements AiPort {
   async checkFeatureFit(input: Parameters<AiPort['checkFeatureFit']>[0], options?: AiCallOptions) {
     return this.engine.checkFeatureFit(input, await this.options('checkFeatureFit', options));
   }
+
+  async redraftChoices(input: Parameters<AiPort['redraftChoices']>[0], options?: AiCallOptions) {
+    return this.engine.redraftChoices(input, await this.options('redraftChoices', options));
+  }
+
+  async redraftSpecProposal(
+    input: Parameters<AiPort['redraftSpecProposal']>[0],
+    options?: AiCallOptions,
+  ) {
+    return this.engine.redraftSpecProposal(
+      input,
+      await this.options('redraftSpecProposal', options),
+    );
+  }
+
+  async redraftBriefProposal(
+    input: Parameters<AiPort['redraftBriefProposal']>[0],
+    options?: AiCallOptions,
+  ) {
+    return this.engine.redraftBriefProposal(
+      input,
+      await this.options('redraftBriefProposal', options),
+    );
+  }
+
+  async redraftFeatureSuggestion(
+    input: Parameters<AiPort['redraftFeatureSuggestion']>[0],
+    options?: AiCallOptions,
+  ) {
+    return this.engine.redraftFeatureSuggestion(
+      input,
+      await this.options('redraftFeatureSuggestion', options),
+    );
+  }
 }

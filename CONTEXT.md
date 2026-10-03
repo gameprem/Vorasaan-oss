@@ -205,7 +205,7 @@ A one-time code Vorasaan shows a person, which they send to the Chat App's bot t
 _Avoid_: Pairing code, OTP, token
 
 **Chat Card**:
-What a person gets in their Chat App: a Decision Request with a button for each Choice, Ask for more info, Write your own answer and Open in Vorasaan; or a NEEDS_INFO question, an escalation notice, or a link to review a Spec Proposal. It shows only the title, the Choices and short status lines, never Attachment contents. Its buttons work only for the person it was sent to, from their linked Chat Account.
+What a person gets in their Chat App: a Decision Request with a button for each Choice, Ask for more info, Write your own answer, Request changes and Open in Vorasaan; or a NEEDS_INFO question, an escalation notice, or a link to review a Spec Proposal with Request changes. It shows only the title, the Choices and short status lines, never Attachment contents. Its buttons work only for the person it was sent to, from their linked Chat Account.
 _Avoid_: Action Card (that is a Conversation's proposal), notification, chat message
 
 **Quiet Hours**:
@@ -239,5 +239,5 @@ The older part of a Conversation folded into fixed sections (the goal, what was 
 _Avoid_: Memory, compaction note, recap
 
 **Action Card**:
-A proposal the AI makes inside a Conversation (a Decision Request draft, a Spec Proposal, a Brief Proposal, a Feature Suggestion), shown with the buttons to approve, edit or decline it. Only the Conversation's owner acts on it. It goes stale when what it proposes changes elsewhere (for example the proposal is approved from the Inbox), and can then no longer be approved.
+A proposal the AI makes inside a Conversation (a Decision Request draft, a Spec Proposal, a Brief Proposal, a Feature Suggestion), shown with the buttons to approve, edit, Request changes or decline it. A Request changes turns it into its next Redraft, in the same card. Only the Conversation's owner acts on it. It goes stale when what it proposes changes elsewhere (for example the proposal is approved from the Inbox), and can then no longer be approved or redrafted.
 _Avoid_: Tool result, command, auto-action

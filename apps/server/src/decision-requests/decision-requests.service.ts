@@ -35,6 +35,7 @@ import { activeDelegates } from '../delegations/active-delegations.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
 import { NotificationsService, type Outbox, type Tx } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { assertNotRedrafting } from '../redrafts/redraft-guard.ts';
 import { ResponseWindowsService } from '../response-windows/response-windows.service.ts';
 import {
   addWorkingTime,
@@ -174,6 +175,8 @@ export class DecisionRequestsService {
     if (input.choices && !request.withChoices) {
       throw new UnprocessableEntityException('This Question was raised without Choices');
     }
+    // A Redraft of the Choices being written: sending waits for it (0065).
+    await assertNotRedrafting(this.db, 'CHOICES', id);
 
     const submittedAt = this.clock.now();
     // The Response Window starts now (ADR 0011): the Project's default for this kind,
@@ -444,6 +447,8 @@ export class DecisionRequestsService {
       throw new ForbiddenException('Only the Decider can decide this Decision Request');
     }
     const status = this.transition(request, 'decide');
+    // A Redraft of the Choices being written: deciding waits for it (0065).
+    await assertNotRedrafting(this.db, 'CHOICES', id);
     // Acting as Delegate means the request reached the Decider in place of the delegator.
     const onBehalfOfId =
       request.recipients.find((r) => r.user.id === user.id)?.onBehalfOfId ?? null;
@@ -518,6 +523,13 @@ export class DecisionRequestsService {
         data: { status, deciderId: user.id },
       });
       if (moved.count !== 1) throw new ConflictException('This Decision Request changed meanwhile');
+      // The Choices may have been redrafted while the Spec Proposal was drafted (0065).
+      if ('choiceId' in input) {
+        const still = await tx.choice.count({ where: { id: input.choiceId, requestId: id } });
+        if (!still) {
+          throw new ConflictException('The Choices were redrafted meanwhile; pick one again');
+        }
+      }
       if (impliedClaim) await this.claimed(tx, outbox, user, request);
       await this.notifications.notify(tx, outbox, {
         type: 'REQUEST_DECIDED',

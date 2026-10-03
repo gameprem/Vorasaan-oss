@@ -93,6 +93,20 @@ export const ActionCardView = z.object({
   reviewedAt: Timestamp.nullable(),
   /** What it proposes, as its target stands now; null once the target is gone. */
   detail: ActionCardDetail.nullable(),
+  /**
+   * Its Redrafts (ticket 0065): `current` is the one shown and the one Approve applies
+   * (1 until someone Requests changes), `writing` while the AI writes the next one, and
+   * how many Request changes are `left`. Null once the target is gone.
+   */
+  redraft: z
+    .object({
+      current: z.int().positive(),
+      writing: z.boolean(),
+      left: z.int().nonnegative(),
+      /** The feedback that caused the current Redraft; null for Redraft 1. */
+      feedback: z.string().nullable(),
+    })
+    .nullable(),
 });
 export type ActionCardView = z.infer<typeof ActionCardView>;
 
@@ -110,6 +124,11 @@ export const ApproveActionCardInput = z
     recipients: Recipients.optional(),
     choices: ChoiceDrafts.optional(),
     teamId: Id.optional(),
+    /**
+     * The Redraft the person saw and approves (ticket 0065). When another one is current
+     * by now, nothing is approved (409).
+     */
+    redraft: z.int().positive().optional(),
   })
   .optional();
 export type ApproveActionCardInput = z.infer<typeof ApproveActionCardInput>;
