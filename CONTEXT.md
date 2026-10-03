@@ -241,3 +241,17 @@ _Avoid_: Memory, compaction note, recap
 **Action Card**:
 A proposal the AI makes inside a Conversation (a Decision Request draft, a Spec Proposal, a Brief Proposal, a Feature Suggestion), shown with the buttons to approve, edit, Request changes or decline it. A Request changes turns it into its next Redraft, in the same card. Only the Conversation's owner acts on it. It goes stale when what it proposes changes elsewhere (for example the proposal is approved from the Inbox), and can then no longer be approved or redrafted.
 _Avoid_: Tool result, command, auto-action
+
+### Learning
+
+**Learning Loop**:
+How Vorasaan learns from what people do with the AI's proposals: every AI call leaves a Receipt, people's outcomes are linked to it, and the AI proposes better Prompt Versions from them. Only an Admin's approval changes how the AI behaves; nothing is published automatically.
+_Avoid_: Self-improvement, auto-tuning, training, fine-tuning
+
+**Receipt**:
+The record of one AI call: its task, prompt and Prompt Version, Approved Model, tokens, cache use, latency, what it produced, and what people then did with it (approved, declined, requested changes, edited by hand). Its export leaves out people's names and Attachment contents.
+_Avoid_: Log, trace, usage record, telemetry
+
+**Prompt Version**:
+An immutable, numbered version of one of the AI's prompts held by an Organization, on top of the built-in default. The AI or an Admin proposes it, an Admin approves it after seeing its eval scores, and it can be rolled back.
+_Avoid_: Prompt template, prompt revision, prompt draft
