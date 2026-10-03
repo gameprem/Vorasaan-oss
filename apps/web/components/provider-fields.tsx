@@ -10,6 +10,7 @@ import {
 import { useState, useTransition } from 'react';
 import { inputClass } from './login-form';
 import { OpenRouterModelPicker } from './openrouter-model-picker';
+import { Radio, RadioGroup } from './ui/radio-group';
 
 export const PROVIDERS: { value: AiProvider; label: string; hint: string; keyLabel: string }[] = [
   {
@@ -37,6 +38,43 @@ export const PROVIDERS: { value: AiProvider; label: string; hint: string; keyLab
     keyLabel: 'OpenRouter API key',
   },
 ];
+
+/** The kinds of provider as tiles, with the picked one's hint under them. */
+export function ProviderKindPicker({
+  label,
+  name,
+  value,
+  onChange,
+}: {
+  label: string;
+  name: string;
+  value: AiProvider;
+  onChange: (kind: AiProvider) => void;
+}) {
+  const current = PROVIDERS.find((p) => p.value === value) ?? PROVIDERS[0];
+  return (
+    <RadioGroup
+      label={label}
+      name={name}
+      value={value}
+      onChange={(kind) => onChange(kind as AiProvider)}
+      description={current?.hint}
+    >
+      <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {PROVIDERS.map((p) => (
+          <Radio
+            key={p.value}
+            value={p.value}
+            variant="bare"
+            className="cursor-pointer rounded-card bg-bg px-3 py-2.5 font-medium data-[hovered]:bg-surface-hi data-[selected]:bg-ink-wash data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-focus"
+          >
+            {p.label}
+          </Radio>
+        ))}
+      </div>
+    </RadioGroup>
+  );
+}
 
 export type ProviderDraft = {
   provider: AiProvider;
@@ -83,39 +121,12 @@ export function ProviderFields({
 
   return (
     <div>
-      <fieldset>
-        <legend className="text-sm">Provider</legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {PROVIDERS.map((p) => {
-            const active = p.value === value.provider;
-            return (
-              <label
-                key={p.value}
-                className={`cursor-pointer rounded-card px-3 py-2.5 ${
-                  active ? 'bg-ink-wash text-fg' : 'bg-bg hover:bg-surface-hi'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="provider"
-                  value={p.value}
-                  checked={active}
-                  onChange={() =>
-                    set({
-                      provider: p.value,
-                      model: DEFAULT_MODELS[p.value],
-                      apiKey: '',
-                    })
-                  }
-                  className="sr-only"
-                />
-                <span className="block font-medium">{p.label}</span>
-              </label>
-            );
-          })}
-        </div>
-        <p className="mt-2 text-sm text-fg-soft">{current?.hint}</p>
-      </fieldset>
+      <ProviderKindPicker
+        label="Provider"
+        name="provider"
+        value={value.provider}
+        onChange={(provider) => set({ provider, model: DEFAULT_MODELS[provider], apiKey: '' })}
+      />
 
       {value.provider === 'OPENAI_COMPATIBLE' && (
         <label className="mt-5 block">

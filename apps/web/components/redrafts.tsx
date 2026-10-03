@@ -13,6 +13,7 @@ import { type PostResult, postJson } from '@/lib/chat-client';
 import { type PointerOption, redraftRoute } from '@/lib/redrafts';
 import { SpecDiff } from './spec-diff';
 import { field, primaryButton, secondaryButton } from './ui';
+import { LazySelect as Select } from './ui/lazy';
 
 // Request changes and Redrafts (ADR 0013, ticket 0065): the third answer to an AI proposal,
 // next to Approve and Decline. The person says what to change, optionally pointing at one
@@ -112,25 +113,17 @@ export function RequestChanges({
         />
       </div>
       {pointers.length > 0 && (
-        <div>
-          <label htmlFor={`${id}-about`} className="text-sm font-medium">
-            About
-          </label>
-          <select
-            id={`${id}-about`}
-            className={field}
-            value={about}
-            disabled={busy}
-            onChange={(e) => setAbout(e.target.value)}
-          >
-            <option value="">The whole proposal</option>
-            {pointers.map((p) => (
-              <option key={p.label} value={p.label}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Select
+          label="About"
+          labelClassName="text-sm font-medium"
+          options={[
+            { id: '', label: 'The whole proposal' },
+            ...pointers.map((p) => ({ id: p.label, label: p.label })),
+          ]}
+          value={about}
+          isDisabled={busy}
+          onChange={setAbout}
+        />
       )}
       {error && (
         <p role="alert" className="text-sm text-lacquer">
@@ -246,23 +239,17 @@ export function RedraftHistory({
           )}
           {ready.length > 1 && base && (
             <>
-              <p className="flex flex-wrap items-center gap-2">
-                <label htmlFor={`${id}-from`}>Compare Redraft {shown.number} with</label>
-                <select
-                  id={`${id}-from`}
-                  className="rounded-tile bg-surface px-2 py-1 ring-1 ring-inset ring-line"
-                  value={from}
-                  onChange={(e) => setFrom(Number(e.target.value))}
-                >
-                  {ready
-                    .filter((r) => r.number !== shown.number)
-                    .map((r) => (
-                      <option key={r.number} value={r.number}>
-                        Redraft {r.number}
-                      </option>
-                    ))}
-                </select>
-              </p>
+              <Select
+                label={`Compare Redraft ${shown.number} with`}
+                labelClassName=""
+                className="flex flex-wrap items-center gap-2"
+                triggerClassName="mt-0! w-auto! py-1!"
+                options={ready
+                  .filter((r) => r.number !== shown.number)
+                  .map((r) => ({ id: String(r.number), label: `Redraft ${r.number}` }))}
+                value={String(from)}
+                onChange={(n) => setFrom(Number(n))}
+              />
               {base.number !== shown.number && (
                 <figure
                   aria-label={`Changes from Redraft ${base.number} to Redraft ${shown.number}`}

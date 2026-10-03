@@ -3,17 +3,20 @@
 import type { TeamRole, TeamView } from '@vorasaan/shared';
 import { useActionState, useEffect, useId, useState } from 'react';
 import { createDelegation, type DelegationActionState } from '@/lib/delegation-actions';
-import { field, primaryButton, ROLE_LABEL } from './ui';
+import { primaryButton, ROLE_LABEL } from './ui';
+import { DatePicker } from './ui/date-picker';
+import { PersonPicker } from './ui/person-picker';
+import { Select } from './ui/select';
 
 export type DelegationTeam = Pick<TeamView, 'id' | 'name' | 'members'> & { projectName: string };
 
-/** `<input type="datetime-local">` value → ISO, read in the browser's own time zone. */
+/** A '2026-10-03T09:30' picker value → ISO, read in the browser's own time zone. */
 function toIso(local: string) {
   const date = new Date(local);
   return local && !Number.isNaN(date.getTime()) ? date.toISOString() : '';
 }
 
-/** Now, rounded up to the next quarter hour, as a local `datetime-local` value. */
+/** Now, rounded up to the next quarter hour, as a local '2026-10-03T09:30' value. */
 function localNow() {
   const d = new Date();
   d.setSeconds(0, 0);
@@ -77,125 +80,73 @@ export function DelegationForm({
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         {teams.length > 1 ? (
-          <div>
-            <label htmlFor={`${id}-team`} className="block text-sm">
-              Team
-            </label>
-            <select
-              id={`${id}-team`}
-              name="teamId"
-              value={teamId}
-              onChange={(e) => setTeamId(e.target.value)}
-              className={field}
-            >
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.projectName} / {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Team"
+            name="teamId"
+            options={teams.map((t) => ({ id: t.id, label: `${t.projectName} / ${t.name}` }))}
+            value={teamId}
+            onChange={setTeamId}
+          />
         ) : (
           <input type="hidden" name="teamId" value={teamId} />
         )}
         {forAnyone ? (
-          <div>
-            <label htmlFor={`${id}-delegator`} className="block text-sm">
-              On leave (delegator)
-            </label>
-            <select
-              id={`${id}-delegator`}
-              name="delegatorId"
-              value={delegatorId}
-              onChange={(e) => setDelegatorId(e.target.value)}
-              required
-              className={field}
-            >
-              <option value="">Pick a member…</option>
-              {team?.members.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.name}
-                  {m.userId === meId ? ' (you)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+          <PersonPicker
+            label="On leave (delegator)"
+            name="delegatorId"
+            placeholder="Pick a member…"
+            people={(team?.members ?? []).map((m) => ({
+              id: m.userId,
+              name: m.name,
+              roles: m.roles,
+              note: m.userId === meId ? '(you)' : undefined,
+            }))}
+            value={delegatorId}
+            onChange={setDelegatorId}
+            isRequired
+          />
         ) : null}
-        <div>
-          <label htmlFor={`${id}-role`} className="block text-sm">
-            Team Role
-          </label>
-          <select
-            id={`${id}-role`}
-            name="role"
-            value={effectiveRole}
-            onChange={(e) => setRole(e.target.value as TeamRole)}
-            required
-            disabled={roles.length === 0}
-            className={field}
-          >
-            <option value="">{roles.length === 0 ? '—' : 'Pick a Team Role…'}</option>
-            {roles.map((r) => (
-              <option key={r} value={r}>
-                {ROLE_LABEL[r]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor={`${id}-delegate`} className="block text-sm">
-            Delegate
-          </label>
-          <select
-            id={`${id}-delegate`}
-            name="delegateId"
-            value={effectiveDelegate}
-            onChange={(e) => setDelegateId(e.target.value)}
-            required
-            disabled={delegates.length === 0}
-            className={field}
-          >
-            <option value="">
-              {!effectiveRole
-                ? 'Pick a Team Role first'
-                : delegates.length === 0
-                  ? 'Nobody else holds this Team Role'
-                  : 'Pick a Delegate…'}
-            </option>
-            {delegates.map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor={`${id}-starts`} className="block text-sm">
-            Starts
-          </label>
-          <input
-            id={`${id}-starts`}
-            type="datetime-local"
-            value={startsAt}
-            onChange={(e) => setStartsAt(e.target.value)}
-            required
-            className={field}
-          />
-        </div>
-        <div>
-          <label htmlFor={`${id}-ends`} className="block text-sm">
-            Ends
-          </label>
-          <input
-            id={`${id}-ends`}
-            type="datetime-local"
-            value={endsAt}
-            min={startsAt || undefined}
-            onChange={(e) => setEndsAt(e.target.value)}
-            required
-            className={field}
-          />
-        </div>
+        <Select
+          label="Team Role"
+          name="role"
+          placeholder={roles.length === 0 ? '—' : 'Pick a Team Role…'}
+          options={roles.map((r) => ({ id: r, label: ROLE_LABEL[r] }))}
+          value={effectiveRole}
+          onChange={(r) => setRole(r as TeamRole)}
+          isRequired
+          isDisabled={roles.length === 0}
+        />
+        <PersonPicker
+          label="Delegate"
+          name="delegateId"
+          placeholder={
+            !effectiveRole
+              ? 'Pick a Team Role first'
+              : delegates.length === 0
+                ? 'Nobody else holds this Team Role'
+                : 'Pick a Delegate…'
+          }
+          people={delegates.map((m) => ({ id: m.userId, name: m.name, roles: m.roles }))}
+          value={effectiveDelegate}
+          onChange={setDelegateId}
+          isRequired
+          isDisabled={delegates.length === 0}
+        />
+        <DatePicker
+          label="Starts"
+          granularity="minute"
+          value={startsAt}
+          onChange={setStartsAt}
+          isRequired
+        />
+        <DatePicker
+          label="Ends"
+          granularity="minute"
+          value={endsAt}
+          minValue={startsAt || undefined}
+          onChange={setEndsAt}
+          isRequired
+        />
       </div>
       <input type="hidden" name="startsAt" value={toIso(startsAt)} />
       <input type="hidden" name="endsAt" value={toIso(endsAt)} />

@@ -87,8 +87,11 @@ test('older messages fold behind "Earlier messages were summarized", which opens
   await expect(log.getByText('Message 3', { exact: false }).first()).toBeVisible();
 
   // Opening it shows the original messages, word for word, above where the summary ends.
-  await marker.click();
-  await expect(marker).toHaveAttribute('aria-expanded', 'true');
+  // A click before the page has hydrated does nothing, so click again until it opens.
+  await expect(async () => {
+    if ((await marker.getAttribute('aria-expanded')) !== 'true') await marker.click();
+    await expect(marker).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
+  }).toPass();
   await expect(original).toBeVisible();
   await expect(original).toContainText(first.split('\n')[1] ?? '');
   await expect(log.getByText('The AI reads the messages above as a summary')).toBeVisible();

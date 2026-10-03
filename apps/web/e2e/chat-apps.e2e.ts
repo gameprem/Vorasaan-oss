@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import { E2E } from './env';
-import { beam, expect, pim, test } from './fixtures';
+import { beam, expect, fillTime, pim, test, tick, timeValue } from './fixtures';
 
 // Linking a LINE account (ticket 0057): an Admin turns LINE on, Beam gets a code, "LINE"
 // (this test, signing like LINE does) sends it back, and Beam's page shows the link.
@@ -120,13 +120,13 @@ test('an Admin turns LINE on, and a person links and unlinks their LINE account'
   // Quiet hours.
   const prefs = member.getByRole('form', { name: 'Chat app preferences' });
   await expect(prefs.getByLabel(/Decision Requests sent to me/)).toBeChecked();
-  await prefs.getByLabel(/Hold cards during quiet hours/).check();
-  await prefs.getByLabel('From').fill('22:00');
-  await prefs.getByLabel('Until').fill('07:00');
+  await tick(prefs.getByLabel(/Hold cards during quiet hours/));
+  await fillTime(prefs, 'From', '22:00');
+  await fillTime(prefs, 'Until', '07:00');
   await prefs.getByRole('button', { name: 'Save chat preferences' }).click();
   await expect(prefs.getByRole('status')).toHaveText('Saved');
   await member.reload();
-  await expect(
-    member.getByRole('form', { name: 'Chat app preferences' }).getByLabel('From'),
-  ).toHaveValue('22:00');
+  await expect
+    .poll(() => timeValue(member.getByRole('form', { name: 'Chat app preferences' }), 'From'))
+    .toBe('22:00');
 });

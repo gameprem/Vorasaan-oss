@@ -192,3 +192,54 @@ export function BackIcon({ size = 16 }: IconProps) {
     </svg>
   );
 }
+
+export function ForwardIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="m6 3 5 5-5 5" {...stroke} strokeWidth={1.7} />
+    </svg>
+  );
+}
+
+/** The ticked item of a list or a checkbox. */
+export function CheckIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="m3.5 8.5 3 3 6-7" {...stroke} strokeWidth={1.9} />
+    </svg>
+  );
+}
+
+/** Opens a date picker's calendar. */
+export function CalendarIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="2" y="3" width="12" height="11" rx="2.5" {...stroke} strokeWidth={1.3} />
+      <path d="M2 6.5h12M5.5 1.8v2.4M10.5 1.8v2.4" {...stroke} strokeWidth={1.3} />
+    </svg>
+  );
+}
+
+/** A searchable list. */
+export function SearchIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <circle cx="7" cy="7" r="4.5" {...stroke} strokeWidth={1.4} />
+      <path d="m10.5 10.5 3 3" {...stroke} strokeWidth={1.5} />
+    </svg>
+  );
+}
+
+/** A time zone. */
+export function GlobeIcon({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <circle cx="8" cy="8" r="6" {...stroke} strokeWidth={1.3} />
+      <path
+        d="M2 8h12M8 2c1.7 1.8 2.5 3.8 2.5 6S9.7 12.2 8 14C6.3 12.2 5.5 10.2 5.5 8S6.3 3.8 8 2Z"
+        {...stroke}
+        strokeWidth={1.3}
+      />
+    </svg>
+  );
+}

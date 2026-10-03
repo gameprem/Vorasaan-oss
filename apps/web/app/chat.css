@@ -545,13 +545,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.scope select {
+.scope .scope-picker {
   max-width: 100%;
-  border-radius: 999px;
-  background: var(--bg);
+  width: 260px;
   color: var(--fg);
-  font: 500 13px / 1.2 var(--font);
-  padding: 8px 12px;
 }
 .send {
   margin-left: auto;
@@ -885,7 +882,7 @@
     margin-top: 6px;
     font-size: 11px;
   }
-  .composer-row .scope:not(:has(select)) {
+  .composer-row .scope:not(:has(.scope-picker)) {
     display: none;
   }
   /* The model menu spans the composer instead of overflowing the screen. */

@@ -26,8 +26,10 @@ import {
   updateApprovedModel,
 } from '@/lib/ai-settings-actions';
 import { OpenRouterModelPicker } from './openrouter-model-picker';
-import { PROVIDERS } from './provider-fields';
+import { PROVIDERS, ProviderKindPicker } from './provider-fields';
 import { field, primaryButton, secondaryButton } from './ui';
+import { Checkbox } from './ui/checkbox';
+import { Select } from './ui/select';
 
 // Settings → AI models (ADR 0010): the providers (with their keys), the Approved
 // Models people may use with one default, and the model of each AI task.
@@ -254,36 +256,15 @@ function NewProviderForm({ onDone, canCancel }: { onDone: () => void; canCancel:
         );
       }}
     >
-      <fieldset>
-        <legend className="text-sm">Kind</legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {PROVIDERS.map((p) => {
-            const active = p.value === kind;
-            return (
-              <label
-                key={p.value}
-                className={`cursor-pointer rounded-card px-3 py-2.5 ${
-                  active ? 'bg-ink-wash text-fg' : 'bg-bg hover:bg-surface-hi'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="provider-kind"
-                  value={p.value}
-                  checked={active}
-                  onChange={() => {
-                    setKind(p.value);
-                    setDraft({ ...draft, name: DEFAULT_PROVIDER_NAMES[p.value] });
-                  }}
-                  className="sr-only"
-                />
-                <span className="block font-medium">{p.label}</span>
-              </label>
-            );
-          })}
-        </div>
-        <p className="mt-2 text-sm text-fg-soft">{current?.hint}</p>
-      </fieldset>
+      <ProviderKindPicker
+        label="Kind"
+        name="provider-kind"
+        value={kind}
+        onChange={(next) => {
+          setKind(next);
+          setDraft({ ...draft, name: DEFAULT_PROVIDER_NAMES[next] });
+        }}
+      />
       <label className="mt-4 block">
         <span className="text-sm">Name</span>
         <input
@@ -603,20 +584,15 @@ function ModelForm({
           className={field}
         />
       </label>
-      <label className="block">
-        <span className="text-sm">Provider</span>
-        <select
-          value={draft.providerId}
-          onChange={(e) => setDraft({ ...draft, providerId: e.target.value })}
-          className={field}
-        >
-          {providers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} ({kindLabel(p.kind)})
-            </option>
-          ))}
-        </select>
-      </label>
+      <Select
+        label="Provider"
+        options={providers.map((p) => ({
+          id: p.id,
+          label: `${p.name} (${kindLabel(p.kind)})`,
+        }))}
+        value={draft.providerId}
+        onChange={(providerId) => setDraft({ ...draft, providerId })}
+      />
       {kind === 'OPENROUTER' && (
         <div className="sm:col-span-2">
           {/* OpenRouter's list (ticket 0064): a pick fills the id and its window. */}
@@ -687,14 +663,13 @@ function ModelForm({
         </span>
       </label>
       {showDefault && (
-        <label className="flex items-center gap-2 text-sm sm:col-span-2">
-          <input
-            type="checkbox"
-            checked={draft.isDefault}
-            onChange={(e) => setDraft({ ...draft, isDefault: e.target.checked })}
-          />
+        <Checkbox
+          className="text-sm sm:col-span-2"
+          isSelected={draft.isDefault}
+          onChange={(isDefault) => setDraft({ ...draft, isDefault })}
+        >
           Make it the default
-        </label>
+        </Checkbox>
       )}
       <div className="flex gap-3 sm:col-span-2">
         <button type="submit" disabled={pending} className={primaryButton}>
@@ -745,7 +720,7 @@ function TasksSection({ settings }: { settings: AiSettingsView }) {
       >
         <div className="rows">
           {settings.tasks.map((t) => (
-            <label
+            <div
               key={t.task}
               className="grid items-center gap-2 px-4 py-3 sm:grid-cols-[1fr_16rem]"
             >
@@ -758,23 +733,24 @@ function TasksSection({ settings }: { settings: AiSettingsView }) {
                   </span>
                 )}
               </span>
-              <select
+              <Select
+                aria-label={TASK_LABEL[t.task].label}
+                isDisabled={settings.models.length === 0}
+                options={[
+                  { id: '', label: `Default${fallback ? ` (${fallback.displayName})` : ''}` },
+                  ...settings.models.map((m) => ({
+                    id: m.id,
+                    label: m.displayName,
+                    description: m.modelId,
+                  })),
+                ]}
                 value={choice[t.task]}
-                disabled={settings.models.length === 0}
-                onChange={(e) => {
+                onChange={(id) => {
                   clear();
-                  setChoice({ ...choice, [t.task]: e.target.value });
+                  setChoice({ ...choice, [t.task]: id });
                 }}
-                className={field}
-              >
-                <option value="">Default{fallback ? ` (${fallback.displayName})` : ''}</option>
-                {settings.models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.displayName}
-                  </option>
-                ))}
-              </select>
-            </label>
+              />
+            </div>
           ))}
         </div>
         <div className="mt-4 flex items-center gap-4">

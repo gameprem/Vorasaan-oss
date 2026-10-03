@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import { type InviteState, invite } from '@/lib/org-actions';
 import { field, primaryButton } from './ui';
+import { Select } from './ui/select';
 
 export function InviteForm({ origin }: { origin: string }) {
   const [state, action, pending] = useActionState<InviteState, FormData>(invite, {});
@@ -14,13 +15,16 @@ export function InviteForm({ origin }: { origin: string }) {
           <span className="text-sm">Email</span>
           <input name="email" type="email" required placeholder="beam@acme.com" className={field} />
         </label>
-        <label className="w-36">
-          <span className="text-sm">Access</span>
-          <select name="role" defaultValue="MEMBER" className={field}>
-            <option value="MEMBER">Member</option>
-            <option value="ADMIN">Admin</option>
-          </select>
-        </label>
+        <Select
+          label="Access"
+          name="role"
+          className="w-36"
+          options={[
+            { id: 'MEMBER', label: 'Member' },
+            { id: 'ADMIN', label: 'Admin' },
+          ]}
+          defaultValue="MEMBER"
+        />
         <button type="submit" disabled={pending} className={primaryButton}>
           {pending ? 'Creating link…' : 'Create invite link'}
         </button>
