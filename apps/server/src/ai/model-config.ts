@@ -1,4 +1,5 @@
 import type { AiProvider } from '@vorasaan/shared';
+import { openRouterHeaders } from './openrouter.ts';
 
 /** A provider configuration with its secret decrypted, ready to call. */
 export type ResolvedProvider = {
@@ -10,11 +11,12 @@ export type ResolvedProvider = {
 
 /**
  * What Mastra's Agent accepts as `model`: a "provider/model" string that reads
- * its key from env, or an OpenAI-compatible config object with an explicit key.
+ * its key from env, a "provider/model" config with an explicit key (and headers),
+ * or an OpenAI-compatible config with its own URL.
  */
 export type MastraModel =
   | string
-  | { id: `${string}/${string}`; apiKey: string }
+  | { id: `${string}/${string}`; apiKey: string; headers?: Record<string, string> }
   | { providerId: string; modelId: string; url: string; apiKey: string };
 
 export function toMastraModel(p: ResolvedProvider): MastraModel {
@@ -26,6 +28,12 @@ export function toMastraModel(p: ResolvedProvider): MastraModel {
     case 'OPENAI_COMPATIBLE':
       if (!p.baseUrl) throw new Error('A custom provider needs a base URL');
       return { providerId: 'custom', modelId: p.model, url: p.baseUrl, apiKey: p.apiKey };
+    case 'OPENROUTER':
+      // Mastra's OpenRouter provider (ticket 0064): OpenRouter's fixed URL (or the
+      // operator's OPENROUTER_BASE_URL), never a stored one. No `url` here, or Mastra
+      // would fall back to its generic OpenAI-compatible provider, which can't mark
+      // system blocks for caching.
+      return { id: `openrouter/${p.model}`, apiKey: p.apiKey, headers: openRouterHeaders() };
   }
 }
 
@@ -34,5 +42,15 @@ export function mastraModelOf(choice: {
   provider: ResolvedProvider | null;
   name: string;
 }): MastraModel {
-  return choice.provider ? toMastraModel(choice.provider) : choice.name;
+  if (choice.provider) return toMastraModel(choice.provider);
+  // An env "openrouter/…" model with the env key: the OpenRouter headers still go along.
+  const envKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (choice.name.startsWith('openrouter/') && envKey) {
+    return {
+      id: choice.name as `openrouter/${string}`,
+      apiKey: envKey,
+      headers: openRouterHeaders(),
+    };
+  }
+  return choice.name;
 }

@@ -54,6 +54,14 @@ export class SetupController {
     return this.ai.test(body);
   }
 
+  /** OpenRouter's model list, for the provider step (ticket 0064). No key is needed. */
+  @Post('openrouter-models')
+  @HttpCode(200)
+  @UseGuards(SetupTokenGuard)
+  async openRouterModels() {
+    return this.ai.openRouterModels();
+  }
+
   @Post()
   @HttpCode(201)
   @UseGuards(SetupTokenGuard)
@@ -64,6 +72,7 @@ export class SetupController {
     } catch (error) {
       throw new UnprocessableEntityException((error as Error).message);
     }
+    this.ai.assertSetupInput(body.ai);
     const passwordHash = await hashPassword(body.admin.password);
 
     const { organizationId, user } = await this.db

@@ -1,13 +1,15 @@
 import { z } from 'zod';
 
 /** The kinds of LLM provider an Admin can connect. */
-export const AiProvider = z.enum(['ANTHROPIC', 'OPENAI', 'OPENAI_COMPATIBLE']);
+export const AiProvider = z.enum(['ANTHROPIC', 'OPENAI', 'OPENAI_COMPATIBLE', 'OPENROUTER']);
 export type AiProvider = z.infer<typeof AiProvider>;
 
 export const DEFAULT_MODELS: Record<AiProvider, string> = {
   ANTHROPIC: 'claude-opus-5-5',
   OPENAI: 'gpt-5.6-sol',
   OPENAI_COMPATIBLE: '',
+  // Picked from OpenRouter's model list (ticket 0064).
+  OPENROUTER: '',
 };
 
 /** The name a provider gets when none is given (setup, and the migrated provider). */
@@ -15,6 +17,7 @@ export const DEFAULT_PROVIDER_NAMES: Record<AiProvider, string> = {
   ANTHROPIC: 'Anthropic',
   OPENAI: 'OpenAI',
   OPENAI_COMPATIBLE: 'Custom endpoint',
+  OPENROUTER: 'OpenRouter',
 };
 
 /**
@@ -64,6 +67,11 @@ const ApiKey = z.string().trim().min(1, 'Enter an API key').max(4_000);
 const BaseUrl = z.url({ message: 'Enter the full URL, e.g. http://localhost:20128/v1' });
 const ProviderName = z.string().trim().min(1, 'Name the provider').max(100);
 const Id = z.uuid();
+/**
+ * OpenRouter's base URL is fixed (ticket 0064). The field is accepted only so the
+ * server can refuse it with a 422, as it refuses a base URL on the other fixed providers.
+ */
+const FixedUrl = z.unknown().optional();
 
 /**
  * One provider and its model, as the setup wizard asks for them: it becomes the
@@ -78,6 +86,12 @@ export const AiSettingsInput = z.discriminatedUnion('provider', [
     model: Model,
     baseUrl: BaseUrl,
     apiKey: ApiKey.optional(),
+  }),
+  z.object({
+    provider: z.literal('OPENROUTER'),
+    model: Model,
+    apiKey: ApiKey.optional(),
+    baseUrl: FixedUrl,
   }),
 ]);
 export type AiSettingsInput = z.infer<typeof AiSettingsInput>;
@@ -101,6 +115,13 @@ export const CreateAiProviderInput = z.discriminatedUnion('kind', [
     baseUrl: BaseUrl,
     apiKey: ApiKey,
   }),
+  /** A key only: the base URL is OpenRouter's own (https://openrouter.ai/api/v1). */
+  z.object({
+    kind: z.literal('OPENROUTER'),
+    name: ProviderName,
+    apiKey: ApiKey,
+    baseUrl: FixedUrl,
+  }),
 ]);
 export type CreateAiProviderInput = z.infer<typeof CreateAiProviderInput>;
 
@@ -123,6 +144,27 @@ export const AiProviderView = z.object({
   modelCount: z.number().int(),
 });
 export type AiProviderView = z.infer<typeof AiProviderView>;
+
+/**
+ * One model of OpenRouter's list (`GET /models`), for the picker (ticket 0064).
+ * `contextWindow` is its `context_length`, or null when it is missing or out of range.
+ */
+export const OpenRouterModelView = z.object({
+  id: z.string(),
+  name: z.string(),
+  contextWindow: z.number().int().nullable(),
+});
+export type OpenRouterModelView = z.infer<typeof OpenRouterModelView>;
+
+/**
+ * OpenRouter's model list. When it can't be loaded, `models` is empty and `error`
+ * says why: the Admin types the model id instead.
+ */
+export const OpenRouterModelsView = z.object({
+  models: z.array(OpenRouterModelView),
+  error: z.string().nullable(),
+});
+export type OpenRouterModelsView = z.infer<typeof OpenRouterModelsView>;
 
 // ─── Approved Models (Admin) ────────────────────────────────────────────────
 

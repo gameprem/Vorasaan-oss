@@ -8,8 +8,9 @@ import type { MastraModel } from './model-config.ts';
 // Feature's Spec, then retrieved context, then history and the new input. A
 // prompt is cut where a stable part ends; on Anthropic each cut becomes a
 // cache_control breakpoint, so the next call with the same prefix reads it from
-// the cache. Every other provider gets the whole text as before (OpenAI caches
-// the longest repeated prefix by itself, so it only needs the order).
+// the cache, and so on an Anthropic model routed through OpenRouter (ticket 0064).
+// Every other provider gets the whole text as before (OpenAI caches the longest
+// repeated prefix by itself, so it only needs the order).
 
 /**
  * A prompt and the same text cut at its cache breakpoints: `parts.join('')` is
@@ -68,21 +69,52 @@ export const ANTHROPIC_CACHE_MARK = {
 } as const;
 
 /**
+ * The provider option Mastra's OpenRouter provider turns into `cache_control` on a
+ * content part (ticket 0064), system blocks included. OpenRouter passes it on to
+ * Anthropic, with Anthropic's rules (512 tokens and up, at most four marks).
+ */
+export const OPENROUTER_CACHE_MARK = {
+  openrouter: { cacheControl: { type: 'ephemeral' } },
+} as const;
+
+export type CacheMark = typeof ANTHROPIC_CACHE_MARK | typeof OPENROUTER_CACHE_MARK;
+
+/**
  * Whether Mastra calls this model through its Anthropic provider (the Messages
  * API, which takes cache_control). A config with its own `url` goes through the
  * OpenAI-compatible provider instead, whatever its id says.
  */
 export function isAnthropicModel(model: MastraModel): boolean {
-  if (typeof model === 'string') return model.startsWith('anthropic/');
-  if ('url' in model && model.url) return false;
-  return 'id' in model && model.id.startsWith('anthropic/');
+  return routerId(model)?.startsWith('anthropic/') ?? false;
 }
 
-type TextPart = { type: 'text'; text: string; providerOptions?: typeof ANTHROPIC_CACHE_MARK };
+/** The "provider/model" id Mastra routes by, or null for a config with its own URL. */
+function routerId(model: MastraModel): string | null {
+  if (typeof model === 'string') return model.toLowerCase();
+  if ('url' in model && model.url) return null;
+  return 'id' in model ? model.id.toLowerCase() : null;
+}
 
-/** A one-shot task's prompt as an Anthropic user message, its stable parts marked. */
-export function anthropicUserMessage(
+/**
+ * The mark for this model's stable parts, or null when it gets the plain text:
+ * Anthropic's for an Anthropic model, OpenRouter's for an Anthropic model routed
+ * through OpenRouter (`openrouter/anthropic/...`). Every other model caches by itself
+ * (OpenAI) or not at all, and gets the prompt as before.
+ */
+export function cacheMarkOf(model: MastraModel): CacheMark | null {
+  const id = routerId(model);
+  if (!id) return null;
+  if (id.startsWith('anthropic/')) return ANTHROPIC_CACHE_MARK;
+  if (id.startsWith('openrouter/anthropic/')) return OPENROUTER_CACHE_MARK;
+  return null;
+}
+
+type TextPart = { type: 'text'; text: string; providerOptions?: CacheMark };
+
+/** A one-shot task's prompt as one user message, its stable parts marked. */
+export function markedUserMessage(
   prompt: Prompt,
+  mark: CacheMark,
   fixedTokens = 0,
 ): { role: 'user'; content: TextPart[] } {
   const marked = new Set(cacheBreakpoints(prompt.parts, fixedTokens));
@@ -91,7 +123,7 @@ export function anthropicUserMessage(
     content: prompt.parts.map((text, i) => ({
       type: 'text' as const,
       text,
-      ...(marked.has(i) ? { providerOptions: ANTHROPIC_CACHE_MARK } : {}),
+      ...(marked.has(i) ? { providerOptions: mark } : {}),
     })),
   };
 }
@@ -99,16 +131,16 @@ export function anthropicUserMessage(
 type SystemPart = {
   role: 'system';
   content: string;
-  providerOptions?: typeof ANTHROPIC_CACHE_MARK;
+  providerOptions?: CacheMark;
 };
 
-/** A chat's system prompt as Anthropic system blocks, its stable parts marked. */
-export function anthropicSystem(prompt: Prompt): SystemPart[] {
+/** A chat's system prompt as system blocks, its stable parts marked. */
+export function markedSystem(prompt: Prompt, mark: CacheMark): SystemPart[] {
   const marked = new Set(cacheBreakpoints(prompt.parts));
   return prompt.parts.map((content, i) => ({
     role: 'system' as const,
     content,
-    ...(marked.has(i) ? { providerOptions: ANTHROPIC_CACHE_MARK } : {}),
+    ...(marked.has(i) ? { providerOptions: mark } : {}),
   }));
 }
 
@@ -125,8 +157,9 @@ const count = (value: unknown): number | null =>
 
 /**
  * The usage the AI SDK reports for a call: `cachedInputTokens` (Anthropic's
- * `cache_read_input_tokens`, OpenAI's `cached_tokens`) and, for Anthropic,
- * `cacheCreationInputTokens`; the v3 `inputTokens` details as a fallback.
+ * `cache_read_input_tokens`, OpenAI's and OpenRouter's `cached_tokens`) and, for
+ * Anthropic and OpenRouter (`cache_write_tokens`), `cacheCreationInputTokens`; the
+ * v3 `inputTokens` details as a fallback.
  */
 export function cacheUsageOf(usage: unknown): CacheUsage {
   const u = (usage ?? {}) as Record<string, unknown>;
