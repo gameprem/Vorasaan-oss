@@ -62,6 +62,8 @@ export default defineConfig({
         VORASAAN_SETUP_TOKEN: E2E.setupToken,
         // Chat app replies go to the fake LINE API in chat-apps.e2e.ts, never to LINE.
         VORASAAN_LINE_API_URL: E2E.fakeChatUrl,
+        // OpenRouter's model list comes from the fake in openrouter-settings.e2e.ts (ticket 0064).
+        OPENROUTER_BASE_URL: E2E.fakeOpenRouterUrl,
       },
       reuseExistingServer: !CI,
       timeout: 60_000,

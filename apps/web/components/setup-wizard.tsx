@@ -7,8 +7,12 @@ import {
   DEFAULT_RESPONSE_WINDOW_SETTINGS,
   WorkingTimeInput,
 } from '@vorasaan/shared';
-import { useEffect, useState, useTransition } from 'react';
-import { completeSetup, testAiDuringSetup } from '@/lib/setup-actions';
+import { useCallback, useEffect, useState, useTransition } from 'react';
+import {
+  completeSetup,
+  listOpenRouterModelsDuringSetup,
+  testAiDuringSetup,
+} from '@/lib/setup-actions';
 import { browserTimeZone } from '@/lib/time-zones';
 import { inputClass } from './login-form';
 import { type ProviderDraft, ProviderFields, toSettingsInput } from './provider-fields';
@@ -38,6 +42,10 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
   });
   const [error, setError] = useState<string>();
   const [finishing, startFinish] = useTransition();
+  const loadOpenRouterModels = useCallback(
+    () => listOpenRouterModelsDuringSetup(setupToken),
+    [setupToken],
+  );
 
   // The token came in the link from the server log: keep it out of the address bar (and so
   // out of bookmarks and screenshots) once it's in the field.
@@ -217,6 +225,7 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
               value={provider}
               onChange={setProvider}
               test={(input) => testAiDuringSetup(input, setupToken)}
+              loadOpenRouterModels={loadOpenRouterModels}
             />
           </>
         )}

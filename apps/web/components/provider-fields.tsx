@@ -5,9 +5,11 @@ import {
   type AiSettingsInput,
   type AiTestResult,
   DEFAULT_MODELS,
+  type OpenRouterModelsView,
 } from '@vorasaan/shared';
 import { useState, useTransition } from 'react';
 import { inputClass } from './login-form';
+import { OpenRouterModelPicker } from './openrouter-model-picker';
 
 export const PROVIDERS: { value: AiProvider; label: string; hint: string; keyLabel: string }[] = [
   {
@@ -27,6 +29,12 @@ export const PROVIDERS: { value: AiProvider; label: string; hint: string; keyLab
     label: 'Custom URL',
     hint: 'Any OpenAI-compatible endpoint with a token, such as 9Router.',
     keyLabel: 'Token',
+  },
+  {
+    value: 'OPENROUTER',
+    label: 'OpenRouter',
+    hint: 'An OpenRouter API key from openrouter.ai: one key for models from many providers.',
+    keyLabel: 'OpenRouter API key',
   },
 ];
 
@@ -54,12 +62,15 @@ export function ProviderFields({
   test,
   keyOptional = false,
   keyHint,
+  loadOpenRouterModels,
 }: {
   value: ProviderDraft;
   onChange: (next: ProviderDraft) => void;
   test: (input: AiSettingsInput) => Promise<AiTestResult>;
   keyOptional?: boolean;
   keyHint?: string | null;
+  /** OpenRouter's model list (ticket 0064); without it, the model id is typed. */
+  loadOpenRouterModels?: () => Promise<OpenRouterModelsView>;
 }) {
   const [result, setResult] = useState<AiTestResult | null>(null);
   const [testing, startTest] = useTransition();
@@ -74,7 +85,7 @@ export function ProviderFields({
     <div>
       <fieldset>
         <legend className="text-sm">Provider</legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {PROVIDERS.map((p) => {
             const active = p.value === value.provider;
             return (
@@ -118,13 +129,28 @@ export function ProviderFields({
         </label>
       )}
 
+      {value.provider === 'OPENROUTER' && loadOpenRouterModels && (
+        <div className="mt-5">
+          <OpenRouterModelPicker
+            load={loadOpenRouterModels}
+            selectedId={value.model}
+            onPick={(m) => set({ model: m.id })}
+            inputClass={inputClass}
+          />
+        </div>
+      )}
+
       <label className="mt-5 block">
         <span className="text-sm">Model</span>
         <input
           value={value.model}
           onChange={(e) => set({ model: e.target.value })}
           placeholder={
-            value.provider === 'OPENAI_COMPATIBLE' ? 'The model name your endpoint expects' : ''
+            value.provider === 'OPENAI_COMPATIBLE'
+              ? 'The model name your endpoint expects'
+              : value.provider === 'OPENROUTER'
+                ? 'Pick one above, or type its id'
+                : ''
           }
           className={inputClass}
         />

@@ -4,6 +4,7 @@ import {
   type AiSettingsInput,
   type AiTestResult,
   type LoginResult,
+  type OpenRouterModelsView,
   SETUP_TOKEN_HEADER,
   type SetupInput,
 } from '@vorasaan/shared';
@@ -36,6 +37,23 @@ export async function testAiDuringSetup(
     });
   } catch (error) {
     return { ok: false, message: errorOf(error), latencyMs: null };
+  }
+}
+
+/** OpenRouter's model list for the provider step (ticket 0064). */
+export async function listOpenRouterModelsDuringSetup(
+  setupToken: string,
+): Promise<OpenRouterModelsView> {
+  try {
+    return await api<OpenRouterModelsView>('/setup/openrouter-models', {
+      method: 'POST',
+      body: {},
+      headers: tokenHeader(setupToken),
+      redirectOnUnauthorized: false,
+      anonymous: true,
+    });
+  } catch (error) {
+    return { models: [], error: errorOf(error) };
   }
 }
 
