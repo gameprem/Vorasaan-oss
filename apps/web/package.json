@@ -8,6 +8,7 @@
     "build": "bun --bun next build",
     "start": "bun --bun next start --port 3000",
     "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test lib components",
     "e2e": "playwright test"
   },
   "dependencies": {

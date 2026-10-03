@@ -1,5 +1,5 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
-import { type ChatLanguage, type ChatProvider, DEFAULT_CHAT_LANGUAGE } from '@vorasaan/shared';
+import type { ChatLanguage, ChatProvider } from '@vorasaan/shared';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import type { ChatInbound, InboundRequest } from './adapters/adapter.ts';
 import { ChatAccountsService, type LinkResult } from './chat-accounts.service.ts';
@@ -108,7 +108,9 @@ export class ChatEventsService {
     event: Message,
   ): Promise<ChatLanguage> {
     const account = await this.accounts.accountFor(organizationId, provider, event.user.id);
-    return account ? this.accounts.languageOf(account.userId) : DEFAULT_CHAT_LANGUAGE;
+    return account
+      ? this.accounts.languageOf(account.userId)
+      : this.accounts.organizationLanguage(organizationId);
   }
 
   private async message(organizationId: string, provider: ChatProvider, event: Message) {
@@ -130,7 +132,9 @@ export class ChatEventsService {
       } else {
         const account = await this.accounts.accountFor(organizationId, provider, event.user.id);
         const t = chatText(
-          account ? await this.accounts.languageOf(account.userId) : DEFAULT_CHAT_LANGUAGE,
+          account
+            ? await this.accounts.languageOf(account.userId)
+            : await this.accounts.organizationLanguage(organizationId),
         );
         reply = account ? t.linkedAs(account.user.name) : t.howToLink(provider);
       }

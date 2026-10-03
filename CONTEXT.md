@@ -46,6 +46,10 @@ _Avoid_: Assignee, owner
 A one-time secret that first-run setup requires, so only whoever runs the server can create the Organization and become its first Admin. The server prints it to its log while setup is needed, or the operator chooses it. It stops working once setup is done.
 _Avoid_: Install key, admin password, invite code
 
+**Getting started**:
+The checklist an Admin sees on their Inbox after first-run setup: create a Project and a Team, create a Feature and write its Spec, invite members, link the CLI, and optionally turn on a Chat App. Each step ticks itself from what exists, never by hand. It goes away once every required step is done, or when that Admin dismisses it.
+_Avoid_: Onboarding wizard, tutorial, todo list
+
 ### Spec
 
 **Spec**:

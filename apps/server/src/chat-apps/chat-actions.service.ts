@@ -11,7 +11,6 @@ import type { ChatCard, PrismaClient, User } from '@vorasaan/db';
 import {
   type ChatLanguage,
   type ChatProvider,
-  DEFAULT_CHAT_LANGUAGE,
   DecideInput,
   PostRequestMessageInput,
 } from '@vorasaan/shared';
@@ -85,7 +84,7 @@ export class ChatActionsService {
     const account = await this.accounts.accountFor(press.organizationId, provider, press.user.id);
     const lang: ChatLanguage = account
       ? await this.accounts.languageOf(account.userId)
-      : DEFAULT_CHAT_LANGUAGE;
+      : await this.accounts.organizationLanguage(press.organizationId);
     const t = chatText(lang);
     const say = (text: string) => this.reply(press, { text });
 

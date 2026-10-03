@@ -1,4 +1,9 @@
-import type { MyChatAppsView, ResponseWindowSettingsView } from '@vorasaan/shared';
+import type {
+  ChatLanguage,
+  MyChatAppsView,
+  OrganizationSettingsView,
+  ResponseWindowSettingsView,
+} from '@vorasaan/shared';
 import { unstable_rethrow } from 'next/navigation';
 import { Notice } from '@/components/bits';
 import { ChatAccountsSettings } from '@/components/chat-accounts-settings';
@@ -9,13 +14,16 @@ export const metadata = { title: 'Notifications' };
 export default async function NotificationsSettingsPage() {
   let view: MyChatAppsView;
   let organizationTimeZone: string;
+  let organizationLanguage: ChatLanguage;
   try {
-    const [mine, calendar] = await Promise.all([
+    const [mine, calendar, organization] = await Promise.all([
       api<MyChatAppsView>('/me/chat-apps'),
       api<ResponseWindowSettingsView>('/settings/response-windows'),
+      api<OrganizationSettingsView>('/settings/organization'),
     ]);
     view = mine;
     organizationTimeZone = calendar.timeZone;
+    organizationLanguage = organization.language;
   } catch (error) {
     unstable_rethrow(error);
     return (
@@ -32,7 +40,11 @@ export default async function NotificationsSettingsPage() {
         Your Inbox and Notifications are always in Vorasaan. You can also get them in a chat app.
       </p>
       <div className="mt-8">
-        <ChatAccountsSettings view={view} organizationTimeZone={organizationTimeZone} />
+        <ChatAccountsSettings
+          view={view}
+          organizationTimeZone={organizationTimeZone}
+          organizationLanguage={organizationLanguage}
+        />
       </div>
     </section>
   );

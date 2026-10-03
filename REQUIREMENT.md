@@ -258,7 +258,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 9. Browser-based `vorasaan login`.
 10. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.
     - [x] First-run setup requires a Setup Token from the server log (0062). Required before the first public release.
-    - [ ] Setup asks for the time zone, working days and hours, and language; a Getting started checklist follows (0063).
+    - [x] Setup asks for the time zone, working days and hours, and language; a Getting started checklist follows (0063).
 
 ### Later (recorded, not scheduled)
 - **Drift check:** a GitHub App reads a PR, compares it with the Feature's Spec and Decisions, and comments or opens a Question when they disagree. It builds on `vorasaan run`.

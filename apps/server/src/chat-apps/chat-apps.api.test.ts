@@ -508,6 +508,7 @@ describe('Chat apps: setup and linking accounts (ticket 0057)', () => {
         timeZone: null,
         effectiveTimeZone: 'UTC',
         language: null,
+        effectiveLanguage: 'en',
       });
     });
 
@@ -524,6 +525,7 @@ describe('Chat apps: setup and linking accounts (ticket 0057)', () => {
         timeZone: 'Asia/Bangkok',
         effectiveTimeZone: 'Asia/Bangkok',
         language: null,
+        effectiveLanguage: 'en',
       });
       const pims = await asPim<ChatPreferencesView>('GET', '/me/chat-preferences');
       expect(pims.body.events).toEqual(['DECISION_REQUEST', 'NEEDS_INFO']);

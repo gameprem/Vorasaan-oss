@@ -4,6 +4,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { ChatProvider, PrismaClient } from '@vorasaan/db';
 import { SEED, seed } from '@vorasaan/db/seed';
 import type {
+  ChatPreferencesView,
   CreatedAccessToken,
   DecideResult,
   DecisionLogEntry,
@@ -810,6 +811,26 @@ describe('Deciding from LINE, Slack and Teams (ticket 0058)', () => {
       await settle();
       expect((await request(sent.id)).status).toBe('DECIDED');
       expect(fake.texts().some((t) => t.startsWith('ตัดสินใจแล้ว: Choice B'))).toBe(true);
+    });
+
+    test('without a language of their own, a person gets the Organization’s (ticket 0063)', async () => {
+      await link(pim.id, 'SLACK', 'UPIM');
+      expect((await asPim('PUT', '/settings/organization', { language: 'th' })).status).toBe(200);
+      const prefs = await asPim<ChatPreferencesView>('GET', '/me/chat-preferences');
+      expect(prefs.body).toMatchObject({ language: null, effectiveLanguage: 'th' });
+      await sendBlocker();
+      const buttons = slackButtons(slackPosts()[0] as SlackPost);
+      expect([...buttons.keys()][0]).toBe('เลือก A');
+
+      // Their own choice wins over the Organization's.
+      await asPim('PUT', '/me/chat-preferences', {
+        events: ['DECISION_REQUEST', 'NEEDS_INFO'],
+        quietHours: null,
+        timeZone: null,
+        language: 'en',
+      });
+      await sendBlocker();
+      expect([...slackButtons(slackPosts().at(-1) as SlackPost).keys()][0]).toBe('Choose A');
     });
 
     test('a failing chat app never fails or holds up the web action; the card is FAILED and nothing secret is logged', async () => {

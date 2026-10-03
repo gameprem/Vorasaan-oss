@@ -112,9 +112,10 @@ docker compose logs server | grep -i setup
 Open that link (or **http://localhost:3000** and paste the token). The token works once; a new one is printed each time the server restarts until setup is done. The setup wizard walks you through:
 
 1. **Your organization**: the setup token, the organization's name, and your account as the first Admin.
-2. **AI provider**: Claude API, OpenAI API, or Custom URL + token. **Test connection** checks it before you continue. It becomes your first provider, and its model the default Approved Model; **Settings → AI models** adds more providers and models, and sets the model of each AI task.
+2. **Calendar & language**: the time zone (your browser's, to start with), working days and hours (Monday to Friday, 09:00 to 18:00 by default), which Response Windows count in, and the language of chat app cards (English or Thai). Change them later in **Settings → Response Windows** and **Settings → Organization**.
+3. **AI provider**: Claude API, OpenAI API, or Custom URL + token. **Test connection** checks it before you continue. It becomes your first provider, and its model the default Approved Model; **Settings → AI models** adds more providers and models, and sets the model of each AI task.
 
-Then create a **Project** and a **Team**, **invite your team** with a link, create a **Feature**, choose its **Role Owners**, and write **Spec v1**.
+Then a **Getting started** checklist on your Inbox leads you on, and ticks each step itself once it's done: create a **Project** and a **Team**, create a **Feature** and write **Spec v1**, **invite your team** with a link, and link the CLI (`vorasaan login`); optionally, connect a chat app. Dismiss it whenever you like.
 
 > [!TIP]
 > Running 9Router too? Start it with `docker compose --profile router up -d` and choose **Custom URL** with `http://ninerouter:20128/v1`.

@@ -9,7 +9,15 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { PrismaClient } from '@vorasaan/db';
-import { AiSettingsInput, type LoginResult, SetupInput, type SetupStatus } from '@vorasaan/shared';
+import {
+  AiSettingsInput,
+  DEFAULT_CHAT_LANGUAGE,
+  DEFAULT_RESPONSE_WINDOW_SETTINGS,
+  type LoginResult,
+  minutesOfDay,
+  SetupInput,
+  type SetupStatus,
+} from '@vorasaan/shared';
 import { AiSettingsService } from '../ai/ai-settings.service.ts';
 import { AuthService, hashPassword } from '../auth/auth.service.ts';
 import { Public } from '../auth/identity.guard.ts';
@@ -19,7 +27,8 @@ import { ALREADY_SET_UP, SetupTokenGuard } from './setup-token.guard.ts';
 import { SetupTokenService } from './setup-token.service.ts';
 
 /**
- * First boot. Every route here is public and works only until an Organization exists;
+ * First boot: the Organization with its Working Time and language, its first Admin, and the
+ * AI provider. Every route here is public and works only until an Organization exists;
  * all but the status also need the Setup Token (ticket 0062).
  */
 @Public()
@@ -64,8 +73,26 @@ export class SetupController {
             throw new ConflictException(ALREADY_SET_UP);
           }
           const organization = await tx.organization.create({
-            data: { name: body.organizationName },
+            data: { name: body.organizationName, language: body.language ?? DEFAULT_CHAT_LANGUAGE },
           });
+          // The working calendar Response Windows count in (ticket 0063), with the default
+          // windows. Left out by an older client: no row, so the defaults apply.
+          if (body.workingTime) {
+            const { blocker, question } = DEFAULT_RESPONSE_WINDOW_SETTINGS;
+            await tx.responseWindowSettings.create({
+              data: {
+                organizationId: organization.id,
+                timeZone: body.workingTime.timeZone,
+                workingDays: [...body.workingTime.workingDays].sort((a, b) => a - b),
+                workStartMinute: minutesOfDay(body.workingTime.workStart),
+                workEndMinute: minutesOfDay(body.workingTime.workEnd),
+                blockerWindow: blocker.value,
+                blockerWindowUnit: blocker.unit,
+                questionWindow: question.value,
+                questionWindowUnit: question.unit,
+              },
+            });
+          }
           const user = await tx.user.create({
             data: {
               name: body.admin.name,

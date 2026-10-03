@@ -23,6 +23,7 @@ import { DelegationsService } from './delegations/delegations.service.ts';
 import { FeatureGuidelinesModule } from './feature-guidelines/feature-guidelines.module.ts';
 import { FeatureSuggestionsModule } from './feature-suggestions/feature-suggestions.module.ts';
 import { FeaturesController } from './features/features.controller.ts';
+import { GettingStartedModule } from './getting-started/getting-started.module.ts';
 import { GrillingModule } from './grilling/grilling.module.ts';
 import { HealthController } from './health/health.controller.ts';
 import { InboxModule } from './inbox/inbox.module.ts';
@@ -56,6 +57,7 @@ import { SpecModule } from './spec/spec.module.ts';
     BriefModule,
     ConversationsModule,
     ChatAppsModule,
+    GettingStartedModule,
   ],
   controllers: [
     HealthController,

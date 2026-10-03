@@ -15,6 +15,7 @@ import { SETTINGS_BUTTON_ID } from './shell';
 //   so Back and Esc go to the Inbox, the default view.
 
 export const SETTINGS_SECTIONS = [
+  { href: '/settings/organization', label: 'Organization' },
   { href: '/settings/members', label: 'Members' },
   { href: '/settings/delegations', label: 'Delegations' },
   { href: '/settings/notifications', label: 'Notifications' },

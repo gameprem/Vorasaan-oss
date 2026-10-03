@@ -287,12 +287,23 @@ export class ChatAccountsService {
     return settings?.timeZone ?? DEFAULT_RESPONSE_WINDOW_SETTINGS.timeZone;
   }
 
+  /** The Organization's language (ticket 0063): for anyone who hasn't picked their own. */
+  async organizationLanguage(organizationId: string): Promise<ChatLanguage> {
+    const org = await this.db.organization.findUnique({
+      where: { id: organizationId },
+      select: { language: true },
+    });
+    return chatLanguage(org?.language) ?? DEFAULT_CHAT_LANGUAGE;
+  }
+
   async preferences(user: Pick<User, 'id'>): Promise<ChatPreferencesView> {
     const organizationId = await this.organizationOf(user);
-    const [row, orgTimeZone] = await Promise.all([
+    const [row, orgTimeZone, orgLanguage] = await Promise.all([
       this.db.chatPreference.findUnique({ where: { userId: user.id } }),
       this.organizationTimeZone(organizationId),
+      this.organizationLanguage(organizationId),
     ]);
+    const language = chatLanguage(row?.language);
     const quiet =
       row?.quietStartMinute != null && row.quietEndMinute != null
         ? { start: timeOfDay(row.quietStartMinute), end: timeOfDay(row.quietEndMinute) }
@@ -302,7 +313,8 @@ export class ChatAccountsService {
       quietHours: quiet,
       timeZone: row?.timeZone ?? null,
       effectiveTimeZone: row?.timeZone ?? orgTimeZone,
-      language: chatLanguage(row?.language),
+      language,
+      effectiveLanguage: language ?? orgLanguage,
     };
   }
 
@@ -332,17 +344,24 @@ export class ChatAccountsService {
       quietStartMinute: view.quietHours ? minutesOfDay(view.quietHours.start) : null,
       quietEndMinute: view.quietHours ? minutesOfDay(view.quietHours.end) : null,
       timeZone: view.effectiveTimeZone,
-      language: view.language ?? DEFAULT_CHAT_LANGUAGE,
+      language: view.effectiveLanguage,
     };
   }
 
-  /** The language a person reads cards and bot replies in. */
+  /** The language a person reads cards and bot replies in: their own, else the Organization's. */
   async languageOf(userId: string): Promise<ChatLanguage> {
-    const row = await this.db.chatPreference.findUnique({
-      where: { userId },
-      select: { language: true },
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      select: {
+        chatPreference: { select: { language: true } },
+        orgMemberships: { select: { organization: { select: { language: true } } }, take: 1 },
+      },
     });
-    return chatLanguage(row?.language) ?? DEFAULT_CHAT_LANGUAGE;
+    return (
+      chatLanguage(user?.chatPreference?.language) ??
+      chatLanguage(user?.orgMemberships[0]?.organization.language) ??
+      DEFAULT_CHAT_LANGUAGE
+    );
   }
 }
 
