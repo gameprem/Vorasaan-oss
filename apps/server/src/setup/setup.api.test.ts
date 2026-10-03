@@ -4,12 +4,20 @@ import type { PrismaClient } from '@vorasaan/db';
 import {
   type AiSettingsView,
   type AiTestResult,
+  type DecisionRequestView,
   type LoginResult,
+  type OrganizationSettingsView,
+  type ProjectView,
+  type ResponseWindowSettingsView,
   SETUP_TOKEN_HEADER,
   type SetupStatus,
+  type TeamSummary,
 } from '@vorasaan/shared';
+import type { z } from 'zod';
 import { createTestApp, type TestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
+import type { FakeClock } from '../test/fake-clock.ts';
+import { as } from '../test/http.ts';
 import { SetupTokenService } from './setup-token.service.ts';
 
 const body = {
@@ -28,6 +36,7 @@ describe('First-boot setup', () => {
   let connection: TestApp['connection'];
   let db: PrismaClient;
   let tokens: SetupTokenService;
+  let clock: FakeClock;
   /** The Setup Token the server generated for this test (as if read from its log). */
   let setupToken: string;
 
@@ -48,17 +57,19 @@ describe('First-boot setup', () => {
   const withToken = (token = setupToken) => ({ [SETUP_TOKEN_HEADER]: token });
 
   beforeAll(async () => {
-    ({ app, connection } = await createTestApp());
+    ({ app, connection, clock } = await createTestApp());
     db = createTestPrisma();
     tokens = app.get(SetupTokenService);
   });
 
   afterAll(async () => {
+    clock.reset();
     await db.$disconnect();
     await app.close();
   });
 
   beforeEach(async () => {
+    clock.reset();
     await truncateAll(db);
     connection.tester = async () => {};
     connection.calls = 0;
@@ -212,5 +223,156 @@ describe('First-boot setup', () => {
     const weak = { ...body, admin: { ...body.admin, password: 'short' } };
     expect((await call('POST', '/setup', weak, withToken())).status).toBe(400);
     expect(await db.organization.count()).toBe(0);
+  });
+
+  describe('Working Time and language (ticket 0063)', () => {
+    const bangkok = {
+      timeZone: 'Asia/Bangkok',
+      workingDays: [1, 2, 3, 4, 5, 6],
+      workStart: '08:30',
+      workEnd: '17:30',
+    };
+    const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
+
+    test('setup stores the time zone, working days and hours, and the language', async () => {
+      const res = await call<LoginResult>(
+        'POST',
+        '/setup',
+        { ...body, workingTime: bangkok, language: 'th' },
+        withToken(),
+      );
+      expect(res.status).toBe(201);
+      const auth = bearer(res.body.token);
+
+      const calendar = await call<ResponseWindowSettingsView>(
+        'GET',
+        '/settings/response-windows',
+        undefined,
+        auth,
+      );
+      expect(calendar.body).toMatchObject({
+        ...bangkok,
+        holidays: [],
+        // The default Response Windows stay.
+        blocker: { value: 4, unit: 'WORKING_HOURS' },
+        question: { value: 2, unit: 'WORKING_DAYS' },
+      });
+      const org = await call<OrganizationSettingsView>(
+        'GET',
+        '/settings/organization',
+        undefined,
+        auth,
+      );
+      expect(org.body).toEqual({ name: 'Acme Bank', language: 'th' });
+    });
+
+    test('an older client that sends neither keeps the defaults', async () => {
+      const res = await call<LoginResult>('POST', '/setup', body, withToken());
+      expect(res.status).toBe(201);
+      const auth = bearer(res.body.token);
+      const calendar = await call<ResponseWindowSettingsView>(
+        'GET',
+        '/settings/response-windows',
+        undefined,
+        auth,
+      );
+      expect(calendar.body).toMatchObject({
+        timeZone: 'UTC',
+        workingDays: [1, 2, 3, 4, 5],
+        workStart: '09:00',
+        workEnd: '18:00',
+      });
+      const org = await call<OrganizationSettingsView>(
+        'GET',
+        '/settings/organization',
+        undefined,
+        auth,
+      );
+      expect(org.body.language).toBe('en');
+    });
+
+    test('a missing or unknown time zone, bad hours or an unknown language is a 400 and creates nothing', async () => {
+      const { timeZone: _, ...noTimeZone } = bangkok;
+      const bad = [
+        { workingTime: noTimeZone },
+        { workingTime: { ...bangkok, timeZone: 'Mars/Olympus' } },
+        { workingTime: { ...bangkok, timeZone: '' } },
+        { workingTime: { ...bangkok, workingDays: [] } },
+        { workingTime: { ...bangkok, workStart: '18:00', workEnd: '09:00' } },
+        { language: 'fr' },
+      ];
+      for (const patch of bad) {
+        const res = await call('POST', '/setup', { ...body, ...patch }, withToken());
+        expect(res.status).toBe(400);
+      }
+      expect(await db.organization.count()).toBe(0);
+      expect(await db.responseWindowSettings.count()).toBe(0);
+    });
+
+    test('a Response Window started right after setup counts in the Organization’s working hours', async () => {
+      // Friday 16:00 in Bangkok; working hours 09:00-18:00, Monday to Friday.
+      clock.set('2026-10-09T16:00:00+07:00');
+      const res = await call<LoginResult>(
+        'POST',
+        '/setup',
+        {
+          ...body,
+          workingTime: {
+            ...bangkok,
+            workingDays: [1, 2, 3, 4, 5],
+            workStart: '09:00',
+            workEnd: '18:00',
+          },
+        },
+        withToken(),
+      );
+      expect(res.status).toBe(201);
+      const nok = res.body.user.id;
+      const asNok = as(app, nok);
+
+      // A second person, Pim, the PO who decides; Nok raises as Backend.
+      const pim = await db.user.create({
+        data: { name: 'Pim', email: 'pim@acmebank.test', passwordHash: 'x' },
+      });
+      const { organizationId } = await db.orgMembership.findFirstOrThrow({
+        where: { userId: nok },
+      });
+      await db.orgMembership.create({ data: { organizationId, userId: pim.id } });
+
+      const project = await asNok<ProjectView>('POST', '/projects', { name: 'Mobile Banking' });
+      const team = await asNok<z.infer<typeof TeamSummary>>(
+        'POST',
+        `/projects/${project.body.id}/teams`,
+        { name: 'Checkout' },
+      );
+      expect(team.status).toBe(201);
+      await asNok('PUT', `/teams/${team.body.id}/members/${nok}`, { roles: ['BACKEND'] });
+      await asNok('PUT', `/teams/${team.body.id}/members/${pim.id}`, { roles: ['PO'] });
+      const feature = await asNok<{ id: string }>('POST', `/teams/${team.body.id}/features`, {
+        title: 'Pay by QR',
+      });
+      await asNok('PUT', `/features/${feature.body.id}/role-owners`, {
+        owners: [
+          { userId: nok, role: 'BACKEND' },
+          { userId: pim.id, role: 'PO' },
+        ],
+      });
+      const draft = await asNok<DecisionRequestView>('POST', '/decision-requests', {
+        featureId: feature.body.id,
+        kind: 'BLOCKER',
+        title: 'Provider has no webhook',
+        description: 'Only polling is available.',
+      });
+      const sent = await asNok<DecisionRequestView>(
+        'POST',
+        `/decision-requests/${draft.body.id}/submit`,
+        { deciderRole: 'PO' },
+      );
+      expect(sent.status).toBe(201);
+      // 4 working hours: Friday 16:00-18:00, then Monday 09:00-11:00, Bangkok time.
+      expect(sent.body.responseWindow.dueAt).toBe(
+        new Date('2026-10-12T11:00:00+07:00').toISOString(),
+      );
+    });
   });
 });

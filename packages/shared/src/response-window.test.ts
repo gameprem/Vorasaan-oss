@@ -4,6 +4,7 @@ import {
   ProjectResponseWindowsInput,
   ResponseWindowSettingsInput,
   responseWindowLabels,
+  WorkingTimeInput,
 } from './response-window.ts';
 
 const now = new Date('2026-10-05T10:00:00Z');
@@ -88,4 +89,19 @@ test('ProjectResponseWindowsInput: null keeps the Organization default', () => {
       question: null,
     }),
   ).toEqual({ blocker: { value: 2, unit: 'WORKING_HOURS' }, question: null });
+});
+
+test('WorkingTimeInput (first-run setup): the same checks, without holidays or windows', () => {
+  const valid = {
+    timeZone: 'Asia/Bangkok',
+    workingDays: [1, 2, 3, 4, 5],
+    workStart: '09:00',
+    workEnd: '18:00',
+  };
+  expect(WorkingTimeInput.safeParse(valid).success).toBe(true);
+  const { timeZone: _, ...noTimeZone } = valid;
+  expect(WorkingTimeInput.safeParse(noTimeZone).success).toBe(false);
+  expect(WorkingTimeInput.safeParse({ ...valid, timeZone: 'Mars/Olympus' }).success).toBe(false);
+  expect(WorkingTimeInput.safeParse({ ...valid, workEnd: '08:00' }).success).toBe(false);
+  expect(WorkingTimeInput.safeParse({ ...valid, holidays: [] }).success).toBe(false);
 });

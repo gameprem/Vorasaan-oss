@@ -51,19 +51,36 @@ export const minutesOfDay = (time: string) => {
 export const timeOfDay = (minutes: number) =>
   `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 
+/** The Organization's Working Time, minus the holidays. Working days are ISO weekdays. */
+const workingTimeShape = {
+  timeZone: TimeZone,
+  workingDays: z
+    .array(z.int().min(1).max(7))
+    .min(1, 'Pick at least one working day')
+    .refine((days) => new Set(days).size === days.length, 'A working day appears twice'),
+  workStart: TimeOfDay,
+  workEnd: TimeOfDay,
+};
+const endsAfterStart = (s: { workStart: string; workEnd: string }) =>
+  minutesOfDay(s.workEnd) > minutesOfDay(s.workStart);
+const ENDS_AFTER_START = { message: 'Working hours must end after they start', path: ['workEnd'] };
+
+/**
+ * The time zone, working days and working hours on their own, as first-run setup asks for
+ * them (ticket 0063). Saved into the same settings as `ResponseWindowSettingsInput`.
+ */
+export const WorkingTimeInput = z
+  .strictObject(workingTimeShape)
+  .refine(endsAfterStart, ENDS_AFTER_START);
+export type WorkingTimeInput = z.infer<typeof WorkingTimeInput>;
+
 /**
  * `PUT /settings/response-windows` (Admins): the Organization's working calendar and its
  * default windows. Working days are ISO weekdays (1 = Monday ... 7 = Sunday).
  */
 export const ResponseWindowSettingsInput = z
   .strictObject({
-    timeZone: TimeZone,
-    workingDays: z
-      .array(z.int().min(1).max(7))
-      .min(1, 'Pick at least one working day')
-      .refine((days) => new Set(days).size === days.length, 'A working day appears twice'),
-    workStart: TimeOfDay,
-    workEnd: TimeOfDay,
+    ...workingTimeShape,
     holidays: z
       .array(Holiday)
       .max(400)
@@ -74,10 +91,7 @@ export const ResponseWindowSettingsInput = z
     blocker: ResponseWindow,
     question: ResponseWindow,
   })
-  .refine((s) => minutesOfDay(s.workEnd) > minutesOfDay(s.workStart), {
-    message: 'Working hours must end after they start',
-    path: ['workEnd'],
-  });
+  .refine(endsAfterStart, ENDS_AFTER_START);
 export type ResponseWindowSettingsInput = z.infer<typeof ResponseWindowSettingsInput>;
 
 /** `GET /settings/response-windows` (every member of the Organization). */
