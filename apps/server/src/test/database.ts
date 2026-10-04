@@ -2,20 +2,23 @@ import { createPrismaClient, type PrismaClient } from '@vorasaan/db';
 import pg from 'pg';
 
 // Tests run against a real Postgres database whose name must end in "_test",
-// so a misconfigured env can never truncate a dev database.
+// so a misconfigured env can never truncate a dev database. The benchmark (ticket 0073)
+// uses its own database, whose name must end in "_bench", for the same reason.
 const DEFAULT_TEST_URL = 'postgresql://vorasaan:vorasaan@localhost:5432/vorasaan_test';
 
 export const testDatabaseUrl = process.env.TEST_DATABASE_URL ?? DEFAULT_TEST_URL;
 
 const dbPackageDir = new URL('../../../../packages/db/', import.meta.url).pathname;
 
-let prepared: Promise<void> | undefined;
+const prepared = new Map<string, Promise<void>>();
 
 async function ensureDatabaseExists(url: string) {
   const target = new URL(url);
   const name = target.pathname.slice(1);
-  if (!name.endsWith('_test')) {
-    throw new Error(`Refusing to use "${name}" for tests: the database name must end in _test`);
+  if (!name.endsWith('_test') && !name.endsWith('_bench')) {
+    throw new Error(
+      `Refusing to use "${name}" for tests: the database name must end in _test (or _bench)`,
+    );
   }
   const admin = new URL(url);
   admin.pathname = '/postgres';
@@ -41,10 +44,19 @@ async function migrate(url: string) {
   }
 }
 
+/** Creates a test or bench database if needed and applies migrations, once per run. */
+export function prepareDatabase(url: string): Promise<void> {
+  let ready = prepared.get(url);
+  if (!ready) {
+    ready = ensureDatabaseExists(url).then(() => migrate(url));
+    prepared.set(url, ready);
+  }
+  return ready;
+}
+
 /** Creates the test database if needed and applies migrations, once per test run. */
 export function prepareTestDatabase(): Promise<void> {
-  prepared ??= ensureDatabaseExists(testDatabaseUrl).then(() => migrate(testDatabaseUrl));
-  return prepared;
+  return prepareDatabase(testDatabaseUrl);
 }
 
 export function createTestPrisma(): PrismaClient {

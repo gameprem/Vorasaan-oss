@@ -283,24 +283,29 @@ export class ContentChunkRepository {
     if (n > HNSW_MAX_DIMS) return Promise.resolve();
     let pending = this.indexes.get(n);
     if (!pending) {
-      pending = this.db
-        .$executeRawUnsafe(
-          `CREATE INDEX IF NOT EXISTS "ContentChunk_embedding_hnsw_${n}" ON "ContentChunk" ` +
-            `USING hnsw ((embedding::vector(${n})) vector_cosine_ops) WHERE "embeddingDims" = ${n}`,
-        )
-        .then(
-          () => undefined,
-          (error: Error) => {
-            this.indexes.delete(n);
-            this.logger.warn(
-              `Could not create the HNSW index for ${n} dimensions: ${error.message}`,
-            );
-          },
-        );
+      pending = this.db.$executeRawUnsafe(hnswIndexSql(n)).then(
+        () => undefined,
+        (error: Error) => {
+          this.indexes.delete(n);
+          this.logger.warn(`Could not create the HNSW index for ${n} dimensions: ${error.message}`);
+        },
+      );
       this.indexes.set(n, pending);
     }
     return pending;
   }
+}
+
+/**
+ * The partial HNSW index for one dimension. Bulk loads (the large Organization of ticket
+ * 0073) create it after inserting, with the same statement, so search plans stay the same.
+ */
+export function hnswIndexSql(dims: number): string {
+  const n = checkedDims(dims);
+  return (
+    `CREATE INDEX IF NOT EXISTS "ContentChunk_embedding_hnsw_${n}" ON "ContentChunk" ` +
+    `USING hnsw ((embedding::vector(${n})) vector_cosine_ops) WHERE "embeddingDims" = ${n}`
+  );
 }
 
 export function sourceKey(ref: ChunkSourceRef): string {
@@ -316,7 +321,7 @@ function checkedDims(dims: number): number {
 }
 
 /** pgvector's text format, passed as a parameter and cast: "[0.1,0.2,...]". */
-function toVectorLiteral(vector: number[]): string {
+export function toVectorLiteral(vector: number[]): string {
   return `[${vector.join(',')}]`;
 }
 

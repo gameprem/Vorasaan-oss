@@ -1,0 +1,653 @@
+{
+  "ticket": "0073",
+  "createdAt": "2026-10-04T10:35:31.406Z",
+  "machine": {
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cores": 4,
+    "memoryGb": 16,
+    "os": "Linux 6.18.44-fc-v64 x64",
+    "bun": "1.4.2",
+    "postgres": "PostgreSQL 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit",
+    "pgvector": "0.6.0"
+  },
+  "dataset": {
+    "scale": "large",
+    "seed": 73,
+    "now": "2026-06-01T10:00:00.000Z",
+    "counts": {
+      "users": 200,
+      "projects": 50,
+      "teams": 50,
+      "features": 500,
+      "roleOwners": 4500,
+      "delegations": 75,
+      "decisionRequests": 20000,
+      "requestsByStatus": {
+        "DRAFT": 1326,
+        "OPEN": 3971,
+        "NEEDS_INFO": 1374,
+        "DECIDED": 6392,
+        "SPEC_UPDATED": 4726,
+        "WITHDRAWN": 2211
+      },
+      "recipients": 28930,
+      "choices": 48192,
+      "redrafts": 3282,
+      "deciderChanges": 7893,
+      "requestMessages": 6924,
+      "historyEntries": 5421,
+      "decisions": 11118,
+      "specVersions": 5226,
+      "specProposals": 8514,
+      "briefVersions": 50,
+      "attachments": 6050,
+      "notifications": 18166,
+      "chunks": 200000
+    }
+  },
+  "iterations": 30,
+  "retrievalFoundNeedle": true,
+  "results": [
+    {
+      "name": "GET /inbox",
+      "description": "Pim's Inbox: every Decision Request, Spec Proposal and Brief Proposal for her",
+      "iterations": 30,
+      "ms": {
+        "p50": 67.5,
+        "p95": 84.5,
+        "mean": 68.2,
+        "min": 53.4,
+        "max": 85.3
+      },
+      "queries": {
+        "p50": 22,
+        "max": 22
+      },
+      "dbMs": {
+        "p50": 116.6,
+        "p95": 179.3
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"Feature\".\"id\", \"public\".\"Feature\".\"title\" FROM \"public\".\"Feature\" WHERE \"public\".\"Feature\".\"id\" IN (?...) OFFSET ?",
+        "count": 2,
+        "totalMs": 7.7
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"DecisionRequest\".\"id\", \"public\".\"DecisionRequest\".\"featureId\", \"public\".\"DecisionRequest\".\"kind\"::text, \"public\".\"DecisionRequest\".\"withChoices\", \"public\".\"DecisionRequest\".\"raiserId\", \"public\".\"DecisionRequest\".\"title\", \"public\".\"DecisionRequest\".\"description\", \"public\".\"DecisionRequest\".\"suggestedRole\"::text, \"public\".\"DecisionRequest\".\"deciderRole\"::text, \"public\".\"DecisionRequest\".\"deciderId\", \"public\".\"DecisionRequest\".\"status\"::text, \"public\".\"DecisionRequest\".\"submittedAt\", \"public\".\"DecisionRequest\".\"closedAt\", \"public\".\"DecisionRequest\".\"responseWindowMinutes\", \"public\".\"DecisionRequest\".\"dueAt\", \"public\".\"DecisionRequest\".\"pausedAt\", \"public\".\"DecisionRequest\".\"escalationStep\", \"public\".\"DecisionRequest\".\"choicesApprovedModelId\", \"public\".\"DecisionRequest\".\"choicesModelDisplayName\", \"public\".\"DecisionRequest\".\"choicesModelName\", \"public\".\"DecisionRequest\".\"createdAt\", \"public\".\"DecisionRequest\".\"updatedAt\" FROM \"public\".\"DecisionRequest\" WHERE (\"public\".\"DecisionRequest\".\"status\" = CAST(?::text AS \"public\".\"DecisionRequestStatus\") AND (\"public\".\"DecisionRequest\".\"deciderId\" = ? OR (\"public\".\"DecisionRequest\".\"deciderId\" IS NULL AND EXISTS(SELECT \"t0\".\"requestId\" FROM \"public\".\"RequestRecipient\" AS \"t0\" WHERE (\"t0\".\"userId\" = ? AND (\"public\".\"DecisionRequest\".\"id\") = (\"t0\".\"requestId\") AND \"t0\".\"requestId\" IS NOT NULL))))) OFFSET ?",
+          "count": 30,
+          "totalMs": 540.7
+        },
+        {
+          "sql": "SELECT \"public\".\"Feature\".\"id\", \"public\".\"Feature\".\"title\" FROM \"public\".\"Feature\" WHERE \"public\".\"Feature\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 420.5
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 363.3
+        },
+        {
+          "sql": "SELECT \"public\".\"RequestRecipient\".\"id\", \"public\".\"RequestRecipient\".\"onBehalfOfId\", \"public\".\"RequestRecipient\".\"requestId\" FROM \"public\".\"RequestRecipient\" WHERE (\"public\".\"RequestRecipient\".\"userId\" = ? AND \"public\".\"RequestRecipient\".\"requestId\" IN (?...)) OFFSET ?",
+          "count": 30,
+          "totalMs": 324.5
+        },
+        {
+          "sql": "SELECT \"public\".\"Project\".\"id\", \"public\".\"Project\".\"name\" FROM \"public\".\"Project\" WHERE \"public\".\"Project\".\"id\" IN (NULL) OFFSET ?",
+          "count": 60,
+          "totalMs": 279.4
+        }
+      ],
+      "queryBudget": null,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "Feature page (5 requests)",
+      "description": "The Feature page's reads, one after another: /features/00000000-0000-4000-8000-000000000004, /features/00000000-0000-4000-8000-000000000004/spec-versions, /features/00000000-0000-4000-8000-000000000004/decision-log, /features/00000000-0000-4000-8000-000000000004/role-owners, /features/00000000-0000-4000-8000-000000000004/attachments",
+      "iterations": 30,
+      "ms": {
+        "p50": 23.2,
+        "p95": 32.8,
+        "mean": 25,
+        "min": 19,
+        "max": 41.4
+      },
+      "queries": {
+        "p50": 31,
+        "max": 31
+      },
+      "dbMs": {
+        "p50": 18.2,
+        "p95": 34.1
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+        "count": 5,
+        "totalMs": 3.1
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+          "count": 150,
+          "totalMs": 95.6
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"email\", \"public\".\"User\".\"name\", \"public\".\"User\".\"passwordHash\", \"public\".\"User\".\"createdAt\", \"public\".\"User\".\"updatedAt\" FROM \"public\".\"User\" WHERE (\"public\".\"User\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 150,
+          "totalMs": 82.4
+        },
+        {
+          "sql": "SELECT \"public\".\"Attachment\".\"id\", \"public\".\"Attachment\".\"featureId\", \"public\".\"Attachment\".\"projectId\", \"public\".\"Attachment\".\"source\"::text, \"public\".\"Attachment\".\"title\", \"public\".\"Attachment\".\"url\", \"public\".\"Attachment\".\"storageKey\", \"public\".\"Attachment\".\"mimeType\", \"public\".\"Attachment\".\"snapshotText\", \"public\".\"Attachment\".\"snapshotAt\", \"public\".\"Attachment\".\"summary\", \"public\".\"Attachment\".\"addedById\", \"public\".\"Attachment\".\"createdAt\" FROM \"public\".\"Attachment\" WHERE \"public\".\"Attachment\".\"featureId\" = ? ORDER BY \"public\".\"Attachment\".\"createdAt\" ASC OFFSET ?",
+          "count": 30,
+          "totalMs": 50.5
+        },
+        {
+          "sql": "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"Feature\".\"id\" FROM \"public\".\"Feature\" WHERE \"public\".\"Feature\".\"id\" = ? OFFSET ?) AS \"sub\"",
+          "count": 60,
+          "totalMs": 38.8
+        },
+        {
+          "sql": "SELECT \"public\".\"Choice\".\"id\", \"public\".\"Choice\".\"label\", \"public\".\"Choice\".\"title\" FROM \"public\".\"Choice\" WHERE \"public\".\"Choice\".\"id\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 33.7
+        }
+      ],
+      "queryBudget": null,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /features/:id",
+      "description": "One read of the Feature page",
+      "iterations": 30,
+      "ms": {
+        "p50": 2.9,
+        "p95": 3.4,
+        "mean": 2.9,
+        "min": 2.4,
+        "max": 3.5
+      },
+      "queries": {
+        "p50": 5,
+        "max": 5
+      },
+      "dbMs": {
+        "p50": 2.3,
+        "p95": 2.9
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"Feature\".\"id\", \"public\".\"Feature\".\"teamId\", \"public\".\"Feature\".\"title\", \"public\".\"Feature\".\"description\", \"public\".\"Feature\".\"status\"::text, \"public\".\"Feature\".\"jiraIssueKey\", \"public\".\"Feature\".\"createdAt\", \"public\".\"Feature\".\"updatedAt\", COALESCE(\"aggr_selection_0_DecisionRequest\".\"_aggr_count_decisionRequests\", 0) AS \"_aggr_count_decisionRequests\" FROM \"public\".\"Feature\" LEFT JOIN (SELECT \"public\".\"DecisionRequest\".\"featureId\", COUNT(*) AS \"_aggr_count_decisionRequests\" FROM \"public\".\"DecisionRequest\" WHERE (\"public\".\"DecisionRequest\".\"kind\" = CAST(?::text AS \"public\".\"DecisionRequestKind\") AND \"public\".\"DecisionRequest\".\"status\" IN (CAST(?::text AS \"public\".\"DecisionRequestStatus\"),CAST(?::text AS \"public\".\"DecisionRequestStatus\"))) GROUP BY \"public\".\"DecisionRequest\".\"featureId\") AS \"aggr_selection_0_DecisionRequest\" ON (\"public\".\"Feature\".\"id\" = \"aggr_selection_0_DecisionRequest\".\"featureId\") WHERE (\"public\".\"Feature\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+        "count": 1,
+        "totalMs": 0.6
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"Feature\".\"id\", \"public\".\"Feature\".\"teamId\", \"public\".\"Feature\".\"title\", \"public\".\"Feature\".\"description\", \"public\".\"Feature\".\"status\"::text, \"public\".\"Feature\".\"jiraIssueKey\", \"public\".\"Feature\".\"createdAt\", \"public\".\"Feature\".\"updatedAt\", COALESCE(\"aggr_selection_0_DecisionRequest\".\"_aggr_count_decisionRequests\", 0) AS \"_aggr_count_decisionRequests\" FROM \"public\".\"Feature\" LEFT JOIN (SELECT \"public\".\"DecisionRequest\".\"featureId\", COUNT(*) AS \"_aggr_count_decisionRequests\" FROM \"public\".\"DecisionRequest\" WHERE (\"public\".\"DecisionRequest\".\"kind\" = CAST(?::text AS \"public\".\"DecisionRequestKind\") AND \"public\".\"DecisionRequest\".\"status\" IN (CAST(?::text AS \"public\".\"DecisionRequestStatus\"),CAST(?::text AS \"public\".\"DecisionRequestStatus\"))) GROUP BY \"public\".\"DecisionRequest\".\"featureId\") AS \"aggr_selection_0_DecisionRequest\" ON (\"public\".\"Feature\".\"id\" = \"aggr_selection_0_DecisionRequest\".\"featureId\") WHERE (\"public\".\"Feature\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 30,
+          "totalMs": 21.9
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"email\", \"public\".\"User\".\"name\", \"public\".\"User\".\"passwordHash\", \"public\".\"User\".\"createdAt\", \"public\".\"User\".\"updatedAt\" FROM \"public\".\"User\" WHERE (\"public\".\"User\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 30,
+          "totalMs": 15.3
+        },
+        {
+          "sql": "SELECT \"public\".\"RoleOwner\".\"id\", \"public\".\"RoleOwner\".\"role\"::text, \"public\".\"RoleOwner\".\"featureId\" FROM \"public\".\"RoleOwner\" WHERE (\"public\".\"RoleOwner\".\"userId\" = ? AND \"public\".\"RoleOwner\".\"featureId\" = ?) OFFSET ?",
+          "count": 30,
+          "totalMs": 13.6
+        },
+        {
+          "sql": "SELECT \"public\".\"Team\".\"id\", \"public\".\"Team\".\"name\", \"public\".\"Team\".\"projectId\" FROM \"public\".\"Team\" WHERE \"public\".\"Team\".\"id\" = ? OFFSET ?",
+          "count": 30,
+          "totalMs": 11.5
+        },
+        {
+          "sql": "SELECT \"public\".\"Project\".\"id\", \"public\".\"Project\".\"name\" FROM \"public\".\"Project\" WHERE \"public\".\"Project\".\"id\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 8.6
+        }
+      ],
+      "queryBudget": null,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /features/:id/spec-versions",
+      "description": "One read of the Feature page",
+      "iterations": 30,
+      "ms": {
+        "p50": 3.6,
+        "p95": 4.4,
+        "mean": 3.7,
+        "min": 2.6,
+        "max": 9.3
+      },
+      "queries": {
+        "p50": 6,
+        "max": 6
+      },
+      "dbMs": {
+        "p50": 3.1,
+        "p95": 3.9
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"SpecVersion\".\"id\", \"public\".\"SpecVersion\".\"featureId\", \"public\".\"SpecVersion\".\"version\", \"public\".\"SpecVersion\".\"markdown\", \"public\".\"SpecVersion\".\"source\"::text, \"public\".\"SpecVersion\".\"summary\", \"public\".\"SpecVersion\".\"approvedById\", \"public\".\"SpecVersion\".\"proposalId\", \"public\".\"SpecVersion\".\"revertedFromId\", \"public\".\"SpecVersion\".\"createdAt\" FROM \"public\".\"SpecVersion\" WHERE \"public\".\"SpecVersion\".\"featureId\" = ? ORDER BY \"public\".\"SpecVersion\".\"version\" DESC OFFSET ?",
+        "count": 1,
+        "totalMs": 0.6
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"SpecProposal\".\"id\", \"public\".\"SpecProposal\".\"approvedModelId\", \"public\".\"SpecProposal\".\"modelDisplayName\", \"public\".\"SpecProposal\".\"modelName\" FROM \"public\".\"SpecProposal\" WHERE \"public\".\"SpecProposal\".\"id\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 17.7
+        },
+        {
+          "sql": "SELECT \"public\".\"SpecVersion\".\"id\", \"public\".\"SpecVersion\".\"featureId\", \"public\".\"SpecVersion\".\"version\", \"public\".\"SpecVersion\".\"markdown\", \"public\".\"SpecVersion\".\"source\"::text, \"public\".\"SpecVersion\".\"summary\", \"public\".\"SpecVersion\".\"approvedById\", \"public\".\"SpecVersion\".\"proposalId\", \"public\".\"SpecVersion\".\"revertedFromId\", \"public\".\"SpecVersion\".\"createdAt\" FROM \"public\".\"SpecVersion\" WHERE \"public\".\"SpecVersion\".\"featureId\" = ? ORDER BY \"public\".\"SpecVersion\".\"version\" DESC OFFSET ?",
+          "count": 30,
+          "totalMs": 17.6
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"email\", \"public\".\"User\".\"name\", \"public\".\"User\".\"passwordHash\", \"public\".\"User\".\"createdAt\", \"public\".\"User\".\"updatedAt\" FROM \"public\".\"User\" WHERE (\"public\".\"User\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 30,
+          "totalMs": 16.5
+        },
+        {
+          "sql": "SELECT \"public\".\"SpecVersion\".\"id\", \"public\".\"SpecVersion\".\"version\" FROM \"public\".\"SpecVersion\" WHERE \"public\".\"SpecVersion\".\"id\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 14.7
+        },
+        {
+          "sql": "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"Feature\".\"id\" FROM \"public\".\"Feature\" WHERE \"public\".\"Feature\".\"id\" = ? OFFSET ?) AS \"sub\"",
+          "count": 30,
+          "totalMs": 14.5
+        }
+      ],
+      "queryBudget": null,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /features/:id/decision-log",
+      "description": "One read of the Feature page",
+      "iterations": 30,
+      "ms": {
+        "p50": 4.2,
+        "p95": 4.8,
+        "mean": 4.1,
+        "min": 2.9,
+        "max": 4.9
+      },
+      "queries": {
+        "p50": 9,
+        "max": 9
+      },
+      "dbMs": {
+        "p50": 5.4,
+        "p95": 6.5
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+        "count": 2,
+        "totalMs": 1.2
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 42.1
+        },
+        {
+          "sql": "SELECT \"public\".\"Choice\".\"id\", \"public\".\"Choice\".\"label\", \"public\".\"Choice\".\"title\" FROM \"public\".\"Choice\" WHERE \"public\".\"Choice\".\"id\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 22.4
+        },
+        {
+          "sql": "SELECT \"public\".\"Decision\".\"id\", \"public\".\"Decision\".\"requestId\", \"public\".\"Decision\".\"decidedById\", \"public\".\"Decision\".\"onBehalfOfId\", \"public\".\"Decision\".\"choiceId\", \"public\".\"Decision\".\"customAnswer\", \"public\".\"Decision\".\"rationale\", \"public\".\"Decision\".\"source\"::text, \"public\".\"Decision\".\"createdAt\" FROM \"public\".\"Decision\" LEFT JOIN \"public\".\"DecisionRequest\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"Decision\".\"requestId\") WHERE (\"j0\".\"featureId\" = ? AND (\"j0\".\"id\" IS NOT NULL)) ORDER BY \"public\".\"Decision\".\"createdAt\" ASC OFFSET ?",
+          "count": 30,
+          "totalMs": 22.1
+        },
+        {
+          "sql": "SELECT \"public\".\"SpecProposal\".\"id\", \"public\".\"SpecProposal\".\"decisionId\" FROM \"public\".\"SpecProposal\" WHERE \"public\".\"SpecProposal\".\"decisionId\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 20.4
+        },
+        {
+          "sql": "SELECT \"public\".\"DecisionRequest\".\"id\", \"public\".\"DecisionRequest\".\"title\", \"public\".\"DecisionRequest\".\"kind\"::text, \"public\".\"DecisionRequest\".\"choicesApprovedModelId\", \"public\".\"DecisionRequest\".\"choicesModelDisplayName\", \"public\".\"DecisionRequest\".\"choicesModelName\" FROM \"public\".\"DecisionRequest\" WHERE \"public\".\"DecisionRequest\".\"id\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 18.8
+        }
+      ],
+      "queryBudget": null,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /features/:id/role-owners",
+      "description": "One read of the Feature page",
+      "iterations": 30,
+      "ms": {
+        "p50": 2.6,
+        "p95": 3.4,
+        "mean": 2.7,
+        "min": 2.2,
+        "max": 3.4
+      },
+      "queries": {
+        "p50": 4,
+        "max": 4
+      },
+      "dbMs": {
+        "p50": 1.6,
+        "p95": 2.1
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"email\", \"public\".\"User\".\"name\", \"public\".\"User\".\"passwordHash\", \"public\".\"User\".\"createdAt\", \"public\".\"User\".\"updatedAt\" FROM \"public\".\"User\" WHERE (\"public\".\"User\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+        "count": 1,
+        "totalMs": 0.6
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"RoleOwner\".\"id\", \"public\".\"RoleOwner\".\"featureId\", \"public\".\"RoleOwner\".\"userId\", \"public\".\"RoleOwner\".\"role\"::text FROM \"public\".\"RoleOwner\" LEFT JOIN \"public\".\"User\" AS \"orderby_1\" ON (\"orderby_1\".\"id\") = (\"public\".\"RoleOwner\".\"userId\") WHERE \"public\".\"RoleOwner\".\"featureId\" = ? ORDER BY \"public\".\"RoleOwner\".\"role\" ASC, \"orderby_1\".\"name\" ASC OFFSET ?",
+          "count": 30,
+          "totalMs": 17.3
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"email\", \"public\".\"User\".\"name\", \"public\".\"User\".\"passwordHash\", \"public\".\"User\".\"createdAt\", \"public\".\"User\".\"updatedAt\" FROM \"public\".\"User\" WHERE (\"public\".\"User\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 30,
+          "totalMs": 12.4
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 11.3
+        },
+        {
+          "sql": "SELECT \"public\".\"Feature\".\"id\", \"public\".\"Feature\".\"teamId\" FROM \"public\".\"Feature\" WHERE (\"public\".\"Feature\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 30,
+          "totalMs": 10.4
+        }
+      ],
+      "queryBudget": null,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /features/:id/attachments",
+      "description": "One read of the Feature page",
+      "iterations": 30,
+      "ms": {
+        "p50": 7.4,
+        "p95": 11.8,
+        "mean": 7.4,
+        "min": 4.9,
+        "max": 13.7
+      },
+      "queries": {
+        "p50": 7,
+        "max": 7
+      },
+      "dbMs": {
+        "p50": 3.5,
+        "p95": 4.4
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"Attachment\".\"id\", \"public\".\"Attachment\".\"featureId\", \"public\".\"Attachment\".\"projectId\", \"public\".\"Attachment\".\"source\"::text, \"public\".\"Attachment\".\"title\", \"public\".\"Attachment\".\"url\", \"public\".\"Attachment\".\"storageKey\", \"public\".\"Attachment\".\"mimeType\", \"public\".\"Attachment\".\"snapshotText\", \"public\".\"Attachment\".\"snapshotAt\", \"public\".\"Attachment\".\"summary\", \"public\".\"Attachment\".\"addedById\", \"public\".\"Attachment\".\"createdAt\" FROM \"public\".\"Attachment\" WHERE \"public\".\"Attachment\".\"featureId\" = ? ORDER BY \"public\".\"Attachment\".\"createdAt\" ASC OFFSET ?",
+        "count": 1,
+        "totalMs": 1.5
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"Attachment\".\"id\", \"public\".\"Attachment\".\"featureId\", \"public\".\"Attachment\".\"projectId\", \"public\".\"Attachment\".\"source\"::text, \"public\".\"Attachment\".\"title\", \"public\".\"Attachment\".\"url\", \"public\".\"Attachment\".\"storageKey\", \"public\".\"Attachment\".\"mimeType\", \"public\".\"Attachment\".\"snapshotText\", \"public\".\"Attachment\".\"snapshotAt\", \"public\".\"Attachment\".\"summary\", \"public\".\"Attachment\".\"addedById\", \"public\".\"Attachment\".\"createdAt\" FROM \"public\".\"Attachment\" WHERE \"public\".\"Attachment\".\"featureId\" = ? ORDER BY \"public\".\"Attachment\".\"createdAt\" ASC OFFSET ?",
+          "count": 30,
+          "totalMs": 42.6
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"email\", \"public\".\"User\".\"name\", \"public\".\"User\".\"passwordHash\", \"public\".\"User\".\"createdAt\", \"public\".\"User\".\"updatedAt\" FROM \"public\".\"User\" WHERE (\"public\".\"User\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 30,
+          "totalMs": 16.8
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 10.9
+        },
+        {
+          "sql": "SELECT \"public\".\"Feature\".\"id\", \"public\".\"Feature\".\"teamId\" FROM \"public\".\"Feature\" WHERE (\"public\".\"Feature\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 30,
+          "totalMs": 10.6
+        },
+        {
+          "sql": "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"OrgMembership\".\"id\" FROM \"public\".\"OrgMembership\" WHERE (\"public\".\"OrgMembership\".\"userId\" = ? AND \"public\".\"OrgMembership\".\"organizationId\" = ?) OFFSET ?) AS \"sub\"",
+          "count": 30,
+          "totalMs": 9.2
+        }
+      ],
+      "queryBudget": null,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "Retrieval (Feature, pgvector)",
+      "description": "ContextRetriever.forFeature with the fixture question and the Decision Request budget (12000 tokens), ranked by FakeEmbeddingPort vectors",
+      "iterations": 30,
+      "ms": {
+        "p50": 12,
+        "p95": 17.3,
+        "mean": 12.9,
+        "min": 10.3,
+        "max": 18.8
+      },
+      "queries": {
+        "p50": 29,
+        "max": 29
+      },
+      "dbMs": {
+        "p50": 30.6,
+        "p95": 38.6
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"SpecVersion\".\"id\", \"public\".\"SpecVersion\".\"version\", \"public\".\"SpecVersion\".\"featureId\" FROM \"public\".\"SpecVersion\" LEFT JOIN \"public\".\"Feature\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"SpecVersion\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"teamId\") LEFT JOIN \"public\".\"Project\" AS \"j2\" ON (\"j2\".\"id\") = (\"j1\".\"projectId\") WHERE (1=0 AND (\"j2\".\"id\" = ? AND \"j2\".\"organizationId\" = ? AND (\"j2\".\"id\" IS NOT NULL) AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL))) OFFSET ?",
+        "count": 2,
+        "totalMs": 2.8
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"id\", \"source\", \"sourceId\", \"featureId\", \"position\", \"text\", \"tokenCount\", \"embedding\"::vector(256) <=> ?::vector(256) AS \"distance\" FROM \"ContentChunk\" WHERE \"organizationId\" = ? AND \"projectId\" = ? AND \"featureId\" IS DISTINCT FROM ?::text AND (\"source\" <> 'ATTACHMENT' OR \"featureId\" IS NULL) AND \"embeddingModel\" = ? AND \"embeddingDims\" = 256 ORDER BY \"embedding\"::vector(256) <=> ?::vector(256) LIMIT ?",
+          "count": 30,
+          "totalMs": 98.6
+        },
+        {
+          "sql": "SELECT \"public\".\"SpecVersion\".\"id\", \"public\".\"SpecVersion\".\"version\", \"public\".\"SpecVersion\".\"featureId\" FROM \"public\".\"SpecVersion\" LEFT JOIN \"public\".\"Feature\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"SpecVersion\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"teamId\") LEFT JOIN \"public\".\"Project\" AS \"j2\" ON (\"j2\".\"id\") = (\"j1\".\"projectId\") WHERE (1=0 AND (\"j2\".\"id\" = ? AND \"j2\".\"organizationId\" = ? AND (\"j2\".\"id\" IS NOT NULL) AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL))) OFFSET ?",
+          "count": 60,
+          "totalMs": 85.4
+        },
+        {
+          "sql": "SELECT \"public\".\"Decision\".\"id\", \"public\".\"Decision\".\"requestId\" FROM \"public\".\"Decision\" LEFT JOIN \"public\".\"DecisionRequest\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"Decision\".\"requestId\") LEFT JOIN \"public\".\"Feature\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j2\" ON (\"j2\".\"id\") = (\"j1\".\"teamId\") LEFT JOIN \"public\".\"Project\" AS \"j3\" ON (\"j3\".\"id\") = (\"j2\".\"projectId\") WHERE (\"public\".\"Decision\".\"id\" IN (?...) AND (\"j3\".\"id\" = ? AND \"j3\".\"organizationId\" = ? AND (\"j3\".\"id\" IS NOT NULL) AND (\"j2\".\"id\" IS NOT NULL) AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL))) OFFSET ?",
+          "count": 30,
+          "totalMs": 77.2
+        },
+        {
+          "sql": "SELECT \"public\".\"Attachment\".\"id\", \"public\".\"Attachment\".\"title\" FROM \"public\".\"Attachment\" LEFT JOIN \"public\".\"Feature\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"Attachment\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"teamId\") LEFT JOIN \"public\".\"Project\" AS \"j2\" ON (\"j2\".\"id\") = (\"j1\".\"projectId\") LEFT JOIN \"public\".\"Project\" AS \"j3\" ON (\"j3\".\"id\") = (\"public\".\"Attachment\".\"projectId\") WHERE (\"public\".\"Attachment\".\"id\" IN (?...) AND ((\"j2\".\"id\" = ? AND \"j2\".\"organizationId\" = ? AND (\"j2\".\"id\" IS NOT NULL) AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL)) OR (\"j3\".\"id\" = ? AND \"j3\".\"organizationId\" = ? AND (\"j3\".\"id\" IS NOT NULL)))) OFFSET ?",
+          "count": 30,
+          "totalMs": 54.3
+        },
+        {
+          "sql": "SELECT \"public\".\"Decision\".\"id\", \"public\".\"Decision\".\"customAnswer\", \"public\".\"Decision\".\"rationale\", \"public\".\"Decision\".\"choiceId\", \"public\".\"Decision\".\"requestId\" FROM \"public\".\"Decision\" LEFT JOIN \"public\".\"DecisionRequest\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"Decision\".\"requestId\") WHERE (\"j0\".\"featureId\" = ? AND (\"j0\".\"id\" IS NOT NULL)) ORDER BY \"public\".\"Decision\".\"createdAt\" DESC LIMIT ? OFFSET ?",
+          "count": 30,
+          "totalMs": 54.1
+        }
+      ],
+      "queryBudget": null,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /projects/:id/decision-stats",
+      "description": "Decision Lead Time of the seeded Project, default range (12 weeks)",
+      "iterations": 30,
+      "ms": {
+        "p50": 60.9,
+        "p95": 83.8,
+        "mean": 63.3,
+        "min": 45.7,
+        "max": 101
+      },
+      "queries": {
+        "p50": 17,
+        "max": 17
+      },
+      "dbMs": {
+        "p50": 32.8,
+        "p95": 53.2
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+        "count": 3,
+        "totalMs": 1.3
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"RequestRecipient\".\"id\", \"public\".\"RequestRecipient\".\"userId\", \"public\".\"RequestRecipient\".\"requestId\" FROM \"public\".\"RequestRecipient\" WHERE \"public\".\"RequestRecipient\".\"requestId\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 152.6
+        },
+        {
+          "sql": "SELECT \"public\".\"RequestHistoryEntry\".\"id\", \"public\".\"RequestHistoryEntry\".\"people\", \"public\".\"RequestHistoryEntry\".\"createdAt\", \"public\".\"RequestHistoryEntry\".\"requestId\" FROM \"public\".\"RequestHistoryEntry\" WHERE (\"public\".\"RequestHistoryEntry\".\"kind\" = CAST(?::text AS \"public\".\"RequestHistoryKind\") AND \"public\".\"RequestHistoryEntry\".\"requestId\" IN (?...)) OFFSET ?",
+          "count": 30,
+          "totalMs": 142.1
+        },
+        {
+          "sql": "SELECT \"public\".\"DeciderChange\".\"id\", \"public\".\"DeciderChange\".\"deciderId\", \"public\".\"DeciderChange\".\"createdAt\", \"public\".\"DeciderChange\".\"requestId\" FROM \"public\".\"DeciderChange\" WHERE \"public\".\"DeciderChange\".\"requestId\" IN (?...) ORDER BY \"public\".\"DeciderChange\".\"createdAt\" ASC OFFSET ?",
+          "count": 30,
+          "totalMs": 129.1
+        },
+        {
+          "sql": "SELECT \"public\".\"RequestMessage\".\"id\", \"public\".\"RequestMessage\".\"kind\"::text, \"public\".\"RequestMessage\".\"createdAt\", \"public\".\"RequestMessage\".\"requestId\" FROM \"public\".\"RequestMessage\" WHERE \"public\".\"RequestMessage\".\"requestId\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 125.5
+        },
+        {
+          "sql": "SELECT \"public\".\"Decision\".\"id\", \"public\".\"Decision\".\"createdAt\", \"public\".\"Decision\".\"requestId\" FROM \"public\".\"Decision\" WHERE \"public\".\"Decision\".\"requestId\" IN (?...) OFFSET ?",
+          "count": 30,
+          "totalMs": 114.9
+        }
+      ],
+      "queryBudget": null,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "Escalation job (every open request)",
+      "description": "EscalationJob.run() over every OPEN Decision Request due at \"now\", from the same state each run (reset before), plus the chat card dispatch it queues",
+      "iterations": 6,
+      "ms": {
+        "p50": 11687.5,
+        "p95": 12461.5,
+        "mean": 11667.3,
+        "min": 10473.3,
+        "max": 12461.5
+      },
+      "queries": {
+        "p50": 22595,
+        "max": 22595
+      },
+      "dbMs": {
+        "p50": 11066.4,
+        "p95": 11855
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (NULL) OFFSET ?",
+        "count": 1454,
+        "totalMs": 426.3
+      },
+      "topStatements": [
+        {
+          "sql": "COMMIT",
+          "count": 6882,
+          "totalMs": 5860.7
+        },
+        {
+          "sql": "INSERT INTO \"public\".\"RequestHistoryEntry\" (\"id\",\"requestId\",\"kind\",\"people\",\"createdAt\") VALUES (?,?,CAST(?::text AS \"public\".\"RequestHistoryKind\"),?,?) RETURNING \"public\".\"RequestHistoryEntry\".\"id\", \"public\".\"RequestHistoryEntry\".\"requestId\", \"public\".\"RequestHistoryEntry\".\"kind\"::text, \"public\".\"RequestHistoryEntry\".\"people\", \"public\".\"RequestHistoryEntry\".\"createdAt\"",
+          "count": 8352,
+          "totalMs": 4076.1
+        },
+        {
+          "sql": "SELECT \"public\".\"Notification\".\"id\", \"public\".\"Notification\".\"userId\", \"public\".\"Notification\".\"type\"::text, \"public\".\"Notification\".\"featureId\", \"public\".\"Notification\".\"requestId\", \"public\".\"Notification\".\"specVersionId\", \"public\".\"Notification\".\"delegationId\", \"public\".\"Notification\".\"readAt\", \"public\".\"Notification\".\"createdAt\" FROM \"public\".\"Notification\" WHERE \"public\".\"Notification\".\"id\" IN (?...) ORDER BY \"public\".\"Notification\".\"createdAt\" ASC OFFSET ?",
+          "count": 4362,
+          "totalMs": 3618.7
+        },
+        {
+          "sql": "SELECT \"public\".\"RequestRecipient\".\"id\", \"public\".\"RequestRecipient\".\"userId\", \"public\".\"RequestRecipient\".\"requestId\" FROM \"public\".\"RequestRecipient\" WHERE \"public\".\"RequestRecipient\".\"requestId\" = ? OFFSET ?",
+          "count": 6882,
+          "totalMs": 3611.8
+        },
+        {
+          "sql": "SELECT \"public\".\"Organization\".\"id\" FROM \"public\".\"Organization\" WHERE 1=1 ORDER BY \"public\".\"Organization\".\"createdAt\" ASC LIMIT ? OFFSET ?",
+          "count": 5856,
+          "totalMs": 3471.1
+        }
+      ],
+      "queryBudget": null,
+      "overBudget": false,
+      "nPlusOne": true
+    },
+    {
+      "name": "Chat turn (fake AI)",
+      "description": "POST /conversations/:id/messages in a Feature Conversation, with FakeAiPort; its Receipt is written after the reply and not counted",
+      "iterations": 30,
+      "ms": {
+        "p50": 47.8,
+        "p95": 59.8,
+        "mean": 48.3,
+        "min": 38,
+        "max": 65.8
+      },
+      "queries": {
+        "p50": 83,
+        "max": 83
+      },
+      "dbMs": {
+        "p50": 65.4,
+        "p95": 77
+      },
+      "mostRepeated": {
+        "sql": "COMMIT",
+        "count": 5,
+        "totalMs": 3
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"id\", \"source\", \"sourceId\", \"featureId\", \"position\", \"text\", \"tokenCount\", \"embedding\"::vector(256) <=> ?::vector(256) AS \"distance\" FROM \"ContentChunk\" WHERE \"organizationId\" = ? AND \"projectId\" = ? AND \"featureId\" IS DISTINCT FROM ?::text AND (\"source\" <> 'ATTACHMENT' OR \"featureId\" IS NULL) AND \"embeddingModel\" = ? AND \"embeddingDims\" = 256 ORDER BY \"embedding\"::vector(256) <=> ?::vector(256) LIMIT ?",
+          "count": 30,
+          "totalMs": 142.6
+        },
+        {
+          "sql": "SELECT \"public\".\"BriefVersion\".\"id\", \"public\".\"BriefVersion\".\"version\" FROM \"public\".\"BriefVersion\" LEFT JOIN \"public\".\"Project\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"BriefVersion\".\"projectId\") WHERE (1=0 AND (\"j0\".\"id\" = ? AND \"j0\".\"organizationId\" = ? AND (\"j0\".\"id\" IS NOT NULL))) OFFSET ?",
+          "count": 60,
+          "totalMs": 114.2
+        },
+        {
+          "sql": "SELECT \"public\".\"Decision\".\"id\", \"public\".\"Decision\".\"requestId\" FROM \"public\".\"Decision\" LEFT JOIN \"public\".\"DecisionRequest\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"Decision\".\"requestId\") LEFT JOIN \"public\".\"Feature\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j2\" ON (\"j2\".\"id\") = (\"j1\".\"teamId\") LEFT JOIN \"public\".\"Project\" AS \"j3\" ON (\"j3\".\"id\") = (\"j2\".\"projectId\") WHERE (\"public\".\"Decision\".\"id\" IN (?...) AND (\"j3\".\"id\" = ? AND \"j3\".\"organizationId\" = ? AND (\"j3\".\"id\" IS NOT NULL) AND (\"j2\".\"id\" IS NOT NULL) AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL))) OFFSET ?",
+          "count": 30,
+          "totalMs": 81.7
+        },
+        {
+          "sql": "COMMIT",
+          "count": 150,
+          "totalMs": 78.5
+        },
+        {
+          "sql": "SELECT \"public\".\"Decision\".\"id\", \"public\".\"Decision\".\"customAnswer\", \"public\".\"Decision\".\"rationale\", \"public\".\"Decision\".\"choiceId\", \"public\".\"Decision\".\"requestId\" FROM \"public\".\"Decision\" LEFT JOIN \"public\".\"DecisionRequest\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"Decision\".\"requestId\") WHERE (\"j0\".\"featureId\" = ? AND (\"j0\".\"id\" IS NOT NULL)) ORDER BY \"public\".\"Decision\".\"createdAt\" DESC LIMIT ? OFFSET ?",
+          "count": 30,
+          "totalMs": 62.1
+        }
+      ],
+      "queryBudget": null,
+      "overBudget": false,
+      "nPlusOne": false
+    }
+  ],
+  "pgStatStatements": null
+}

@@ -16,7 +16,8 @@
     "eval:conversation": "bun scripts/eval-conversation.ts",
     "eval:redrafts": "bun scripts/eval-redrafts.ts",
     "eval:prompt-proposals": "bun scripts/eval-prompt-proposals.ts",
-    "tokens:fixture": "bun scripts/token-fixture.ts"
+    "tokens:fixture": "bun scripts/token-fixture.ts",
+    "bench": "bun scripts/bench.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

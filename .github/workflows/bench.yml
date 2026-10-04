@@ -1,0 +1,73 @@
+name: Benchmark
+
+# The performance benchmark (ticket 0073; docs/performance.md) on the medium dataset (a tenth
+# of the baseline's), to watch trends across PRs. It never fails a PR: the job and its steps
+# continue on error, and its results are kept as an artifact and in the job summary.
+# GitHub runners vary, so compare its numbers with other runs of this job, not with the
+# baseline recorded on a developer machine.
+
+on:
+  pull_request:
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    name: Benchmark (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: vorasaan
+          POSTGRES_PASSWORD: vorasaan
+          POSTGRES_DB: vorasaan
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vorasaan"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://vorasaan:vorasaan@localhost:5432/vorasaan
+      BENCH_DATABASE_URL: postgresql://vorasaan:vorasaan@localhost:5432/vorasaan_bench
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+      - run: bun run db:generate
+
+      - name: Run the benchmark on the medium dataset
+        continue-on-error: true
+        run: bun run bench --scale medium --iterations 20 --out bench-results/medium.json
+
+      - name: Add the results to the job summary
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ -f bench-results/medium.md ]; then
+            cat bench-results/medium.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The benchmark did not finish; see its step log." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-medium-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+          path: bench-results/
+          if-no-files-found: ignore
+          retention-days: 90

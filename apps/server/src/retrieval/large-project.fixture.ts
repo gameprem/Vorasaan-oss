@@ -21,9 +21,10 @@ export const NEEDLE_FACTS = ['22:30', '12 THB'];
 
 /**
  * Unrelated handbook topics, each with its own vocabulary, so only the needle
- * section shares words with the question.
+ * section shares words with the question. The large Organization (ticket 0073) builds
+ * its other documents from them too.
  */
-const TOPICS: [heading: string, sentence: string][] = [
+export const TOPICS: [heading: string, sentence: string][] = [
   ['Office access', 'Visitors sign the guest register at reception and wear a red lanyard.'],
   ['Laptop encryption', 'Every laptop uses full disk encryption with a recovery key in escrow.'],
   ['On-call rotation', 'Engineers rotate weekly and hand over the pager every Monday morning.'],
