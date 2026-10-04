@@ -18,7 +18,7 @@ import { EscalationJob } from '../response-windows/escalation.job.ts';
 import { EMBEDDING_PORT_FACTORY } from '../retrieval/embedding.port.ts';
 import { FakeEmbeddings } from '../retrieval/fake-embedding.port.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
-import { beforeTruncate, prepareTestDatabase, testDatabaseUrl } from './database.ts';
+import { beforeTruncate, prepareDatabase, testDatabaseUrl } from './database.ts';
 import { FakeClock } from './fake-clock.ts';
 
 export type TestApp = {
@@ -43,14 +43,27 @@ export type TestApp = {
   proposals: PromptProposalsService;
   /** The escalation job, which tests run by hand (its every-minute timer is off). */
   escalation: EscalationJob;
-  /** The SQL statements the app sends while `run` runs, to check a read stays a fixed few. */
-  recordQueries: <T>(run: () => Promise<T>) => Promise<{ result: T; sql: string[] }>;
+  /**
+   * The SQL statements the app sends while `run` runs, to check a read stays a fixed few,
+   * and how long each took (`queries`, for the benchmark of ticket 0073).
+   */
+  recordQueries: <T>(
+    run: () => Promise<T>,
+  ) => Promise<{ result: T; sql: string[]; queries: RecordedQuery[] }>;
+};
+
+export type RecordedQuery = { sql: string; durationMs: number };
+
+export type TestAppOptions = {
+  /** Another database than the test one, such as the benchmark's (name ending in _bench). */
+  databaseUrl?: string;
 };
 
 /** Boots the real app against the test database, with FakeAiPort, ready for `app.inject()`. */
-export async function createTestApp(): Promise<TestApp> {
-  await prepareTestDatabase();
-  process.env.DATABASE_URL = testDatabaseUrl;
+export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
+  const databaseUrl = options.databaseUrl ?? testDatabaseUrl;
+  await prepareDatabase(databaseUrl);
+  process.env.DATABASE_URL = databaseUrl;
   process.env.VORASAAN_SECRET_KEY ??= 'test-secret-key-for-vorasaan-tests';
   // Most API tests act as seeded users via the dev header; auth tests turn it off.
   process.env.VORASAAN_DEV_AUTH = 'true';
@@ -61,8 +74,10 @@ export async function createTestApp(): Promise<TestApp> {
   const ai = new FakeAiPort();
   const embeddings = new FakeEmbeddings();
   const connection: TestApp['connection'] = { tester: async () => {}, calls: 0 };
-  let recording: string[] | null = null;
-  const prisma = createPrismaClient(testDatabaseUrl, { onQuery: (sql) => recording?.push(sql) });
+  let recording: RecordedQuery[] | null = null;
+  const prisma = createPrismaClient(databaseUrl, {
+    onQuery: (sql, durationMs) => recording?.push({ sql, durationMs }),
+  });
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(PRISMA)
     .useValue(prisma)
@@ -116,10 +131,11 @@ export async function createTestApp(): Promise<TestApp> {
     escalation: app.get(EscalationJob),
     drainIndexing: () => indexing.drain(),
     recordQueries: async (run) => {
-      const sql: string[] = [];
-      recording = sql;
+      const queries: RecordedQuery[] = [];
+      recording = queries;
       try {
-        return { result: await run(), sql };
+        const result = await run();
+        return { result, sql: queries.map((q) => q.sql), queries };
       } finally {
         recording = null;
       }

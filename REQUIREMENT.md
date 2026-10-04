@@ -264,7 +264,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
     - [x] Prompt Versions and in-app evals (0071).
     - [x] The AI proposes better prompts (0072).
 11. **Optimization:** measure first on a large seeded Organization, then make the database faster and the AI cheaper without answering worse.
-    - [ ] Performance baseline (0073).
+    - [x] Performance baseline (0073).
     - [ ] Database optimization (0074).
     - [ ] AI usage dashboard (0075).
     - [ ] Token optimization with an eval guard (0076).
