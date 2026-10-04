@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { PersonRef } from './decision-request.ts';
-import { PromptActivationKind, PromptEvalRunStatus, PromptVersionStatus } from './enums.ts';
+import {
+  PromptActivationKind,
+  PromptAnalysisStatus,
+  PromptAnalysisTrigger,
+  PromptEvalRunStatus,
+  PromptVersionStatus,
+  ProposalKind,
+  ReceiptOutcomeKind,
+} from './enums.ts';
 import { SpecDiffLine } from './spec.ts';
 
 const Timestamp = z.iso.datetime();
@@ -44,11 +52,17 @@ export const PromptSummaryView = z.object({
   evalCases: z.int().min(0),
   /** Whether approved Receipts of it can be replayed. */
   replayable: z.boolean(),
+  /** Outcomes linked to its Receipts since its last analysis (ticket 0072). */
+  newFeedback: z.int().min(0),
 });
 export type PromptSummaryView = z.infer<typeof PromptSummaryView>;
 
 /** `GET /settings/ai/prompts` (Admins only). */
-export const PromptsView = z.object({ prompts: z.array(PromptSummaryView) });
+export const PromptsView = z.object({
+  prompts: z.array(PromptSummaryView),
+  /** The AI analyses a prompt's feedback after this many new outcomes; 0: only when asked. */
+  analysisAfter: z.int().min(0),
+});
 export type PromptsView = z.infer<typeof PromptsView>;
 
 export const PromptVersionView = z.object({
@@ -66,6 +80,10 @@ export const PromptVersionView = z.object({
   declinedAt: Timestamp.nullable(),
   declineReason: z.string().nullable(),
   active: z.boolean(),
+  /** Proposed by the AI from its feedback (ticket 0072): the analysis it came from. */
+  analysisId: z.uuid().nullable(),
+  /** The AI's reasons for the changes, from the patterns it found. */
+  rationale: z.string().nullable(),
 });
 export type PromptVersionView = z.infer<typeof PromptVersionView>;
 
@@ -156,28 +174,6 @@ export const PromptEvalRunView = PromptEvalRunSummary.extend({
 });
 export type PromptEvalRunView = z.infer<typeof PromptEvalRunView>;
 
-/** `GET /settings/ai/prompts/:name`: the prompt, its versions, history and eval runs. */
-export const PromptDetailView = z.object({
-  name: z.string(),
-  tasks: z.array(z.string()),
-  default: z.object({ version: z.string(), template: z.string() }),
-  active: ActivePromptView,
-  /** Newest first. */
-  versions: z.array(PromptVersionView),
-  /** Every approval and rollback, newest first. */
-  history: z.array(PromptActivationView),
-  /** The checked-in eval sets that have cases for this prompt. */
-  evalSets: z.array(z.object({ set: z.string(), cases: z.int().min(0) })),
-  replay: z.object({
-    supported: z.boolean(),
-    /** Approved Receipts a replay would pick now. */
-    receipts: z.int().min(0),
-  }),
-  /** Newest first. */
-  runs: z.array(PromptEvalRunSummary),
-});
-export type PromptDetailView = z.infer<typeof PromptDetailView>;
-
 /** `POST /settings/ai/prompts/:name/versions`: a Prompt Version written by hand, proposed. */
 export const CreatePromptVersionInput = z.strictObject({
   template: z.string().trim().min(1).max(MAX_PROMPT_TEMPLATE_LENGTH),
@@ -255,3 +251,118 @@ export const PromptEvalComparison = z.object({
   ),
 });
 export type PromptEvalComparison = z.infer<typeof PromptEvalComparison>;
+
+// ─── The AI proposes Prompt Versions (ADR 0015, ticket 0072) ────────────────
+// The AI reads the outcomes linked to a prompt's Receipts, names the patterns in them and
+// proposes a Prompt Version from them. Evals run on it, and on the active version, at once.
+// Only an Admin's Approve makes it active; Request changes asks the AI for a Redraft.
+
+/** The default number of new outcomes after which a prompt's feedback is analysed. */
+export const DEFAULT_PROMPT_ANALYSIS_AFTER = 20;
+
+/** One outcome a pattern cites. */
+export const PromptPatternCase = z.object({
+  outcomeId: z.string(),
+  receiptId: z.string(),
+  kind: ReceiptOutcomeKind,
+  /** DECLINE: the reason; REQUEST_CHANGES: the feedback. Null once retention deleted the outcome. */
+  text: z.string().nullable(),
+  redraft: z.int().min(1),
+  proposal: z.object({ kind: ProposalKind, id: z.string() }),
+  /** The web app's path to the proposal; null once it is gone. */
+  href: z.string().nullable(),
+  at: Timestamp,
+});
+export type PromptPatternCase = z.infer<typeof PromptPatternCase>;
+
+/** A pattern the AI named in a prompt's feedback, with the cases it found it in. */
+export const PromptPattern = z.object({
+  title: z.string(),
+  description: z.string(),
+  /** How many cases show it. */
+  count: z.int().min(1),
+  cases: z.array(PromptPatternCase),
+});
+export type PromptPattern = z.infer<typeof PromptPattern>;
+
+/** One reading of a prompt's feedback by the AI. */
+export const PromptAnalysisView = z.object({
+  id: z.uuid(),
+  promptName: z.string(),
+  trigger: PromptAnalysisTrigger,
+  status: PromptAnalysisStatus,
+  /** How many outcomes it read. */
+  outcomes: z.int().min(0),
+  /** Most cases first; empty while running, or when it found none. */
+  patterns: z.array(PromptPattern),
+  error: z.string().nullable(),
+  /** The Prompt Version it proposed, if any. */
+  proposed: z.int().min(1).nullable(),
+  requestedBy: PersonRef.nullable(),
+  createdAt: Timestamp,
+  finishedAt: Timestamp.nullable(),
+});
+export type PromptAnalysisView = z.infer<typeof PromptAnalysisView>;
+
+/** A prompt's feedback: what is new since its last analysis, and its analyses, newest first. */
+export const PromptFeedbackView = z.object({
+  /** Outcomes linked to its Receipts since its last analysis (all of them before the first). */
+  newOutcomes: z.int().min(0),
+  /** Outcomes in all, kept by retention. */
+  outcomes: z.int().min(0),
+  analysisAfter: z.int().min(0),
+  analyses: z.array(PromptAnalysisView),
+});
+export type PromptFeedbackView = z.infer<typeof PromptFeedbackView>;
+
+/**
+ * `GET /settings/ai/prompts/:name/versions/:number/proposal`: a Prompt Version the AI
+ * proposed, as an Admin decides it: the patterns behind it, its rationale, the diff from the
+ * version active now, and the evals on both with their sample outputs side by side.
+ */
+export const PromptProposalView = z.object({
+  version: PromptVersionView,
+  analysis: PromptAnalysisView.nullable(),
+  /** The version active now (0: the default). */
+  activeNumber: VersionNumber,
+  /** From the version it was evaluated against (the one active when it was proposed) to it. */
+  diff: PromptDiff,
+  /** The run on the version active when it was proposed or redrafted, and on the proposal. */
+  before: PromptEvalRunSummary.nullable(),
+  after: PromptEvalRunSummary.nullable(),
+  /** Both runs side by side, once both are done. */
+  comparison: PromptEvalComparison.nullable(),
+  /** Why no evals ran on it, when none did. */
+  evalsNote: z.string().nullable(),
+});
+export type PromptProposalView = z.infer<typeof PromptProposalView>;
+
+/** `PUT /settings/ai/prompt-analysis`: after how many new outcomes the AI analyses a prompt. */
+export const PromptAnalysisSettingsInput = z.strictObject({
+  analysisAfter: z.int().min(0).max(10_000),
+});
+export type PromptAnalysisSettingsInput = z.infer<typeof PromptAnalysisSettingsInput>;
+
+/** `GET /settings/ai/prompts/:name`: the prompt, its versions, history and eval runs. */
+export const PromptDetailView = z.object({
+  name: z.string(),
+  tasks: z.array(z.string()),
+  default: z.object({ version: z.string(), template: z.string() }),
+  active: ActivePromptView,
+  /** Newest first. */
+  versions: z.array(PromptVersionView),
+  /** Every approval and rollback, newest first. */
+  history: z.array(PromptActivationView),
+  /** The checked-in eval sets that have cases for this prompt. */
+  evalSets: z.array(z.object({ set: z.string(), cases: z.int().min(0) })),
+  replay: z.object({
+    supported: z.boolean(),
+    /** Approved Receipts a replay would pick now. */
+    receipts: z.int().min(0),
+  }),
+  /** Newest first. */
+  runs: z.array(PromptEvalRunSummary),
+  /** Its feedback and the AI's analyses of it (ticket 0072). */
+  feedback: PromptFeedbackView,
+});
+export type PromptDetailView = z.infer<typeof PromptDetailView>;

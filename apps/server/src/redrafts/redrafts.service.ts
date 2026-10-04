@@ -9,7 +9,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import type { Prisma, PrismaClient, ProposalKind, User } from '@vorasaan/db';
+import type { ActionCardKind, Prisma, PrismaClient, ProposalKind, User } from '@vorasaan/db';
 import {
   type ChoiceDraft,
   DEFAULT_MAX_REDRAFTS,
@@ -27,6 +27,7 @@ import {
   redraftText,
   type TeamRole,
 } from '@vorasaan/shared';
+import type { SkillName } from '@vorasaan/skills';
 import {
   AI_PORT,
   AiOutputError,
@@ -49,6 +50,8 @@ import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-f
 import { EventBus } from '../inbox/event-bus.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { patternsForAi, storedPatterns, withCaseTexts } from '../prompt-versions/patterns.ts';
+import { PromptVersionsService, tasksOf } from '../prompt-versions/prompt-versions.service.ts';
 import { ReceiptsService } from '../receipts/receipts.service.ts';
 import { ContextRetriever, splitFeatureSpec } from '../retrieval/context-retriever.ts';
 import { estimateTokens } from '../retrieval/token-estimate.ts';
@@ -78,6 +81,7 @@ type Guard =
   | { kind: 'SPEC_PROPOSAL'; featureId: string; baseVersionId: string | null; specId: string }
   | { kind: 'BRIEF_PROPOSAL'; projectId: string; baseVersionId: string | null }
   | { kind: 'FEATURE_SUGGESTION'; projectId: string }
+  | { kind: 'PROMPT_VERSION'; promptName: SkillName; analysisId: string }
   | {
       kind: 'CHOICES';
       featureId: string;
@@ -99,27 +103,32 @@ type RedraftRow = Prisma.RedraftGetPayload<{
 
 const FK: Record<
   ProposalKind,
-  'requestId' | 'specProposalId' | 'briefProposalId' | 'featureSuggestionId'
+  'requestId' | 'specProposalId' | 'briefProposalId' | 'featureSuggestionId' | 'promptVersionId'
 > = {
   CHOICES: 'requestId',
   SPEC_PROPOSAL: 'specProposalId',
   BRIEF_PROPOSAL: 'briefProposalId',
   FEATURE_SUGGESTION: 'featureSuggestionId',
+  PROMPT_VERSION: 'promptVersionId',
 };
 
-/** The Action Card kind whose target is this proposal (a Decision Request for its Choices). */
-export const CARD_KIND = {
+/**
+ * The Action Card kind whose target is this proposal (a Decision Request for its Choices).
+ * A Prompt Version (ticket 0072) is proposed from Settings, never in a Conversation.
+ */
+export const CARD_KIND: Partial<Record<ProposalKind, ActionCardKind>> = {
   CHOICES: 'DECISION_REQUEST',
   SPEC_PROPOSAL: 'SPEC_PROPOSAL',
   BRIEF_PROPOSAL: 'BRIEF_PROPOSAL',
   FEATURE_SUGGESTION: 'FEATURE_SUGGESTION',
-} as const satisfies Record<ProposalKind, string>;
+};
 
 const NAME: Record<ProposalKind, string> = {
   CHOICES: 'The Choices',
   SPEC_PROPOSAL: 'This Spec Proposal',
   BRIEF_PROPOSAL: 'This Brief Proposal',
   FEATURE_SUGGESTION: 'This Feature Suggestion',
+  PROMPT_VERSION: 'This Prompt Version',
 };
 
 /** The limit of Request changes per proposal: VORASAAN_MAX_REDRAFTS, else 10. */
@@ -163,6 +172,7 @@ export class RedraftsService {
     private readonly notifications: NotificationsService,
     private readonly bus: EventBus,
     private readonly receipts: ReceiptsService,
+    private readonly prompts: PromptVersionsService,
   ) {}
 
   /** Called on every Redraft event, after it is committed. Returns the unsubscribe. */
@@ -392,6 +402,18 @@ export class RedraftsService {
           if (updated.count !== 1) throw moved();
           break;
         }
+        case 'PROMPT_VERSION': {
+          if (written.content.kind !== 'PROMPT') throw moved();
+          const updated = await tx.promptVersion.updateMany({
+            where: { id: ref.id, status: 'PROPOSED' },
+            data: {
+              template: written.content.template,
+              rationale: written.content.rationale ?? null,
+            },
+          });
+          if (updated.count !== 1) throw moved();
+          break;
+        }
         case 'CHOICES': {
           if (written.content.kind !== 'CHOICES') throw moved();
           const updated = await tx.decisionRequest.updateMany({
@@ -579,6 +601,47 @@ export class RedraftsService {
           model: await this.models.record(model),
         };
       }
+      case 'PROMPT_VERSION': {
+        if (content.kind !== 'PROMPT') throw new Error('Not a Prompt Version');
+        const name = guard.promptName;
+        const [analysis, active, placeholders, model] = await Promise.all([
+          this.db.promptAnalysis.findUnique({
+            where: { id: guard.analysisId },
+            select: { patterns: true },
+          }),
+          this.prompts.active(name),
+          this.prompts.requiredPlaceholders(name),
+          this.models.chooseModel('redraftPromptVersion'),
+        ]);
+        const out = await this.ai.redraftPromptVersion(
+          {
+            ...feedback,
+            prompt: { name, tasks: tasksOf(name) },
+            template: content.template,
+            rationale: content.rationale ?? '',
+            active: await this.prompts.template(name, active.number),
+            placeholders,
+            patterns: patternsForAi(
+              await withCaseTexts(this.db, storedPatterns(analysis?.patterns)),
+            ),
+          },
+          { model, language, receipt },
+        );
+        const template = `${out.template.trim()}\n`;
+        try {
+          await this.prompts.assertRenders(name, template);
+        } catch (error) {
+          throw new BadGatewayException(
+            `The AI's Redraft can't be used as this prompt (${(error as Error).message}), so nothing changed. Try again.`,
+          );
+        }
+        return {
+          content: { kind: 'PROMPT', template, rationale: out.rationale },
+          summary: out.summary,
+          preferences: out.preferences,
+          model: await this.models.record(model),
+        };
+      }
       case 'CHOICES': {
         if (content.kind !== 'CHOICES') throw new Error('Not Choices');
         const request = await this.db.decisionRequest.findUniqueOrThrow({
@@ -734,6 +797,34 @@ export class RedraftsService {
           guard: { kind: 'FEATURE_SUGGESTION', projectId: s.projectId },
         };
       }
+      case 'PROMPT_VERSION': {
+        const v = await this.db.promptVersion.findUnique({ where: { id: ref.id } });
+        if (!v) throw new NotFoundException('Prompt Version not found');
+        await this.assertAdmin(
+          user,
+          'Only an Organization Admin can request changes to a Prompt Version',
+        );
+        if (!v.analysisId) {
+          throw new UnprocessableEntityException(
+            'Only a Prompt Version the AI proposed can be redrafted. Write a new version instead.',
+          );
+        }
+        if (v.status !== 'PROPOSED') {
+          throw new ConflictException(`This Prompt Version is already ${v.status.toLowerCase()}`);
+        }
+        return {
+          ref,
+          content: { kind: 'PROMPT', template: v.template, rationale: v.rationale },
+          draftedAt: v.createdAt,
+          draftedWith: { approvedModelId: null, modelDisplayName: null, modelName: null },
+          audience: [user.id],
+          guard: {
+            kind: 'PROMPT_VERSION',
+            promptName: this.prompts.prompt(v.promptName),
+            analysisId: v.analysisId,
+          },
+        };
+      }
       case 'CHOICES': {
         const r = await this.db.decisionRequest.findUnique({
           where: { id: ref.id },
@@ -838,7 +929,21 @@ export class RedraftsService {
         if (!exists) throw new NotFoundException('Decision Request not found');
         return;
       }
+      case 'PROMPT_VERSION': {
+        const exists = await this.db.promptVersion.count({ where: { id: ref.id } });
+        if (!exists) throw new NotFoundException('Prompt Version not found');
+        await this.assertAdmin(
+          user,
+          'Only an Organization Admin can see the Redrafts of a Prompt Version',
+        );
+        return;
+      }
     }
+  }
+
+  private async assertAdmin(user: User, message: string) {
+    const admin = await this.db.orgMembership.count({ where: { userId: user.id, role: 'ADMIN' } });
+    if (!admin) throw new ForbiddenException(message);
   }
 
   /** A WRITING Redraft left by a server that stopped mid-call no longer holds the proposal. */
@@ -1027,6 +1132,16 @@ export class RedraftsService {
             )
           : null;
       }
+      case 'PROMPT_VERSION': {
+        const v = await this.db.promptVersion.findUnique({ where: { id: ref.id } });
+        return v
+          ? viewOf(
+              { kind: 'PROMPT', template: v.template, rationale: v.rationale },
+              v.createdAt,
+              null,
+            )
+          : null;
+      }
       case 'CHOICES': {
         const r = await this.db.decisionRequest.findUnique({
           where: { id: ref.id },
@@ -1063,9 +1178,10 @@ export class RedraftsService {
    * proposals there follow it. Retried when a fold writes the summary at the same moment.
    */
   private async rememberPreferences(ref: ProposalRef, preferences: string[]) {
-    if (!preferences.length) return;
+    const cardKind = CARD_KIND[ref.kind];
+    if (!preferences.length || !cardKind) return;
     const card = await this.db.actionCard.findUnique({
-      where: { kind_targetId: { kind: CARD_KIND[ref.kind], targetId: ref.id } },
+      where: { kind_targetId: { kind: cardKind, targetId: ref.id } },
       select: { conversationId: true },
     });
     if (!card) return;

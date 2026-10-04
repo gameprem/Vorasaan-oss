@@ -117,8 +117,10 @@ export class ActionCardsService implements OnModuleInit {
   }
 
   private async redrafted(kind: ProposalKind, proposalId: string) {
+    const cardKind = CARD_KIND[kind];
+    if (!cardKind) return;
     const card = await this.db.actionCard.findUnique({
-      where: { kind_targetId: { kind: CARD_KIND[kind], targetId: proposalId } },
+      where: { kind_targetId: { kind: cardKind, targetId: proposalId } },
       include: { conversation: { select: { ownerId: true } } },
     });
     if (!card) return;

@@ -10,6 +10,7 @@ export const REDRAFT_SLUG = {
   SPEC_PROPOSAL: 'spec-proposals',
   BRIEF_PROPOSAL: 'brief-proposals',
   FEATURE_SUGGESTION: 'feature-suggestions',
+  PROMPT_VERSION: 'prompt-versions',
 } as const satisfies Record<ProposalKind, string>;
 export type RedraftSlug = (typeof REDRAFT_SLUG)[ProposalKind];
 

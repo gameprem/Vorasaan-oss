@@ -100,6 +100,19 @@ export class PromptEvalsService implements OnApplicationBootstrap, OnApplication
     name: SkillName,
     input: StartPromptEvalInput,
   ): Promise<PromptEvalRunSummary> {
+    return this.begin(user.id, name, input);
+  }
+
+  /**
+   * Starts a run in the background and returns it, RUNNING. `startedById` is null for a run
+   * nobody asked for by hand (ticket 0072: the evals of a proposal the AI made, started by
+   * its analysis).
+   */
+  async begin(
+    startedById: string | null,
+    name: SkillName,
+    input: StartPromptEvalInput,
+  ): Promise<PromptEvalRunSummary> {
     const organizationId = await this.versions.organizationId();
     if (!organizationId) throw new UnprocessableEntityException('Run setup first');
     const prompt = await this.versions.resolve(name, input.version);
@@ -128,11 +141,11 @@ export class PromptEvalsService implements OnApplicationBootstrap, OnApplication
         modelName: approved.modelId,
         sources,
         total: cases.length,
-        startedById: user.id,
+        startedById,
       },
       include: runInclude,
     });
-    this.track(this.execute(row.id, user.id, prompt, approved.id, cases));
+    this.track(this.execute(row.id, startedById, prompt, approved.id, cases));
     return this.summary(row, []);
   }
 
@@ -185,7 +198,7 @@ export class PromptEvalsService implements OnApplicationBootstrap, OnApplication
   /** Runs the cases one by one, storing each as it ends, then sums the run up. */
   private async execute(
     runId: string,
-    userId: string,
+    userId: string | null,
     prompt: PromptChoice,
     approvedModelId: string,
     cases: RunnableCase[],
@@ -301,6 +314,13 @@ export class PromptEvalsService implements OnApplicationBootstrap, OnApplication
         ),
       ),
     );
+  }
+
+  /** A run as summarised in lists, or null when there is no such run of the prompt. */
+  async summaryOf(name: SkillName, runId: string | null): Promise<PromptEvalRunSummary | null> {
+    if (!runId) return null;
+    const found = await this.findRun(name, runId).catch(() => null);
+    return found ? this.summary(found.row, found.cases) : null;
   }
 
   async run(name: SkillName, runId: string): Promise<PromptEvalRunView> {

@@ -113,6 +113,7 @@ describe('AI providers and Approved Models', () => {
       'FEATURE_SUGGESTIONS',
       'FIT_CHECK',
       'CHAT',
+      'PROMPT_PROPOSALS',
     ]);
     expect(res.body.tasks.every((t) => t.approvedModelId === null)).toBe(true);
     expect(await choose('chat')).toEqual({

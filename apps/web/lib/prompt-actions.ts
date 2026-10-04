@@ -26,6 +26,7 @@ async function attempt(name: string, run: () => Promise<unknown>): Promise<Actio
   }
   revalidatePath('/settings/ai/prompts');
   revalidatePath(`/settings/ai/prompts/${name}`);
+  revalidatePath('/settings/ai/prompts/[name]/proposals/[number]', 'page');
   return {};
 }
 
@@ -88,4 +89,23 @@ export async function promptEvalRun(name: string, runId: string) {
 
 export async function comparePromptRuns(name: string, a: string, b: string) {
   return read(() => api<PromptEvalComparison>(`${base(name)}/evals/compare?a=${a}&b=${b}`));
+}
+
+// ─── The AI proposes Prompt Versions (ticket 0072) ──────────────────────────
+
+/** The AI reads the prompt's feedback now; the page refreshes until it is done. */
+export async function analyzePrompt(name: string) {
+  return attempt(name, () => api(`${base(name)}/analyses`, { method: 'POST' }));
+}
+
+/** After how many new outcomes the AI reads a prompt's feedback on its own (0: only when asked). */
+export async function setPromptAnalysisAfter(analysisAfter: number): Promise<ActionResult> {
+  try {
+    await api('/settings/ai/prompt-analysis', { method: 'PUT', body: { analysisAfter } });
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.message };
+    throw error;
+  }
+  revalidatePath('/settings/ai/prompts');
+  return {};
 }

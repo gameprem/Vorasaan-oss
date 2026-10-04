@@ -20,7 +20,8 @@ type EvalCasesQuery = z.infer<typeof EvalCasesQuery>;
  *   (`RequestChangesResult`), once the AI has written it;
  * - `GET …/redrafts` lists them (`ProposalRedraftsView`), and `GET …/redrafts/diff`
  *   compares any two.
- * A Decision Request's Choices live under `decision-requests/:id/choices`. An Action
+ * A Decision Request's Choices live under `decision-requests/:id/choices`; a Prompt Version
+ * the AI proposed (ticket 0072) under `prompt-versions/:id`, for Admins only. An Action
  * Card has its own `POST /action-cards/:id/request-changes`.
  */
 @Controller()
@@ -125,6 +126,34 @@ export class RedraftsController {
     @Query({ schema: RedraftDiffQuery }) query: RedraftDiffQuery,
   ) {
     return this.redrafts.diff(user, { kind: 'CHOICES', id }, query.from, query.to);
+  }
+
+  // ─── Prompt Versions the AI proposed (ticket 0072), Admins only ───────────
+
+  @Post('prompt-versions/:id/request-changes')
+  @AdminOnly()
+  promptRequest(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: RequestChangesInput }) body: RequestChangesInput,
+  ) {
+    return this.request(user, 'PROMPT_VERSION', id, body);
+  }
+
+  @Get('prompt-versions/:id/redrafts')
+  @AdminOnly()
+  promptList(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.redrafts.list(user, { kind: 'PROMPT_VERSION', id });
+  }
+
+  @Get('prompt-versions/:id/redrafts/diff')
+  @AdminOnly()
+  promptDiff(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query({ schema: RedraftDiffQuery }) query: RedraftDiffQuery,
+  ) {
+    return this.redrafts.diff(user, { kind: 'PROMPT_VERSION', id }, query.from, query.to);
   }
 
   // ─── Evals ────────────────────────────────────────────────────────────────

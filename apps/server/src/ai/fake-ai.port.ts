@@ -16,6 +16,7 @@ import type {
   FeatureFitDraft,
   FeatureForAi,
   FeatureSuggestionDrafts,
+  FeedbackAnalysis,
   GrillingAnswerForAi,
   GrillingFollowUpDecision,
   GrillingFollowUpForAi,
@@ -24,9 +25,11 @@ import type {
   ProjectForAi,
   ProjectFoundationForAi,
   PromptChoice,
+  ProposedPromptVersion,
   RecordForAi,
   RedraftedChoices,
   RedraftedMarkdown,
+  RedraftedPromptVersion,
   RedraftedSuggestion,
   RedraftFeedbackForAi,
   RequestForAi,
@@ -163,6 +166,33 @@ export const FAKE_THIN_ANSWER_WORDS = 4;
 /** The fake's follow-up on a thin answer to `question`. */
 export function fakeFollowUp(question: string, asked: number): string {
   return `Follow-up ${asked + 1}: can you say more about "${question}"?`;
+}
+
+/**
+ * The patterns the fake finds in a prompt's feedback (ticket 0072): a case shows one when its
+ * words match, in English or Thai. A pattern needs at least two cases.
+ */
+export const FAKE_FEEDBACK_PATTERNS = [
+  {
+    match: /\b(shorter|too long|concise|brief(er)?|less text)\b|สั้น|กระชับ|ยาวเกิน/i,
+    title: 'Often asked to be shorter',
+    description: 'People ask for shorter output, in fewer words.',
+  },
+  {
+    match: /error case|error handling|edge case|failure case|ข้อผิดพลาด|กรณีผิดพลาด|กรณีล้มเหลว/i,
+    title: 'Often missing error cases',
+    description: 'People decline or ask for changes because error and edge cases are missing.',
+  },
+  {
+    match: /\bin thai\b|\bthai\b|ภาษาไทย/i,
+    title: 'Often asked for Thai',
+    description: 'People ask for the output in Thai.',
+  },
+] as const;
+
+/** The line each pattern adds to the fake's proposed Prompt Version. */
+export function fakeGuidance(title: string): string {
+  return `- Learned from feedback: ${title}.`;
 }
 
 /** What the fake reports as one call's usage, unless a test changes `usage`. */
@@ -575,6 +605,60 @@ export class FakeAiPort implements AiPort {
           question: met ? null : `How does it meet "${g.title}"?`,
         };
       }),
+    };
+  }
+
+  /**
+   * The patterns of FAKE_FEEDBACK_PATTERNS that at least two cases show, and "Often edited by
+   * hand" when two or more were MANUAL_EDITs; each cites its cases.
+   */
+  async analyzeFeedback(
+    input: Parameters<AiPort['analyzeFeedback']>[0],
+    options?: AiCallOptions,
+  ): Promise<FeedbackAnalysis> {
+    this.record('analyzeFeedback', input, options);
+    const patterns: FeedbackAnalysis['patterns'] = [];
+    for (const p of FAKE_FEEDBACK_PATTERNS) {
+      const cases = input.cases.filter((c) => c.text && p.match.test(c.text)).map((c) => c.index);
+      if (cases.length >= 2) patterns.push({ title: p.title, description: p.description, cases });
+    }
+    const edits = input.cases.filter((c) => c.outcome === 'MANUAL_EDIT').map((c) => c.index);
+    if (edits.length >= 2) {
+      patterns.push({
+        title: 'Often edited by hand after approval',
+        description: 'People approve, then fix the result themselves.',
+        cases: edits,
+      });
+    }
+    return { patterns: patterns.sort((a, b) => b.cases.length - a.cases.length) };
+  }
+
+  /** The template with one line per pattern added at its end (`fakeGuidance`). */
+  async proposePromptVersion(
+    input: Parameters<AiPort['proposePromptVersion']>[0],
+    options?: AiCallOptions,
+  ): Promise<ProposedPromptVersion> {
+    this.record('proposePromptVersion', input, options);
+    return {
+      template: `${input.template.trimEnd()}\n\n${input.patterns.map((p) => fakeGuidance(p.title)).join('\n')}\n`,
+      rationale: `Addresses ${input.patterns.map((p) => `"${p.title}" (${p.count} cases)`).join(', ')}.`,
+    };
+  }
+
+  /** The current Redraft's template with "- Changed as asked: <feedback>" added. */
+  async redraftPromptVersion(
+    input: Parameters<AiPort['redraftPromptVersion']>[0],
+    options?: AiCallOptions,
+  ): Promise<RedraftedPromptVersion> {
+    this.record('redraftPromptVersion', input, options);
+    await this.nextRedraft();
+    const n = input.current + 1;
+    const first = input.feedback.feedback.split('\n')[0]?.trim().slice(0, 200) ?? '';
+    return {
+      template: `${input.template.trimEnd()}\n${fakeRedraftLine(input.feedback.feedback)}\n`,
+      rationale: `${input.rationale} Changed as asked: ${first}`,
+      summary: `Redraft ${n}: ${first.slice(0, 80)}`,
+      preferences: fakePreferences(input.feedback.feedback),
     };
   }
 

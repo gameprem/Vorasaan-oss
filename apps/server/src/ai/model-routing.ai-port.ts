@@ -165,4 +165,28 @@ export class ModelRoutingAiPort implements AiPort {
       await this.options('redraftFeatureSuggestion', options),
     );
   }
+
+  async analyzeFeedback(input: Parameters<AiPort['analyzeFeedback']>[0], options?: AiCallOptions) {
+    return this.engine.analyzeFeedback(input, await this.options('analyzeFeedback', options));
+  }
+
+  async proposePromptVersion(
+    input: Parameters<AiPort['proposePromptVersion']>[0],
+    options?: AiCallOptions,
+  ) {
+    return this.engine.proposePromptVersion(
+      input,
+      await this.options('proposePromptVersion', options),
+    );
+  }
+
+  async redraftPromptVersion(
+    input: Parameters<AiPort['redraftPromptVersion']>[0],
+    options?: AiCallOptions,
+  ) {
+    return this.engine.redraftPromptVersion(
+      input,
+      await this.options('redraftPromptVersion', options),
+    );
+  }
 }

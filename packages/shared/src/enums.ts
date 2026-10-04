@@ -129,6 +129,7 @@ export const ProposalKind = z.enum([
   'SPEC_PROPOSAL',
   'BRIEF_PROPOSAL',
   'FEATURE_SUGGESTION',
+  'PROMPT_VERSION',
 ]);
 export type ProposalKind = z.infer<typeof ProposalKind>;
 
@@ -146,6 +147,8 @@ export const ReceiptOutputKind = z.enum([
   'ATTACHMENT',
   'GRILLING_ROUND',
   'GRILLING_QUESTION',
+  'PROMPT_ANALYSIS',
+  'PROMPT_VERSION',
 ]);
 export type ReceiptOutputKind = z.infer<typeof ReceiptOutputKind>;
 
@@ -160,3 +163,9 @@ export type PromptActivationKind = z.infer<typeof PromptActivationKind>;
 
 export const PromptEvalRunStatus = z.enum(['RUNNING', 'DONE', 'FAILED']);
 export type PromptEvalRunStatus = z.infer<typeof PromptEvalRunStatus>;
+
+export const PromptAnalysisStatus = z.enum(['RUNNING', 'DONE', 'FAILED']);
+export type PromptAnalysisStatus = z.infer<typeof PromptAnalysisStatus>;
+
+export const PromptAnalysisTrigger = z.enum(['MANUAL', 'FEEDBACK']);
+export type PromptAnalysisTrigger = z.infer<typeof PromptAnalysisTrigger>;

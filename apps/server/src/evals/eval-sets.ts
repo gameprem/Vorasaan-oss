@@ -3,6 +3,7 @@ import { CHOICES_EVAL_CASES } from './cases/choices.ts';
 import { CONVERSATION_EVAL_CASES } from './cases/conversation.ts';
 import { FEATURE_SUGGESTION_EVAL_CASES } from './cases/feature-suggestions.ts';
 import { GRILLING_EVAL_CASES } from './cases/grilling.ts';
+import { PROMPT_PROPOSAL_EVAL_CASES } from './cases/prompt-proposals.ts';
 import { REDRAFT_EVAL_CASES } from './cases/redrafts.ts';
 import { SPEC_FROM_ATTACHMENTS_EVAL_CASES } from './cases/spec-from-attachments.ts';
 import { type EvalCase, promptOfCase } from './eval-case.ts';
@@ -19,6 +20,7 @@ export const EVAL_CASES: EvalCase[] = [
   ...FEATURE_SUGGESTION_EVAL_CASES,
   ...CONVERSATION_EVAL_CASES,
   ...REDRAFT_EVAL_CASES,
+  ...PROMPT_PROPOSAL_EVAL_CASES,
 ];
 
 /** The checked-in cases that evaluate one prompt. */

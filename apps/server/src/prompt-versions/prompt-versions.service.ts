@@ -29,16 +29,18 @@ import type { PromptChoice } from '../ai/ai.port.ts';
 import { TASK_SKILLS } from '../ai/prompts.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { ReceiptsService } from '../receipts/receipts.service.ts';
+import { assertNotRedrafting } from '../redrafts/redraft-guard.ts';
 
 const person = { select: { id: true, name: true } } as const;
 
-const versionInclude = {
+export const versionInclude = {
   proposedBy: person,
   approvedBy: person,
   declinedBy: person,
 } as const satisfies Prisma.PromptVersionInclude;
 
-type VersionRow = Prisma.PromptVersionGetPayload<{ include: typeof versionInclude }>;
+export type VersionRow = Prisma.PromptVersionGetPayload<{ include: typeof versionInclude }>;
 
 /** The placeholder that only marks the cacheable prefix (0061): a version may drop it. */
 const OPTIONAL_PLACEHOLDERS = new Set(['cacheBreak']);
@@ -57,12 +59,16 @@ export function tasksOf(name: SkillName): AiTask[] {
  */
 @Injectable()
 export class PromptVersionsService {
-  /** Versions as Receipts name them, by id: a version never changes, so neither does its name. */
-  private readonly names = new Map<string, Promise<string>>();
+  /**
+   * Versions as Receipts name them, by id and template: a decided version never changes; a
+   * proposal the AI made changes only by its Redrafts (ticket 0072), and is named anew.
+   */
+  private readonly names = new Map<string, { template: string; name: Promise<string> }>();
 
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
     @InjectClock() private readonly clock: Clock,
+    private readonly receipts: ReceiptsService,
   ) {}
 
   // ─── Choosing (every AI call) ─────────────────────────────────────────────
@@ -103,13 +109,13 @@ export class PromptVersionsService {
     };
   }
 
-  private versionName(row: { id: string; number: number; template: string }): Promise<string> {
+  versionName(row: { id: string; number: number; template: string }): Promise<string> {
     let named = this.names.get(row.id);
-    if (!named) {
-      named = promptVersionOf(row.number, row.template);
+    if (named?.template !== row.template) {
+      named = { template: row.template, name: promptVersionOf(row.number, row.template) };
       this.names.set(row.id, named);
     }
-    return named;
+    return named.name;
   }
 
   // ─── Reading ──────────────────────────────────────────────────────────────
@@ -212,7 +218,7 @@ export class PromptVersionsService {
     }));
   }
 
-  private async view(row: VersionRow, activeNumber: number): Promise<PromptVersionView> {
+  async view(row: VersionRow, activeNumber: number): Promise<PromptVersionView> {
     return {
       id: row.id,
       number: row.number,
@@ -228,10 +234,12 @@ export class PromptVersionsService {
       declinedAt: row.declinedAt?.toISOString() ?? null,
       declineReason: row.declineReason,
       active: row.number === activeNumber,
+      analysisId: row.analysisId,
+      rationale: row.rationale,
     };
   }
 
-  private async findVersion(name: SkillName, number: number): Promise<VersionRow> {
+  async findVersion(name: SkillName, number: number): Promise<VersionRow> {
     const organizationId = await this.organizationId();
     const row = organizationId
       ? await this.db.promptVersion.findUnique({
@@ -304,7 +312,13 @@ export class PromptVersionsService {
     }
   }
 
-  private async assertRenders(name: SkillName, template: string): Promise<void> {
+  /** The placeholders a version of the prompt must keep: all it is given but the cache break. */
+  async requiredPlaceholders(name: SkillName): Promise<string[]> {
+    return placeholdersOf(await loadSkill(name)).filter((p) => !OPTIONAL_PLACEHOLDERS.has(p));
+  }
+
+  /** 422 unless the template renders as a version of the prompt (see `propose`). */
+  async assertRenders(name: SkillName, template: string): Promise<void> {
     let expanded: string;
     try {
       expanded = await expandPartials(template);
@@ -329,12 +343,16 @@ export class PromptVersionsService {
     }
   }
 
-  /** Approves a proposed version and makes it active. */
+  /**
+   * Approves a proposed version and makes it active. One the AI proposed (ticket 0072) waits
+   * for a Redraft being written, like every AI proposal (ADR 0013).
+   */
   async approve(user: User, name: SkillName, number: number): Promise<PromptVersionView> {
     const row = await this.findVersion(name, number);
     if (row.status !== 'PROPOSED') {
       throw new ConflictException(`v${number} is already ${row.status.toLowerCase()}`);
     }
+    if (row.analysisId) await assertNotRedrafting(this.db, 'PROMPT_VERSION', row.id);
     const now = this.clock.now();
     await this.db.$transaction(async (tx) => {
       const { count } = await tx.promptVersion.updateMany({
@@ -353,6 +371,13 @@ export class PromptVersionsService {
         },
       });
     });
+    if (row.analysisId) {
+      this.receipts.outcome({
+        kind: 'APPROVE',
+        proposal: { kind: 'PROMPT_VERSION', id: row.id },
+        actorId: user.id,
+      });
+    }
     return this.view(await this.findVersion(name, number), number);
   }
 
@@ -363,6 +388,13 @@ export class PromptVersionsService {
     reason?: string,
   ): Promise<PromptVersionView> {
     const row = await this.findVersion(name, number);
+    if (row.status !== 'PROPOSED') {
+      throw new ConflictException(`v${number} is already ${row.status.toLowerCase()}`);
+    }
+    // The AI learns from why its proposal was declined (ticket 0072): it takes a reason.
+    if (row.analysisId && !reason?.trim()) {
+      throw new UnprocessableEntityException('Say why you decline what the AI proposed');
+    }
     const { count } = await this.db.promptVersion.updateMany({
       where: { id: row.id, status: 'PROPOSED' },
       data: {
@@ -372,7 +404,15 @@ export class PromptVersionsService {
         declineReason: reason?.trim() || null,
       },
     });
-    if (!count) throw new ConflictException(`v${number} is already ${row.status.toLowerCase()}`);
+    if (!count) throw new ConflictException(`v${number} was decided meanwhile`);
+    if (row.analysisId) {
+      this.receipts.outcome({
+        kind: 'DECLINE',
+        proposal: { kind: 'PROMPT_VERSION', id: row.id },
+        actorId: user.id,
+        reason,
+      });
+    }
     return this.view(await this.findVersion(name, number), (await this.active(name)).number);
   }
 

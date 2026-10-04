@@ -37,6 +37,8 @@ const pairs = [
   ['PromptVersionStatus', shared.PromptVersionStatus, db.PromptVersionStatus],
   ['PromptActivationKind', shared.PromptActivationKind, db.PromptActivationKind],
   ['PromptEvalRunStatus', shared.PromptEvalRunStatus, db.PromptEvalRunStatus],
+  ['PromptAnalysisStatus', shared.PromptAnalysisStatus, db.PromptAnalysisStatus],
+  ['PromptAnalysisTrigger', shared.PromptAnalysisTrigger, db.PromptAnalysisTrigger],
 ] as const;
 
 describe('shared enums mirror Prisma', () => {

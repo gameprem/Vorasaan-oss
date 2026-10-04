@@ -11,6 +11,7 @@ import { CLOCK } from '../clock/clock.ts';
 import { installVerbatimBody } from '../http/verbatim-body.ts';
 import { PRISMA } from '../prisma/prisma.module.ts';
 import { PromptEvalsService } from '../prompt-versions/prompt-evals.service.ts';
+import { PromptProposalsService } from '../prompt-versions/prompt-proposals.service.ts';
 import { ReceiptsService } from '../receipts/receipts.service.ts';
 import { RedraftsService } from '../redrafts/redrafts.service.ts';
 import { EscalationJob } from '../response-windows/escalation.job.ts';
@@ -35,6 +36,11 @@ export type TestApp = {
   receipts: ReceiptsService;
   /** Eval runs (ticket 0071): `drain()` waits for the runs in progress. */
   evals: PromptEvalsService;
+  /**
+   * The AI's prompt proposals (ticket 0072): `drain()` waits for analyses, the evals they
+   * start, and the Receipts and outcomes all of it leaves.
+   */
+  proposals: PromptProposalsService;
   /** The escalation job, which tests run by hand (its every-minute timer is off). */
   escalation: EscalationJob;
   /** The SQL statements the app sends while `run` runs, to check a read stays a fixed few. */
@@ -89,10 +95,9 @@ export async function createTestApp(): Promise<TestApp> {
   const receipts = app.get(ReceiptsService);
   // Eval runs (ticket 0071) run in the background and leave Receipts: they end first.
   const evals = app.get(PromptEvalsService);
-  beforeTruncate.add(async () => {
-    await evals.drain();
-    await receipts.drain();
-  });
+  // Analyses (ticket 0072) start evals and are started by outcomes: drain them all together.
+  const proposals = app.get(PromptProposalsService);
+  beforeTruncate.add(() => proposals.drain());
   const chatCards = app.get(ChatCardsService);
   const chatEvents = app.get(ChatEventsService);
   beforeTruncate.add(async () => {
@@ -107,6 +112,7 @@ export async function createTestApp(): Promise<TestApp> {
     clock,
     receipts,
     evals,
+    proposals,
     escalation: app.get(EscalationJob),
     drainIndexing: () => indexing.drain(),
     recordQueries: async (run) => {

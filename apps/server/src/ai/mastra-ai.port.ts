@@ -26,6 +26,7 @@ import {
   FeatureFitDraft,
   type FeatureForAi,
   FeatureSuggestionDrafts,
+  FeedbackAnalysis,
   GeneratedChoices,
   type GrillingAnswerForAi,
   GrillingFollowUpDecision,
@@ -36,9 +37,11 @@ import {
   type ModelChoice,
   type ProjectForAi,
   type ProjectFoundationForAi,
+  ProposedPromptVersion,
   type RecordForAi,
   RedraftedChoices,
   RedraftedMarkdown,
+  RedraftedPromptVersion,
   RedraftedSuggestion,
   type RequestForAi,
   SpecProposalDraft,
@@ -56,6 +59,7 @@ import {
   wholePrompt,
 } from './prompt-cache.ts';
 import {
+  analyzeFeedbackPrompt,
   chatPrompt,
   checkFeatureFitPrompt,
   draftBriefFromGrillingPrompt,
@@ -66,9 +70,11 @@ import {
   grillingFollowUpPrompt,
   grillingQuestionsPrompt,
   type PromptOptions,
+  proposePromptVersionPrompt,
   redraftBriefProposalPrompt,
   redraftChoicesPrompt,
   redraftFeatureSuggestionPrompt,
+  redraftPromptVersionPrompt,
   redraftSpecProposalPrompt,
   suggestFeaturesPrompt,
   summarizeAttachmentPrompt,
@@ -483,6 +489,42 @@ export class MastraAiPort implements AiPort {
       options?.onUsage,
     );
     return generateStructured(generate, 'redraft-feature-suggestion', prompt, RedraftedSuggestion);
+  }
+
+  async analyzeFeedback(input: Parameters<AiPort['analyzeFeedback']>[0], options?: AiCallOptions) {
+    const prompt = await analyzeFeedbackPrompt(input, this.lang(options));
+    const generate = agentGenerate(
+      'analyze-feedback',
+      await this.resolveModel('analyzeFeedback', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'analyze-feedback', prompt, FeedbackAnalysis);
+  }
+
+  async proposePromptVersion(
+    input: Parameters<AiPort['proposePromptVersion']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await proposePromptVersionPrompt(input, this.lang(options));
+    const generate = agentGenerate(
+      'propose-prompt-version',
+      await this.resolveModel('proposePromptVersion', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'propose-prompt-version', prompt, ProposedPromptVersion);
+  }
+
+  async redraftPromptVersion(
+    input: Parameters<AiPort['redraftPromptVersion']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await redraftPromptVersionPrompt(input, this.lang(options));
+    const generate = agentGenerate(
+      'redraft-prompt-version',
+      await this.resolveModel('redraftPromptVersion', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'redraft-prompt-version', prompt, RedraftedPromptVersion);
   }
 
   async *chat(

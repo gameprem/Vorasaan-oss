@@ -52,6 +52,11 @@ const feedback: RedraftFeedbackForAi = {
 };
 
 /** Every AI task's prompt, built with `lang`: a Record, so a new task must be added here. */
+const promptForAi = { name: 'generate-choices' as const, tasks: ['generateChoices'] };
+const patterns = [
+  { title: 'Often asked to be shorter', description: MIXED, count: 3, examples: [QUOTE] },
+];
+
 const BUILDERS: Record<AiTask, (lang: PromptLanguage) => Promise<Prompt>> = {
   generateChoices: (lang) =>
     prompts.generateChoicesPrompt(MIXED, request, context, foundation, lang),
@@ -186,6 +191,45 @@ const BUILDERS: Record<AiTask, (lang: PromptLanguage) => Promise<Prompt>> = {
   redraftFeatureSuggestion: (lang) =>
     prompts.redraftFeatureSuggestionPrompt(
       { ...feedback, project, suggestion, projectContext: context, guidelines: [] },
+      lang,
+    ),
+  analyzeFeedback: (lang) =>
+    prompts.analyzeFeedbackPrompt(
+      {
+        prompt: promptForAi,
+        template: MIXED,
+        calls: 4,
+        cases: [
+          {
+            index: 1,
+            outcome: 'REQUEST_CHANGES',
+            proposal: 'CHOICES',
+            redraft: 1,
+            text: QUOTE,
+            redraftsBeforeApproval: null,
+            choiceLabel: null,
+            editSize: null,
+          },
+        ],
+      },
+      lang,
+    ),
+  proposePromptVersion: (lang) =>
+    prompts.proposePromptVersionPrompt(
+      { prompt: promptForAi, template: MIXED, placeholders: ['spec'], patterns },
+      lang,
+    ),
+  redraftPromptVersion: (lang) =>
+    prompts.redraftPromptVersionPrompt(
+      {
+        ...feedback,
+        prompt: promptForAi,
+        template: MIXED,
+        rationale: QUOTE,
+        active: MIXED,
+        placeholders: ['spec'],
+        patterns,
+      },
       lang,
     ),
 };
