@@ -573,7 +573,14 @@ export class ConversationsService {
             tools: offered,
             signal: stopped,
           },
-          { model: model.choice, language },
+          {
+            model: model.choice,
+            language,
+            receipt: {
+              requestedById: user.id,
+              output: { kind: 'CONVERSATION_MESSAGE', id: replyId },
+            },
+          },
         );
         for await (const chunk of stream) {
           if (chunk.type === 'text') {
@@ -893,7 +900,13 @@ export class ConversationsService {
           ...(turn.focus ? { focus: turn.focus } : {}),
           ...(turn.record ? { record: turn.record } : {}),
         },
-        { language: await personLanguage(this.db, user.id) },
+        {
+          language: await personLanguage(this.db, user.id),
+          receipt: {
+            requestedById: user.id,
+            output: { kind: 'CONVERSATION', id: conversation.id },
+          },
+        },
       );
       const room = Math.max(
         200,

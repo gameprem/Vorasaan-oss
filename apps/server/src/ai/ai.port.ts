@@ -7,6 +7,8 @@ import {
   GuidelineCriterionKind,
   GuidelineFitVerdict,
   MAX_GRILLING_QUESTIONS,
+  type ProposalKind,
+  type ReceiptOutputKind,
   SuggestionLevel,
   TeamRole,
 } from '@vorasaan/shared';
@@ -361,6 +363,33 @@ export type AiCallOptions = {
   approvedModelId?: string;
   model?: ModelChoice;
   language?: ReplyLanguage;
+  /** What the call's Receipt links to (ticket 0070): who asked, what it produces. */
+  receipt?: ReceiptLink;
+  /**
+   * Told each provider call's usage (filled in by `ReceiptingAiPort`): a structured call
+   * retried after an invalid answer reports twice, and the Receipt sums them.
+   */
+  onUsage?: (usage: CallUsage) => void;
+};
+
+/** One provider call's tokens, as reported (tickets 0061, 0070); null when it doesn't say. */
+export type CallUsage = {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+};
+
+/**
+ * What a call's Receipt (ADR 0015, ticket 0070) points at, by id: the person whose action
+ * made the call, what it produces (the Choices of a request, a Redraft, a reply...), and
+ * the proposal it drafts or redrafts with the Redraft's number. Ids may be chosen before
+ * the row is written; a Receipt never holds a copy of the output.
+ */
+export type ReceiptLink = {
+  requestedById?: string | null;
+  output?: { kind: ReceiptOutputKind; id: string } | null;
+  proposal?: { kind: ProposalKind; id: string; redraft: number } | null;
 };
 
 // Every method takes an optional last `options?: AiCallOptions`.

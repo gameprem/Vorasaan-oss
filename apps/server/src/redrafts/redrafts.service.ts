@@ -27,7 +27,13 @@ import {
   redraftText,
   type TeamRole,
 } from '@vorasaan/shared';
-import { AI_PORT, AiOutputError, type AiPort, type FeedbackForAi } from '../ai/ai.port.ts';
+import {
+  AI_PORT,
+  AiOutputError,
+  type AiPort,
+  type FeedbackForAi,
+  type ReceiptLink,
+} from '../ai/ai.port.ts';
 import { AiSettingsService } from '../ai/ai-settings.service.ts';
 import { ContextBudgets, projectBudget } from '../ai/context-budget.ts';
 import { personLanguage, type ReplyLanguage } from '../ai/language.ts';
@@ -43,6 +49,7 @@ import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-f
 import { EventBus } from '../inbox/event-bus.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { ReceiptsService } from '../receipts/receipts.service.ts';
 import { ContextRetriever, splitFeatureSpec } from '../retrieval/context-retriever.ts';
 import { estimateTokens } from '../retrieval/token-estimate.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
@@ -155,6 +162,7 @@ export class RedraftsService {
     private readonly models: AiSettingsService,
     private readonly notifications: NotificationsService,
     private readonly bus: EventBus,
+    private readonly receipts: ReceiptsService,
   ) {}
 
   /** Called on every Redraft event, after it is committed. Returns the unsubscribe. */
@@ -259,6 +267,14 @@ export class RedraftsService {
       number,
       status: 'WRITING',
     });
+    // The feedback on the Redraft before it, linked to the proposal's Receipt (ticket 0070).
+    this.receipts.outcome({
+      kind: 'REQUEST_CHANGES',
+      proposal: ref,
+      actorId: user.id,
+      redraft: number - 1,
+      reason: input.feedback,
+    });
 
     const done = this.write(user, target, { id: writingId, number }, input, pointed);
     this.running.add(done);
@@ -303,7 +319,11 @@ export class RedraftsService {
         ),
       };
       const language = await personLanguage(this.db, user.id);
-      const written = await this.callAi(target, feedback, input.feedback, language);
+      const written = await this.callAi(target, feedback, input.feedback, language, {
+        requestedById: user.id,
+        output: { kind: 'REDRAFT', id: writing.id },
+        proposal: { kind: ref.kind, id: ref.id, redraft: writing.number },
+      });
       await this.store(target, writing, written);
       await this.rememberPreferences(ref, written.preferences);
       this.announce(target, user.id, { ...event, status: 'READY' });
@@ -415,6 +435,7 @@ export class RedraftsService {
     feedback: { current: number; feedback: FeedbackForAi; earlier: FeedbackForAi[] },
     query: string,
     language: ReplyLanguage,
+    receipt: ReceiptLink,
   ): Promise<Written> {
     const { guard, content } = target;
     switch (guard.kind) {
@@ -458,7 +479,7 @@ export class RedraftsService {
             context: withoutBrief(context),
             foundation,
           },
-          { model, language },
+          { model, language, receipt },
         );
         return {
           content: { kind: 'MARKDOWN', markdown: normalizeMarkdown(out.proposedMarkdown) },
@@ -502,7 +523,7 @@ export class RedraftsService {
             projectContext,
             guidelines: guidelines.map(({ ref: _, criterion: __, ...g }) => g),
           },
-          { model, language },
+          { model, language, receipt },
         );
         return {
           content: {
@@ -542,7 +563,7 @@ export class RedraftsService {
             projectContext,
             guidelines: guidelines.map(({ ref: _r, criterion: __, ...g }) => g),
           },
-          { model, language },
+          { model, language, receipt },
         );
         return {
           content: {
@@ -596,7 +617,7 @@ export class RedraftsService {
             context: withoutBrief(context),
             foundation,
           },
-          { model, language },
+          { model, language, receipt },
         );
         return {
           content: {

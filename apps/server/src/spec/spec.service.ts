@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadGatewayException,
   ConflictException,
@@ -24,6 +25,7 @@ import { fromRecordedModelColumns, toRecordedModelColumns } from '../ai/recorded
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { ReceiptsService } from '../receipts/receipts.service.ts';
 import { assertNotRedrafting, currentRedraft } from '../redrafts/redraft-guard.ts';
 import { ContextRetriever, splitFeatureSpec } from '../retrieval/context-retriever.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
@@ -53,6 +55,7 @@ export class SpecService {
     private readonly indexing: IndexingService,
     private readonly retriever: ContextRetriever,
     private readonly budgets: ContextBudgets,
+    private readonly receipts: ReceiptsService,
   ) {}
 
   /**
@@ -96,6 +99,8 @@ export class SpecService {
       ),
     );
 
+    // Chosen now, so the draft's Receipt can point at the Spec Proposal (ticket 0070).
+    const proposalId = randomUUID();
     let draft: Awaited<ReturnType<AiPort['draftSpecFromAttachments']>>;
     try {
       draft = await this.ai.draftSpecFromAttachments(
@@ -105,7 +110,15 @@ export class SpecService {
           specMarkdown: base?.markdown ?? '',
           context,
         },
-        { model, language: await personLanguage(this.db, user.id) },
+        {
+          model,
+          language: await personLanguage(this.db, user.id),
+          receipt: {
+            requestedById: user.id,
+            output: { kind: 'SPEC_PROPOSAL', id: proposalId },
+            proposal: { kind: 'SPEC_PROPOSAL', id: proposalId, redraft: 1 },
+          },
+        },
       );
     } catch (error) {
       if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
@@ -114,6 +127,7 @@ export class SpecService {
 
     const proposal = await this.db.specProposal.create({
       data: {
+        id: proposalId,
         featureId,
         baseVersionId: base?.id ?? null,
         source: 'AI_SUMMARY',
@@ -180,11 +194,13 @@ export class SpecService {
     await assertNotRedrafting(this.db, 'SPEC_PROPOSAL', id);
     const outbox = this.notifications.outbox().inboxChanged(user.id);
 
+    let approvedRedraft = 1;
     try {
       const version = await this.db.$transaction(async (tx) => {
         // Read again inside: what is approved is the Redraft the proposal holds now.
         await assertNotRedrafting(tx, 'SPEC_PROPOSAL', id);
         const current = await currentRedraft(tx, 'SPEC_PROPOSAL', id);
+        approvedRedraft = current;
         if (redraft !== undefined && redraft !== current) {
           throw new StaleStateError(
             `Redraft ${current} is the current one now; review it before approving`,
@@ -240,6 +256,12 @@ export class SpecService {
       });
       await this.notifications.publish(outbox);
       this.indexing.schedule({ source: 'SPEC_VERSION', id: version.id });
+      this.receipts.outcome({
+        kind: 'APPROVE',
+        proposal: { kind: 'SPEC_PROPOSAL', id },
+        actorId: user.id,
+        redraft: approvedRedraft,
+      });
       return toSpecVersionView(version);
     } catch (error) {
       if (error instanceof StaleStateError) throw new ConflictException(error.message);
@@ -247,15 +269,26 @@ export class SpecService {
     }
   }
 
-  /** Rejecting keeps the Decision; the Decision Request stays DECIDED. */
-  async reject(user: User, id: string): Promise<SpecProposalView> {
+  /**
+   * Rejecting keeps the Decision; the Decision Request stays DECIDED. `reason`, when
+   * given, goes to the proposal's Receipt (ticket 0070).
+   */
+  async reject(user: User, id: string, reason?: string): Promise<SpecProposalView> {
     await this.findPendingForApprover(user, id);
+    const redraft = await currentRedraft(this.db, 'SPEC_PROPOSAL', id);
     const updated = await this.db.specProposal.update({
       where: { id, status: 'PENDING' },
       data: { status: 'REJECTED', reviewedAt: new Date() },
       include: specProposalInclude,
     });
     await this.notifications.publish(this.notifications.outbox().inboxChanged(user.id));
+    this.receipts.outcome({
+      kind: 'DECLINE',
+      proposal: { kind: 'SPEC_PROPOSAL', id },
+      actorId: user.id,
+      redraft,
+      reason: reason ?? null,
+    });
     return toSpecProposalView(updated);
   }
 

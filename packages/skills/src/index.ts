@@ -78,3 +78,23 @@ export function renderTemplate(template: string, values: Record<string, string>)
 export async function renderSkill(name: SkillName, values: Record<string, string>) {
   return renderTemplate(await loadSkill(name), values);
 }
+
+const versions = new Map<SkillName, Promise<string>>();
+
+/**
+ * The Prompt Version of a built-in prompt (ticket 0070): `default@` and the first 12 hex
+ * digits of the SHA-256 of its template, partials expanded. It changes whenever the text
+ * does, so a Receipt says exactly which prompt a call rendered. An Organization's own
+ * Prompt Versions (ticket 0071) sit on top of this default.
+ */
+export function skillVersion(name: SkillName): Promise<string> {
+  let version = versions.get(name);
+  if (!version) {
+    version = loadSkill(name).then(
+      (template) =>
+        `default@${new Bun.CryptoHasher('sha256').update(template).digest('hex').slice(0, 12)}`,
+    );
+    versions.set(name, version);
+  }
+  return version;
+}

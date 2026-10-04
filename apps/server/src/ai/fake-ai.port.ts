@@ -4,6 +4,7 @@ import type {
   AiCallOptions,
   AiPort,
   AttachmentForAi,
+  CallUsage,
   ChatChunk,
   ChatMessageForAi,
   ChatTool,
@@ -163,6 +164,14 @@ export function fakeFollowUp(question: string, asked: number): string {
   return `Follow-up ${asked + 1}: can you say more about "${question}"?`;
 }
 
+/** What the fake reports as one call's usage, unless a test changes `usage`. */
+export const FAKE_USAGE: CallUsage = {
+  inputTokens: 1200,
+  outputTokens: 300,
+  cacheReadTokens: 800,
+  cacheWriteTokens: 150,
+};
+
 /** Deterministic stand-in for tests. Records calls so tests can assert on them. */
 export class FakeAiPort implements AiPort {
   /** Every call, with the model it was asked to run on (null when none was chosen). */
@@ -187,6 +196,28 @@ export class FakeAiPort implements AiPort {
    * input is the prompt by the fake's counter. Null reports no usage at all.
    */
   cacheReadTokens: number | null = 0;
+
+  /**
+   * What every call but chat reports as its usage (ticket 0070), for its Receipt; null
+   * reports none. Chat reports its prompt by the fake's counter, as for the meter.
+   */
+  usage: CallUsage | null = { ...FAKE_USAGE };
+
+  /** Errors the next calls (of any method but chat) throw, in order, after being recorded. */
+  readonly failures: Error[] = [];
+
+  /** Records a call and reports its usage; throws the next queued failure, if any. */
+  private record(method: keyof AiPort, input: unknown, options: AiCallOptions | undefined) {
+    this.calls.push({
+      method,
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
+    const failure = this.failures.shift();
+    if (failure) throw failure;
+    if (this.usage) options?.onUsage?.({ ...this.usage });
+  }
 
   /**
    * Decisions the next grillingFollowUp calls return, in order, instead of the
@@ -219,6 +250,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): AsyncIterable<ChatChunk> {
+    // Not `record`: a chat reply's usage is reported with its last chunk, below.
     this.calls.push({
       method: 'chat',
       input,
@@ -240,6 +272,9 @@ export class FakeAiPort implements AiPort {
     if (scripted?.error) throw scripted.error;
     if (this.cacheReadTokens !== null) {
       const inputTokens = Math.ceil((await chatPromptTokens(input)) * this.tokenScale);
+      const cacheReadTokens = Math.min(inputTokens, this.cacheReadTokens);
+      const outputTokens = chunks.filter((c) => c.type === 'text').length;
+      options?.onUsage?.({ inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens: 0 });
       yield {
         type: 'usage',
         usage: { inputTokens, cacheReadTokens: Math.min(inputTokens, this.cacheReadTokens) },
@@ -271,12 +306,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): Promise<ConversationFoldDraft> {
-    this.calls.push({
-      method: 'summarizeConversation',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('summarizeConversation', input, options);
     const before = (key: (typeof SUMMARY_SECTIONS)[number][0]) =>
       summarySection(input.summary, SUMMARY_SECTIONS.find(([k]) => k === key)?.[1] ?? '');
     const lines = input.messages.flatMap((m) =>
@@ -331,12 +361,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({
-      method: 'generateChoices',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('generateChoices', input, options);
     return {
       suggestedRole: 'PO' as const,
       choices: ['A', 'B', 'C'].map((label, i) => ({
@@ -360,12 +385,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({
-      method: 'draftSpecProposal',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('draftSpecProposal', input, options);
     return {
       proposedMarkdown: `${input.specMarkdown.trimEnd()}\n\n## Decisions\n- ${input.request.title}: ${describeDecision(input.decision).split('\n')[0]}\n`,
       summary: `Recorded the decision on "${input.request.title}".`,
@@ -373,12 +393,7 @@ export class FakeAiPort implements AiPort {
   }
 
   async summarizeAttachment(input: { attachment: AttachmentForAi }, options?: AiCallOptions) {
-    this.calls.push({
-      method: 'summarizeAttachment',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('summarizeAttachment', input, options);
     const firstLine = input.attachment.text.trim().split('\n')[0] ?? '';
     return { summary: `Summary of "${input.attachment.title}": ${firstLine.slice(0, 80)}` };
   }
@@ -391,12 +406,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({
-      method: 'draftSpecFromAttachments',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('draftSpecFromAttachments', input, options);
     const titles = new Set(
       input.context.filter((b) => b.source.kind === 'ATTACHMENT').map((b) => b.source.title),
     );
@@ -418,12 +428,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({
-      method: 'grillingQuestions',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('grillingQuestions', input, options);
     const known = input.projectContext.map((b) => b.text.toLowerCase()).join('\n');
     return {
       questions: FAKE_GRILLING_TOPICS[input.round]
@@ -448,12 +453,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): Promise<GrillingFollowUpDecision> {
-    this.calls.push({
-      method: 'grillingFollowUp',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('grillingFollowUp', input, options);
     if (this.followUpScript.length) {
       const scripted = this.followUpScript.shift() ?? null;
       if (scripted instanceof Error) throw scripted;
@@ -480,12 +480,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({
-      method: 'draftBriefFromGrilling',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('draftBriefFromGrilling', input, options);
     const answers = input.answers
       .map((a) => {
         const by = a.answeredBy ? ` (${a.answeredBy.name}, ${a.answeredBy.role})` : '';
@@ -516,12 +511,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): Promise<FeatureSuggestionDrafts> {
-    this.calls.push({
-      method: 'suggestFeatures',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('suggestFeatures', input, options);
     const taken = new Set([...input.pending, ...input.dismissed.map((d) => d.title)]);
     const suggestions: FeatureSuggestionDrafts['suggestions'] = [];
     for (let n = 1; suggestions.length < input.count; n++) {
@@ -548,12 +538,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({
-      method: 'draftSpecFromSuggestion',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('draftSpecFromSuggestion', input, options);
     return {
       proposedMarkdown: `# ${input.suggestion.title}\n\n${input.suggestion.rationale}\n\n## Business value\n${input.suggestion.businessValue}\n`,
       summary: `First Spec of "${input.suggestion.title}".`,
@@ -573,12 +558,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): Promise<FeatureFitDraft> {
-    this.calls.push({
-      method: 'checkFeatureFit',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('checkFeatureFit', input, options);
     const text = `${input.feature.title}\n${input.feature.description}`.toLowerCase();
     return {
       results: input.guidelines.slice(0, -1).map((g) => {
@@ -613,12 +593,7 @@ export class FakeAiPort implements AiPort {
     input: Parameters<AiPort['redraftChoices']>[0],
     options?: AiCallOptions,
   ): Promise<RedraftedChoices> {
-    this.calls.push({
-      method: 'redraftChoices',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('redraftChoices', input, options);
     await this.nextRedraft();
     const n = input.current + 1;
     const pointed = input.feedback.pointer?.match(/^Choice ([A-D])\b/)?.[1];
@@ -643,12 +618,7 @@ export class FakeAiPort implements AiPort {
     input: Parameters<AiPort['redraftSpecProposal']>[0],
     options?: AiCallOptions,
   ): Promise<RedraftedMarkdown> {
-    this.calls.push({
-      method: 'redraftSpecProposal',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('redraftSpecProposal', input, options);
     await this.nextRedraft();
     return fakeMarkdownRedraft(input, input.proposedMarkdown);
   }
@@ -657,12 +627,7 @@ export class FakeAiPort implements AiPort {
     input: Parameters<AiPort['redraftBriefProposal']>[0],
     options?: AiCallOptions,
   ): Promise<RedraftedMarkdown> {
-    this.calls.push({
-      method: 'redraftBriefProposal',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('redraftBriefProposal', input, options);
     await this.nextRedraft();
     return fakeMarkdownRedraft(input, input.proposedMarkdown);
   }
@@ -672,12 +637,7 @@ export class FakeAiPort implements AiPort {
     input: Parameters<AiPort['redraftFeatureSuggestion']>[0],
     options?: AiCallOptions,
   ): Promise<RedraftedSuggestion> {
-    this.calls.push({
-      method: 'redraftFeatureSuggestion',
-      input,
-      model: options?.model ?? null,
-      language: options?.language ?? null,
-    });
+    this.record('redraftFeatureSuggestion', input, options);
     await this.nextRedraft();
     const n = input.current + 1;
     return {

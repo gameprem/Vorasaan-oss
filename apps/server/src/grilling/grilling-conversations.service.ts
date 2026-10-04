@@ -374,7 +374,13 @@ export class GrillingConversationsService {
           followUps: answered(state),
           remaining: MAX_GRILLING_FOLLOW_UPS - state.followUps.length,
         },
-        { language: await personLanguage(this.db, conv.ownerId) },
+        {
+          language: await personLanguage(this.db, conv.ownerId),
+          receipt: {
+            requestedById: conv.ownerId,
+            output: { kind: 'GRILLING_QUESTION', id: question.id },
+          },
+        },
       );
       return decision.followUp?.trim() || null;
     } catch (error) {

@@ -134,3 +134,20 @@ export type ProposalKind = z.infer<typeof ProposalKind>;
 
 export const RedraftStatus = z.enum(['WRITING', 'READY']);
 export type RedraftStatus = z.infer<typeof RedraftStatus>;
+
+export const ReceiptOutputKind = z.enum([
+  'CHOICES',
+  'SPEC_PROPOSAL',
+  'BRIEF_PROPOSAL',
+  'FEATURE_SUGGESTION_BATCH',
+  'REDRAFT',
+  'CONVERSATION_MESSAGE',
+  'CONVERSATION',
+  'ATTACHMENT',
+  'GRILLING_ROUND',
+  'GRILLING_QUESTION',
+]);
+export type ReceiptOutputKind = z.infer<typeof ReceiptOutputKind>;
+
+export const ReceiptOutcomeKind = z.enum(['APPROVE', 'DECLINE', 'REQUEST_CHANGES', 'MANUAL_EDIT']);
+export type ReceiptOutcomeKind = z.infer<typeof ReceiptOutcomeKind>;

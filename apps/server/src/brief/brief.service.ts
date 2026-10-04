@@ -20,6 +20,7 @@ import {
 import { toRecordedModelColumns } from '../ai/recorded-model.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { ReceiptsService } from '../receipts/receipts.service.ts';
 import { assertNotRedrafting, currentRedraft } from '../redrafts/redraft-guard.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
@@ -49,6 +50,7 @@ export class BriefService {
     @InjectPrisma() private readonly db: PrismaClient,
     private readonly indexing: IndexingService,
     private readonly notifications: NotificationsService,
+    private readonly receipts: ReceiptsService,
   ) {}
 
   async current(user: User, projectId: string): Promise<ProjectBriefView> {
@@ -102,12 +104,15 @@ export class BriefService {
   /** Admins and the POs of the Project's Teams write the Brief by hand. */
   async write(user: User, projectId: string, input: WriteBriefInput): Promise<BriefVersionView> {
     await assertCanEditProject(this.db, user, projectId);
-    return this.saveNext(projectId, input.baseVersion, 'saving', (current) => ({
+    const version = await this.saveNext(projectId, input.baseVersion, 'saving', (current) => ({
       markdown: normalizeMarkdown(input.markdown),
       source: 'MANUAL',
       summary: input.summary || (current === 0 ? 'Initial Project Brief' : 'Edited by hand'),
       approvedById: user.id,
     }));
+    // A hand edit right after an approved Brief Proposal is feedback on it (ticket 0070).
+    this.receipts.editedByHand('BRIEF_PROPOSAL', version.id, user.id);
+    return version;
   }
 
   /**
@@ -202,11 +207,13 @@ export class BriefService {
     const found = await this.findPendingForApprover(user, id);
     // A Redraft being written is about to change it: Approve waits for it (0065).
     await assertNotRedrafting(this.db, 'BRIEF_PROPOSAL', id);
+    let approvedRedraft = 1;
     try {
       const created = await this.db.$transaction(async (tx) => {
         // Read again inside: what is approved is the Redraft the proposal holds now.
         await assertNotRedrafting(tx, 'BRIEF_PROPOSAL', id);
         const current = await currentRedraft(tx, 'BRIEF_PROPOSAL', id);
+        approvedRedraft = current;
         if (redraft !== undefined && redraft !== current) {
           throw new StaleStateError(
             `Redraft ${current} is the current one now; review it before approving`,
@@ -242,19 +249,34 @@ export class BriefService {
         });
       });
       this.indexing.schedule({ source: 'BRIEF_VERSION', id: created.id });
+      this.receipts.outcome({
+        kind: 'APPROVE',
+        proposal: { kind: 'BRIEF_PROPOSAL', id },
+        actorId: user.id,
+        redraft: approvedRedraft,
+      });
       return toBriefVersionView(created);
     } catch (error) {
       throw conflict(error, 'Someone saved the Project Brief at the same time. Try again.');
     }
   }
 
-  async reject(user: User, id: string): Promise<BriefProposalView> {
+  /** `reason`, when given, goes to the proposal's Receipt (ticket 0070). */
+  async reject(user: User, id: string, reason?: string): Promise<BriefProposalView> {
     await this.findPendingForApprover(user, id);
+    const redraft = await currentRedraft(this.db, 'BRIEF_PROPOSAL', id);
     const marked = await this.db.briefProposal.updateMany({
       where: { id, status: 'PENDING' },
       data: { status: 'REJECTED', reviewedAt: new Date() },
     });
     if (marked.count !== 1) throw new ConflictException('This proposal was already reviewed');
+    this.receipts.outcome({
+      kind: 'DECLINE',
+      proposal: { kind: 'BRIEF_PROPOSAL', id },
+      actorId: user.id,
+      redraft,
+      reason: reason ?? null,
+    });
     return toBriefProposalView(await this.findProposalOrThrow(id));
   }
 

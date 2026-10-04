@@ -104,9 +104,9 @@ export class AttachmentsService {
     );
 
     const attachmentTitle = clip(title ?? file.originalname);
-    const summary = await this.summarize(user, attachmentTitle, 'FILE', text);
-
     const id = randomUUID();
+    const summary = await this.summarize(user, id, attachmentTitle, 'FILE', text);
+
     const storageKey =
       'featureId' in owner
         ? `attachments/${owner.featureId}/${id}`
@@ -155,9 +155,12 @@ export class AttachmentsService {
     });
     const url = snapshot.url ?? ref;
     const attachmentTitle = clip(input.title ?? snapshot.title ?? url);
-    const summary = await this.summarize(user, attachmentTitle, input.source, snapshot.text);
+    // Chosen now, so the summary's Receipt can point at the Attachment (ticket 0070).
+    const id = randomUUID();
+    const summary = await this.summarize(user, id, attachmentTitle, input.source, snapshot.text);
     const created = await this.db.attachment.create({
       data: {
+        id,
         ...owner,
         source: input.source,
         title: attachmentTitle,
@@ -191,7 +194,8 @@ export class AttachmentsService {
     const title = clip(
       `Repo Scan: ${input.repoName}${input.commitSha ? ` @ ${input.commitSha.slice(0, 7)}` : ''}`,
     );
-    const summary = await this.summarize(user, title, 'REPO_SCAN', text);
+    const id = randomUUID();
+    const summary = await this.summarize(user, id, title, 'REPO_SCAN', text);
     const { created, replaced } = await this.db.$transaction(async (tx) => {
       const previous = await tx.attachment.findMany({
         where: { projectId, source: 'REPO_SCAN' },
@@ -200,6 +204,7 @@ export class AttachmentsService {
       await tx.attachment.deleteMany({ where: { id: { in: previous.map((a) => a.id) } } });
       const created = await tx.attachment.create({
         data: {
+          id,
           projectId,
           source: 'REPO_SCAN',
           title,
@@ -229,7 +234,13 @@ export class AttachmentsService {
     }
     const snapshot = await this.capture(attachment.source, attachment);
     // A summary of the old Snapshot would be stale: replace it, or clear it on failure.
-    const summary = await this.summarize(user, attachment.title, attachment.source, snapshot.text);
+    const summary = await this.summarize(
+      user,
+      id,
+      attachment.title,
+      attachment.source,
+      snapshot.text,
+    );
     const updated = await this.db.attachment.update({
       where: { id },
       data: {
@@ -281,6 +292,7 @@ export class AttachmentsService {
    */
   private async summarize(
     user: Pick<User, 'id'>,
+    attachmentId: string,
     title: string,
     source: AttachmentSource,
     text: string | null,
@@ -291,7 +303,13 @@ export class AttachmentsService {
         {
           attachment: { title, source, text: clipForAi(text, ATTACHMENT_CONTEXT_BUDGET.summary) },
         },
-        { language: await personLanguage(this.db, user.id) },
+        {
+          language: await personLanguage(this.db, user.id),
+          receipt: {
+            requestedById: user.id,
+            output: { kind: 'ATTACHMENT', id: attachmentId },
+          },
+        },
       );
       return summary;
     } catch (error) {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadGatewayException,
   ConflictException,
@@ -8,18 +9,21 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { PrismaClient, User } from '@vorasaan/db';
-import type {
-  DecideInput,
+import {
+  type ChoiceDraft,
+  type DecideInput,
   DecideResult,
-  DecisionRequestView,
-  DecisionSource,
-  ListDecisionRequestsQuery,
-  PostRequestMessageInput,
-  RaiseDecisionRequestInput,
-  ReassignInput,
-  RecordedModel,
-  SubmitDecisionRequestInput,
-  TeamRole,
+  type DecisionRequestView,
+  type DecisionSource,
+  diffLines,
+  type ListDecisionRequestsQuery,
+  type PostRequestMessageInput,
+  type RaiseDecisionRequestInput,
+  type ReassignInput,
+  type RecordedModel,
+  redraftText,
+  type SubmitDecisionRequestInput,
+  type TeamRole,
 } from '@vorasaan/shared';
 import {
   AI_PORT,
@@ -36,7 +40,8 @@ import { activeDelegates } from '../delegations/active-delegations.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
 import { NotificationsService, type Outbox, type Tx } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
-import { assertNotRedrafting } from '../redrafts/redraft-guard.ts';
+import { ReceiptsService } from '../receipts/receipts.service.ts';
+import { assertNotRedrafting, currentRedraft } from '../redrafts/redraft-guard.ts';
 import { ResponseWindowsService } from '../response-windows/response-windows.service.ts';
 import {
   addWorkingTime,
@@ -75,6 +80,7 @@ export class DecisionRequestsService {
     private readonly budgets: ContextBudgets,
     private readonly windows: ResponseWindowsService,
     @InjectClock() private readonly clock: Clock,
+    private readonly receipts: ReceiptsService,
   ) {}
 
   /**
@@ -99,6 +105,8 @@ export class DecisionRequestsService {
     }
 
     const withChoices = input.withChoices ?? true;
+    // Chosen now, so the Choices' Receipt can point at the request (ticket 0070).
+    const requestId = randomUUID();
     let generated: Awaited<ReturnType<AiPort['generateChoices']>> | undefined;
     if (withChoices) {
       // The budgets are shares of the window of the model the Choices are generated on (0060).
@@ -129,7 +137,15 @@ export class DecisionRequestsService {
               raiserRole: raiserRole.role,
             },
           },
-          { model, language: await personLanguage(this.db, user.id) },
+          {
+            model,
+            language: await personLanguage(this.db, user.id),
+            receipt: {
+              requestedById: user.id,
+              output: { kind: 'CHOICES', id: requestId },
+              proposal: { kind: 'CHOICES', id: requestId, redraft: 1 },
+            },
+          },
         );
       } catch (error) {
         if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
@@ -139,6 +155,7 @@ export class DecisionRequestsService {
 
     const created = await this.db.decisionRequest.create({
       data: {
+        id: requestId,
         featureId: input.featureId,
         kind: input.kind,
         withChoices,
@@ -236,6 +253,18 @@ export class DecisionRequestsService {
         .inboxChanged(to)
         .chatCard({ kind: 'DECISION_REQUEST', requestId: id, to }),
     );
+    // The Raiser edited the AI's Choices by hand before sending (ticket 0070).
+    if (input.choices) {
+      const editSize = choicesEditSize(request.choices, input.choices);
+      if (editSize) {
+        this.receipts.outcome({
+          kind: 'MANUAL_EDIT',
+          proposal: { kind: 'CHOICES', id },
+          actorId: user.id,
+          editSize,
+        });
+      }
+    }
     return toDecisionRequestView(updated, await this.viewer(user));
   }
 
@@ -403,7 +432,11 @@ export class DecisionRequestsService {
     return { pausedAt: null, dueAt: addWorkingTime(request.dueAt, waited, calendar) };
   }
 
-  async withdraw(user: User, id: string): Promise<DecisionRequestView> {
+  /**
+   * `reason` is why a DRAFT was declined (an Action Card's Decline): its AI Choices'
+   * Receipt keeps it (ticket 0070).
+   */
+  async withdraw(user: User, id: string, reason?: string): Promise<DecisionRequestView> {
     const request = await this.findOrThrow(id);
     this.assertRaiser(user, request);
     const status = this.transition(request, 'withdraw');
@@ -428,6 +461,15 @@ export class DecisionRequestsService {
       return updated;
     });
     await this.notifications.publish(outbox);
+    // Withdrawing a draft declines the Choices the AI drafted for it (ticket 0070).
+    if (request.status === 'DRAFT' && request.withChoices && request.choices.length) {
+      this.receipts.outcome({
+        kind: 'DECLINE',
+        proposal: { kind: 'CHOICES', id },
+        actorId: user.id,
+        reason: reason ?? null,
+      });
+    }
     return toDecisionRequestView(updated, await this.viewer(user));
   }
 
@@ -491,6 +533,8 @@ export class DecisionRequestsService {
       ),
     );
 
+    // Chosen now, so the draft's Receipt can point at the Spec Proposal (ticket 0070).
+    const proposalId = randomUUID();
     let draft: Awaited<ReturnType<AiPort['draftSpecProposal']>>;
     try {
       draft = await this.ai.draftSpecProposal(
@@ -507,7 +551,15 @@ export class DecisionRequestsService {
           },
           decision,
         },
-        { model, language: await personLanguage(this.db, user.id) },
+        {
+          model,
+          language: await personLanguage(this.db, user.id),
+          receipt: {
+            requestedById: user.id,
+            output: { kind: 'SPEC_PROPOSAL', id: proposalId },
+            proposal: { kind: 'SPEC_PROPOSAL', id: proposalId, redraft: 1 },
+          },
+        },
       );
     } catch (error) {
       if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
@@ -555,6 +607,7 @@ export class DecisionRequestsService {
       });
       const proposal = await tx.specProposal.create({
         data: {
+          id: proposalId,
           featureId: request.featureId,
           baseVersionId: base?.id ?? null,
           source: 'DECISION',
@@ -580,6 +633,27 @@ export class DecisionRequestsService {
     await this.notifications.publish(outbox);
     if (proposal.decisionId) {
       this.indexing.schedule({ source: 'DECISION', id: proposal.decisionId });
+    }
+    // The AI's Choices: one approved, or all set aside for an answer of the Decider's own.
+    if (request.withChoices && request.choices.length) {
+      const redraft = await currentRedraft(this.db, 'CHOICES', id);
+      this.receipts.outcome(
+        decision.kind === 'choice'
+          ? {
+              kind: 'APPROVE',
+              proposal: { kind: 'CHOICES', id },
+              actorId: user.id,
+              redraft,
+              choiceLabel: decision.choice.label,
+            }
+          : {
+              kind: 'DECLINE',
+              proposal: { kind: 'CHOICES', id },
+              actorId: user.id,
+              redraft,
+              reason: 'Decided with an answer of their own',
+            },
+      );
     }
 
     return {
@@ -756,4 +830,21 @@ export class DecisionRequestsService {
       throw error;
     }
   }
+}
+
+/** Lines changed between the Choices as drafted and as the Raiser sent them. */
+function choicesEditSize(before: ChoiceDraft[], after: ChoiceDraft[]): number {
+  const text = (choices: ChoiceDraft[]) =>
+    redraftText({
+      kind: 'CHOICES',
+      choices: choices.map((c) => ({
+        label: c.label,
+        title: c.title,
+        description: c.description,
+        impactScope: c.impactScope,
+        impactTime: c.impactTime,
+        impactRisk: c.impactRisk,
+      })),
+    });
+  return diffLines(text(before), text(after)).filter((l) => l.kind !== 'UNCHANGED').length;
 }
