@@ -6,12 +6,14 @@ import type {
   TeamRole,
 } from '@vorasaan/db';
 import {
+  type GrillingLanguage,
   type GrillingNote,
   grillingNotesText,
   MAX_GRILLING_FOLLOW_UPS,
   quoteAnswer,
 } from '@vorasaan/shared';
 import { z } from 'zod';
+import { personLanguage } from '../ai/language.ts';
 import type { Tx } from '../inbox/notifications.service.ts';
 
 // Grilling Conversations (ticket 0044): each holder of a round's Team Role answers
@@ -84,7 +86,8 @@ export function nextQuestion<Q extends QuestionRow>(
 
 // ─── What the server writes ──────────────────────────────────────────────────
 // As Grilling Notes (ticket 0047): the facts, stored with the message so a client
-// shows them in the reader's language; the message's `content` is them in English.
+// shows them in the reader's language; the message's `content` is them in the
+// Conversation owner's language (ticket 0068: their own, else the Organization's).
 
 export function title(kind: GrillingRoundKind): string {
   return `Grilling: ${ROUND_LABEL[kind]} round`;
@@ -146,13 +149,16 @@ export function closedText(
   return { kind: 'CLOSED', round: round.kind, reason };
 }
 
-/** A server-written message: its notes, and the same in English as its `content`. */
-export function noteMessage(notes: GrillingNote[]): {
+/** A server-written message: its notes, and the same in `lang` as its `content`. */
+export function noteMessage(
+  notes: GrillingNote[],
+  lang: GrillingLanguage = 'en',
+): {
   content: string;
   grillingNotes: Prisma.InputJsonValue;
 } {
   return {
-    content: grillingNotesText(notes, 'en'),
+    content: grillingNotesText(notes, lang),
     grillingNotes: notes as unknown as Prisma.InputJsonValue,
   };
 }
@@ -189,15 +195,14 @@ export async function openGrillingConversations(
       ),
     ].sort();
   const first = nextQuestion(round.questions, []);
-  const message = noteMessage(
-    first ? [intro(round), ask(first, round.questions.length)] : [intro(round)],
-  );
+  const notes = first ? [intro(round), ask(first, round.questions.length)] : [intro(round)];
   for (const ownerId of owners) {
     const existing = await tx.conversation.findFirst({
       where: { grillingRoundId: round.id, ownerId },
       select: { id: true },
     });
     if (existing) continue;
+    const message = noteMessage(notes, await personLanguage(tx, ownerId));
     await tx.conversation.create({
       data: {
         ownerId,
@@ -240,7 +245,10 @@ export async function placeBriefProposal(
     where: { id: g.projectId },
     select: { name: true },
   });
-  const message = noteMessage([{ kind: 'BRIEF_DRAFTED', project: project.name }]);
+  const message = noteMessage(
+    [{ kind: 'BRIEF_DRAFTED', project: project.name }],
+    await personLanguage(tx, g.startedById),
+  );
   const latest = await tx.conversation.findFirst({
     where: { ownerId: g.startedById, grillingRound: { grillingId: g.id } },
     orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],

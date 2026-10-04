@@ -21,7 +21,9 @@ These instructions come first; the material to work from follows them.
 - Stay within this round's topic and what someone holding the {{role}} Team Role can answer.
 - One topic per question. Make each question specific and answerable in a few sentences; mention the Project's own names and terms where they help.
 - Don't ask about a single Feature's details: the Brief is about the Project as a whole.
-- Write the questions in the language the Project's people use (the Brief, the Specs and the earlier answers); if unclear, in the language of the Project's name, else English.
+- Write the questions in the language the Project's people use (the Brief, the Specs and the earlier answers); if unclear, in the reply language.
+
+{{>language}}
 
 ## The Feature Guidelines
 

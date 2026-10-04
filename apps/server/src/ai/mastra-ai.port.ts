@@ -44,6 +44,7 @@ import {
   SpecProposalDraft,
   type SuggestionForAi,
 } from './ai.port.ts';
+import type { LanguageStrategy, PromptLanguage } from './language.ts';
 import { type MastraModel, mastraModelOf } from './model-config.ts';
 import {
   type CacheUsage,
@@ -207,7 +208,19 @@ export function agentGenerate(task: string, model: MastraModel): StructuredGener
 
 // Mastra used as a library (ADR 0003): no Mastra server, no storage needed yet.
 export class MastraAiPort implements AiPort {
-  constructor(private readonly resolveModel: ModelResolver = useChosenModel) {}
+  constructor(
+    private readonly resolveModel: ModelResolver = useChosenModel,
+    /**
+     * How prompts reach the reply language (ticket 0068). The product answers
+     * directly; the eval scripts pass `english-first` to compare (`--english-first`).
+     */
+    private readonly languageStrategy: LanguageStrategy = 'direct',
+  ) {}
+
+  /** The language rules a prompt of this call is rendered with. */
+  private lang(options: AiCallOptions | undefined): PromptLanguage {
+    return { language: options?.language, strategy: this.languageStrategy };
+  }
 
   async generateChoices(
     input: {
@@ -223,6 +236,7 @@ export class MastraAiPort implements AiPort {
       input.request,
       input.context,
       input.foundation,
+      this.lang(options),
     );
     const generate = agentGenerate(
       'generate-choices',
@@ -247,6 +261,7 @@ export class MastraAiPort implements AiPort {
       input.decision,
       input.context,
       input.foundation,
+      this.lang(options),
     );
     const generate = agentGenerate(
       'draft-spec-proposal',
@@ -256,7 +271,7 @@ export class MastraAiPort implements AiPort {
   }
 
   async summarizeAttachment(input: { attachment: AttachmentForAi }, options?: AiCallOptions) {
-    const prompt = await summarizeAttachmentPrompt(input.attachment);
+    const prompt = await summarizeAttachmentPrompt(input.attachment, this.lang(options));
     const generate = agentGenerate(
       'summarize-attachment',
       await this.resolveModel('summarizeAttachment', options?.model),
@@ -276,6 +291,7 @@ export class MastraAiPort implements AiPort {
       input.feature,
       input.specMarkdown,
       input.context,
+      this.lang(options),
     );
     const generate = agentGenerate(
       'draft-spec-from-attachments',
@@ -295,7 +311,7 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await grillingQuestionsPrompt(input);
+    const prompt = await grillingQuestionsPrompt(input, this.lang(options));
     const generate = agentGenerate(
       'grilling-questions',
       await this.resolveModel('grillingQuestions', options?.model),
@@ -315,7 +331,7 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await grillingFollowUpPrompt(input);
+    const prompt = await grillingFollowUpPrompt(input, this.lang(options));
     const generate = agentGenerate(
       'grilling-follow-up',
       await this.resolveModel('grillingFollowUp', options?.model),
@@ -334,7 +350,7 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await draftBriefFromGrillingPrompt(input);
+    const prompt = await draftBriefFromGrillingPrompt(input, this.lang(options));
     const generate = agentGenerate(
       'draft-brief-from-grilling',
       await this.resolveModel('draftBriefFromGrilling', options?.model),
@@ -354,7 +370,7 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await suggestFeaturesPrompt(input);
+    const prompt = await suggestFeaturesPrompt(input, this.lang(options));
     const generate = agentGenerate(
       'suggest-features',
       await this.resolveModel('suggestFeatures', options?.model),
@@ -371,7 +387,7 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await draftSpecFromSuggestionPrompt(input);
+    const prompt = await draftSpecFromSuggestionPrompt(input, this.lang(options));
     const generate = agentGenerate(
       'draft-spec-from-suggestion',
       await this.resolveModel('draftSpecFromSuggestion', options?.model),
@@ -388,7 +404,7 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await checkFeatureFitPrompt(input);
+    const prompt = await checkFeatureFitPrompt(input, this.lang(options));
     const generate = agentGenerate(
       'check-feature-fit',
       await this.resolveModel('checkFeatureFit', options?.model),
@@ -397,7 +413,7 @@ export class MastraAiPort implements AiPort {
   }
 
   async redraftChoices(input: Parameters<AiPort['redraftChoices']>[0], options?: AiCallOptions) {
-    const prompt = await redraftChoicesPrompt(input);
+    const prompt = await redraftChoicesPrompt(input, this.lang(options));
     const generate = agentGenerate(
       'redraft-choices',
       await this.resolveModel('redraftChoices', options?.model),
@@ -409,7 +425,7 @@ export class MastraAiPort implements AiPort {
     input: Parameters<AiPort['redraftSpecProposal']>[0],
     options?: AiCallOptions,
   ) {
-    const prompt = await redraftSpecProposalPrompt(input);
+    const prompt = await redraftSpecProposalPrompt(input, this.lang(options));
     const generate = agentGenerate(
       'redraft-spec-proposal',
       await this.resolveModel('redraftSpecProposal', options?.model),
@@ -421,7 +437,7 @@ export class MastraAiPort implements AiPort {
     input: Parameters<AiPort['redraftBriefProposal']>[0],
     options?: AiCallOptions,
   ) {
-    const prompt = await redraftBriefProposalPrompt(input);
+    const prompt = await redraftBriefProposalPrompt(input, this.lang(options));
     const generate = agentGenerate(
       'redraft-brief-proposal',
       await this.resolveModel('redraftBriefProposal', options?.model),
@@ -433,7 +449,7 @@ export class MastraAiPort implements AiPort {
     input: Parameters<AiPort['redraftFeatureSuggestion']>[0],
     options?: AiCallOptions,
   ) {
-    const prompt = await redraftFeatureSuggestionPrompt(input);
+    const prompt = await redraftFeatureSuggestionPrompt(input, this.lang(options));
     const generate = agentGenerate(
       'redraft-feature-suggestion',
       await this.resolveModel('redraftFeatureSuggestion', options?.model),
@@ -453,7 +469,7 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): AsyncIterable<ChatChunk> {
-    const instructions = await chatPrompt(input);
+    const instructions = await chatPrompt(input, this.lang(options));
     const model = await this.resolveModel('chat', options?.model);
     try {
       yield* streamChat(model, instructions, input.recentMessages, input.tools, input.signal);
@@ -508,7 +524,7 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await summarizeConversationPrompt(input);
+    const prompt = await summarizeConversationPrompt(input, this.lang(options));
     const generate = agentGenerate(
       'summarize-conversation',
       await this.resolveModel('summarizeConversation', options?.model),

@@ -19,6 +19,7 @@ import {
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort } from '../ai/ai.port.ts';
 import { ContextBudgets } from '../ai/context-budget.ts';
+import { personLanguage } from '../ai/language.ts';
 import { fromRecordedModelColumns, toRecordedModelColumns } from '../ai/recorded-model.ts';
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
@@ -104,7 +105,7 @@ export class SpecService {
           specMarkdown: base?.markdown ?? '',
           context,
         },
-        { model },
+        { model, language: await personLanguage(this.db, user.id) },
       );
     } catch (error) {
       if (error instanceof AiOutputError) throw new BadGatewayException(error.message);

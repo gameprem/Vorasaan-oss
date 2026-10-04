@@ -2,6 +2,7 @@
 // against the real model, so a human can judge them. Not part of `bun run test`.
 // Needs ANTHROPIC_API_KEY (or another provider).
 //   bun run eval:conversation
+//   bun run eval:conversation -- --english-first   (ticket 0068's comparison)
 //
 // What to look for:
 // - answers come from the context blocks and name the ones they rely on; when the
@@ -19,7 +20,9 @@
 //   numbers and ids copied exactly (PAY-142, 24 hours, 1.5M); it records nothing as
 //   approved, says when an agreed point isn't in the Spec yet, and is written in
 //   the person's language (the Thai case in Thai, ids and numbers untouched);
-// - continuing from the summary, the reply still knows what was agreed.
+// - continuing from the summary, the reply still knows what was agreed;
+// - the Thai and mixed Thai-English cases (0068) are checked automatically: in the
+//   reply language, with ids, numbers and the person's quoted words kept exactly.
 
 import { chatToolsFor } from '../src/action-cards/chat-tools.ts';
 import { loadAiConfig } from '../src/ai/ai.config.ts';
@@ -31,6 +34,13 @@ import type {
 } from '../src/ai/ai.port.ts';
 import { MastraAiPort } from '../src/ai/mastra-ai.port.ts';
 import { renderConversationSummary } from '../src/ai/prompts.ts';
+import {
+  checkLanguage,
+  LANGUAGE_STRATEGY,
+  type LanguageExpectation,
+  languageBanner,
+  printLanguageSummary,
+} from './eval-language.ts';
 
 const TOOLS = chatToolsFor({ featureId: 'feature' });
 
@@ -90,26 +100,30 @@ if (models.some((m) => m.startsWith('anthropic/')) && !process.env.ANTHROPIC_API
   console.error('ANTHROPIC_API_KEY is not set. Add it to .env or export it, then re-run.');
   process.exit(1);
 }
-const ai = new MastraAiPort(async (task) => config[`${task}Model`]);
-console.log(`Models: chat ${models[0]}, summary ${models[1]}\n`);
+const ai = new MastraAiPort(async (task) => config[`${task}Model`], LANGUAGE_STRATEGY);
+console.log(`Models: chat ${models[0]}, summary ${models[1]}\n${languageBanner()}\n`);
 
 async function reply(
   name: string,
   summary: string,
   recentMessages: ChatMessageForAi[],
   tools = false,
+  lang?: LanguageExpectation,
 ) {
   const started = performance.now();
   let first: number | null = null;
   let text = '';
-  for await (const chunk of ai.chat({
-    scope: SCOPE,
-    context: CONTEXT,
-    foundation: FOUNDATION,
-    summary,
-    recentMessages,
-    tools: tools ? TOOLS : [],
-  })) {
+  for await (const chunk of ai.chat(
+    {
+      scope: SCOPE,
+      context: CONTEXT,
+      foundation: FOUNDATION,
+      summary,
+      recentMessages,
+      tools: tools ? TOOLS : [],
+    },
+    { language: lang?.language },
+  )) {
     if (chunk.type === 'usage') continue;
     if (chunk.type === 'tool-call') {
       text += `\n[tool call] ${chunk.call.name} ${JSON.stringify(chunk.call.args).slice(0, 400)}\n`;
@@ -123,6 +137,7 @@ async function reply(
     `━━ ${name} (first text ${secs(first ?? started)}s, done ${secs(performance.now())}s)`,
   );
   console.log(`${text}\n`);
+  if (lang) checkLanguage(`Reply: ${name}`, text, lang);
   return text;
 }
 
@@ -173,7 +188,25 @@ await reply(
   true,
 );
 
-await reply('Thai', '', [{ role: 'USER', content: 'เราจะรอผู้ให้บริการชำระเงินนานแค่ไหน' }]);
+await reply('Thai', '', [{ role: 'USER', content: 'เราจะรอผู้ให้บริการชำระเงินนานแค่ไหน' }], false, {
+  language: 'th',
+});
+
+// Ticket 0068: mixed Thai-English, asking for a quote back: the quote and ids stay as written.
+await reply(
+  'Mixed Thai-English, with a quote to keep',
+  '',
+  [
+    {
+      role: 'USER',
+      content:
+        'ลูกค้าเขียนมาใน PAY-142 ว่า "จ่ายแล้วแต่แอปยังขึ้นว่ารอชำระ" ' +
+        'ตาม Decision ที่ poll ทุก 5 วินาที เคสนี้ควรขึ้น Processing นานสุดเท่าไหร่ ยกคำพูดลูกค้ามาด้วย',
+    },
+  ],
+  false,
+  { language: 'th', keep: ['PAY-142', '"จ่ายแล้วแต่แอปยังขึ้นว่ารอชำระ"', 'Processing'] },
+);
 
 const turns: ChatMessageForAi[] = [
   { role: 'USER', content: 'How often do we check the payment status, and why?' },
@@ -181,23 +214,34 @@ const turns: ChatMessageForAi[] = [
   { role: 'USER', content: 'Support wants to see why a payment is pending. Is that covered?' },
   { role: 'ASSISTANT', content: 'Not yet: the Spec has no support view. I would propose one.' },
 ];
-async function summarize(name: string, before: string, messages: ChatMessageForAi[]) {
+async function summarize(
+  name: string,
+  before: string,
+  messages: ChatMessageForAi[],
+  lang?: LanguageExpectation,
+  focus?: string,
+) {
   const started = performance.now();
-  const draft = await ai.summarizeConversation({
-    scope: SCOPE,
-    summary: before,
-    messages,
-    actionCards: [
-      {
-        kind: 'SPEC_PROPOSAL',
-        title: 'Add a support view of pending payments',
-        status: 'PROPOSED',
-      },
-      { kind: 'DECISION_REQUEST', title: 'Provider timeout', status: 'APPROVED' },
-    ],
-  });
+  const draft = await ai.summarizeConversation(
+    {
+      scope: SCOPE,
+      summary: before,
+      messages,
+      ...(focus ? { focus } : {}),
+      actionCards: [
+        {
+          kind: 'SPEC_PROPOSAL',
+          title: 'Add a support view of pending payments',
+          status: 'PROPOSED',
+        },
+        { kind: 'DECISION_REQUEST', title: 'Provider timeout', status: 'APPROVED' },
+      ],
+    },
+    { language: lang?.language },
+  );
   const summary = renderConversationSummary(draft);
   console.log(`━━ ${name} (${((performance.now() - started) / 1000).toFixed(1)}s)\n${summary}\n`);
+  if (lang) checkLanguage(`Summary: ${name}`, draft, lang);
   return summary;
 }
 
@@ -210,17 +254,42 @@ const summary = await summarize(
   ],
 );
 
-await summarize('Conversation Summary in Thai', '', [
-  {
-    role: 'USER',
-    content:
-      'เราตกลงกันแล้วว่าจะรอผู้ให้บริการไม่เกิน 24 ชั่วโมง ตามตั๋ว PAY-142 ' +
-      'แต่ยังไม่ได้แก้ใน Spec นะ เป้าหมายคือผู้ใช้ที่ชำระเงิน 1.5M คนต่อเดือน',
-  },
-  { role: 'ASSISTANT', content: 'รับทราบครับ ต้องการให้ผมร่างการแก้ไข Spec ไหมครับ' },
-  { role: 'USER', content: 'ยังก่อน ขอถามก่อนว่าทีมซัพพอร์ตต้องเห็นอะไรบ้าง ตอบสั้น ๆ เป็นภาษาไทยนะ' },
-]);
+await summarize(
+  'Conversation Summary in Thai',
+  '',
+  [
+    {
+      role: 'USER',
+      content:
+        'เราตกลงกันแล้วว่าจะรอผู้ให้บริการไม่เกิน 24 ชั่วโมง ตามตั๋ว PAY-142 ' +
+        'แต่ยังไม่ได้แก้ใน Spec นะ เป้าหมายคือผู้ใช้ที่ชำระเงิน 1.5M คนต่อเดือน',
+    },
+    { role: 'ASSISTANT', content: 'รับทราบครับ ต้องการให้ผมร่างการแก้ไข Spec ไหมครับ' },
+    { role: 'USER', content: 'ยังก่อน ขอถามก่อนว่าทีมซัพพอร์ตต้องเห็นอะไรบ้าง ตอบสั้น ๆ เป็นภาษาไทยนะ' },
+  ],
+  { language: 'th', keep: ['PAY-142', '24', '1.5M'] },
+);
+
+// Ticket 0068: mixed Thai-English, with a quote the person asked to keep word for word.
+await summarize(
+  'Conversation Summary, mixed Thai-English, keeping a quote',
+  '',
+  [
+    {
+      role: 'USER',
+      content:
+        'Support ส่ง ticket SUP-88 มา ลูกค้าบอกว่า "กด Pay แล้วหมุนค้าง 8 วิ" ' +
+        'เราตกลงว่าจะโชว์ Processing ทันทีภายใน 1 วินาที ตาม Spec v3',
+    },
+    { role: 'ASSISTANT', content: 'ตรงกับ Spec v3 ครับ ต้องการร่าง Decision Request ถึง QA ไหมครับ' },
+    { role: 'USER', content: 'เอา แต่ให้ Tech Lead เป็น Decider นะ' },
+  ],
+  { language: 'th', keep: ['SUP-88', '"กด Pay แล้วหมุนค้าง 8 วิ"', 'Spec v3', '1 วินาที'] },
+  'คำพูดลูกค้า "กด Pay แล้วหมุนค้าง 8 วิ" ให้เก็บไว้ตามนี้',
+);
 
 await reply('Continuing from the summary', summary, [
   { role: 'USER', content: 'OK, what should the support view show?' },
 ]);
+
+printLanguageSummary('eval:conversation');

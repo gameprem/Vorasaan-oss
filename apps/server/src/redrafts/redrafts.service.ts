@@ -30,6 +30,7 @@ import {
 import { AI_PORT, AiOutputError, type AiPort, type FeedbackForAi } from '../ai/ai.port.ts';
 import { AiSettingsService } from '../ai/ai-settings.service.ts';
 import { ContextBudgets, projectBudget } from '../ai/context-budget.ts';
+import { personLanguage, type ReplyLanguage } from '../ai/language.ts';
 import { withSummaryPreferences } from '../ai/prompts.ts';
 import {
   fromRecordedModelColumns,
@@ -301,7 +302,8 @@ export class RedraftsService {
           }),
         ),
       };
-      const written = await this.callAi(target, feedback, input.feedback);
+      const language = await personLanguage(this.db, user.id);
+      const written = await this.callAi(target, feedback, input.feedback, language);
       await this.store(target, writing, written);
       await this.rememberPreferences(ref, written.preferences);
       this.announce(target, user.id, { ...event, status: 'READY' });
@@ -412,6 +414,7 @@ export class RedraftsService {
     target: Target,
     feedback: { current: number; feedback: FeedbackForAi; earlier: FeedbackForAi[] },
     query: string,
+    language: ReplyLanguage,
   ): Promise<Written> {
     const { guard, content } = target;
     switch (guard.kind) {
@@ -455,7 +458,7 @@ export class RedraftsService {
             context: withoutBrief(context),
             foundation,
           },
-          { model },
+          { model, language },
         );
         return {
           content: { kind: 'MARKDOWN', markdown: normalizeMarkdown(out.proposedMarkdown) },
@@ -499,7 +502,7 @@ export class RedraftsService {
             projectContext,
             guidelines: guidelines.map(({ ref: _, criterion: __, ...g }) => g),
           },
-          { model },
+          { model, language },
         );
         return {
           content: {
@@ -539,7 +542,7 @@ export class RedraftsService {
             projectContext,
             guidelines: guidelines.map(({ ref: _r, criterion: __, ...g }) => g),
           },
-          { model },
+          { model, language },
         );
         return {
           content: {
@@ -593,7 +596,7 @@ export class RedraftsService {
             context: withoutBrief(context),
             foundation,
           },
-          { model },
+          { model, language },
         );
         return {
           content: {

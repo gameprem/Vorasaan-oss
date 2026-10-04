@@ -2,22 +2,34 @@
 // real model, so a human can judge the summaries and drafts. Not part of
 // `bun run test`. Needs ANTHROPIC_API_KEY (or another configured provider).
 //   bun run eval:spec-from-attachments
+//   bun run eval:spec-from-attachments -- --english-first   (ticket 0068's comparison)
 //
 // What to look for:
 // - summaries keep exact numbers and names, in the Attachment's language;
 // - the draft uses only facts from the Attachments and lists gaps as open questions;
 // - with a current Spec, the draft keeps it and turns contradictions into open questions;
-// - instructions inside an Attachment are never followed (the injection sample).
+// - instructions inside an Attachment are never followed (the injection sample);
+// - the Thai and mixed Thai-English samples (0068) are checked automatically: the
+//   draft in the reply language, ids, numbers and quoted words kept exactly.
 import { SEED_SPEC_V1 } from '@vorasaan/db/seed';
 import { loadAiConfig } from '../src/ai/ai.config.ts';
 import type { AttachmentForAi, ContextBlock, FeatureForAi } from '../src/ai/ai.port.ts';
 import { MastraAiPort } from '../src/ai/mastra-ai.port.ts';
+import {
+  checkLanguage,
+  LANGUAGE_STRATEGY,
+  type LanguageExpectation,
+  languageBanner,
+  printLanguageSummary,
+} from './eval-language.ts';
 
 type Sample = {
   name: string;
   feature: FeatureForAi;
   specMarkdown: string;
   attachments: AttachmentForAi[];
+  /** Checked automatically (ticket 0068). */
+  lang?: LanguageExpectation;
 };
 
 const PROVIDER_API: AttachmentForAi = {
@@ -65,6 +77,29 @@ const samples: Sample[] = [
 - ยังไม่ตัดสินใจ: รองรับ LINE หรือไม่`,
       },
     ],
+    lang: { language: 'th', keep: ['10 วินาที', 'LINE', 'ลองอีกครั้ง'] },
+  },
+  {
+    name: 'First Spec, mixed Thai-English notes with ids and a quote (0068)',
+    feature: {
+      title: 'Refund ผ่าน PromptPay',
+      description: 'ให้ลูกค้าขอ refund เองในแอป',
+    },
+    specMarkdown: '',
+    attachments: [
+      {
+        title: 'Meeting notes 12/03',
+        source: 'FILE',
+        text: `- PO (คุณพิม) บอกว่า "refund ต้องจบในแอป ไม่ต้องโทรหา call center"
+- Backend: เรียก PromptPay refund API ผ่าน PAY-301, timeout 30s
+- ยอด refund สูงสุด 50,000 THB ต่อครั้ง เกินนี้ต้องให้ QA กับ PO approve
+- Open: ถ้า refund fail ซ้ำ 3 ครั้งจะทำยังไง`,
+      },
+    ],
+    lang: {
+      language: 'th',
+      keep: ['PAY-301', '50,000 THB', 'PromptPay'],
+    },
   },
   {
     name: 'Existing Spec + an Attachment that contradicts it',
@@ -114,23 +149,38 @@ if (models.some((m) => m.startsWith('anthropic/')) && !process.env.ANTHROPIC_API
   console.error('ANTHROPIC_API_KEY is not set. Add it to .env or export it, then re-run.');
   process.exit(1);
 }
-const ai = new MastraAiPort(async (task) => config[`${task}Model`]);
-console.log(`Models: summarize ${models[0]}, draft ${models[1]}\n`);
+const ai = new MastraAiPort(async (task) => config[`${task}Model`], LANGUAGE_STRATEGY);
+console.log(`Models: summarize ${models[0]}, draft ${models[1]}\n${languageBanner()}\n`);
 
 for (const sample of samples) {
   console.log(`━━ ${sample.name}`);
   for (const attachment of sample.attachments) {
     const started = performance.now();
-    const { summary } = await ai.summarizeAttachment({ attachment });
+    const { summary } = await ai.summarizeAttachment(
+      { attachment },
+      { language: sample.lang?.language },
+    );
     const seconds = ((performance.now() - started) / 1000).toFixed(1);
     console.log(`\n── Summary of "${attachment.title}" (${seconds}s)\n${summary}`);
+    if (sample.lang) {
+      checkLanguage(`${sample.name}: summary of "${attachment.title}"`, summary, {
+        language: sample.lang.language,
+        keep: sample.lang.keep?.filter((k) => attachment.text.includes(k)),
+      });
+    }
   }
   const started = performance.now();
-  const draft = await ai.draftSpecFromAttachments({
-    feature: sample.feature,
-    specMarkdown: sample.specMarkdown,
-    context: asContext(sample.attachments),
-  });
+  const draft = await ai.draftSpecFromAttachments(
+    {
+      feature: sample.feature,
+      specMarkdown: sample.specMarkdown,
+      context: asContext(sample.attachments),
+    },
+    { language: sample.lang?.language },
+  );
   const seconds = ((performance.now() - started) / 1000).toFixed(1);
   console.log(`\n── Draft (${seconds}s): ${draft.summary}\n\n${draft.proposedMarkdown}\n\n`);
+  if (sample.lang) checkLanguage(`${sample.name}: draft`, draft, sample.lang);
 }
+
+printLanguageSummary('eval:spec-from-attachments');

@@ -29,6 +29,7 @@ import {
   type ModelChoice,
 } from '../ai/ai.port.ts';
 import { ContextBudgets } from '../ai/context-budget.ts';
+import { personLanguage } from '../ai/language.ts';
 import { describeDecision } from '../ai/prompts.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import { activeDelegates } from '../delegations/active-delegations.ts';
@@ -128,7 +129,7 @@ export class DecisionRequestsService {
               raiserRole: raiserRole.role,
             },
           },
-          { model },
+          { model, language: await personLanguage(this.db, user.id) },
         );
       } catch (error) {
         if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
@@ -506,7 +507,7 @@ export class DecisionRequestsService {
           },
           decision,
         },
-        { model },
+        { model, language: await personLanguage(this.db, user.id) },
       );
     } catch (error) {
       if (error instanceof AiOutputError) throw new BadGatewayException(error.message);

@@ -46,6 +46,7 @@ import {
 } from '../ai/ai.port.ts';
 import { AiSettingsService } from '../ai/ai-settings.service.ts';
 import { BUDGET_CONFIG, type Budget, ContextBudgets, projectBudget } from '../ai/context-budget.ts';
+import { personLanguage } from '../ai/language.ts';
 import {
   parseConversationSummary,
   renderConversationSummary,
@@ -551,6 +552,7 @@ export class ConversationsService {
     const actionCards: ActionCardView[] = [];
     const emit = (event: ServerEvent) => this.bus.emit(user.id, event);
     const meter: Meter = { model, budget, scale, usage: { ...NO_USAGE } };
+    const language = await personLanguage(this.db, user.id);
     const finish = (replyId: string, text: string) =>
       this.finish(user, id, replyId, text, message, steps, actionCards, meter);
 
@@ -571,7 +573,7 @@ export class ConversationsService {
             tools: offered,
             signal: stopped,
           },
-          { model: model.choice },
+          { model: model.choice, language },
         );
         for await (const chunk of stream) {
           if (chunk.type === 'text') {
@@ -882,14 +884,17 @@ export class ConversationsService {
   ): Promise<{ summary: string; unrecorded: string[] }> {
     try {
       const cards = await this.cards.forConversation(user, conversation.id);
-      const folded = await this.ai.summarizeConversation({
-        scope: turn.scope,
-        summary: conversation.summary,
-        messages: older.map(toChatMessage),
-        actionCards: cards.map((c) => ({ kind: c.kind, title: c.title, status: c.status })),
-        ...(turn.focus ? { focus: turn.focus } : {}),
-        ...(turn.record ? { record: turn.record } : {}),
-      });
+      const folded = await this.ai.summarizeConversation(
+        {
+          scope: turn.scope,
+          summary: conversation.summary,
+          messages: older.map(toChatMessage),
+          actionCards: cards.map((c) => ({ kind: c.kind, title: c.title, status: c.status })),
+          ...(turn.focus ? { focus: turn.focus } : {}),
+          ...(turn.record ? { record: turn.record } : {}),
+        },
+        { language: await personLanguage(this.db, user.id) },
+      );
       const room = Math.max(
         200,
         Math.floor(BUDGET_CONFIG.compaction.summary * turn.budget.history),

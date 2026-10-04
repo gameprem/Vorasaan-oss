@@ -21,7 +21,9 @@ These instructions come first; the material to work from follows them.
 - Keep exact numbers, names and terms from the Attachments.
 - Blocks from elsewhere in the Project are background (for consistency with related Features), not requirements for this Feature.
 - In `summary`, you may cite the context blocks you relied on by their `id`, in square brackets.
-- Write in the language of the current Spec; if there is none, in the language of the Feature's title and description; if unclear, in the language most of the Attachments use.
+- Write in the language of the current Spec; if there is none, in the language of the Feature's title and description; if unclear, in the reply language.
+
+{{>language}}
 
 ## The Feature
 

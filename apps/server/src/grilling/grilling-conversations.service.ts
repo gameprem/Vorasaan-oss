@@ -19,6 +19,7 @@ import {
   type ServerEvent,
 } from '@vorasaan/shared';
 import { AI_PORT, type AiPort } from '../ai/ai.port.ts';
+import { personLanguage } from '../ai/language.ts';
 import { projectAccess } from '../brief/brief-access.ts';
 import {
   type ConversationWithScope,
@@ -348,7 +349,7 @@ export class GrillingConversationsService {
           : waiting(round.role, round.questions.filter((q) => !q.answeredAt).length),
       );
     }
-    const saved = await this.save(conversationId, state, lines);
+    const saved = await this.save(conversationId, conv.ownerId, state, lines);
     this.emit(conv.ownerId, {
       event: 'conversation.appended',
       data: { conversationId, messages: [toConversationMessageView(saved.reply)] },
@@ -363,15 +364,18 @@ export class GrillingConversationsService {
     state: GrillingConversationState,
   ): Promise<string | null> {
     try {
-      const decision = await this.ai.grillingFollowUp({
-        project: { name: round.grilling.project.name },
-        round: round.kind,
-        role: round.role,
-        question: question.text,
-        answer: state.answer ?? '',
-        followUps: answered(state),
-        remaining: MAX_GRILLING_FOLLOW_UPS - state.followUps.length,
-      });
+      const decision = await this.ai.grillingFollowUp(
+        {
+          project: { name: round.grilling.project.name },
+          round: round.kind,
+          role: round.role,
+          question: question.text,
+          answer: state.answer ?? '',
+          followUps: answered(state),
+          remaining: MAX_GRILLING_FOLLOW_UPS - state.followUps.length,
+        },
+        { language: await personLanguage(this.db, conv.ownerId) },
+      );
       return decision.followUp?.trim() || null;
     } catch (error) {
       this.logger.error('A Grilling follow-up failed', error as Error);
@@ -430,7 +434,7 @@ export class GrillingConversationsService {
     state: GrillingConversationState,
     notes: GrillingNote[],
   ): Promise<GrillingTurn> {
-    const saved = await this.save(conv.id, state, notes);
+    const saved = await this.save(conv.id, conv.ownerId, state, notes);
     this.emit(user.id, {
       event: 'conversation.done',
       data: { conversationId: conv.id, message: toConversationMessageView(saved.reply) },
@@ -438,7 +442,14 @@ export class GrillingConversationsService {
     return { conversation: saved.conversation, message, reply: saved.reply };
   }
 
-  private save(conversationId: string, state: GrillingConversationState, notes: GrillingNote[]) {
+  /** Saves the state and the server's reply, written in the owner's language (0068). */
+  private async save(
+    conversationId: string,
+    ownerId: string,
+    state: GrillingConversationState,
+    notes: GrillingNote[],
+  ) {
+    const language = await personLanguage(this.db, ownerId);
     return this.db.$transaction(async (tx) => {
       const conversation = await tx.conversation.update({
         where: { id: conversationId },
@@ -454,7 +465,7 @@ export class GrillingConversationsService {
           conversationId,
           position: (_max.position ?? -1) + 1,
           role: 'ASSISTANT',
-          ...noteMessage(notes),
+          ...noteMessage(notes, language),
         },
       });
       return { conversation, reply };

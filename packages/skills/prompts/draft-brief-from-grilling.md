@@ -24,7 +24,9 @@ These instructions come first; the material to work from follows them.
 - Use the follow-up replies as part of their answer: they usually hold the specific numbers and scope.
 - When people's answers disagree, don't pick one silently: write what each said, naming them and their Team Role, under "Open questions".
 - Describe the Project as a whole; don't turn it into a list of Features.
-- Write in the language the people answered in; if mixed, in the language of the current Brief; if unclear, English.
+- Write in the language the people answered in; if mixed, in the language of the current Brief; if unclear, in the reply language.
+
+{{>language}}
 
 ## The current Project Brief
 

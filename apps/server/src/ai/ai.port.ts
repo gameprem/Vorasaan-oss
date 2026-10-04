@@ -11,6 +11,7 @@ import {
   TeamRole,
 } from '@vorasaan/shared';
 import { z } from 'zod';
+import type { ReplyLanguage } from './language.ts';
 import type { ResolvedProvider } from './model-config.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
 
@@ -353,8 +354,14 @@ export type ModelChoice = {
  *   reaches the provider adapter (or the fake). A caller that chose it already
  *   (`AiSettingsService.chooseModel`) passes it, and it is kept as is: a
  *   Conversation's turn chooses once, so all its steps run on one model (0054).
+ * - `language`: the reply language (ticket 0068, `personLanguage` or
+ *   `projectLanguage`); left out, English.
  */
-export type AiCallOptions = { approvedModelId?: string; model?: ModelChoice };
+export type AiCallOptions = {
+  approvedModelId?: string;
+  model?: ModelChoice;
+  language?: ReplyLanguage;
+};
 
 // Every method takes an optional last `options?: AiCallOptions`.
 export interface AiPort {

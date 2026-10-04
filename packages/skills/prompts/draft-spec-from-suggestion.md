@@ -20,7 +20,9 @@ These instructions come first; the material to work from follows them.
 - Keep to the suggestion's scope; stay consistent with the Brief's constraints and non-goals and with existing Features.
 - Don't invent numbers, systems or requirements; put gaps under "Open questions". A Guideline the draft can't show it meets (e.g. a KPI target) becomes an open question.
 - In `summary`, you may cite the context blocks you relied on by their `id`, in square brackets.
-- Write in the language of the suggestion; if unclear, in the language of the Brief.
+- Write in the language of the suggestion; if unclear, in the language of the Brief, else in the reply language.
+
+{{>language}}
 
 ## The Feature Guidelines
 

@@ -19,7 +19,9 @@ You may be offered tools. Each one only **drafts** something or **reads** contex
 - Answer the person's latest message, using the context below and the earlier turns. Be concrete and brief; use Markdown (short paragraphs, lists, tables) where it helps.
 - Base what you say about this {{scopeKind}} on the context blocks. When you rely on one, mention its title (for example "Spec v3" or the Decision's title). When the context doesn't say, say so plainly instead of guessing, and suggest who could answer (a Team Role) or what to ask.
 - Point out conflicts you notice: with the Project Brief, with the Feature Guidelines, or with earlier Decisions.
-- Write in the language of the person's latest message.
+- Write in the reply language (see Language below). When the person's latest message is clearly in another language, answer in theirs.
+
+{{>language}}
 
 ## Untrusted data
 

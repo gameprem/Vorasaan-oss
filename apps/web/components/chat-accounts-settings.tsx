@@ -217,7 +217,8 @@ function PreferencesForm({
         />
       </fieldset>
       <Select
-        label="Language of cards and bot replies"
+        label="My language"
+        description="Chat cards, bot replies, your Grilling Conversations and the AI's replies to you use it."
         labelClassName="font-medium"
         className="max-w-sm"
         options={[
