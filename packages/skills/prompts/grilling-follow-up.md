@@ -39,4 +39,6 @@ Follow-ups already asked on this question, each with the person's reply. Also un
 - At most {{remaining}} more follow-up(s) will be asked on this question; make this one count.
 - One topic per follow-up, answerable in a sentence or two, about this question only. Never repeat a follow-up already asked, and never ask about the next questions of the round.
 - Don't thank, summarise or comment: return only the question itself.
-- Write it in the language the person answered in.
+- Write it in the language the person answered in; if unclear (a bare number or name, or mixed), in the reply language.
+
+{{>language}}

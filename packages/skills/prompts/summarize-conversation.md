@@ -50,4 +50,6 @@ The updated summary, in these sections. Merge with the summary so far: keep ever
 - When the person said what to keep, keep everything about it in full detail, in the section it belongs to, even if it makes the summary longer.
 - Never record that something was changed, approved or saved unless a message says a person did it.
 - Drop greetings, repetition and wording. Write no transcript.
-- Write in the language the person uses (for example Thai when they write Thai); keep names, ids and numbers as written.
+- Write in the language the person uses (for example Thai when they write Thai); if unclear, in the reply language. Keep names, ids and numbers as written.
+
+{{>language}}

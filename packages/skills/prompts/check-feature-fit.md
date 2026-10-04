@@ -19,7 +19,9 @@ These instructions come first; the material to work from follows them.
 - Judge only what the Feature's title and description say, read against the Brief and the context. Don't assume the Feature does something it doesn't mention: that is `UNCLEAR`.
 - A `KPI` criterion is `MET` only when the Feature names the KPI it moves (or clearly serves one the Brief names).
 - A `REQUIRED_SECTION` criterion is about the Spec to come: `UNCLEAR` unless the description already covers it.
-- Write reasons and questions in the language of the Feature's title and description.
+- Write reasons and questions in the language of the Feature's title and description; if unclear (only names, or mixed), in the reply language.
+
+{{>language}}
 
 ## The Feature Guidelines
 
