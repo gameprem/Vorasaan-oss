@@ -23,6 +23,7 @@ import type {
   ModelChoice,
   ProjectForAi,
   ProjectFoundationForAi,
+  PromptChoice,
   RecordForAi,
   RedraftedChoices,
   RedraftedMarkdown,
@@ -181,6 +182,8 @@ export class FakeAiPort implements AiPort {
     model: ModelChoice | null;
     /** The reply language the call was asked for (ticket 0068); null when none was given. */
     language: ReplyLanguage | null;
+    /** The version of the prompt it would render (ticket 0071); null when none was chosen. */
+    prompt: PromptChoice | null;
   }[] = [];
   /** Replies the next chat calls give, in order, instead of the default one. */
   readonly chatScript: ScriptedChatReply[] = [];
@@ -213,6 +216,7 @@ export class FakeAiPort implements AiPort {
       input,
       model: options?.model ?? null,
       language: options?.language ?? null,
+      prompt: options?.prompt ?? null,
     });
     const failure = this.failures.shift();
     if (failure) throw failure;
@@ -256,6 +260,7 @@ export class FakeAiPort implements AiPort {
       input,
       model: options?.model ?? null,
       language: options?.language ?? null,
+      prompt: options?.prompt ?? null,
     });
     const scripted = this.chatScript.shift();
     const chunks: ChatChunk[] = scripted

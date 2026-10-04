@@ -12,6 +12,7 @@ import {
   SuggestionLevel,
   TeamRole,
 } from '@vorasaan/shared';
+import type { SkillName } from '@vorasaan/skills';
 import { z } from 'zod';
 import type { ReplyLanguage } from './language.ts';
 import type { ResolvedProvider } from './model-config.ts';
@@ -363,6 +364,12 @@ export type AiCallOptions = {
   approvedModelId?: string;
   model?: ModelChoice;
   language?: ReplyLanguage;
+  /**
+   * The version of the task's prompt (ticket 0071), filled in by `ModelRoutingAiPort`:
+   * the Organization's active Prompt Version, or the built-in default. An eval run
+   * passes the version it evaluates, and it is kept as is.
+   */
+  prompt?: PromptChoice;
   /** What the call's Receipt links to (ticket 0070): who asked, what it produces. */
   receipt?: ReceiptLink;
   /**
@@ -370,6 +377,21 @@ export type AiCallOptions = {
    * retried after an invalid answer reports twice, and the Receipt sums them.
    */
   onUsage?: (usage: CallUsage) => void;
+};
+
+/**
+ * The version of a prompt one AI call renders (ADR 0015, ticket 0071): the built-in
+ * default (`template` null) or an Organization's Prompt Version.
+ */
+export type PromptChoice = {
+  /** The packages/skills name. */
+  name: SkillName;
+  /** As Receipts name it: `default@<hash>` or `v<n>@<hash>`. */
+  version: string;
+  /** The Prompt Version's number; 0 for the default. */
+  number: number;
+  /** The Prompt Version's template as written; null renders the built-in default. */
+  template: string | null;
 };
 
 /** One provider call's tokens, as reported (tickets 0061, 0070); null when it doesn't say. */
@@ -390,6 +412,8 @@ export type ReceiptLink = {
   requestedById?: string | null;
   output?: { kind: ReceiptOutputKind; id: string } | null;
   proposal?: { kind: ProposalKind; id: string; redraft: number } | null;
+  /** The eval run (ticket 0071) the call is made for: a replay never picks its Receipt. */
+  evalRunId?: string | null;
 };
 
 // Every method takes an optional last `options?: AiCallOptions`.

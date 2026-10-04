@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { type ReactNode, useEffect, useRef } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useRef } from 'react';
 import { BackIcon } from './icons';
 import { SETTINGS_BUTTON_ID } from './shell';
 
@@ -23,10 +23,46 @@ export const SETTINGS_SECTIONS = [
   { href: '/settings/response-windows', label: 'Response Windows' },
   { href: '/settings/chat-apps', label: 'Chat apps' },
   { href: '/settings/ai', label: 'AI models' },
+  { href: '/settings/ai/prompts', label: 'AI prompts' },
   { href: '/settings/tokens', label: 'Access tokens' },
 ] as const;
 
 const DEFAULT_VIEW = '/inbox';
+
+/** The section a path belongs to: the longest href it starts with (AI prompts within AI). */
+export function currentSection(pathname: string): string | undefined {
+  return SETTINGS_SECTIONS.map((s) => s.href)
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
+}
+
+const SettingsMode = createContext<'overlay' | 'page'>('page');
+
+/**
+ * A link from one Settings page to another, such as a prompt in AI prompts. Over the app
+ * ("overlay") it is a soft navigation the modal route intercepts, so Back still returns
+ * to the page underneath; on its own ("page") a full load, as the nav does.
+ */
+export function SettingsLink({
+  href,
+  className,
+  children,
+}: {
+  href: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  const mode = useContext(SettingsMode);
+  return mode === 'overlay' ? (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  ) : (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  );
+}
 /** Never made inert: Next announces route changes from here. */
 const KEEP_LIVE = new Set(['NEXT-ROUTE-ANNOUNCER', 'SCRIPT', 'STYLE', 'TEMPLATE']);
 const FOCUSABLE =
@@ -133,7 +169,7 @@ export function SettingsDialog({
       <div className="settings-body">
         <nav className="settings-nav" aria-label="Settings sections">
           {SETTINGS_SECTIONS.map((s) => {
-            const current = pathname.startsWith(s.href) ? ('page' as const) : undefined;
+            const current = currentSection(pathname) === s.href ? ('page' as const) : undefined;
             // Overlay: replace, so Back leaves Settings in one step. Page: a full load,
             // because a soft navigation would be intercepted into a second modal.
             return mode === 'overlay' ? (
@@ -147,7 +183,9 @@ export function SettingsDialog({
             );
           })}
         </nav>
-        <section className="settings-pane">{children}</section>
+        <section className="settings-pane">
+          <SettingsMode.Provider value={mode}>{children}</SettingsMode.Provider>
+        </section>
       </div>
     </div>
   );

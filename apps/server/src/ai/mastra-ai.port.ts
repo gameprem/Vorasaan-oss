@@ -44,7 +44,7 @@ import {
   SpecProposalDraft,
   type SuggestionForAi,
 } from './ai.port.ts';
-import type { LanguageStrategy, PromptLanguage } from './language.ts';
+import type { LanguageStrategy } from './language.ts';
 import { type MastraModel, mastraModelOf } from './model-config.ts';
 import {
   type CacheUsage,
@@ -65,6 +65,7 @@ import {
   generateChoicesPrompt,
   grillingFollowUpPrompt,
   grillingQuestionsPrompt,
+  type PromptOptions,
   redraftBriefProposalPrompt,
   redraftChoicesPrompt,
   redraftFeatureSuggestionPrompt,
@@ -223,9 +224,16 @@ export class MastraAiPort implements AiPort {
     private readonly languageStrategy: LanguageStrategy = 'direct',
   ) {}
 
-  /** The language rules a prompt of this call is rendered with. */
-  private lang(options: AiCallOptions | undefined): PromptLanguage {
-    return { language: options?.language, strategy: this.languageStrategy };
+  /**
+   * How a prompt of this call is rendered: its language rules, and the Prompt Version
+   * chosen for it (ticket 0071; none, the built-in default).
+   */
+  private lang(options: AiCallOptions | undefined): PromptOptions {
+    return {
+      language: options?.language,
+      strategy: this.languageStrategy,
+      template: options?.prompt?.template ?? null,
+    };
   }
 
   async generateChoices(

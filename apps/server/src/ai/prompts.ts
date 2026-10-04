@@ -1,5 +1,5 @@
 import type { ChoiceDraft, GrillingRoundKind, TeamRole } from '@vorasaan/shared';
-import { loadSkill, renderSkill, type SkillName } from '@vorasaan/skills';
+import { expandPartials, loadSkill, renderTemplate, type SkillName } from '@vorasaan/skills';
 import { estimateTokens } from '../retrieval/token-estimate.ts';
 import type { AiTask } from './ai.config.ts';
 import type {
@@ -28,17 +28,25 @@ import { CACHE_BREAK, type Prompt, splitPrompt } from './prompt-cache.ts';
 import { renderMemory, type WorkflowMemory } from './workflow-memory.ts';
 
 /**
+ * How a prompt is rendered: its language rules (ticket 0068) and, when the Organization
+ * has a Prompt Version of it active (ticket 0071), that version's template instead of
+ * the built-in one. The template is as written: its partials are expanded here.
+ */
+export type PromptOptions = PromptLanguage & { template?: string | null };
+
+/**
  * A skill rendered as a Prompt (ticket 0061): cut at its `{{cacheBreak}}`s and at
  * the breaks the values carry, so the stable prefix can be cached. Every skill
  * carries the language rules (ticket 0068), filled in from `lang`.
  */
 async function renderPrompt(
-  lang: PromptLanguage,
+  lang: PromptOptions,
   name: SkillName,
   values: Record<string, string>,
 ): Promise<Prompt> {
+  const template = lang.template ? await expandPartials(lang.template) : await loadSkill(name);
   return splitPrompt(
-    await renderSkill(name, { ...values, ...languageValues(lang), cacheBreak: CACHE_BREAK }),
+    renderTemplate(template, { ...values, ...languageValues(lang), cacheBreak: CACHE_BREAK }),
   );
 }
 
@@ -180,7 +188,7 @@ export function generateChoicesPrompt(
   request: RequestForAi,
   context: ContextBlock[],
   foundation: ProjectFoundationForAi = NO_FOUNDATION,
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   return renderPrompt(lang, 'generate-choices', {
     spec: fence(specMarkdown),
@@ -213,7 +221,7 @@ export function draftSpecProposalPrompt(
   decision: DecisionForAi,
   context: ContextBlock[],
   foundation: ProjectFoundationForAi = NO_FOUNDATION,
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   return renderPrompt(lang, 'draft-spec-proposal', {
     spec: fence(specMarkdown),
@@ -227,7 +235,7 @@ export function draftSpecProposalPrompt(
   });
 }
 
-export function summarizeAttachmentPrompt(attachment: AttachmentForAi, lang: PromptLanguage = {}) {
+export function summarizeAttachmentPrompt(attachment: AttachmentForAi, lang: PromptOptions = {}) {
   return renderPrompt(lang, 'summarize-attachment', {
     attachments: renderAttachments([attachment]),
   });
@@ -237,7 +245,7 @@ export function draftSpecFromAttachmentsPrompt(
   feature: FeatureForAi,
   specMarkdown: string,
   context: ContextBlock[],
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   return renderPrompt(lang, 'draft-spec-from-attachments', {
     featureTitle: feature.title,
@@ -316,7 +324,7 @@ export function grillingFollowUpPrompt(
     followUps: GrillingFollowUpForAi[];
     remaining: number;
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   const followUps = input.followUps.length
     ? renderFollowUps(input.followUps)
@@ -342,7 +350,7 @@ export function grillingQuestionsPrompt(
     guidelines: GuidelineForAi[];
     memory: WorkflowMemory;
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   return renderPrompt(lang, 'grilling-questions', {
     projectName: attribute(input.project.name),
@@ -364,7 +372,7 @@ export function draftBriefFromGrillingPrompt(
     memory: WorkflowMemory;
     answers: GrillingAnswerForAi[];
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   return renderPrompt(lang, 'draft-brief-from-grilling', {
     projectName: attribute(input.project.name),
@@ -397,7 +405,7 @@ export function suggestFeaturesPrompt(
     dismissed: DismissedSuggestionForAi[];
     pending: string[];
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   const pending = input.pending.length
     ? input.pending.map((t) => `- ${oneLineOf(t)}`).join('\n')
@@ -432,7 +440,7 @@ export function draftSpecFromSuggestionPrompt(
     projectContext: ContextBlock[];
     guidelines: GuidelineForAi[];
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   return renderPrompt(lang, 'draft-spec-from-suggestion', {
     projectName: attribute(input.project.name),
@@ -449,7 +457,7 @@ export function checkFeatureFitPrompt(
     projectContext: ContextBlock[];
     guidelines: GuidelineForAi[];
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   const feature = `Title: ${oneLineOf(input.feature.title)}\n\n${input.feature.description || '(No description.)'}`;
   return renderPrompt(lang, 'check-feature-fit', {
@@ -475,7 +483,7 @@ export function chatPrompt(
     foundation: ProjectFoundationForAi;
     summary: string;
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   return renderPrompt(lang, 'chat', {
     scope: describeConversationScope(input.scope),
@@ -509,7 +517,7 @@ export function summarizeConversationPrompt(
     focus?: string | null;
     record?: RecordForAi | null;
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   const cards = input.actionCards ?? [];
   const focus = input.focus?.trim();
@@ -609,7 +617,7 @@ export function redraftChoicesPrompt(
     context: ContextBlock[];
     foundation?: ProjectFoundationForAi;
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   const foundation = input.foundation ?? NO_FOUNDATION;
   return renderPrompt(lang, 'redraft-choices', {
@@ -634,7 +642,7 @@ export function redraftSpecProposalPrompt(
     context: ContextBlock[];
     foundation?: ProjectFoundationForAi;
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   const foundation = input.foundation ?? NO_FOUNDATION;
   return renderPrompt(lang, 'redraft-spec-proposal', {
@@ -656,7 +664,7 @@ export function redraftBriefProposalPrompt(
     projectContext: ContextBlock[];
     guidelines: GuidelineForAi[];
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   return renderPrompt(lang, 'redraft-brief-proposal', {
     projectName: attribute(input.project.name),
@@ -675,7 +683,7 @@ export function redraftFeatureSuggestionPrompt(
     projectContext: ContextBlock[];
     guidelines: GuidelineForAi[];
   },
-  lang: PromptLanguage = {},
+  lang: PromptOptions = {},
 ) {
   const { pointer: _, ...values } = feedbackValues(input);
   return renderPrompt(lang, 'redraft-feature-suggestion', {

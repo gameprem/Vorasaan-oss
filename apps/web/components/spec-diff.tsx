@@ -94,13 +94,22 @@ const KIND: Record<SpecDiffView['lines'][number]['kind'], Kind> = {
   UNCHANGED: 'same',
 };
 
-/** A diff between two Spec Versions as computed by the server (`GET /features/:id/spec-diff`). */
-export function VersionDiff({ diff }: { diff: SpecDiffView }) {
+/**
+ * A diff between two versions as computed by the server: Spec Versions
+ * (`GET /features/:id/spec-diff`), or Prompt Versions with their own `caption` (0071).
+ */
+export function VersionDiff({
+  diff,
+  caption,
+}: {
+  diff: Pick<SpecDiffView, 'from' | 'to' | 'lines'>;
+  caption?: string;
+}) {
   const rows = fold(diff.lines.map((l) => ({ kind: KIND[l.kind], text: l.text })));
   return (
     <DiffTable
       rows={rows}
-      caption={diff.from === 0 ? `v${diff.to}` : `v${diff.from} → v${diff.to}`}
+      caption={caption ?? (diff.from === 0 ? `v${diff.to}` : `v${diff.from} → v${diff.to}`)}
     />
   );
 }

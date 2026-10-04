@@ -151,3 +151,12 @@ export type ReceiptOutputKind = z.infer<typeof ReceiptOutputKind>;
 
 export const ReceiptOutcomeKind = z.enum(['APPROVE', 'DECLINE', 'REQUEST_CHANGES', 'MANUAL_EDIT']);
 export type ReceiptOutcomeKind = z.infer<typeof ReceiptOutcomeKind>;
+
+export const PromptVersionStatus = z.enum(['PROPOSED', 'APPROVED', 'DECLINED']);
+export type PromptVersionStatus = z.infer<typeof PromptVersionStatus>;
+
+export const PromptActivationKind = z.enum(['APPROVE', 'ROLLBACK']);
+export type PromptActivationKind = z.infer<typeof PromptActivationKind>;
+
+export const PromptEvalRunStatus = z.enum(['RUNNING', 'DONE', 'FAILED']);
+export type PromptEvalRunStatus = z.infer<typeof PromptEvalRunStatus>;

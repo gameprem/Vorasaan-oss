@@ -75,6 +75,7 @@ export class ReceiptingAiPort implements AiPort {
             error: error === null ? null : receiptError(error, [options?.model?.provider?.apiKey]),
             usage,
             model: options?.model,
+            prompt: options?.prompt,
             language: options?.language,
             link: options?.receipt,
           });

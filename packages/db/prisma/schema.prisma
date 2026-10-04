@@ -259,6 +259,12 @@ model User {
   receipts        Receipt[]        @relation("ReceiptRequestedBy")
   receiptOutcomes ReceiptOutcome[] @relation("ReceiptOutcomeBy")
 
+  promptVersionsProposed PromptVersion[]    @relation("PromptVersionProposedBy")
+  promptVersionsApproved PromptVersion[]    @relation("PromptVersionApprovedBy")
+  promptVersionsDeclined PromptVersion[]    @relation("PromptVersionDeclinedBy")
+  promptActivations      PromptActivation[] @relation("PromptActivationBy")
+  promptEvalRuns         PromptEvalRun[]    @relation("PromptEvalRunStartedBy")
+
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
   delegationsCreated  Delegation[] @relation("DelegationCreatedBy")
@@ -305,18 +311,21 @@ model Organization {
   receiptRetentionDays Int      @default(90)
   createdAt            DateTime @default(now())
 
-  memberships    OrgMembership[]
-  invitations    Invitation[]
-  integrations   OrgIntegration[]
-  approvedModels ApprovedModel[]
-  aiTaskModels   AiTaskModel[]
-  projects       Project[]
-  chunks         ContentChunk[]
-  guidelines     GuidelineCriterion[]
-  chatAccounts   ChatAccount[]
-  chatLinkCodes  ChatLinkCode[]
-  responseWindow ResponseWindowSettings?
-  holidays       OrgHoliday[]
+  memberships       OrgMembership[]
+  invitations       Invitation[]
+  integrations      OrgIntegration[]
+  approvedModels    ApprovedModel[]
+  aiTaskModels      AiTaskModel[]
+  projects          Project[]
+  chunks            ContentChunk[]
+  guidelines        GuidelineCriterion[]
+  chatAccounts      ChatAccount[]
+  chatLinkCodes     ChatLinkCode[]
+  responseWindow    ResponseWindowSettings?
+  holidays          OrgHoliday[]
+  promptVersions    PromptVersion[]
+  promptActivations PromptActivation[]
+  promptEvalRuns    PromptEvalRun[]
 }
 
 // The Organization's working calendar and default Response Windows (ADR 0011).
@@ -1389,6 +1398,9 @@ model Receipt {
   proposalId       String?
   redraft          Int?
   requestedById    String?
+  // The eval run (ticket 0071) the call was made for; null for the product's own calls.
+  // A replay never picks these.
+  evalRunId        String?
   createdAt        DateTime           @default(now())
   requestedBy      User?              @relation("ReceiptRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   outcomes         ReceiptOutcome[]   @relation("ReceiptOutcomes")
@@ -1398,6 +1410,7 @@ model Receipt {
   @@index([proposalKind, proposalId, redraft])
   @@index([outputKind, outputId])
   @@index([requestedById])
+  @@index([evalRunId])
 }
 
 // What people did with a proposal, linked to the Receipt that drafted it (`receiptId`)
@@ -1425,4 +1438,131 @@ model ReceiptOutcome {
   @@index([proposalKind, proposalId])
   @@index([createdAt])
   @@index([actorId])
+}
+
+// ─── Prompt Versions and evals (ADR 0015, ticket 0071) ──────────────────────
+
+enum PromptVersionStatus {
+  PROPOSED // written by an Admin (or, later, the AI), waiting for an Admin's approval
+  APPROVED // may be active; the active one is the latest PromptActivation of its prompt
+  DECLINED
+}
+
+// An Organization's own version of one of the built-in prompts (a packages/skills name),
+// on top of the default. Numbered per prompt when written, and immutable: only its status
+// moves, PROPOSED to APPROVED or DECLINED.
+model PromptVersion {
+  id             String              @id @default(uuid())
+  organizationId String
+  promptName     String // a packages/skills name, e.g. generate-choices
+  number         Int // 1, 2, ... per prompt; the built-in default is 0
+  template       String // the prompt's Markdown, placeholders and partials as written
+  note           String? // what it changes and why
+  status         PromptVersionStatus @default(PROPOSED)
+  proposedById   String?
+  approvedById   String?
+  approvedAt     DateTime?
+  declinedById   String?
+  declinedAt     DateTime?
+  declineReason  String?
+  createdAt      DateTime            @default(now())
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  proposedBy     User?               @relation("PromptVersionProposedBy", fields: [proposedById], references: [id], onDelete: SetNull)
+  approvedBy     User?               @relation("PromptVersionApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  declinedBy     User?               @relation("PromptVersionDeclinedBy", fields: [declinedById], references: [id], onDelete: SetNull)
+  activations    PromptActivation[]
+  evalRuns       PromptEvalRun[]
+
+  @@unique([organizationId, promptName, number])
+  @@index([proposedById])
+  @@index([approvedById])
+  @@index([declinedById])
+}
+
+enum PromptActivationKind {
+  APPROVE // a Prompt Version approved, and so made active
+  ROLLBACK // an earlier Prompt Version, or the default, made active again
+}
+
+// Which version of a prompt is active, as a log: the latest row of a prompt wins, and no
+// row means the built-in default. Rollbacks are rows too, so the history keeps them.
+model PromptActivation {
+  id             String               @id @default(uuid())
+  seq            Int                  @default(autoincrement()) // the order they happened in
+  organizationId String
+  promptName     String
+  versionId      String? // null: the built-in default
+  kind           PromptActivationKind
+  actorId        String?
+  createdAt      DateTime             @default(now())
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  version        PromptVersion?       @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  actor          User?                @relation("PromptActivationBy", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, promptName, seq])
+  @@index([versionId])
+  @@index([actorId])
+}
+
+enum PromptEvalRunStatus {
+  RUNNING
+  DONE
+  FAILED
+}
+
+// One eval run of a prompt's version (the default or a Prompt Version) on an Approved
+// Model: the checked-in eval cases and/or a replay of approved Receipts, run in the
+// background. Its calls leave Receipts marked with its id; their tokens are summed here
+// when it ends.
+model PromptEvalRun {
+  id               String              @id @default(uuid())
+  organizationId   String
+  promptName       String
+  versionId        String? // null: the built-in default
+  promptVersion    String // as Receipts name it: default@<hash> or v<n>@<hash>
+  approvedModelId  String? // a plain id, so the run outlives the model
+  modelDisplayName String
+  modelName        String
+  sources          String[] // CHECKED_IN, REPLAY
+  status           PromptEvalRunStatus @default(RUNNING)
+  total            Int                 @default(0)
+  done             Int                 @default(0)
+  score            Float? // the mean of its cases' scores, once done
+  error            String?
+  inputTokens      Int?
+  outputTokens     Int?
+  cacheReadTokens  Int?
+  cacheWriteTokens Int?
+  startedById      String?
+  createdAt        DateTime            @default(now())
+  finishedAt       DateTime?
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  version          PromptVersion?      @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  startedBy        User?               @relation("PromptEvalRunStartedBy", fields: [startedById], references: [id], onDelete: SetNull)
+  cases            PromptEvalCase[]
+
+  @@index([organizationId, promptName, createdAt])
+  @@index([versionId])
+  @@index([startedById])
+}
+
+// One case of an eval run: its score (0 to 1, the share of its checks passed), each
+// check, and the output as a sample. A replay case names the Receipt it replayed.
+model PromptEvalCase {
+  id        String        @id @default(uuid())
+  runId     String
+  position  Int
+  set       String // the eval set (choices, grilling...) or "replay"
+  caseKey   String // stable across runs, so two runs compare case by case
+  name      String
+  score     Float
+  checks    Json // [{ name, passed, detail }]
+  output    Json? // the output as a sample; null when the call failed
+  error     String?
+  receiptId String? // replay: the approved Receipt replayed (a plain id)
+  latencyMs Int
+  createdAt DateTime      @default(now())
+  run       PromptEvalRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, caseKey])
 }
