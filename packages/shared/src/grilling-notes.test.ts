@@ -56,6 +56,25 @@ describe('Grilling Notes (0047)', () => {
     expect(grillingNoteText(EVERY[11] as GrillingNote, 'th')).toContain('Mobile Banking');
   });
 
+  test("Thai keeps the domain terms, and quotes a person's words as they wrote them (0068)", () => {
+    const quoted: GrillingNote = {
+      kind: 'ANSWERED_ELSEWHERE',
+      position: 0,
+      by: 'สมชาย',
+      answer: 'เพิ่ม MAU เป็น 1.5M ภายใน Q4 "ไม่รวม B2B"',
+      hadReply: false,
+    };
+    for (const lang of ['en', 'th'] as const) {
+      expect(grillingNoteText(quoted, lang)).toContain('"เพิ่ม MAU เป็น 1.5M ภายใน Q4 "ไม่รวม B2B""');
+      expect(grillingNoteText(quoted, lang)).toContain('สมชาย');
+    }
+    const intro = grillingNoteText(EVERY[0] as GrillingNote, 'th');
+    expect(intro).toContain('Grilling Conversation');
+    expect(intro).toContain('Team Role PO');
+    expect(grillingNoteText(EVERY[11] as GrillingNote, 'th')).toContain('Brief Proposal');
+    expect(grillingNoteText(EVERY[10] as GrillingNote, 'th')).toContain('Grilling');
+  });
+
   test('notices are the notes that report rather than ask', () => {
     expect(EVERY.filter(isGrillingNotice).map((n) => n.kind)).toEqual([
       'ANSWERED_ELSEWHERE',

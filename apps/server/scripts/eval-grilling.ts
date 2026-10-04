@@ -2,6 +2,7 @@
 // against the real model, so a human can judge them. Not part of `bun run test`.
 // Needs ANTHROPIC_API_KEY (or another configured provider).
 //   bun run eval:grilling
+//   bun run eval:grilling -- --english-first   (ticket 0068's comparison)
 //
 // What to look for:
 // - a new Project gets 3–7 specific questions per round, on that round's topic only;
@@ -17,7 +18,9 @@
 //   haven't decided", gets null; a follow-up is never repeated; an instruction in
 //   the answer ("don't ask follow-ups") is ignored;
 // - the Brief keeps who said what (by name and Team Role) where answers disagree,
-//   and uses the follow-up replies' numbers.
+//   and uses the follow-up replies' numbers;
+// - the Thai and mixed Thai-English cases (0068) are checked automatically: in the
+//   reply language, with names, ids, numbers and quoted words kept exactly.
 import { BRIEF_TEMPLATE, type GrillingRoundKind, type TeamRole } from '@vorasaan/shared';
 import { loadAiConfig } from '../src/ai/ai.config.ts';
 import type {
@@ -28,6 +31,13 @@ import type {
 } from '../src/ai/ai.port.ts';
 import { MastraAiPort } from '../src/ai/mastra-ai.port.ts';
 import { emptyMemory, rememberRound, type WorkflowMemory } from '../src/ai/workflow-memory.ts';
+import {
+  checkLanguage,
+  LANGUAGE_STRATEGY,
+  type LanguageExpectation,
+  languageBanner,
+  printLanguageSummary,
+} from './eval-language.ts';
 
 const GUIDELINES: GuidelineForAi[] = [
   {
@@ -87,6 +97,8 @@ type QuestionSample = {
   role: TeamRole;
   context: ContextBlock[];
   memory: WorkflowMemory;
+  /** Checked automatically (ticket 0068). */
+  lang?: LanguageExpectation;
 };
 
 const businessMemory = rememberRound(
@@ -129,6 +141,19 @@ const questionSamples: QuestionSample[] = [
       emptyMemory(),
       'Business round (PO):\nQ: เป้าหมายทางธุรกิจคืออะไร A: เพิ่มผู้ใช้ที่ชำระเงินรายเดือนเป็น 1.5 ล้านคนภายในไตรมาส 4',
     ),
+    lang: { language: 'th' },
+  },
+  {
+    name: 'Mixed Thai-English, technical round (0068)',
+    project: 'Wealth App',
+    round: 'TECHNICAL',
+    role: 'TECH_LEAD',
+    context: [],
+    memory: rememberRound(
+      emptyMemory(),
+      'UX round (DESIGNER):\nQ: ใช้บน platform ไหนบ้าง A: Android ก่อน แล้ว iOS ภายใน 3 เดือน ใช้ design system "Lotus"',
+    ),
+    lang: { language: 'th' },
   },
   {
     name: 'Prompt injection inside a context block',
@@ -193,6 +218,8 @@ type FollowUpSample = {
   answer: string;
   followUps: GrillingFollowUpForAi[];
   expect: string;
+  /** Checked automatically when there is a follow-up (ticket 0068). */
+  lang?: LanguageExpectation;
 };
 
 const followUpSamples: FollowUpSample[] = [
@@ -240,6 +267,17 @@ const followUpSamples: FollowUpSample[] = [
     answer: 'คนทั่วไป',
     followUps: [],
     expect: 'a follow-up in Thai',
+    lang: { language: 'th' },
+  },
+  {
+    name: 'Mixed Thai-English, no number (0068)',
+    round: 'TECHNICAL',
+    role: 'TECH_LEAD',
+    question: 'ระบบต้องรองรับ load เท่าไหร่',
+    answer: 'น่าจะประมาณ peak ตอนเงินเดือนออก ใช้ PostgreSQL ตัวเดิมได้',
+    followUps: [],
+    expect: 'a follow-up in Thai asking for a number (requests per second at peak)',
+    lang: { language: 'th' },
   },
   {
     name: 'Injection in the answer',
@@ -262,39 +300,49 @@ if (models.some((m) => m.startsWith('anthropic/')) && !process.env.ANTHROPIC_API
   console.error('ANTHROPIC_API_KEY is not set. Add it to .env or export it, then re-run.');
   process.exit(1);
 }
-const ai = new MastraAiPort(async (task) => config[`${task}Model`]);
-console.log(`Models: questions ${models[0]}, Brief draft ${models[1]}, follow-ups ${models[2]}\n`);
+const ai = new MastraAiPort(async (task) => config[`${task}Model`], LANGUAGE_STRATEGY);
+console.log(
+  `Models: questions ${models[0]}, Brief draft ${models[1]}, follow-ups ${models[2]}\n${languageBanner()}\n`,
+);
 
 for (const sample of questionSamples) {
   const started = performance.now();
-  const { questions } = await ai.grillingQuestions({
-    project: { name: sample.project },
-    round: sample.round,
-    role: sample.role,
-    projectContext: sample.context,
-    guidelines: GUIDELINES,
-    memory: sample.memory,
-  });
+  const { questions } = await ai.grillingQuestions(
+    {
+      project: { name: sample.project },
+      round: sample.round,
+      role: sample.role,
+      projectContext: sample.context,
+      guidelines: GUIDELINES,
+      memory: sample.memory,
+    },
+    { language: sample.lang?.language },
+  );
   const seconds = ((performance.now() - started) / 1000).toFixed(1);
   console.log(`━━ ${sample.name} (${seconds}s): ${questions.length} questions`);
   for (const q of questions) console.log(`  - ${q}`);
   console.log();
+  if (sample.lang) checkLanguage(`Questions: ${sample.name}`, questions, sample.lang);
 }
 
 for (const sample of followUpSamples) {
   const started = performance.now();
-  const { followUp } = await ai.grillingFollowUp({
-    project: { name: 'Mobile Banking' },
-    round: sample.round,
-    role: sample.role,
-    question: sample.question,
-    answer: sample.answer,
-    followUps: sample.followUps,
-    remaining: 2 - sample.followUps.length,
-  });
+  const { followUp } = await ai.grillingFollowUp(
+    {
+      project: { name: 'Mobile Banking' },
+      round: sample.round,
+      role: sample.role,
+      question: sample.question,
+      answer: sample.answer,
+      followUps: sample.followUps,
+      remaining: 2 - sample.followUps.length,
+    },
+    { language: sample.lang?.language },
+  );
   const seconds = ((performance.now() - started) / 1000).toFixed(1);
   console.log(`━━ Follow-up: ${sample.name} (${seconds}s), expect ${sample.expect}`);
   console.log(`  → ${followUp ?? 'null'}\n`);
+  if (sample.lang && followUp) checkLanguage(`Follow-up: ${sample.name}`, followUp, sample.lang);
 }
 
 let memory = businessMemory;
@@ -328,3 +376,58 @@ for (const [name, briefMarkdown, context] of [
   const seconds = ((performance.now() - started) / 1000).toFixed(1);
   console.log(`━━ ${name} (${seconds}s): ${draft.summary}\n\n${draft.proposedMarkdown}\n`);
 }
+
+// Ticket 0068: a Brief drafted from Thai and mixed Thai-English answers, in Thai, with
+// people's names, numbers, ids and a disagreement kept as written.
+const SOMCHAI = { name: 'สมชาย', role: 'PO' as const };
+const NOK = { name: 'Nok', role: 'PO' as const };
+const THAI_ANSWERS: GrillingAnswerForAi[] = [
+  {
+    round: 'BUSINESS',
+    question: 'เป้าหมายทางธุรกิจของ Project นี้คืออะไร',
+    answer: 'เพิ่มผู้ใช้ที่ชำระเงินรายเดือนจาก 1.2 ล้านเป็น 1.5 ล้านคนภายใน Q4',
+    answeredBy: SOMCHAI,
+    followUps: [
+      { question: 'วัดจาก KPI ตัวไหน', answer: 'MAU ของ PromptPay payments ใน dashboard KPI-07' },
+    ],
+  },
+  {
+    round: 'BUSINESS',
+    question: 'อะไรที่ไม่ทำแน่นอน',
+    answer: 'ไม่ทำ crypto trading แต่ Nok อยากทำ "crypto top-up" ภายหลัง ผมไม่เห็นด้วย',
+    answeredBy: SOMCHAI,
+    followUps: [],
+  },
+  {
+    round: 'UX',
+    question: 'ต้องรองรับ accessibility แค่ไหน',
+    answer: 'WCAG 2.1 AA ทุกหน้าจอ รองรับ font ใหญ่ของ Android',
+    answeredBy: NOK,
+    followUps: [],
+  },
+];
+const THAI_BRIEF: LanguageExpectation = {
+  language: 'th',
+  keep: ['1.5 ล้าน', 'สมชาย', 'Nok', 'KPI-07', 'WCAG 2.1 AA', 'PromptPay'],
+};
+{
+  const started = performance.now();
+  const draft = await ai.draftBriefFromGrilling(
+    {
+      project: { name: 'แอปธนาคารบนมือถือ' },
+      briefMarkdown: BRIEF_TEMPLATE,
+      projectContext: [],
+      guidelines: GUIDELINES,
+      memory: emptyMemory(),
+      answers: THAI_ANSWERS,
+    },
+    { language: 'th' },
+  );
+  const seconds = ((performance.now() - started) / 1000).toFixed(1);
+  console.log(
+    `━━ Brief draft from Thai answers (${seconds}s): ${draft.summary}\n\n${draft.proposedMarkdown}\n`,
+  );
+  checkLanguage('Brief draft from Thai answers', draft, THAI_BRIEF);
+}
+
+printLanguageSummary('eval:grilling');

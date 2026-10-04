@@ -242,6 +242,10 @@ _Avoid_: Memory, compaction note, recap
 One fold of a Conversation's older messages into its Conversation Summary: on its own when the history nears its share of the Context Window, or when the person asks for it (`/compact`), optionally saying what the summary must keep (its focus). The chat marks each one with a divider; the messages above it stay readable.
 _Avoid_: Truncation, reset, clearing the chat
 
+**Reply Language**:
+The language the AI and Vorasaan's own Grilling texts use with a person: the language they picked for themselves, else their Organization's, else English. What the AI writes for a whole Project rather than one person (Grilling questions, the Brief drafted from a Grilling) is in the Organization's. Vorasaan's terms, names, ids, numbers and people's quoted words stay as written in any language.
+_Avoid_: Locale, translation language
+
 **Action Card**:
 A proposal the AI makes inside a Conversation (a Decision Request draft, a Spec Proposal, a Brief Proposal, a Feature Suggestion), shown with the buttons to approve, edit, Request changes or decline it. A Request changes turns it into its next Redraft, in the same card. Only the Conversation's owner acts on it. It goes stale when what it proposes changes elsewhere (for example the proposal is approved from the Inbox), and can then no longer be approved or redrafted.
 _Avoid_: Tool result, command, auto-action

@@ -25,6 +25,7 @@ import {
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort, type ContextBlock } from '../ai/ai.port.ts';
 import { ContextBudgets, projectBudget } from '../ai/context-budget.ts';
+import { personLanguage } from '../ai/language.ts';
 import { clipForAi } from '../attachments/attachment-context.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
 import {
@@ -115,6 +116,7 @@ export class FeatureSuggestionsService {
       }));
     const pending = earlier.filter((s) => s.status === 'PENDING').map((s) => s.title);
 
+    const language = await personLanguage(this.db, user.id);
     const drafted = await this.callAi(() =>
       this.ai.suggestFeatures(
         {
@@ -126,7 +128,7 @@ export class FeatureSuggestionsService {
           dismissed,
           pending,
         },
-        { model },
+        { model, language },
       ),
     );
 
@@ -243,6 +245,7 @@ export class FeatureSuggestionsService {
         projectBudget(budget),
       ),
     ]);
+    const language = await personLanguage(this.db, user.id);
     const draft = await this.callAi(() =>
       this.ai.draftSpecFromSuggestion(
         {
@@ -257,7 +260,7 @@ export class FeatureSuggestionsService {
           projectContext,
           guidelines: guidelines.map(({ ref: _, criterion: __, ...g }) => g),
         },
-        { model },
+        { model, language },
       ),
     );
 
@@ -341,6 +344,7 @@ export class FeatureSuggestionsService {
       `${feature.title}\n\n${feature.description}`,
       projectBudget(budget),
     );
+    const language = await personLanguage(this.db, user.id);
     const checked = await this.callAi(() =>
       this.ai.checkFeatureFit(
         {
@@ -349,7 +353,7 @@ export class FeatureSuggestionsService {
           projectContext,
           guidelines: guidelines.map(({ criterion: _, ...g }) => g),
         },
-        { model },
+        { model, language },
       ),
     );
     return { projectId, ...fitOf(guidelines, checked.results) };

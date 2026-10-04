@@ -26,6 +26,7 @@ import {
   type GuidelineForAi,
 } from '../ai/ai.port.ts';
 import { ContextBudgets, projectBudget } from '../ai/context-budget.ts';
+import { projectLanguage } from '../ai/language.ts';
 import {
   emptyMemory,
   rememberRound,
@@ -364,6 +365,9 @@ export class GrillingService {
     from: number,
   ): Promise<Plan> {
     const guidelines = await this.guidelinesFor(project.id);
+    // Written for a Team Role's holders and for the Project, not for whoever moved the
+    // Grilling on: in the Organization's language (ticket 0068).
+    const language = await projectLanguage(this.db, project.id);
     const rounds: NewRound[] = [];
     let known = memory;
     for (const { kind, role } of GRILLING_ROUNDS.slice(from)) {
@@ -400,7 +404,7 @@ export class GrillingService {
             guidelines,
             memory: memoryNow,
           },
-          { model },
+          { model, language },
         ),
       );
       const questions = distinct(drafted.questions).slice(0, MAX_GRILLING_QUESTIONS);
@@ -449,7 +453,7 @@ export class GrillingService {
           memory: memoryNow,
           answers,
         },
-        { model },
+        { model, language },
       ),
     );
     return {

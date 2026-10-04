@@ -120,7 +120,7 @@ export const ChatPreferencesInput = z.strictObject({
   quietHours: QuietHours.nullable(),
   /** null: the Organization's time zone. */
   timeZone: TimeZone.nullable(),
-  /** The language of cards and bot replies; null: the Organization's. Left out: unchanged. */
+  /** The person's language (cards, bot replies, Grilling texts, AI replies); null: the Organization's. Left out: unchanged. */
   language: ChatLanguage.nullable().optional(),
 });
 export type ChatPreferencesInput = z.infer<typeof ChatPreferencesInput>;

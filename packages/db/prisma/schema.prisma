@@ -293,8 +293,8 @@ model PersonalAccessToken {
 model Organization {
   id        String   @id @default(uuid())
   name      String
-  // "en" or "th" (ticket 0063): the language of chat app cards and bot replies for
-  // anyone who hasn't picked their own.
+  // "en" or "th" (tickets 0063, 0068): the language of chat app cards, bot replies, Grilling
+  // texts and AI replies for anyone who hasn't picked their own, and of Project-wide AI output.
   language  String   @default("en")
   createdAt DateTime @default(now())
 
@@ -1240,7 +1240,7 @@ model ChatPreference {
   quietStartMinute Int? // minutes after local midnight; both set or both null
   quietEndMinute   Int? // may be before the start: quiet hours across midnight
   timeZone         String? // IANA; null: the Organization's time zone
-  language         String? // "en" or "th": the language of cards and bot replies; null: the Organization's
+  language         String? // "en" or "th": the person's language (cards, bot replies, Grilling texts, AI replies, 0068); null: the Organization's
   updatedAt        DateTime        @updatedAt
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

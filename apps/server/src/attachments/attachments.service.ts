@@ -18,6 +18,7 @@ import {
   type CreateRepoScanInput,
 } from '@vorasaan/shared';
 import { AI_PORT, type AiPort } from '../ai/ai.port.ts';
+import { personLanguage } from '../ai/language.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
@@ -103,7 +104,7 @@ export class AttachmentsService {
     );
 
     const attachmentTitle = clip(title ?? file.originalname);
-    const summary = await this.summarize(attachmentTitle, 'FILE', text);
+    const summary = await this.summarize(user, attachmentTitle, 'FILE', text);
 
     const id = randomUUID();
     const storageKey =
@@ -154,7 +155,7 @@ export class AttachmentsService {
     });
     const url = snapshot.url ?? ref;
     const attachmentTitle = clip(input.title ?? snapshot.title ?? url);
-    const summary = await this.summarize(attachmentTitle, input.source, snapshot.text);
+    const summary = await this.summarize(user, attachmentTitle, input.source, snapshot.text);
     const created = await this.db.attachment.create({
       data: {
         ...owner,
@@ -190,7 +191,7 @@ export class AttachmentsService {
     const title = clip(
       `Repo Scan: ${input.repoName}${input.commitSha ? ` @ ${input.commitSha.slice(0, 7)}` : ''}`,
     );
-    const summary = await this.summarize(title, 'REPO_SCAN', text);
+    const summary = await this.summarize(user, title, 'REPO_SCAN', text);
     const { created, replaced } = await this.db.$transaction(async (tx) => {
       const previous = await tx.attachment.findMany({
         where: { projectId, source: 'REPO_SCAN' },
@@ -228,7 +229,7 @@ export class AttachmentsService {
     }
     const snapshot = await this.capture(attachment.source, attachment);
     // A summary of the old Snapshot would be stale: replace it, or clear it on failure.
-    const summary = await this.summarize(attachment.title, attachment.source, snapshot.text);
+    const summary = await this.summarize(user, attachment.title, attachment.source, snapshot.text);
     const updated = await this.db.attachment.update({
       where: { id },
       data: {
@@ -279,15 +280,19 @@ export class AttachmentsService {
    * fails: a missing summary never stops an Attachment from being saved.
    */
   private async summarize(
+    user: Pick<User, 'id'>,
     title: string,
     source: AttachmentSource,
     text: string | null,
   ): Promise<string | null> {
     if (!text?.trim()) return null;
     try {
-      const { summary } = await this.ai.summarizeAttachment({
-        attachment: { title, source, text: clipForAi(text, ATTACHMENT_CONTEXT_BUDGET.summary) },
-      });
+      const { summary } = await this.ai.summarizeAttachment(
+        {
+          attachment: { title, source, text: clipForAi(text, ATTACHMENT_CONTEXT_BUDGET.summary) },
+        },
+        { language: await personLanguage(this.db, user.id) },
+      );
       return summary;
     } catch (error) {
       this.logger.warn(`Could not summarize Attachment "${title}": ${(error as Error).message}`);

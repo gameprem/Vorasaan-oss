@@ -4,6 +4,8 @@
 // Settings (or ANTHROPIC_API_KEY); uses the embeddings provider when one is set,
 // the keyword fallback otherwise.
 //   bun run eval:retrieval
+// (It uses the server's own AI port, so it has no --english-first mode; its Thai case
+// (0068) checks retrieval and the reply language only.)
 //
 // It creates a temporary Project in the first Organization, indexes it, and deletes
 // it at the end. What to look for:
@@ -34,6 +36,7 @@ import {
   NEEDLE_QUESTION,
   OTHER_FEATURES,
 } from '../src/retrieval/large-project.fixture.ts';
+import { checkLanguage, printLanguageSummary } from './eval-language.ts';
 
 const app = await NestFactory.createApplicationContext(AppModule, { logger: ['warn', 'error'] });
 const db = app.get<PrismaClient>(PRISMA);
@@ -128,6 +131,40 @@ try {
     `\n   facts used: ${NEEDLE_FACTS.map((f) => `${f} ${answer.includes(f) ? 'yes' : 'NO'}`).join(', ')}\n`,
   );
 
+  // Case 1b (ticket 0068): the same question in mixed Thai-English. The needle is still
+  // retrieved, and the Choices are in Thai with the facts kept exactly.
+  const thaiQuestion = {
+    title: 'PromptPay settlement cutoff กี่โมง',
+    description:
+      'batch ของ payout scheduler ไปถึงธนาคารช้าบ้าง ควรตั้ง cutoff เท่าไหร่ และ batch ที่ช้าเสียค่าอะไร',
+  };
+  const thaiBlocks = await retriever.forFeature(
+    feature.id,
+    `${thaiQuestion.title}\n\n${thaiQuestion.description}`,
+    CONTEXT_CEILINGS.decisionRequest,
+  );
+  const thaiNeedleAt = thaiBlocks.findIndex((b) => b.text.includes(NEEDLE_PARAGRAPH));
+  console.log(`━━ Choices, mixed Thai-English: "${thaiQuestion.title}"`);
+  console.log(`   needle: ${thaiNeedleAt === -1 ? 'MISSING' : `block ${thaiNeedleAt + 1}`}`);
+  const thaiSplit = splitFeatureSpec(thaiBlocks);
+  started = performance.now();
+  const thaiChoices = await ai.generateChoices(
+    {
+      specMarkdown: thaiSplit.spec?.text ?? '',
+      context: thaiSplit.context,
+      request: { kind: 'QUESTION', raiserRole: 'BACKEND', ...thaiQuestion },
+    },
+    { language: 'th' },
+  );
+  console.log(`   (${((performance.now() - started) / 1000).toFixed(1)}s)`);
+  for (const c of thaiChoices.choices)
+    console.log(`\n   ${c.label}. ${c.title}\n      ${c.description}`);
+  console.log();
+  checkLanguage('Choices, mixed Thai-English', thaiChoices, {
+    language: 'th',
+    keep: [...NEEDLE_FACTS, 'PromptPay'],
+  });
+
   // Case 2: a Spec drafted from the same large Attachments.
   const draftBlocks = await retriever.forFeature(
     feature.id,
@@ -144,6 +181,7 @@ try {
     `━━ Spec from Attachments: ${draftBlocks.length} blocks ` +
       `(${((performance.now() - started) / 1000).toFixed(1)}s)\n   ${draft.summary}\n\n${draft.proposedMarkdown}\n`,
   );
+  printLanguageSummary('eval:retrieval');
 } finally {
   await app.get(AttachmentFilesService).deleteProject(project.id);
   await app.close();

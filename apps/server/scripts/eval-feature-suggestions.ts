@@ -2,6 +2,7 @@
 // Feature Guidelines fit check, against the real model, so a human can judge
 // them. Not part of `bun run test`. Needs ANTHROPIC_API_KEY (or another provider).
 //   bun run eval:feature-suggestions
+//   bun run eval:feature-suggestions -- --english-first   (ticket 0068's comparison)
 //
 // What to look for:
 // - suggestions serve the Brief's goals, fill real gaps (not what an existing
@@ -14,12 +15,19 @@
 //   has the sections a REQUIRED_SECTION criterion asks for;
 // - the fit check gives one verdict per Guideline: MET only when the text shows
 //   it, NOT_MET for the PCI-violating Feature, UNCLEAR with a useful question otherwise;
-// - Thai input gets Thai output;
+// - Thai input gets Thai output; the Thai and mixed Thai-English cases (0068) are
+//   checked automatically: in the reply language, ids, numbers and names kept exactly;
 // - instructions inside a context block, a dismissed reason or the Feature checked
 //   are never followed.
 import { loadAiConfig } from '../src/ai/ai.config.ts';
 import type { ContextBlock, DismissedSuggestionForAi, GuidelineForAi } from '../src/ai/ai.port.ts';
 import { MastraAiPort } from '../src/ai/mastra-ai.port.ts';
+import {
+  checkLanguage,
+  LANGUAGE_STRATEGY,
+  languageBanner,
+  printLanguageSummary,
+} from './eval-language.ts';
 
 const GUIDELINES: GuidelineForAi[] = [
   {
@@ -113,8 +121,10 @@ if (models.some((m) => m.startsWith('anthropic/')) && !process.env.ANTHROPIC_API
   console.error('ANTHROPIC_API_KEY is not set. Add it to .env or export it, then re-run.');
   process.exit(1);
 }
-const ai = new MastraAiPort(async (task) => config[`${task}Model`]);
-console.log(`Models: suggest ${models[0]}, first Spec ${models[1]}, fit ${models[2]}\n`);
+const ai = new MastraAiPort(async (task) => config[`${task}Model`], LANGUAGE_STRATEGY);
+console.log(
+  `Models: suggest ${models[0]}, first Spec ${models[1]}, fit ${models[2]}\n${languageBanner()}\n`,
+);
 
 const timed = async <T>(name: string, run: () => Promise<T>): Promise<T> => {
   const started = performance.now();
@@ -143,24 +153,109 @@ for (const s of suggestions) {
 console.log();
 
 const thai = await timed('Suggestions in Thai (new Project, Brief only)', () =>
-  ai.suggestFeatures({
-    project: { name: 'แอปธนาคารบนมือถือ' },
-    count: 3,
-    projectContext: [
-      {
-        source: { kind: 'BRIEF_VERSION', id: 'b-1', title: 'Project Brief', version: 1 },
-        scope: 'PROJECT',
-        text: '# Project Brief\n\n## เป้าหมายทางธุรกิจ\nเพิ่มผู้ใช้ที่ชำระเงินรายเดือนเป็น 1.5 ล้านคนภายในไตรมาส 4',
-      },
-    ],
-    guidelines: [],
-    decisions: [],
-    dismissed: [],
-    pending: [],
-  }),
+  ai.suggestFeatures(
+    {
+      project: { name: 'แอปธนาคารบนมือถือ' },
+      count: 3,
+      projectContext: [
+        {
+          source: { kind: 'BRIEF_VERSION', id: 'b-1', title: 'Project Brief', version: 1 },
+          scope: 'PROJECT',
+          text: '# Project Brief\n\n## เป้าหมายทางธุรกิจ\nเพิ่มผู้ใช้ที่ชำระเงินรายเดือนเป็น 1.5 ล้านคนภายในไตรมาส 4',
+        },
+      ],
+      guidelines: [],
+      decisions: [],
+      dismissed: [],
+      pending: [],
+    },
+    { language: 'th' },
+  ),
 );
 for (const s of thai.suggestions) console.log(`  - ${s.title}: ${s.rationale}`);
 console.log();
+checkLanguage('Suggestions in Thai', thai, { language: 'th' });
+
+// Ticket 0068: a mixed Thai-English Project, with Guidelines, a dismissed reason and an
+// existing Feature to keep by name.
+const mixed = await timed('Suggestions, mixed Thai-English (0068)', () =>
+  ai.suggestFeatures(
+    {
+      project: { name: 'Wealth App' },
+      count: 3,
+      projectContext: [
+        {
+          source: { kind: 'BRIEF_VERSION', id: 'b-2', title: 'Project Brief', version: 2 },
+          scope: 'PROJECT',
+          text:
+            '# Project Brief\n\n## Business goals\nเพิ่ม AUM เป็น 2,000 ล้านบาท ภายใน 2027 ' +
+            'และลด churn ของลูกค้า fund ใหม่ให้ต่ำกว่า 8%\n\n## Non-goals\nไม่ทำ crypto',
+        },
+        {
+          source: { kind: 'FEATURE', id: 'f-9', title: 'Feature: DCA auto-invest' },
+          scope: 'PROJECT',
+          text: 'Status: IN_PROGRESS\n\nลงทุนอัตโนมัติรายเดือนใน fund ที่เลือก',
+        },
+      ],
+      guidelines: GUIDELINES,
+      decisions: [],
+      dismissed: [
+        {
+          title: 'Robo-advisor',
+          rationale: 'แนะนำพอร์ตอัตโนมัติ',
+          reason: 'ต้องขอ license จาก ก.ล.ต. ก่อน ยังไม่ทำปีนี้',
+        },
+      ],
+      pending: [],
+    },
+    { language: 'th' },
+  ),
+);
+for (const s of mixed.suggestions) console.log(`  - ${s.title}: ${s.rationale}`);
+console.log();
+checkLanguage('Suggestions, mixed Thai-English', mixed, { language: 'th' });
+
+const [thaiTop] = mixed.suggestions;
+if (thaiTop) {
+  const draft = await timed(`First Spec in Thai of "${thaiTop.title}"`, () =>
+    ai.draftSpecFromSuggestion(
+      {
+        project: { name: 'Wealth App' },
+        suggestion: thaiTop,
+        projectContext: [],
+        guidelines: GUIDELINES,
+      },
+      { language: 'th' },
+    ),
+  );
+  console.log(`${draft.summary}\n\n${draft.proposedMarkdown}\n`);
+  checkLanguage(`First Spec in Thai of "${thaiTop.title}"`, draft, {
+    language: 'th',
+    keep: [thaiTop.title],
+  });
+}
+
+const thaiFit = await timed('Fit check in Thai, mixed Thai-English Feature (0068)', () =>
+  ai.checkFeatureFit(
+    {
+      project: { name: 'Mobile Banking' },
+      feature: {
+        title: 'บันทึกบัตรไว้จ่ายครั้งเดียว',
+        description: 'เก็บเลขบัตรกับ CVV ไว้ที่ server ของเรา ให้ลูกค้ากด pay ได้ใน 1 tap ตาม PAY-210',
+      },
+      projectContext: CONTEXT,
+      guidelines: GUIDELINES,
+    },
+    { language: 'th' },
+  ),
+);
+for (const r of thaiFit.results) {
+  console.log(
+    `  ${r.guideline} ${r.verdict}: ${r.reason}${r.question ? `\n     ? ${r.question}` : ''}`,
+  );
+}
+console.log();
+checkLanguage('Fit check in Thai', thaiFit, { language: 'th' });
 
 const [top] = suggestions;
 if (top) {
@@ -205,3 +300,5 @@ for (const feature of [
   }
   console.log();
 }
+
+printLanguageSummary('eval:feature-suggestions');

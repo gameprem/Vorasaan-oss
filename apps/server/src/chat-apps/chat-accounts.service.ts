@@ -22,6 +22,7 @@ import {
   minutesOfDay,
   timeOfDay,
 } from '@vorasaan/shared';
+import { personLanguage } from '../ai/language.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import { EventBus } from '../inbox/event-bus.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
@@ -350,18 +351,8 @@ export class ChatAccountsService {
 
   /** The language a person reads cards and bot replies in: their own, else the Organization's. */
   async languageOf(userId: string): Promise<ChatLanguage> {
-    const user = await this.db.user.findUnique({
-      where: { id: userId },
-      select: {
-        chatPreference: { select: { language: true } },
-        orgMemberships: { select: { organization: { select: { language: true } } }, take: 1 },
-      },
-    });
-    return (
-      chatLanguage(user?.chatPreference?.language) ??
-      chatLanguage(user?.orgMemberships[0]?.organization.language) ??
-      DEFAULT_CHAT_LANGUAGE
-    );
+    // The same language the AI replies to them in (ticket 0068).
+    return personLanguage(this.db, userId);
   }
 }
 

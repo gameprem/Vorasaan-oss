@@ -31,6 +31,7 @@ import type {
   SuggestionForAi,
 } from './ai.port.ts';
 import { toolTokens } from './context-budget.ts';
+import type { ReplyLanguage } from './language.ts';
 import { chatPrompt, describeDecision, SUMMARY_SECTIONS } from './prompts.ts';
 import { estimateChatTokens } from './token-count.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
@@ -165,7 +166,13 @@ export function fakeFollowUp(question: string, asked: number): string {
 /** Deterministic stand-in for tests. Records calls so tests can assert on them. */
 export class FakeAiPort implements AiPort {
   /** Every call, with the model it was asked to run on (null when none was chosen). */
-  readonly calls: { method: keyof AiPort; input: unknown; model: ModelChoice | null }[] = [];
+  readonly calls: {
+    method: keyof AiPort;
+    input: unknown;
+    model: ModelChoice | null;
+    /** The reply language the call was asked for (ticket 0068); null when none was given. */
+    language: ReplyLanguage | null;
+  }[] = [];
   /** Replies the next chat calls give, in order, instead of the default one. */
   readonly chatScript: ScriptedChatReply[] = [];
   /** Every countTokens call, with what it counted (kept apart from `calls`). */
@@ -212,7 +219,12 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): AsyncIterable<ChatChunk> {
-    this.calls.push({ method: 'chat', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'chat',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     const scripted = this.chatScript.shift();
     const chunks: ChatChunk[] = scripted
       ? (scripted.chunks ?? [])
@@ -259,7 +271,12 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): Promise<ConversationFoldDraft> {
-    this.calls.push({ method: 'summarizeConversation', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'summarizeConversation',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     const before = (key: (typeof SUMMARY_SECTIONS)[number][0]) =>
       summarySection(input.summary, SUMMARY_SECTIONS.find(([k]) => k === key)?.[1] ?? '');
     const lines = input.messages.flatMap((m) =>
@@ -314,7 +331,12 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'generateChoices', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'generateChoices',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     return {
       suggestedRole: 'PO' as const,
       choices: ['A', 'B', 'C'].map((label, i) => ({
@@ -338,7 +360,12 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'draftSpecProposal', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'draftSpecProposal',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     return {
       proposedMarkdown: `${input.specMarkdown.trimEnd()}\n\n## Decisions\n- ${input.request.title}: ${describeDecision(input.decision).split('\n')[0]}\n`,
       summary: `Recorded the decision on "${input.request.title}".`,
@@ -346,7 +373,12 @@ export class FakeAiPort implements AiPort {
   }
 
   async summarizeAttachment(input: { attachment: AttachmentForAi }, options?: AiCallOptions) {
-    this.calls.push({ method: 'summarizeAttachment', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'summarizeAttachment',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     const firstLine = input.attachment.text.trim().split('\n')[0] ?? '';
     return { summary: `Summary of "${input.attachment.title}": ${firstLine.slice(0, 80)}` };
   }
@@ -359,7 +391,12 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'draftSpecFromAttachments', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'draftSpecFromAttachments',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     const titles = new Set(
       input.context.filter((b) => b.source.kind === 'ATTACHMENT').map((b) => b.source.title),
     );
@@ -381,7 +418,12 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'grillingQuestions', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'grillingQuestions',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     const known = input.projectContext.map((b) => b.text.toLowerCase()).join('\n');
     return {
       questions: FAKE_GRILLING_TOPICS[input.round]
@@ -406,7 +448,12 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): Promise<GrillingFollowUpDecision> {
-    this.calls.push({ method: 'grillingFollowUp', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'grillingFollowUp',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     if (this.followUpScript.length) {
       const scripted = this.followUpScript.shift() ?? null;
       if (scripted instanceof Error) throw scripted;
@@ -433,7 +480,12 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'draftBriefFromGrilling', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'draftBriefFromGrilling',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     const answers = input.answers
       .map((a) => {
         const by = a.answeredBy ? ` (${a.answeredBy.name}, ${a.answeredBy.role})` : '';
@@ -464,7 +516,12 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): Promise<FeatureSuggestionDrafts> {
-    this.calls.push({ method: 'suggestFeatures', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'suggestFeatures',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     const taken = new Set([...input.pending, ...input.dismissed.map((d) => d.title)]);
     const suggestions: FeatureSuggestionDrafts['suggestions'] = [];
     for (let n = 1; suggestions.length < input.count; n++) {
@@ -491,7 +548,12 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'draftSpecFromSuggestion', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'draftSpecFromSuggestion',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     return {
       proposedMarkdown: `# ${input.suggestion.title}\n\n${input.suggestion.rationale}\n\n## Business value\n${input.suggestion.businessValue}\n`,
       summary: `First Spec of "${input.suggestion.title}".`,
@@ -511,7 +573,12 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): Promise<FeatureFitDraft> {
-    this.calls.push({ method: 'checkFeatureFit', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'checkFeatureFit',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     const text = `${input.feature.title}\n${input.feature.description}`.toLowerCase();
     return {
       results: input.guidelines.slice(0, -1).map((g) => {
@@ -546,7 +613,12 @@ export class FakeAiPort implements AiPort {
     input: Parameters<AiPort['redraftChoices']>[0],
     options?: AiCallOptions,
   ): Promise<RedraftedChoices> {
-    this.calls.push({ method: 'redraftChoices', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'redraftChoices',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     await this.nextRedraft();
     const n = input.current + 1;
     const pointed = input.feedback.pointer?.match(/^Choice ([A-D])\b/)?.[1];
@@ -571,7 +643,12 @@ export class FakeAiPort implements AiPort {
     input: Parameters<AiPort['redraftSpecProposal']>[0],
     options?: AiCallOptions,
   ): Promise<RedraftedMarkdown> {
-    this.calls.push({ method: 'redraftSpecProposal', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'redraftSpecProposal',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     await this.nextRedraft();
     return fakeMarkdownRedraft(input, input.proposedMarkdown);
   }
@@ -580,7 +657,12 @@ export class FakeAiPort implements AiPort {
     input: Parameters<AiPort['redraftBriefProposal']>[0],
     options?: AiCallOptions,
   ): Promise<RedraftedMarkdown> {
-    this.calls.push({ method: 'redraftBriefProposal', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'redraftBriefProposal',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     await this.nextRedraft();
     return fakeMarkdownRedraft(input, input.proposedMarkdown);
   }
@@ -590,7 +672,12 @@ export class FakeAiPort implements AiPort {
     input: Parameters<AiPort['redraftFeatureSuggestion']>[0],
     options?: AiCallOptions,
   ): Promise<RedraftedSuggestion> {
-    this.calls.push({ method: 'redraftFeatureSuggestion', input, model: options?.model ?? null });
+    this.calls.push({
+      method: 'redraftFeatureSuggestion',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+    });
     await this.nextRedraft();
     const n = input.current + 1;
     return {
