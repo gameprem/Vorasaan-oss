@@ -172,6 +172,39 @@ const CALLS: Record<AiTask, (ai: AiPort, options: AiCallOptions) => Promise<unkn
       { ...feedback, project, suggestion, projectContext: [], guidelines: [] },
       o,
     ),
+  analyzeFeedback: (ai, o) =>
+    ai.analyzeFeedback(
+      {
+        prompt: { name: 'generate-choices', tasks: ['generateChoices'] },
+        template: '# Prompt',
+        calls: 1,
+        cases: [],
+      },
+      o,
+    ),
+  proposePromptVersion: (ai, o) =>
+    ai.proposePromptVersion(
+      {
+        prompt: { name: 'generate-choices', tasks: ['generateChoices'] },
+        template: '# Prompt',
+        placeholders: [],
+        patterns: [],
+      },
+      o,
+    ),
+  redraftPromptVersion: (ai, o) =>
+    ai.redraftPromptVersion(
+      {
+        ...feedback,
+        prompt: { name: 'generate-choices', tasks: ['generateChoices'] },
+        template: '# Prompt',
+        rationale: 'Shorter.',
+        active: '# Prompt',
+        placeholders: [],
+        patterns: [],
+      },
+      o,
+    ),
 };
 
 const TASKS = Object.keys(TASK_SKILLS) as AiTask[];

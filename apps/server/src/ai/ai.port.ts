@@ -8,6 +8,7 @@ import {
   GuidelineFitVerdict,
   MAX_GRILLING_QUESTIONS,
   type ProposalKind,
+  type ReceiptOutcomeKind,
   type ReceiptOutputKind,
   SuggestionLevel,
   TeamRole,
@@ -322,6 +323,64 @@ export type RedraftFeedbackForAi = {
   /** Feedback on earlier Redrafts of the same proposal, oldest first. */
   earlier: FeedbackForAi[];
 };
+
+// ─── The AI proposes Prompt Versions (ADR 0015, ticket 0072) ────────────────
+
+/** A prompt as the Learning Loop's AI calls see it: its packages/skills name and the tasks that render it. */
+export type PromptForAi = { name: SkillName; tasks: string[] };
+
+/**
+ * One human outcome of a proposal the prompt drafted (ticket 0070), as AI input. `text` is a
+ * person's own words (a decline reason, Request changes feedback): untrusted.
+ */
+export type FeedbackCaseForAi = {
+  /** 1-based: the AI cites a case by it. */
+  index: number;
+  outcome: ReceiptOutcomeKind;
+  proposal: ProposalKind;
+  /** The Redraft it was given on. */
+  redraft: number;
+  text: string | null;
+  redraftsBeforeApproval: number | null;
+  choiceLabel: string | null;
+  /** MANUAL_EDIT: lines added plus removed. */
+  editSize: number | null;
+};
+
+/** The most patterns one analysis names. */
+export const MAX_FEEDBACK_PATTERNS = 8;
+
+export const FeedbackAnalysis = z.object({
+  patterns: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(300),
+        description: z.string().trim().min(1).max(2_000),
+        /** The `index` of each case that shows it. */
+        cases: z.array(z.int().min(1)).max(1_000),
+      }),
+    )
+    .max(MAX_FEEDBACK_PATTERNS),
+});
+export type FeedbackAnalysis = z.infer<typeof FeedbackAnalysis>;
+
+/** A pattern as the proposal is given it: the cases' own words are untrusted. */
+export type PatternForAi = {
+  title: string;
+  description: string;
+  count: number;
+  /** A few of its cases' words, as written. */
+  examples: string[];
+};
+
+export const ProposedPromptVersion = z.object({
+  template: z.string().trim().min(1).max(100_000),
+  rationale: z.string().trim().min(1).max(4_000),
+});
+export type ProposedPromptVersion = z.infer<typeof ProposedPromptVersion>;
+
+export const RedraftedPromptVersion = ProposedPromptVersion.extend(RedraftNotes);
+export type RedraftedPromptVersion = z.infer<typeof RedraftedPromptVersion>;
 
 /** An Action Card of the Conversation, as the summary is told about it. Its title is untrusted. */
 export type ActionCardForAi = { kind: string; title: string; status: string };
@@ -650,6 +709,51 @@ export interface AiPort {
     },
     options?: AiCallOptions,
   ): Promise<RedraftedSuggestion>;
+
+  /**
+   * The patterns in a prompt's feedback (ticket 0072): what people repeatedly wanted
+   * different from what it proposed, each citing the cases that show it.
+   */
+  analyzeFeedback(
+    input: {
+      prompt: PromptForAi;
+      /** The prompt's active version, as written. */
+      template: string;
+      /** How many calls of it the outcomes come from, as a line for the prompt. */
+      calls: number;
+      /** Oldest first. */
+      cases: FeedbackCaseForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<FeedbackAnalysis>;
+
+  /** A new Prompt Version of a prompt that addresses the patterns, with its rationale. */
+  proposePromptVersion(
+    input: {
+      prompt: PromptForAi;
+      /** The active version, as written: the proposal starts from it. */
+      template: string;
+      /** The `{{placeholders}}` it must keep. */
+      placeholders: string[];
+      patterns: PatternForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<ProposedPromptVersion>;
+
+  /** A Redraft of a proposed Prompt Version from an Admin's feedback (tickets 0065, 0072). */
+  redraftPromptVersion(
+    input: RedraftFeedbackForAi & {
+      prompt: PromptForAi;
+      /** The current Redraft's template and rationale. */
+      template: string;
+      rationale: string;
+      /** The version active now, as written. */
+      active: string;
+      placeholders: string[];
+      patterns: PatternForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<RedraftedPromptVersion>;
 
   /** How a Feature about to be created meets each effective Guideline (each with its `ref`). */
   checkFeatureFit(

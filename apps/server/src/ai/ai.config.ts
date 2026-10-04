@@ -24,7 +24,10 @@ export type AiTask =
   | 'redraftChoices'
   | 'redraftSpecProposal'
   | 'redraftBriefProposal'
-  | 'redraftFeatureSuggestion';
+  | 'redraftFeatureSuggestion'
+  | 'analyzeFeedback'
+  | 'proposePromptVersion'
+  | 'redraftPromptVersion';
 
 /** The Settings task each call belongs to, and the env var that overrides its model. */
 export const AI_TASKS: Record<AiTask, { kind: AiTaskKind; env: string }> = {
@@ -54,6 +57,10 @@ export const AI_TASKS: Record<AiTask, { kind: AiTaskKind; env: string }> = {
     kind: 'FEATURE_SUGGESTIONS',
     env: 'VORASAAN_MODEL_REDRAFT_FEATURE_SUGGESTION',
   },
+  // The Learning Loop (ticket 0072): reading a prompt's feedback and proposing a version of it.
+  analyzeFeedback: { kind: 'PROMPT_PROPOSALS', env: 'VORASAAN_MODEL_ANALYZE_FEEDBACK' },
+  proposePromptVersion: { kind: 'PROMPT_PROPOSALS', env: 'VORASAAN_MODEL_PROPOSE_PROMPT_VERSION' },
+  redraftPromptVersion: { kind: 'PROMPT_PROPOSALS', env: 'VORASAAN_MODEL_REDRAFT_PROMPT_VERSION' },
 };
 
 /** The per-task env override, or undefined when it isn't set. */

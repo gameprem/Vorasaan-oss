@@ -203,4 +203,26 @@ export class ReceiptingAiPort implements AiPort {
       this.engine.redraftFeatureSuggestion(input, o),
     );
   }
+
+  analyzeFeedback(input: Parameters<AiPort['analyzeFeedback']>[0], options?: AiCallOptions) {
+    return this.run('analyzeFeedback', options, (o) => this.engine.analyzeFeedback(input, o));
+  }
+
+  proposePromptVersion(
+    input: Parameters<AiPort['proposePromptVersion']>[0],
+    options?: AiCallOptions,
+  ) {
+    return this.run('proposePromptVersion', options, (o) =>
+      this.engine.proposePromptVersion(input, o),
+    );
+  }
+
+  redraftPromptVersion(
+    input: Parameters<AiPort['redraftPromptVersion']>[0],
+    options?: AiCallOptions,
+  ) {
+    return this.run('redraftPromptVersion', options, (o) =>
+      this.engine.redraftPromptVersion(input, o),
+    );
+  }
 }

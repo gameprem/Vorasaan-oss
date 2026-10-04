@@ -268,6 +268,10 @@ _Avoid_: Prompt template, prompt revision, prompt draft, skill (that is an Agent
 One evaluation of a version of a prompt (the built-in default or a Prompt Version) on an Approved Model an Admin picks: the checked-in eval cases, a Replay, or both. Each case is scored by the share of its checks it passes, and the run's cost comes from its Receipts. Two Eval Runs are compared case by case.
 _Avoid_: Benchmark, test run, eval job
 
+**Feedback Analysis**:
+One reading by the AI of the outcomes linked to a prompt's Receipts (approvals, declines with their reasons, Request changes with their feedback, edits by hand). It names the patterns in them, such as "Choices often asked to be shorter", each with the number of cases that show it and links to them; when it finds any, the AI proposes a Prompt Version from them, with its rationale and eval scores. It runs when an Admin asks, or once a prompt has enough new outcomes, and it never changes a prompt by itself.
+_Avoid_: Insight, report, audit, self-improvement
+
 **Replay**:
 Running the AI calls behind approved proposals again, with the same inputs rebuilt from the records their Receipts point at, and scoring each output by how close it comes to what people approved. A Receipt whose records are gone, or which is past retention, is left out.
 _Avoid_: Re-run, backtest, regression test

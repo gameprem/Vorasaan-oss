@@ -321,9 +321,11 @@ describe('Decision Graph of a Feature (ticket 0067)', () => {
 
   test('the graph is read in a fixed number of queries, however many requests there are', async () => {
     const count = async () => {
-      // Background work (indexing, Redrafts) would be counted too: let it finish first.
+      // Background work (indexing, Redrafts, Receipts and the feedback check they start,
+      // ticket 0072) would be counted too: let it finish first.
       await testApp.drainIndexing();
       await app.get(RedraftsService).drain();
+      await testApp.proposals.drain();
       const { result, sql } = await testApp.recordQueries(() => asBeam('GET', GRAPH));
       expect(result.status).toBe(200);
       // Who is asking, then the Feature, its versions, its requests and their Redrafts.

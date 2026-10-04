@@ -12,12 +12,15 @@ import type {
   DecisionForAi,
   DismissedSuggestionForAi,
   FeatureForAi,
+  FeedbackCaseForAi,
   FeedbackForAi,
   GrillingAnswerForAi,
   GrillingFollowUpForAi,
   GuidelineForAi,
+  PatternForAi,
   ProjectForAi,
   ProjectFoundationForAi,
+  PromptForAi,
   RecordForAi,
   RedraftFeedbackForAi,
   RequestForAi,
@@ -68,6 +71,9 @@ export const TASK_SKILLS: Record<AiTask, SkillName> = {
   redraftSpecProposal: 'redraft-spec-proposal',
   redraftBriefProposal: 'redraft-brief-proposal',
   redraftFeatureSuggestion: 'redraft-feature-suggestion',
+  analyzeFeedback: 'analyze-feedback',
+  proposePromptVersion: 'propose-prompt-version',
+  redraftPromptVersion: 'redraft-prompt-version',
 };
 
 const skillCosts = new Map<SkillName, Promise<number>>();
@@ -691,6 +697,119 @@ export function redraftFeatureSuggestionPrompt(
     guidelines: renderGuidelines(input.guidelines),
     context: renderContextAfterLead(input.projectContext, 'PROJECT_BRIEF', { projectLevel: true }),
     suggestion: renderSuggestion(input.suggestion),
+    ...values,
+  });
+}
+
+// ─── The AI proposes Prompt Versions (ticket 0072) ──────────────────────────
+
+/**
+ * A prompt's template as data inside a `<template>` block. It is itself a prompt, full of
+ * the tags `fence` neutralises (<spec>, <context>...), and the AI must give it back as
+ * written: so only what could close the block itself is neutralised.
+ */
+export function fenceTemplate(template: string): string {
+  return template.replace(/<(\s*\/?\s*template\b)/gi, '‹$1');
+}
+
+/** Text inside a `<cases>` or `<patterns>` block: people's words, fenced like any data. */
+function fenceCases(text: string): string {
+  return fence(text).replace(/<(\s*\/?\s*(?:cases?|patterns?|template)\b)/gi, '‹$1');
+}
+
+/** The outcomes of a prompt's proposals as numbered `<case>` blocks; people's words are fenced. */
+export function renderFeedbackCases(cases: FeedbackCaseForAi[]): string {
+  if (cases.length === 0) return '(No feedback.)';
+  return cases
+    .map((c) => {
+      const facts = [
+        `outcome="${c.outcome}"`,
+        `proposal="${c.proposal}"`,
+        `redraft="${c.redraft}"`,
+        c.redraftsBeforeApproval === null ? '' : `redraftsBefore="${c.redraftsBeforeApproval}"`,
+        c.choiceLabel ? `choice="${attribute(c.choiceLabel)}"` : '',
+        c.editSize === null ? '' : `linesEdited="${c.editSize}"`,
+      ].filter(Boolean);
+      const text = c.text?.trim() ? fenceCases(c.text.trim()) : '(No words.)';
+      return `<case index="${c.index}" ${facts.join(' ')}>\n${text}\n</case>`;
+    })
+    .join('\n\n');
+}
+
+/** Patterns as numbered blocks, with a few of their cases' words (untrusted) as examples. */
+export function renderPatterns(patterns: PatternForAi[]): string {
+  if (patterns.length === 0) return '(No patterns.)';
+  return patterns
+    .map((p, i) => {
+      const examples = p.examples.length
+        ? `\nIn people's words:\n${p.examples.map((e) => `- ${fenceCases(oneLineOf(e)).slice(0, 500)}`).join('\n')}`
+        : '';
+      return `<pattern index="${i + 1}" cases="${p.count}" title="${attribute(p.title)}">\n${fenceCases(p.description)}${examples}\n</pattern>`;
+    })
+    .join('\n\n');
+}
+
+/** The literal markers a Prompt Version must keep, given as values so they are never expanded. */
+const MARKER_VALUES = { languageInclude: '`{{>language}}`', cacheBreakMarker: '`{{cacheBreak}}`' };
+
+function placeholderList(placeholders: string[]): string {
+  return placeholders.map((p) => `\`{{${p}}}\``).join(', ') || '(none)';
+}
+
+function promptValues(prompt: PromptForAi) {
+  return { promptName: prompt.name, tasks: prompt.tasks.join(', ') || prompt.name };
+}
+
+export function analyzeFeedbackPrompt(
+  input: { prompt: PromptForAi; template: string; calls: number; cases: FeedbackCaseForAi[] },
+  lang: PromptOptions = {},
+) {
+  return renderPrompt(lang, 'analyze-feedback', {
+    ...promptValues(input.prompt),
+    template: fenceTemplate(input.template),
+    calls: `${input.cases.length} outcomes, from ${input.calls} calls of the prompt.`,
+    cases: renderFeedbackCases(input.cases),
+  });
+}
+
+export function proposePromptVersionPrompt(
+  input: {
+    prompt: PromptForAi;
+    template: string;
+    placeholders: string[];
+    patterns: PatternForAi[];
+  },
+  lang: PromptOptions = {},
+) {
+  return renderPrompt(lang, 'propose-prompt-version', {
+    ...promptValues(input.prompt),
+    ...MARKER_VALUES,
+    placeholders: placeholderList(input.placeholders),
+    template: fenceTemplate(input.template),
+    patterns: renderPatterns(input.patterns),
+  });
+}
+
+export function redraftPromptVersionPrompt(
+  input: RedraftFeedbackForAi & {
+    prompt: PromptForAi;
+    template: string;
+    rationale: string;
+    active: string;
+    placeholders: string[];
+    patterns: PatternForAi[];
+  },
+  lang: PromptOptions = {},
+) {
+  const { pointer: _, ...values } = feedbackValues(input);
+  return renderPrompt(lang, 'redraft-prompt-version', {
+    ...promptValues(input.prompt),
+    ...MARKER_VALUES,
+    placeholders: placeholderList(input.placeholders),
+    active: fenceTemplate(input.active),
+    template: fenceTemplate(input.template),
+    rationale: fence(input.rationale),
+    patterns: renderPatterns(input.patterns),
     ...values,
   });
 }

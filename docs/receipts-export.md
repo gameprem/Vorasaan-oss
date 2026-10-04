@@ -96,9 +96,9 @@ Free text people wrote themselves (feedback, reasons) is kept, apart from names 
 | `usage` | Tokens in and out, and read from and written to the provider's prompt cache, summed over the call's requests (a structured call retried after an invalid answer counts both). `null` when the provider didn't say. |
 | `latencyMs` | How long the call took, end to end. |
 | `success`, `error` | Whether it returned. A failed call has a Receipt too, with a short, redacted `error`. A chat reply stopped by the person counts as failed ("Stopped by the person"). |
-| `output` | What it produced, by reference: `CHOICES` (a Decision Request's id), `SPEC_PROPOSAL`, `BRIEF_PROPOSAL`, `FEATURE_SUGGESTION_BATCH` (the batch of Feature Suggestions generated together), `REDRAFT` (a Redraft's id), `CONVERSATION_MESSAGE` (a reply), `CONVERSATION` (a Conversation Summary), `ATTACHMENT` (a summary), `GRILLING_ROUND` (its questions), `GRILLING_QUESTION` (a follow-up). `null` for the fit check, which stores nothing. The id may point at nothing if writing the output failed after the call. |
-| `proposal` | The proposal it drafted (`redraft` 1) or redrafted (2, 3…): `CHOICES`, `SPEC_PROPOSAL`, `BRIEF_PROPOSAL` or `FEATURE_SUGGESTION`. |
-| `requestedBy` | Whose action made the call; `null` for what runs on its own (a Grilling moving on). |
+| `output` | What it produced, by reference: `CHOICES` (a Decision Request's id), `SPEC_PROPOSAL`, `BRIEF_PROPOSAL`, `FEATURE_SUGGESTION_BATCH` (the batch of Feature Suggestions generated together), `REDRAFT` (a Redraft's id), `CONVERSATION_MESSAGE` (a reply), `CONVERSATION` (a Conversation Summary), `ATTACHMENT` (a summary), `GRILLING_ROUND` (its questions), `GRILLING_QUESTION` (a follow-up), `PROMPT_ANALYSIS` (the patterns the AI found in a prompt's feedback) and `PROMPT_VERSION` (a Prompt Version it proposed). `null` for the fit check, which stores nothing. The id may point at nothing if writing the output failed after the call. |
+| `proposal` | The proposal it drafted (`redraft` 1) or redrafted (2, 3…): `CHOICES`, `SPEC_PROPOSAL`, `BRIEF_PROPOSAL`, `FEATURE_SUGGESTION` or `PROMPT_VERSION` (one the AI proposed, ticket 0072). |
+| `requestedBy` | Whose action made the call; `null` for what runs on its own (a Grilling moving on, a Feedback Analysis started by new feedback). |
 | `outcomes` | What people did with the proposal, oldest first (below). |
 
 ### Outcomes

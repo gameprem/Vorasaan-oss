@@ -223,6 +223,7 @@ export const AiTask = z.enum([
   'FEATURE_SUGGESTIONS',
   'FIT_CHECK',
   'CHAT',
+  'PROMPT_PROPOSALS',
 ]);
 export type AiTask = z.infer<typeof AiTask>;
 

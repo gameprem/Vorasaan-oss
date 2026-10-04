@@ -192,7 +192,7 @@ In this order: OpenRouter as a provider and Request changes on every AI proposal
 
 ## Learning Loop (Post-MVP 10)
 
-Every AI call leaves a Receipt with what people did with its proposal; an Organization holds its own Prompt Versions and evaluates them in the app; the AI proposes better ones, and only an Admin's approval makes one active (ADR 0015, inspired by [Reef](https://github.com/Human-Agent-Society/reef)). Receipts and feedback, with their JSONL export ([format](../receipts-export.md)), are done; so are Prompt Versions with in-app evals (Settings → AI prompts).
+Every AI call leaves a Receipt with what people did with its proposal; an Organization holds its own Prompt Versions and evaluates them in the app; the AI proposes better ones, and only an Admin's approval makes one active (ADR 0015, inspired by [Reef](https://github.com/Human-Agent-Society/reef)). Receipts and feedback, with their JSONL export ([format](../receipts-export.md)), are done; so are Prompt Versions with in-app evals (Settings → AI prompts), and the AI's own proposals of better Prompt Versions from that feedback, each decided by an Admin.
 
 | # | Ticket | Depends on |
 | --- | --- | --- |

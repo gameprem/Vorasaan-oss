@@ -64,6 +64,12 @@ export const RedraftContent = z.discriminatedUnion('kind', [
     effort: SuggestionLevel,
     risk: SuggestionLevel,
   }),
+  /** A Prompt Version the AI proposed (ticket 0072): its template, and why it changes it. */
+  z.object({
+    kind: z.literal('PROMPT'),
+    template: z.string(),
+    rationale: z.string().nullable().optional(),
+  }),
 ]);
 export type RedraftContent = z.infer<typeof RedraftContent>;
 
@@ -71,12 +77,15 @@ const LEVEL = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High' } as const;
 
 /**
  * A Redraft as Markdown text, the way it is diffed against another (like Spec Versions,
- * 0020): a Markdown proposal as it is; Choices and a Feature Suggestion written out.
+ * 0020): a Markdown proposal and a prompt's template as they are; Choices and a Feature
+ * Suggestion written out.
  */
 export function redraftText(content: RedraftContent): string {
   switch (content.kind) {
     case 'MARKDOWN':
       return content.markdown;
+    case 'PROMPT':
+      return content.template;
     case 'CHOICES':
       return content.choices
         .map((c) =>

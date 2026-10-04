@@ -264,6 +264,7 @@ model User {
   promptVersionsDeclined PromptVersion[]    @relation("PromptVersionDeclinedBy")
   promptActivations      PromptActivation[] @relation("PromptActivationBy")
   promptEvalRuns         PromptEvalRun[]    @relation("PromptEvalRunStartedBy")
+  promptAnalyses         PromptAnalysis[]   @relation("PromptAnalysisRequestedBy")
 
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
@@ -309,6 +310,9 @@ model Organization {
   // days they are kept. Turning collection off stops new ones; old ones follow retention.
   receiptsEnabled      Boolean  @default(true)
   receiptRetentionDays Int      @default(90)
+  // The AI analyses a prompt's feedback once this many new outcomes are linked to its
+  // Receipts (ticket 0072); 0 never analyses on its own (an Admin still can).
+  promptAnalysisAfter  Int      @default(20)
   createdAt            DateTime @default(now())
 
   memberships       OrgMembership[]
@@ -326,6 +330,7 @@ model Organization {
   promptVersions    PromptVersion[]
   promptActivations PromptActivation[]
   promptEvalRuns    PromptEvalRun[]
+  promptAnalyses    PromptAnalysis[]
 }
 
 // The Organization's working calendar and default Response Windows (ADR 0011).
@@ -445,6 +450,7 @@ enum AiTaskKind {
   FEATURE_SUGGESTIONS
   FIT_CHECK // a new Feature against the Feature Guidelines
   CHAT // Conversation replies
+  PROMPT_PROPOSALS // the AI reading feedback and proposing Prompt Versions (ticket 0072)
 }
 
 // The Approved Model an AI task uses. No row: the default Approved Model.
@@ -1294,6 +1300,7 @@ enum ProposalKind {
   SPEC_PROPOSAL
   BRIEF_PROPOSAL
   FEATURE_SUGGESTION
+  PROMPT_VERSION // a Prompt Version the AI proposed (ticket 0072)
 }
 
 enum RedraftStatus {
@@ -1332,17 +1339,20 @@ model Redraft {
   specProposalId      String?
   briefProposalId     String?
   featureSuggestionId String?
+  promptVersionId     String?
   requestedBy         User?              @relation("RedraftRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   request             DecisionRequest?   @relation(fields: [requestId], references: [id], onDelete: Cascade)
   specProposal        SpecProposal?      @relation(fields: [specProposalId], references: [id], onDelete: Cascade)
   briefProposal       BriefProposal?     @relation(fields: [briefProposalId], references: [id], onDelete: Cascade)
   featureSuggestion   FeatureSuggestion? @relation(fields: [featureSuggestionId], references: [id], onDelete: Cascade)
+  promptVersion       PromptVersion?     @relation(fields: [promptVersionId], references: [id], onDelete: Cascade)
 
   @@unique([proposalKind, proposalId, number])
   @@index([requestId])
   @@index([specProposalId])
   @@index([briefProposalId])
   @@index([featureSuggestionId])
+  @@index([promptVersionId])
   @@index([requestedById])
 }
 
@@ -1360,6 +1370,8 @@ enum ReceiptOutputKind {
   ATTACHMENT // an Attachment's summary
   GRILLING_ROUND // a Grilling round's questions
   GRILLING_QUESTION // a follow-up on a Grilling question
+  PROMPT_ANALYSIS // the patterns the AI found in a prompt's feedback (ticket 0072)
+  PROMPT_VERSION // a Prompt Version the AI proposed
 }
 
 enum ReceiptOutcomeKind {
@@ -1443,14 +1455,15 @@ model ReceiptOutcome {
 // ─── Prompt Versions and evals (ADR 0015, ticket 0071) ──────────────────────
 
 enum PromptVersionStatus {
-  PROPOSED // written by an Admin (or, later, the AI), waiting for an Admin's approval
+  PROPOSED // written by an Admin or proposed by the AI, waiting for an Admin's approval
   APPROVED // may be active; the active one is the latest PromptActivation of its prompt
   DECLINED
 }
 
 // An Organization's own version of one of the built-in prompts (a packages/skills name),
-// on top of the default. Numbered per prompt when written, and immutable: only its status
-// moves, PROPOSED to APPROVED or DECLINED.
+// on top of the default. Numbered per prompt when written, and immutable once decided: only
+// its status moves, PROPOSED to APPROVED or DECLINED. One the AI proposed (ticket 0072) holds
+// its latest Redraft while PROPOSED, like every AI proposal (ADR 0013).
 model PromptVersion {
   id             String              @id @default(uuid())
   organizationId String
@@ -1465,6 +1478,12 @@ model PromptVersion {
   declinedById   String?
   declinedAt     DateTime?
   declineReason  String?
+  // Proposed by the AI (ticket 0072): the analysis it came from, and why it changes what it does.
+  analysisId     String?             @unique
+  rationale      String?
+  // The evals run on it automatically, and on the version active then, for its current Redraft.
+  evalRunId      String?
+  baselineRunId  String?
   createdAt      DateTime            @default(now())
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   proposedBy     User?               @relation("PromptVersionProposedBy", fields: [proposedById], references: [id], onDelete: SetNull)
@@ -1472,11 +1491,17 @@ model PromptVersion {
   declinedBy     User?               @relation("PromptVersionDeclinedBy", fields: [declinedById], references: [id], onDelete: SetNull)
   activations    PromptActivation[]
   evalRuns       PromptEvalRun[]
+  analysis       PromptAnalysis?     @relation(fields: [analysisId], references: [id], onDelete: SetNull)
+  evalRun        PromptEvalRun?      @relation("PromptVersionEvalRun", fields: [evalRunId], references: [id], onDelete: SetNull)
+  baselineRun    PromptEvalRun?      @relation("PromptVersionBaselineRun", fields: [baselineRunId], references: [id], onDelete: SetNull)
+  redrafts       Redraft[]
 
   @@unique([organizationId, promptName, number])
   @@index([proposedById])
   @@index([approvedById])
   @@index([declinedById])
+  @@index([evalRunId])
+  @@index([baselineRunId])
 }
 
 enum PromptActivationKind {
@@ -1540,6 +1565,8 @@ model PromptEvalRun {
   version          PromptVersion?      @relation(fields: [versionId], references: [id], onDelete: Cascade)
   startedBy        User?               @relation("PromptEvalRunStartedBy", fields: [startedById], references: [id], onDelete: SetNull)
   cases            PromptEvalCase[]
+  proposalsAfter   PromptVersion[]     @relation("PromptVersionEvalRun")
+  proposalsBefore  PromptVersion[]     @relation("PromptVersionBaselineRun")
 
   @@index([organizationId, promptName, createdAt])
   @@index([versionId])
@@ -1565,4 +1592,41 @@ model PromptEvalCase {
   run       PromptEvalRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
   @@unique([runId, caseKey])
+}
+
+// ─── The AI proposes Prompt Versions (ADR 0015, ticket 0072) ────────────────
+
+enum PromptAnalysisStatus {
+  RUNNING
+  DONE // patterns named, and a Prompt Version proposed when any were found
+  FAILED
+}
+
+enum PromptAnalysisTrigger {
+  MANUAL // an Admin asked, from Settings
+  FEEDBACK // enough new outcomes were linked to the prompt's Receipts
+}
+
+// One reading of a prompt's feedback by the AI: the outcomes linked to its Receipts, and the
+// patterns it named in them, each with the cases it cites ([{ title, description, count,
+// cases: [{ outcomeId, receiptId, kind, proposalKind, proposalId, redraft, text }] }]).
+// When it found any, the AI proposed a Prompt Version from them (PromptVersion.analysisId).
+model PromptAnalysis {
+  id             String                @id @default(uuid())
+  organizationId String
+  promptName     String
+  trigger        PromptAnalysisTrigger
+  status         PromptAnalysisStatus  @default(RUNNING)
+  outcomes       Int                   @default(0) // how many outcomes it read
+  patterns       Json? // null until done
+  error          String?
+  requestedById  String?
+  createdAt      DateTime              @default(now())
+  finishedAt     DateTime?
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy    User?                 @relation("PromptAnalysisRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  version        PromptVersion?
+
+  @@index([organizationId, promptName, createdAt])
+  @@index([requestedById])
 }

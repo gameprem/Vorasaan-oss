@@ -88,6 +88,9 @@ describe('loadAiConfig', () => {
       redraftSpecProposalModel: DEFAULT_MODEL,
       redraftBriefProposalModel: DEFAULT_MODEL,
       redraftFeatureSuggestionModel: DEFAULT_MODEL,
+      analyzeFeedbackModel: DEFAULT_MODEL,
+      proposePromptVersionModel: DEFAULT_MODEL,
+      redraftPromptVersionModel: DEFAULT_MODEL,
     });
   });
 
@@ -115,6 +118,9 @@ describe('loadAiConfig', () => {
       redraftSpecProposalModel: 'openai/some-model',
       redraftBriefProposalModel: 'openai/some-model',
       redraftFeatureSuggestionModel: 'openai/some-model',
+      analyzeFeedbackModel: 'openai/some-model',
+      proposePromptVersionModel: 'openai/some-model',
+      redraftPromptVersionModel: 'openai/some-model',
     });
   });
 });

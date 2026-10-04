@@ -1,5 +1,11 @@
 import { Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
-import type { Prisma, PrismaClient, ProposalKind, ReceiptOutcomeKind } from '@vorasaan/db';
+import type {
+  ActionCardKind,
+  Prisma,
+  PrismaClient,
+  ProposalKind,
+  ReceiptOutcomeKind,
+} from '@vorasaan/db';
 import {
   DEFAULT_RECEIPT_RETENTION_DAYS,
   diffLines,
@@ -51,13 +57,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Receipts read per query while exporting. */
 const EXPORT_PAGE = 200;
 
-/** The Action Card kind whose target is this proposal (a Decision Request for its Choices). */
-const CARD_KIND = {
+/**
+ * The Action Card kind whose target is this proposal (a Decision Request for its Choices).
+ * A Prompt Version (ticket 0072) is never drafted in a Conversation.
+ */
+const CARD_KIND: Partial<Record<ProposalKind, ActionCardKind>> = {
   CHOICES: 'DECISION_REQUEST',
   SPEC_PROPOSAL: 'SPEC_PROPOSAL',
   BRIEF_PROPOSAL: 'BRIEF_PROPOSAL',
   FEATURE_SUGGESTION: 'FEATURE_SUGGESTION',
-} as const satisfies Record<ProposalKind, string>;
+};
 
 /** The provider kind of an env model, by its Mastra "provider/" prefix. */
 const ENV_PROVIDER: Record<string, string> = {
@@ -85,6 +94,8 @@ export class ReceiptsService {
   /** Receipt writes in flight; outcomes wait for them, so they find their Receipt. */
   private readonly receiptWrites = new Set<Promise<unknown>>();
   private readonly outcomeWrites = new Set<Promise<unknown>>();
+  /** Told the prompts of the Receipts each new outcome is linked to (ticket 0072). */
+  private readonly outcomeListeners = new Set<(promptNames: string[]) => void>();
 
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
@@ -108,8 +119,36 @@ export class ReceiptsService {
       await Promise.allSettled([...this.receiptWrites]);
       if (!(await this.settings()).enabled) return;
       const data = await this.outcomeData(entry);
-      if (data) await this.db.receiptOutcome.create({ data });
+      if (!data) return;
+      await this.db.receiptOutcome.create({ data });
+      if (this.outcomeListeners.size) await this.announceOutcome(data);
     });
+  }
+
+  /**
+   * Calls `listener` with the prompts a new outcome's Receipts rendered (the one that drafted
+   * the proposal, and the one that wrote its Redraft), once it is saved. Returns the unsubscribe.
+   */
+  onOutcome(listener: (promptNames: string[]) => void): () => void {
+    this.outcomeListeners.add(listener);
+    return () => this.outcomeListeners.delete(listener);
+  }
+
+  private async announceOutcome(data: { receiptId: string; redraftReceiptId?: string | null }) {
+    const ids = [data.receiptId, data.redraftReceiptId].filter((id): id is string => Boolean(id));
+    const rows = await this.db.receipt.findMany({
+      where: { id: { in: ids }, evalRunId: null },
+      select: { promptName: true },
+    });
+    const names = [...new Set(rows.map((r) => r.promptName))];
+    if (!names.length) return;
+    for (const listener of this.outcomeListeners) {
+      try {
+        listener(names);
+      } catch (error) {
+        this.logger.warn(`An outcome listener failed: ${(error as Error)?.message ?? error}`);
+      }
+    }
   }
 
   /**
@@ -254,8 +293,10 @@ export class ReceiptsService {
         : null;
       if (batch) return batch.id;
     }
+    const cardKind = CARD_KIND[kind];
+    if (!cardKind) return null;
     const card = await this.db.actionCard.findUnique({
-      where: { kind_targetId: { kind: CARD_KIND[kind], targetId: proposalId } },
+      where: { kind_targetId: { kind: cardKind, targetId: proposalId } },
       select: { messageId: true },
     });
     if (!card) return null;

@@ -7,12 +7,14 @@ import {
   ParseIntPipe,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import type { User } from '@vorasaan/db';
 import {
   CreatePromptVersionInput,
   DeclinePromptVersionInput,
+  PromptAnalysisSettingsInput,
   type PromptDetailView,
   PromptDiffQuery,
   PromptEvalCompareQuery,
@@ -25,6 +27,7 @@ import { AdminOnly } from '../auth/admin.guard.ts';
 import { CurrentUser } from '../auth/identity.guard.ts';
 import { casesForPrompt } from '../evals/eval-sets.ts';
 import { PromptEvalsService } from './prompt-evals.service.ts';
+import { PromptProposalsService } from './prompt-proposals.service.ts';
 import { PromptVersionsService, tasksOf } from './prompt-versions.service.ts';
 import { PromptReplay, REPLAYABLE } from './replay.ts';
 
@@ -35,14 +38,18 @@ export class PromptSettings {
     private readonly versions: PromptVersionsService,
     private readonly evals: PromptEvalsService,
     private readonly replay: PromptReplay,
+    private readonly proposals: PromptProposalsService,
   ) {}
 
   async list(): Promise<PromptsView> {
-    const [active, versions] = await Promise.all([
+    const [active, versions, newFeedback, analysisAfter] = await Promise.all([
       this.versions.activeByPrompt(),
       this.versions.versionsByPrompt(),
+      this.proposals.newOutcomesByPrompt(SKILLS),
+      this.proposals.analysisAfter(),
     ]);
     return {
+      analysisAfter,
       prompts: await Promise.all(
         SKILLS.map(async (name) => {
           const held = versions.get(name) ?? [];
@@ -59,6 +66,7 @@ export class PromptSettings {
             proposed: held.filter((v) => v.status === 'PROPOSED').length,
             evalCases: casesForPrompt(name).length,
             replayable: Boolean(REPLAYABLE[name]),
+            newFeedback: newFeedback.get(name) ?? 0,
           };
         }),
       ),
@@ -69,13 +77,14 @@ export class PromptSettings {
     const active = await this.versions.active(name);
     const sets = new Map<string, number>();
     for (const c of casesForPrompt(name)) sets.set(c.set, (sets.get(c.set) ?? 0) + 1);
-    const [template, version, versions, history, runs, receipts] = await Promise.all([
+    const [template, version, versions, history, runs, receipts, feedback] = await Promise.all([
       readSkillSource(name),
       skillVersion(name),
       this.versions.versionViews(name, active.number),
       this.versions.history(name),
       this.evals.runs(name),
       REPLAYABLE[name] ? this.replay.count(name) : 0,
+      this.proposals.feedback(name),
     ]);
     return {
       name,
@@ -87,6 +96,7 @@ export class PromptSettings {
       evalSets: [...sets].map(([set, cases]) => ({ set, cases })),
       replay: { supported: Boolean(REPLAYABLE[name]), receipts },
       runs,
+      feedback,
     };
   }
 }
@@ -103,6 +113,7 @@ export class PromptVersionsController {
     private readonly settings: PromptSettings,
     private readonly versions: PromptVersionsService,
     private readonly evals: PromptEvalsService,
+    private readonly proposals: PromptProposalsService,
   ) {}
 
   @Get()
@@ -143,6 +154,18 @@ export class PromptVersionsController {
     return this.versions.decline(user, this.versions.prompt(name), number, body.reason);
   }
 
+  /** A Prompt Version the AI proposed, with its patterns, diff and evals (ticket 0072). */
+  @Get(':name/versions/:number/proposal')
+  proposal(@Param('name') name: string, @Param('number', ParseIntPipe) number: number) {
+    return this.proposals.proposal(this.versions.prompt(name), number);
+  }
+
+  /** The AI reads the prompt's feedback now and, from its patterns, proposes a version (0072). */
+  @Post(':name/analyses')
+  analyze(@CurrentUser() user: User, @Param('name') name: string) {
+    return this.proposals.analyze(user, this.versions.prompt(name), 'MANUAL');
+  }
+
   @Post(':name/rollback')
   rollback(
     @CurrentUser() user: User,
@@ -178,5 +201,25 @@ export class PromptVersionsController {
   @Get(':name/evals/:runId')
   run(@Param('name') name: string, @Param('runId', ParseUUIDPipe) runId: string) {
     return this.evals.run(this.versions.prompt(name), runId);
+  }
+}
+
+/**
+ * After how many new outcomes the AI reads a prompt's feedback on its own (ticket 0072),
+ * Admins only. 0 turns that off; an Admin can still ask from a prompt's page.
+ */
+@AdminOnly()
+@Controller('settings/ai/prompt-analysis')
+export class PromptAnalysisSettingsController {
+  constructor(private readonly proposals: PromptProposalsService) {}
+
+  @Get()
+  async get() {
+    return { analysisAfter: await this.proposals.analysisAfter() };
+  }
+
+  @Put()
+  set(@Body({ schema: PromptAnalysisSettingsInput }) body: PromptAnalysisSettingsInput) {
+    return this.proposals.setAnalysisAfter(body.analysisAfter);
   }
 }
