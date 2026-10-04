@@ -12,6 +12,7 @@ import type { User } from '@vorasaan/db';
 import {
   ApproveProposalInput,
   BriefDiffQuery,
+  RejectProposalInput,
   RevertBriefInput,
   WriteBriefInput,
 } from '@vorasaan/shared';
@@ -90,7 +91,11 @@ export class BriefController {
   }
 
   @Post('brief-proposals/:id/reject')
-  reject(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
-    return this.brief.reject(user, id);
+  reject(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: RejectProposalInput }) body: RejectProposalInput,
+  ) {
+    return this.brief.reject(user, id, body?.reason);
   }
 }

@@ -183,7 +183,12 @@ function redactLogs<A extends { name: string; __setLogger(logger: ConsoleLogger)
   return agent;
 }
 
-export function agentGenerate(task: string, model: MastraModel): StructuredGenerate {
+/** `onUsage` is told each call's usage (ticket 0070), for its Receipt. */
+export function agentGenerate(
+  task: string,
+  model: MastraModel,
+  onUsage?: (usage: CacheUsage) => void,
+): StructuredGenerate {
   const agent = redactLogs(
     new Agent({ id: task, name: task, instructions: INSTRUCTIONS, model: model as AgentModel }),
     model,
@@ -201,7 +206,8 @@ export function agentGenerate(task: string, model: MastraModel): StructuredGener
       structuredOutput: { schema },
     });
     const object = await stream.object;
-    await logUsage(task, stream.usage);
+    const usage = await logUsage(task, stream.usage);
+    if (usage) onUsage?.(usage);
     return object;
   };
 }
@@ -241,6 +247,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'generate-choices',
       await this.resolveModel('generateChoices', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'generate-choices', prompt, GeneratedChoices);
   }
@@ -266,6 +273,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'draft-spec-proposal',
       await this.resolveModel('draftSpecProposal', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'draft-spec-proposal', prompt, SpecProposalDraft);
   }
@@ -275,6 +283,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'summarize-attachment',
       await this.resolveModel('summarizeAttachment', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'summarize-attachment', prompt, AttachmentSummary);
   }
@@ -296,6 +305,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'draft-spec-from-attachments',
       await this.resolveModel('draftSpecFromAttachments', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'draft-spec-from-attachments', prompt, SpecProposalDraft);
   }
@@ -315,6 +325,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'grilling-questions',
       await this.resolveModel('grillingQuestions', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'grilling-questions', prompt, GrillingQuestionDrafts);
   }
@@ -335,6 +346,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'grilling-follow-up',
       await this.resolveModel('grillingFollowUp', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'grilling-follow-up', prompt, GrillingFollowUpDecision);
   }
@@ -354,6 +366,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'draft-brief-from-grilling',
       await this.resolveModel('draftBriefFromGrilling', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'draft-brief-from-grilling', prompt, BriefDraft);
   }
@@ -374,6 +387,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'suggest-features',
       await this.resolveModel('suggestFeatures', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'suggest-features', prompt, FeatureSuggestionDrafts);
   }
@@ -391,6 +405,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'draft-spec-from-suggestion',
       await this.resolveModel('draftSpecFromSuggestion', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'draft-spec-from-suggestion', prompt, SpecProposalDraft);
   }
@@ -408,6 +423,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'check-feature-fit',
       await this.resolveModel('checkFeatureFit', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'check-feature-fit', prompt, FeatureFitDraft);
   }
@@ -417,6 +433,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'redraft-choices',
       await this.resolveModel('redraftChoices', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'redraft-choices', prompt, RedraftedChoices);
   }
@@ -429,6 +446,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'redraft-spec-proposal',
       await this.resolveModel('redraftSpecProposal', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'redraft-spec-proposal', prompt, RedraftedMarkdown);
   }
@@ -441,6 +459,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'redraft-brief-proposal',
       await this.resolveModel('redraftBriefProposal', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'redraft-brief-proposal', prompt, RedraftedMarkdown);
   }
@@ -453,6 +472,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'redraft-feature-suggestion',
       await this.resolveModel('redraftFeatureSuggestion', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'redraft-feature-suggestion', prompt, RedraftedSuggestion);
   }
@@ -472,7 +492,14 @@ export class MastraAiPort implements AiPort {
     const instructions = await chatPrompt(input, this.lang(options));
     const model = await this.resolveModel('chat', options?.model);
     try {
-      yield* streamChat(model, instructions, input.recentMessages, input.tools, input.signal);
+      yield* streamChat(
+        model,
+        instructions,
+        input.recentMessages,
+        input.tools,
+        input.signal,
+        options?.onUsage,
+      );
     } catch (error) {
       // A request longer than the model's window: the Conversation compacts and retries once.
       if (isContextTooLong(error)) throw new ContextTooLongError(error);
@@ -528,6 +555,7 @@ export class MastraAiPort implements AiPort {
     const generate = agentGenerate(
       'summarize-conversation',
       await this.resolveModel('summarizeConversation', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'summarize-conversation', prompt, ConversationFoldDraft);
   }
@@ -637,6 +665,7 @@ async function* streamChat(
   messages: ChatMessageForAi[],
   tools: ChatTool[],
   signal: AbortSignal | undefined,
+  onUsage?: (usage: CacheUsage) => void,
 ): AsyncIterable<ChatChunk> {
   // Anthropic, directly or through OpenRouter: the system prompt's stable parts carry
   // cache_control (tickets 0061, 0064). Every other model gets the whole text as one
@@ -677,6 +706,7 @@ async function* streamChat(
     }
   }
   const usage = await logUsage('chat', output.usage);
+  if (usage) onUsage?.(usage);
   // The context meter shows the last turn's cache reads (ticket 0066).
   if (usage && (usage.inputTokens !== null || usage.cacheReadTokens !== null)) {
     yield {

@@ -299,6 +299,11 @@ export class ActionCardsService implements OnModuleInit {
     });
     const stale: string[] = [];
     for (const row of rows) {
+      // A card being approved or declined right now has a target that already moved on
+      // (approved, rejected...): `act` marks it in a moment. Marking it STALE here first
+      // would win, since `mark` only changes a PROPOSED card. A reload prompted by the
+      // approval's own Inbox event raced it this way.
+      if (this.acting.has(row.id)) continue;
       if (row.status === 'PROPOSED' && (await this.isStale(row))) stale.push(row.id);
     }
     if (!stale.length) return this.views(rows);
@@ -459,20 +464,18 @@ export class ActionCardsService implements OnModuleInit {
   /** The owner declines: the draft is withdrawn, the proposal rejected, the suggestion dismissed. */
   async decline(user: User, id: string, input: DeclineActionCardInput): Promise<ActionCardView> {
     return this.act(user, id, async (card) => {
-      if (input?.reason && card.kind !== 'FEATURE_SUGGESTION') {
-        throw new UnprocessableEntityException(
-          '`reason` only applies to a Feature Suggestion card',
-        );
-      }
+      // The reason goes to the proposal's Receipt (ticket 0070), and for a Feature
+      // Suggestion it is also the dismiss reason the AI reads next time.
+      const reason = input?.reason;
       switch (card.kind) {
         case 'DECISION_REQUEST':
-          await this.decisionRequests.withdraw(user, card.targetId);
+          await this.decisionRequests.withdraw(user, card.targetId, reason);
           break;
         case 'SPEC_PROPOSAL':
-          await this.spec.reject(user, card.targetId);
+          await this.spec.reject(user, card.targetId, reason);
           break;
         case 'BRIEF_PROPOSAL':
-          await this.brief.reject(user, card.targetId);
+          await this.brief.reject(user, card.targetId, reason);
           break;
         case 'FEATURE_SUGGESTION':
           await this.suggestions.dismiss(user, card.targetId, {

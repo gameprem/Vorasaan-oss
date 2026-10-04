@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadGatewayException,
   ConflictException,
@@ -78,6 +79,8 @@ const MAX_SUMMARY_CHARS = 200;
 const MAX_ATTEMPTS = 3;
 
 type NewRound = {
+  /** Chosen before its questions are drafted, so their Receipt can point at it (0070). */
+  id: string;
   kind: GrillingRoundKind;
   role: TeamRole;
   status: 'ASKING' | 'SKIPPED';
@@ -94,7 +97,13 @@ type Plan = {
   memory: WorkflowMemory;
   rounds: NewRound[];
   asking: NewRound | null;
-  draft: { markdown: string; summary: string; baseVersionId: string | null } | null;
+  draft: {
+    /** The Brief Proposal's id, chosen before it is drafted (its Receipt points at it). */
+    proposalId: string;
+    markdown: string;
+    summary: string;
+    baseVersionId: string | null;
+  } | null;
 };
 
 /** Thrown inside a transaction when the Grilling changed since it was read. */
@@ -377,6 +386,7 @@ export class GrillingService {
           `${LABEL[kind]} round skipped: nobody in the Project's Teams holds the ${role} Team Role.`,
         );
         rounds.push({
+          id: randomUUID(),
           kind,
           role,
           status: 'SKIPPED',
@@ -394,6 +404,7 @@ export class GrillingService {
         projectBudget(budget),
       );
       const memoryNow = known;
+      const roundId = randomUUID();
       const drafted = await this.callAi(() =>
         this.ai.grillingQuestions(
           {
@@ -404,7 +415,7 @@ export class GrillingService {
             guidelines,
             memory: memoryNow,
           },
-          { model, language },
+          { model, language, receipt: { output: { kind: 'GRILLING_ROUND', id: roundId } } },
         ),
       );
       const questions = distinct(drafted.questions).slice(0, MAX_GRILLING_QUESTIONS);
@@ -413,10 +424,24 @@ export class GrillingService {
           known,
           `${LABEL[kind]} round (${role}): what is already known answers it; nothing was asked.`,
         );
-        rounds.push({ kind, role, status: 'SKIPPED', skipReason: 'NOTHING_TO_ASK', questions: [] });
+        rounds.push({
+          id: roundId,
+          kind,
+          role,
+          status: 'SKIPPED',
+          skipReason: 'NOTHING_TO_ASK',
+          questions: [],
+        });
         continue;
       }
-      const round: NewRound = { kind, role, status: 'ASKING', skipReason: null, questions };
+      const round: NewRound = {
+        id: roundId,
+        kind,
+        role,
+        status: 'ASKING',
+        skipReason: null,
+        questions,
+      };
       rounds.push(round);
       return { memory: known, rounds, asking: round, draft: null };
     }
@@ -442,6 +467,7 @@ export class GrillingService {
       ),
     );
     const memoryNow = known;
+    const proposalId = randomUUID();
     const draft = await this.callAi(() =>
       this.ai.draftBriefFromGrilling(
         {
@@ -453,7 +479,14 @@ export class GrillingService {
           memory: memoryNow,
           answers,
         },
-        { model, language },
+        {
+          model,
+          language,
+          receipt: {
+            output: { kind: 'BRIEF_PROPOSAL', id: proposalId },
+            proposal: { kind: 'BRIEF_PROPOSAL', id: proposalId, redraft: 1 },
+          },
+        },
       ),
     );
     return {
@@ -461,6 +494,7 @@ export class GrillingService {
       rounds,
       asking: null,
       draft: {
+        proposalId,
         markdown: normalizeMarkdown(draft.proposedMarkdown),
         summary: oneLine(draft.summary),
         baseVersionId: base?.id ?? null,
@@ -480,6 +514,7 @@ export class GrillingService {
     for (const round of plan.rounds) {
       const created = await tx.grillingRound.create({
         data: {
+          id: round.id,
           grillingId: g.id,
           kind: round.kind,
           role: round.role,
@@ -504,6 +539,7 @@ export class GrillingService {
     }
     const proposal = await tx.briefProposal.create({
       data: {
+        id: plan.draft.proposalId,
         projectId: g.projectId,
         baseVersionId: plan.draft.baseVersionId,
         source: 'GRILLING',

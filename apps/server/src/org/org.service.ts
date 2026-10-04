@@ -34,6 +34,7 @@ import { hashToken, newToken } from '../auth/tokens.ts';
 import { OPEN_BLOCKERS } from '../features/open-blockers.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { ReceiptsService } from '../receipts/receipts.service.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specVersionInclude, toSpecVersionView } from '../spec/spec.view.ts';
@@ -76,6 +77,7 @@ export class OrgService {
     private readonly auth: AuthService,
     private readonly notifications: NotificationsService,
     private readonly indexing: IndexingService,
+    private readonly receipts: ReceiptsService,
   ) {}
 
   // ─── Permissions ──────────────────────────────────────────────────────────
@@ -421,6 +423,8 @@ export class OrgService {
       });
       await this.notifications.publish(outbox);
       this.indexing.schedule({ source: 'SPEC_VERSION', id: version.id });
+      // A hand edit right after an approved Spec Proposal is feedback on it (ticket 0070).
+      this.receipts.editedByHand('SPEC_PROPOSAL', version.id, user.id);
       return toSpecVersionView(version);
     } catch (error) {
       throw uniqueConflict(error, 'Someone saved the Spec at the same time. Reload and try again.');

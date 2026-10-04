@@ -134,8 +134,9 @@ export const ApproveActionCardInput = z
 export type ApproveActionCardInput = z.infer<typeof ApproveActionCardInput>;
 
 /**
- * `POST /action-cards/:id/decline`. The body is optional; `reason` is a Feature
- * Suggestion's dismiss reason, which the AI reads next time.
+ * `POST /action-cards/:id/decline`. The body is optional; `reason` is kept with the
+ * proposal's Receipt (ticket 0070), and for a Feature Suggestion it is also the dismiss
+ * reason the AI reads next time.
  */
 export const DeclineActionCardInput = z
   .strictObject({ reason: z.string().trim().min(1).max(1000).optional() })

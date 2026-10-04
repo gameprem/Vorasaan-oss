@@ -260,7 +260,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 9. **Language:** prompts keep domain terms, ids, numbers, names and quoted words as written, and reply in the person's language, else the Organization's. Every eval set gets Thai and mixed Thai-English cases, and answering directly is measured against reasoning in English first.
    - [x] Language rules and Thai eval cases (0068).
 10. **Learning Loop** ([ADR 0015](./docs/adr/0015-learning-loop-humans-change-the-ai.md), inspired by [Reef](https://github.com/Human-Agent-Society/reef)): every AI call leaves a Receipt, and what people did with its proposal is linked to it. An Organization can hold its own Prompt Versions and evaluate them in the app. The AI proposes better Prompt Versions from the feedback, with eval scores; only an Admin's approval makes one active. No automatic publishing, no training in the product, and a JSONL export for other tools.
-    - [ ] Receipts and feedback (0070).
+    - [x] Receipts and feedback (0070).
     - [ ] Prompt Versions and in-app evals (0071).
     - [ ] The AI proposes better prompts (0072).
 11. **Optimization:** measure first on a large seeded Organization, then make the database faster and the AI cheaper without answering worse.

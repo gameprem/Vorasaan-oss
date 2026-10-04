@@ -1,4 +1,7 @@
 import { Global, Logger, Module } from '@nestjs/common';
+import { CLOCK, type Clock } from '../clock/clock.ts';
+import { ReceiptingAiPort } from '../receipts/receipting.ai-port.ts';
+import { ReceiptsService } from '../receipts/receipts.service.ts';
 import { AI_PORT, type AiPort } from './ai.port.ts';
 import {
   AI_CONNECTION_TESTER,
@@ -30,6 +33,7 @@ export const AI_ENGINE = Symbol('AI_ENGINE');
     },
     AiSettingsService,
     ContextBudgets,
+    ReceiptsService,
     {
       provide: AI_ENGINE,
       useFactory: (): AiPort => {
@@ -40,15 +44,23 @@ export const AI_ENGINE = Symbol('AI_ENGINE');
         return new MastraAiPort();
       },
     },
+    // Every call: the model is chosen, then a Receipt is left (ticket 0070), then the
+    // provider (or the fake) is called.
     {
       provide: AI_PORT,
-      inject: [AI_ENGINE, AiSettingsService],
-      useFactory: (engine: AiPort, settings: AiSettingsService): AiPort =>
-        new ModelRoutingAiPort(engine, (task, approvedModelId) =>
-          settings.chooseModel(task, approvedModelId),
+      inject: [AI_ENGINE, AiSettingsService, ReceiptsService, CLOCK],
+      useFactory: (
+        engine: AiPort,
+        settings: AiSettingsService,
+        receipts: ReceiptsService,
+        clock: Clock,
+      ): AiPort =>
+        new ModelRoutingAiPort(
+          new ReceiptingAiPort(engine, receipts, clock),
+          (task, approvedModelId) => settings.chooseModel(task, approvedModelId),
         ),
     },
   ],
-  exports: [AI_PORT, AI_ENGINE, AiSettingsService, ContextBudgets],
+  exports: [AI_PORT, AI_ENGINE, AiSettingsService, ContextBudgets, ReceiptsService],
 })
 export class MastraModule {}

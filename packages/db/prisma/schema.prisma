@@ -256,6 +256,9 @@ model User {
 
   redraftsRequested Redraft[] @relation("RedraftRequestedBy")
 
+  receipts        Receipt[]        @relation("ReceiptRequestedBy")
+  receiptOutcomes ReceiptOutcome[] @relation("ReceiptOutcomeBy")
+
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
   delegationsCreated  Delegation[] @relation("DelegationCreatedBy")
@@ -291,12 +294,16 @@ model PersonalAccessToken {
 
 // One per self-hosted instance for now; kept as a model so SaaS stays possible.
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
+  id                   String   @id @default(uuid())
+  name                 String
   // "en" or "th" (tickets 0063, 0068): the language of chat app cards, bot replies, Grilling
   // texts and AI replies for anyone who hasn't picked their own, and of Project-wide AI output.
-  language  String   @default("en")
-  createdAt DateTime @default(now())
+  language             String   @default("en")
+  // Receipts (ADR 0015, ticket 0070): whether every AI call leaves one, and for how many
+  // days they are kept. Turning collection off stops new ones; old ones follow retention.
+  receiptsEnabled      Boolean  @default(true)
+  receiptRetentionDays Int      @default(90)
+  createdAt            DateTime @default(now())
 
   memberships    OrgMembership[]
   invitations    Invitation[]
@@ -1328,4 +1335,94 @@ model Redraft {
   @@index([briefProposalId])
   @@index([featureSuggestionId])
   @@index([requestedById])
+}
+
+// ─── Receipts (ADR 0015, ticket 0070) ───────────────────────────────────────
+
+// What an AI call produced, referenced by id (never copied).
+enum ReceiptOutputKind {
+  CHOICES // a Decision Request's Choices (the request's id)
+  SPEC_PROPOSAL
+  BRIEF_PROPOSAL
+  FEATURE_SUGGESTION_BATCH // the Feature Suggestions generated together (their batchId)
+  REDRAFT // a Redraft of a proposal (the Redraft's id)
+  CONVERSATION_MESSAGE // a reply in a Conversation
+  CONVERSATION // a Conversation Summary (the Conversation's id)
+  ATTACHMENT // an Attachment's summary
+  GRILLING_ROUND // a Grilling round's questions
+  GRILLING_QUESTION // a follow-up on a Grilling question
+}
+
+enum ReceiptOutcomeKind {
+  APPROVE
+  DECLINE // with its reason, when one was given
+  REQUEST_CHANGES // with its feedback (ADR 0013)
+  MANUAL_EDIT // edited by hand: the Choices before sending, or the next Spec or Brief Version
+}
+
+// The record of one AI call (a Receipt). Never the prompt or the reply: the task, the prompt
+// and its Prompt Version, the model, tokens, cache use, latency and a reference to what it
+// produced. Kept for the Organization's retention (receiptRetentionDays), then deleted with
+// its outcomes.
+model Receipt {
+  id               String             @id @default(uuid())
+  task             String // the AI task, e.g. generateChoices
+  taskKind         String // its Settings task (AiTaskKind), e.g. CHOICES
+  promptName       String // the prompt it rendered (a packages/skills name)
+  promptVersion    String // "default@<hash>" for the built-in default
+  modelSource      String? // APPROVED_MODEL or ENV
+  approvedModelId  String? // a plain id, so the Receipt outlives the model
+  modelName        String? // the provider's model id, or the env "provider/model"
+  providerKind     String? // ANTHROPIC, OPENAI, OPENROUTER...
+  language         String? // the Reply Language asked for
+  inputTokens      Int?
+  outputTokens     Int?
+  cacheReadTokens  Int?
+  cacheWriteTokens Int?
+  latencyMs        Int
+  success          Boolean
+  error            String? // a short, redacted message when it failed
+  outputKind       ReceiptOutputKind?
+  outputId         String?
+  // The proposal it drafted or redrafted, and which Redraft (1 for the first draft).
+  proposalKind     ProposalKind?
+  proposalId       String?
+  redraft          Int?
+  requestedById    String?
+  createdAt        DateTime           @default(now())
+  requestedBy      User?              @relation("ReceiptRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  outcomes         ReceiptOutcome[]   @relation("ReceiptOutcomes")
+  redraftOutcomes  ReceiptOutcome[]   @relation("ReceiptRedraftOutcomes")
+
+  @@index([createdAt])
+  @@index([proposalKind, proposalId, redraft])
+  @@index([outputKind, outputId])
+  @@index([requestedById])
+}
+
+// What people did with a proposal, linked to the Receipt that drafted it (`receiptId`)
+// and, for a Redraft after the first, to the Receipt that wrote it (`redraftReceiptId`).
+model ReceiptOutcome {
+  id                     String             @id @default(uuid())
+  receiptId              String
+  redraftReceiptId       String?
+  kind                   ReceiptOutcomeKind
+  proposalKind           ProposalKind
+  proposalId             String
+  redraft                Int // the Redraft it was given on
+  reason                 String? // DECLINE: the reason; REQUEST_CHANGES: the feedback
+  redraftsBeforeApproval Int? // APPROVE: how many Redrafts were written before it
+  choiceLabel            String? // APPROVE of Choices: the Choice decided
+  editSize               Int? // MANUAL_EDIT: lines added plus lines removed
+  actorId                String?
+  createdAt              DateTime           @default(now())
+  receipt                Receipt            @relation("ReceiptOutcomes", fields: [receiptId], references: [id], onDelete: Cascade)
+  redraftReceipt         Receipt?           @relation("ReceiptRedraftOutcomes", fields: [redraftReceiptId], references: [id], onDelete: SetNull)
+  actor                  User?              @relation("ReceiptOutcomeBy", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([receiptId])
+  @@index([redraftReceiptId])
+  @@index([proposalKind, proposalId])
+  @@index([createdAt])
+  @@index([actorId])
 }

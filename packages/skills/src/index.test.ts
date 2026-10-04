@@ -7,6 +7,7 @@ import {
   readSkillSource,
   renderTemplate,
   SKILLS,
+  skillVersion,
 } from './index.ts';
 
 describe('skills', () => {
@@ -56,5 +57,16 @@ describe('the language rules (ticket 0068)', () => {
     expect(out.startsWith('A\n\n## Language\n')).toBe(true);
     expect(out.endsWith('.\n\nB')).toBe(true);
     await expect(expandPartials('{{>nope}}')).rejects.toThrow('nope');
+  });
+});
+
+describe('Prompt Versions of the built-in prompts (ticket 0070)', () => {
+  test('each is default@ and a hash of its expanded template, distinct per prompt', async () => {
+    const all = await Promise.all(SKILLS.map((name) => skillVersion(name)));
+    for (const version of all) expect(version).toMatch(/^default@[0-9a-f]{12}$/);
+    expect(new Set(all).size).toBe(SKILLS.length);
+    const template = await loadSkill('chat');
+    const hash = new Bun.CryptoHasher('sha256').update(template).digest('hex').slice(0, 12);
+    expect(await skillVersion('chat')).toBe(`default@${hash}`);
   });
 });

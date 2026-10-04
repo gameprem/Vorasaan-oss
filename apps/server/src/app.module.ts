@@ -32,6 +32,7 @@ import { InboxModule } from './inbox/inbox.module.ts';
 import { OrgController } from './org/org.controller.ts';
 import { OrgService } from './org/org.service.ts';
 import { PrismaModule } from './prisma/prisma.module.ts';
+import { ReceiptsModule } from './receipts/receipts.module.ts';
 import { RedraftsModule } from './redrafts/redrafts.module.ts';
 import { ResponseWindowsModule } from './response-windows/response-windows.module.ts';
 import { RetrievalModule } from './retrieval/retrieval.module.ts';
@@ -59,6 +60,7 @@ import { SpecModule } from './spec/spec.module.ts';
     SpecModule,
     BriefModule,
     RedraftsModule,
+    ReceiptsModule,
     ConversationsModule,
     ChatAppsModule,
     GettingStartedModule,
