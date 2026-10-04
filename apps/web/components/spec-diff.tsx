@@ -52,15 +52,20 @@ function DiffTable({ rows, caption }: { rows: Row[]; caption?: string }) {
             key={i}
             className={
               row.kind === 'add'
-                ? 'bg-jade-wash px-4 text-jade'
+                ? 'bg-jade-wash px-4 text-fg'
                 : row.kind === 'del'
-                  ? 'bg-lacquer-wash px-4 text-lacquer line-through decoration-lacquer/40'
+                  ? 'bg-lacquer-wash px-4 text-fg line-through decoration-lacquer/60'
                   : row.kind === 'fold'
                     ? 'px-4 text-fg-soft/70 italic'
                     : 'px-4 text-fg-soft'
             }
           >
-            <span aria-hidden className="mr-3 inline-block w-3 select-none">
+            <span
+              aria-hidden
+              className={`mr-3 inline-block w-3 select-none ${
+                row.kind === 'add' ? 'text-jade' : row.kind === 'del' ? 'text-lacquer' : ''
+              }`}
+            >
               {row.kind === 'add' ? '+' : row.kind === 'del' ? '−' : ''}
             </span>
             <span className="sr-only">

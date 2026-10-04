@@ -2,6 +2,7 @@
 
 import type {
   ApprovedModelSettingsView,
+  PromptAnalysisView,
   PromptDetailView,
   PromptDiff,
   PromptEvalCaseView,
@@ -9,6 +10,7 @@ import type {
   PromptEvalRunSummary,
   PromptEvalRunView,
   PromptEvalSource,
+  PromptPattern,
   PromptSummaryView,
   PromptVersionView,
 } from '@vorasaan/shared';
@@ -16,6 +18,7 @@ import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useId, useState, useTransition } from 'react';
 import {
   type ActionResult,
+  analyzePrompt,
   approvePromptVersion,
   comparePromptRuns,
   declinePromptVersion,
@@ -23,30 +26,34 @@ import {
   promptEvalRun,
   proposePromptVersion,
   rollbackPrompt,
+  setPromptAnalysisAfter,
   startPromptEval,
 } from '@/lib/prompt-actions';
 import { SettingsLink } from './settings-dialog';
 import { VersionDiff } from './spec-diff';
 import { field } from './ui';
-import { Button } from './ui/button';
+import { Button, buttonClass } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import { Select } from './ui/select';
 
 // Settings → AI → Prompts (ADR 0015, ticket 0071): each built-in prompt with its active
 // version, the Organization's Prompt Versions (written by hand, approved by an Admin, rolled
-// back), the diff between two, and eval runs with their comparison.
+// back), the diff between two, and eval runs with their comparison. Ticket 0072 adds the
+// prompt's feedback: the AI's analyses of it, the patterns found, and the Prompt Versions it
+// proposed from them (reviewed on their own page, components/prompt-proposal.tsx).
 
 /** How a version is named: "Default" for the built-in prompt (0), else "v3". */
 export const versionLabel = (number: number) => (number === 0 ? 'Default' : `v${number}`);
 
-const percent = (score: number | null) => (score === null ? '–' : `${Math.round(score * 100)}%`);
+export const percent = (score: number | null) =>
+  score === null ? '–' : `${Math.round(score * 100)}%`;
 const numberFormat = new Intl.NumberFormat('en');
 const tokens = (n: number | null) => (n === null ? '–' : numberFormat.format(n));
-const when = (iso: string) =>
+export const when = (iso: string) =>
   new Date(iso).toLocaleString('en', { dateStyle: 'medium', timeStyle: 'short' });
 
 /** How often a page with an eval run in progress refreshes. */
-const POLL_MS = 1500;
+export const POLL_MS = 1500;
 
 const SET_LABEL: Record<string, string> = {
   choices: 'Choices',
@@ -55,12 +62,13 @@ const SET_LABEL: Record<string, string> = {
   'feature-suggestions': 'Feature Suggestions',
   conversation: 'Conversation',
   redrafts: 'Redrafts',
+  'prompt-proposals': 'Prompt proposals',
   replay: 'Replay of approved Receipts',
 };
-const setLabel = (set: string) => SET_LABEL[set] ?? set;
+export const setLabel = (set: string) => SET_LABEL[set] ?? set;
 
 /** Runs a server action and keeps its error (or a short confirmation) for display. */
-function useAction() {
+export function useAction() {
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<{ ok: boolean; text: string }>();
   const run = (action: () => Promise<ActionResult>, done?: string, onOk?: () => void) =>
@@ -76,7 +84,7 @@ function useAction() {
   return { pending, message, run };
 }
 
-function Status({ message }: { message?: { ok: boolean; text: string } }) {
+export function Status({ message }: { message?: { ok: boolean; text: string } }) {
   if (!message) return null;
   return (
     <p role={message.ok ? 'status' : 'alert'} className={message.ok ? 'text-jade' : 'text-lacquer'}>
@@ -85,7 +93,7 @@ function Status({ message }: { message?: { ok: boolean; text: string } }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+export function Section({ title, children }: { title: string; children: ReactNode }) {
   const id = useId();
   return (
     <section aria-labelledby={id} className="mt-10">
@@ -97,7 +105,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Badge({
+export function Badge({
   tone,
   children,
 }: {
@@ -128,6 +136,7 @@ export function PromptList({ prompts }: { prompts: PromptSummaryView[] }) {
           <th className="py-2 font-medium">Active</th>
           <th className="py-2 font-medium">Versions</th>
           <th className="py-2 font-medium">Eval cases</th>
+          <th className="py-2 font-medium">New feedback</th>
         </tr>
       </thead>
       <tbody>
@@ -157,10 +166,55 @@ export function PromptList({ prompts }: { prompts: PromptSummaryView[] }) {
               {p.evalCases}
               {p.replayable && <span className="text-fg-soft"> + replay</span>}
             </td>
+            <td className="py-2" data-testid={`feedback-${p.name}`}>
+              {p.newFeedback}
+            </td>
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** After how many new outcomes the AI reads a prompt's feedback on its own (ticket 0072). */
+export function AnalysisSettings({ analysisAfter }: { analysisAfter: number }) {
+  const [value, setValue] = useState(String(analysisAfter));
+  const action = useAction();
+  const id = useId();
+  const n = Number(value);
+  return (
+    <form
+      className="mt-6 flex flex-wrap items-end gap-3"
+      aria-label="Learning from feedback"
+      onSubmit={(e) => {
+        e.preventDefault();
+        action.run(
+          () => setPromptAnalysisAfter(n),
+          n === 0
+            ? 'The AI reads feedback only when an Admin asks.'
+            : `The AI reads a prompt's feedback after ${n} new outcomes.`,
+        );
+      }}
+    >
+      <div>
+        <label htmlFor={id} className="text-sm">
+          The AI reads a prompt's feedback after this many new outcomes (0: only when asked)
+        </label>
+        <input
+          id={id}
+          type="number"
+          min={0}
+          max={10000}
+          className={`${field} w-32`}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </div>
+      <Button type="submit" isDisabled={action.pending || !Number.isInteger(n) || n < 0}>
+        Save
+      </Button>
+      <Status message={action.message} />
+    </form>
   );
 }
 
@@ -174,7 +228,9 @@ export function PromptDetail({
   models: ApprovedModelSettingsView[];
 }) {
   const router = useRouter();
-  const running = prompt.runs.some((r) => r.status === 'RUNNING');
+  const running =
+    prompt.runs.some((r) => r.status === 'RUNNING') ||
+    prompt.feedback.analyses.some((a) => a.status === 'RUNNING');
   useEffect(() => {
     if (!running) return;
     const poll = setInterval(() => router.refresh(), POLL_MS);
@@ -197,6 +253,7 @@ export function PromptDetail({
         )}
       </p>
       <Versions prompt={prompt} />
+      <Feedback prompt={prompt} />
       <CompareVersions prompt={prompt} />
       <WriteVersion prompt={prompt} />
       <Evals prompt={prompt} models={models} />
@@ -218,7 +275,15 @@ function Versions({ prompt }: { prompt: PromptDetailView }) {
           <li key={v.id} className="py-3" aria-label={versionLabel(v.number)}>
             <VersionRow v={v} />
             <div className="mt-2 flex flex-wrap gap-2">
-              {v.status === 'PROPOSED' && (
+              {v.status === 'PROPOSED' && v.analysisId && (
+                <SettingsLink
+                  href={proposalHref(prompt.name, v.number)}
+                  className={buttonClass('primary', 'sm')}
+                >
+                  Review the proposal
+                </SettingsLink>
+              )}
+              {v.status === 'PROPOSED' && !v.analysisId && (
                 <>
                   <Button
                     variant="primary"
@@ -317,19 +382,26 @@ function Versions({ prompt }: { prompt: PromptDetailView }) {
   );
 }
 
-function VersionRow({ v }: { v: PromptVersionView }) {
+/** Where an AI-proposed Prompt Version is reviewed and decided (ticket 0072). */
+export const proposalHref = (name: string, number: number) =>
+  `/settings/ai/prompts/${name}/proposals/${number}`;
+
+export function VersionRow({ v }: { v: PromptVersionView }) {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2">
         <strong>{versionLabel(v.number)}</strong>
+        {v.analysisId && <Badge tone="soft">Proposed by the AI</Badge>}
         {v.active && <Badge tone="jade">Active</Badge>}
         {v.status === 'PROPOSED' && <Badge tone="amber">Waiting for approval</Badge>}
         {v.status === 'APPROVED' && !v.active && <Badge tone="soft">Approved</Badge>}
         {v.status === 'DECLINED' && <Badge tone="lacquer">Declined</Badge>}
         {v.note && <span className="text-sm">{v.note}</span>}
       </div>
+      {v.rationale && <p className="mt-1 text-sm">{v.rationale}</p>}
       <p className="text-sm text-fg-soft">
-        Written {v.proposedBy ? `by ${v.proposedBy.name} ` : ''}on {when(v.createdAt)}
+        {v.analysisId ? 'Proposed' : 'Written'} {v.proposedBy ? `by ${v.proposedBy.name} ` : ''}
+        on {when(v.createdAt)}
         {v.approvedAt &&
           `; approved by ${v.approvedBy?.name ?? 'someone'} on ${when(v.approvedAt)}`}
         {v.declinedAt &&
@@ -359,6 +431,120 @@ function TemplateToggle({ template, label }: { template: string; label: string }
         </pre>
       )}
     </>
+  );
+}
+
+// ─── Feedback and the AI's analyses (ticket 0072) ───────────────────────────
+
+const OUTCOME_LABEL = {
+  APPROVE: 'Approved',
+  DECLINE: 'Declined',
+  REQUEST_CHANGES: 'Asked for changes',
+  MANUAL_EDIT: 'Edited by hand',
+} as const;
+
+function Feedback({ prompt }: { prompt: PromptDetailView }) {
+  const { feedback } = prompt;
+  const action = useAction();
+  const reading = feedback.analyses.some((a) => a.status === 'RUNNING');
+  return (
+    <Section title="Feedback">
+      <p className="mt-1 text-sm text-fg-soft" data-testid="new-feedback">
+        {feedback.newOutcomes} new outcome{feedback.newOutcomes === 1 ? '' : 's'} since the last
+        analysis ({feedback.outcomes} kept in all).{' '}
+        {feedback.analysisAfter > 0
+          ? `The AI reads them on its own after ${feedback.analysisAfter} new ones, and proposes a version when it finds patterns.`
+          : 'The AI reads them only when an Admin asks.'}{' '}
+        A proposal changes nothing until an Admin approves it.
+      </p>
+      <Button
+        className="mt-3"
+        isDisabled={action.pending || reading || feedback.outcomes === 0}
+        onPress={() =>
+          action.run(
+            () => analyzePrompt(prompt.name),
+            'The AI is reading the feedback on this prompt.',
+          )
+        }
+      >
+        {reading ? 'Reading the feedback…' : 'Analyze feedback now'}
+      </Button>
+      <Status message={action.message} />
+      {feedback.analyses.length > 0 && (
+        <ol className="mt-4 space-y-4">
+          {feedback.analyses.map((a) => (
+            <Analysis key={a.id} prompt={prompt.name} analysis={a} />
+          ))}
+        </ol>
+      )}
+    </Section>
+  );
+}
+
+function Analysis({ prompt, analysis: a }: { prompt: string; analysis: PromptAnalysisView }) {
+  const who =
+    a.trigger === 'FEEDBACK'
+      ? 'after enough new feedback'
+      : a.requestedBy
+        ? `asked by ${a.requestedBy.name}`
+        : 'asked by an Admin';
+  return (
+    <li className="rounded-card bg-rail p-3" aria-label={`Analysis of ${when(a.createdAt)}`}>
+      <p className="text-sm">
+        <strong>{when(a.createdAt)}</strong>, {who}: {a.outcomes} outcome
+        {a.outcomes === 1 ? '' : 's'} read.{' '}
+        {a.status === 'RUNNING' && <span role="status">Reading…</span>}
+        {a.status === 'FAILED' && <span className="text-lacquer">Failed: {a.error}</span>}
+        {a.status === 'DONE' && !a.patterns.length && 'No pattern found.'}
+        {a.status === 'DONE' && a.error && <span className="text-lacquer"> {a.error}</span>}
+      </p>
+      {a.patterns.length > 0 && <Patterns patterns={a.patterns} />}
+      {a.proposed !== null && (
+        <SettingsLink
+          href={proposalHref(prompt, a.proposed)}
+          className="mt-2 inline-block text-sm font-medium underline-offset-2 hover:underline"
+        >
+          Proposed {versionLabel(a.proposed)} →
+        </SettingsLink>
+      )}
+    </li>
+  );
+}
+
+/** The patterns the AI named, each with its count and the cases it cites. */
+export function Patterns({ patterns }: { patterns: PromptPattern[] }) {
+  return (
+    <ul className="mt-2 space-y-2" aria-label="Patterns">
+      {patterns.map((p) => (
+        <li key={p.title} className="rounded-tile bg-bg p-3">
+          <p className="font-medium">
+            {p.title}{' '}
+            <span className="text-sm text-fg-soft" data-testid="pattern-count">
+              {p.count} case{p.count === 1 ? '' : 's'}
+            </span>
+          </p>
+          <p className="text-sm text-fg-soft">{p.description}</p>
+          <details className="mt-1 text-sm">
+            <summary className="cursor-default">The cases</summary>
+            <ul className="mt-1 space-y-1">
+              {p.cases.map((c) => (
+                <li key={c.outcomeId}>
+                  <span className="text-fg-soft">
+                    {OUTCOME_LABEL[c.kind]} (Redraft {c.redraft}){c.text ? ': ' : ''}
+                  </span>
+                  {c.text && <q className="whitespace-pre-line">{c.text}</q>}{' '}
+                  {c.href && (
+                    <a href={c.href} className="underline-offset-2 hover:underline">
+                      Open
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -793,7 +979,7 @@ function CaseList({ cases }: { cases: PromptEvalCaseView[] }) {
   );
 }
 
-function Sample({ output }: { output: unknown }) {
+export function Sample({ output }: { output: unknown }) {
   return (
     <pre
       // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable sample must be reachable by keyboard (axe: scrollable-region-focusable)
@@ -805,7 +991,7 @@ function Sample({ output }: { output: unknown }) {
   );
 }
 
-function Comparison({ comparison }: { comparison: PromptEvalComparison }) {
+export function Comparison({ comparison }: { comparison: PromptEvalComparison }) {
   const head = (run: PromptEvalRunSummary) =>
     `${versionLabel(run.number)} on ${run.model.displayName}`;
   return (

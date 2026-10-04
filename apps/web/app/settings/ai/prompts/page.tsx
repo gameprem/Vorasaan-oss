@@ -1,7 +1,7 @@
 import type { PromptsView } from '@vorasaan/shared';
 import { unstable_rethrow } from 'next/navigation';
 import { Notice } from '@/components/bits';
-import { PromptList } from '@/components/prompt-versions';
+import { AnalysisSettings, PromptList } from '@/components/prompt-versions';
 import { ApiError, api } from '@/lib/api';
 
 export const metadata = { title: 'AI prompts' };
@@ -27,8 +27,10 @@ export default async function PromptsPage() {
       <p className="mt-2 text-fg-soft">
         The instructions the AI follows for each kind of work. The built-in default is used until an
         Admin approves a Prompt Version of your own; run evals on a version before you approve it,
-        and roll back at any time.
+        and roll back at any time. The AI also reads what people did with its proposals and proposes
+        better versions; those change nothing until an Admin approves them.
       </p>
+      <AnalysisSettings analysisAfter={view.analysisAfter} />
       <PromptList prompts={view.prompts} />
     </section>
   );
