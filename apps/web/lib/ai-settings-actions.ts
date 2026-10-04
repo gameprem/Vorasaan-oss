@@ -5,6 +5,7 @@ import type {
   CreateAiProviderInput,
   CreateApprovedModelInput,
   OpenRouterModelsView,
+  ReceiptSettingsInput,
   SetAiTaskModelsInput,
   UpdateAiProviderInput,
   UpdateApprovedModelInput,
@@ -74,4 +75,9 @@ export async function listOpenRouterModels(providerId: string): Promise<OpenRout
     if (error instanceof ApiError) return { models: [], error: error.message };
     throw error;
   }
+}
+
+/** Receipts (ticket 0070): collection on or off, and how many days they are kept. */
+export async function saveReceiptSettings(input: ReceiptSettingsInput) {
+  return attempt(() => api('/settings/ai/receipts', { method: 'PUT', body: input }));
 }
