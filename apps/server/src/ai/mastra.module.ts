@@ -1,5 +1,6 @@
 import { Global, Logger, Module } from '@nestjs/common';
 import { CLOCK, type Clock } from '../clock/clock.ts';
+import { PromptVersionsService } from '../prompt-versions/prompt-versions.service.ts';
 import { ReceiptingAiPort } from '../receipts/receipting.ai-port.ts';
 import { ReceiptsService } from '../receipts/receipts.service.ts';
 import { AI_PORT, type AiPort } from './ai.port.ts';
@@ -34,6 +35,7 @@ export const AI_ENGINE = Symbol('AI_ENGINE');
     AiSettingsService,
     ContextBudgets,
     ReceiptsService,
+    PromptVersionsService,
     {
       provide: AI_ENGINE,
       useFactory: (): AiPort => {
@@ -44,23 +46,32 @@ export const AI_ENGINE = Symbol('AI_ENGINE');
         return new MastraAiPort();
       },
     },
-    // Every call: the model is chosen, then a Receipt is left (ticket 0070), then the
-    // provider (or the fake) is called.
+    // Every call: the model and the version of its prompt (ticket 0071) are chosen, then a
+    // Receipt is left (ticket 0070), then the provider (or the fake) is called.
     {
       provide: AI_PORT,
-      inject: [AI_ENGINE, AiSettingsService, ReceiptsService, CLOCK],
+      inject: [AI_ENGINE, AiSettingsService, ReceiptsService, PromptVersionsService, CLOCK],
       useFactory: (
         engine: AiPort,
         settings: AiSettingsService,
         receipts: ReceiptsService,
+        prompts: PromptVersionsService,
         clock: Clock,
       ): AiPort =>
         new ModelRoutingAiPort(
           new ReceiptingAiPort(engine, receipts, clock),
           (task, approvedModelId) => settings.chooseModel(task, approvedModelId),
+          (task) => prompts.choose(task),
         ),
     },
   ],
-  exports: [AI_PORT, AI_ENGINE, AiSettingsService, ContextBudgets, ReceiptsService],
+  exports: [
+    AI_PORT,
+    AI_ENGINE,
+    AiSettingsService,
+    ContextBudgets,
+    ReceiptsService,
+    PromptVersionsService,
+  ],
 })
 export class MastraModule {}

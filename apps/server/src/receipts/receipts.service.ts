@@ -11,7 +11,7 @@ import {
 } from '@vorasaan/shared';
 import { skillVersion } from '@vorasaan/skills';
 import { AI_TASKS, type AiTask } from '../ai/ai.config.ts';
-import type { CallUsage, ModelChoice, ReceiptLink } from '../ai/ai.port.ts';
+import type { CallUsage, ModelChoice, PromptChoice, ReceiptLink } from '../ai/ai.port.ts';
 import { TASK_SKILLS } from '../ai/prompts.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
@@ -28,6 +28,8 @@ export type ReceiptEntry = {
   error: string | null;
   usage: CallUsage | null;
   model: ModelChoice | undefined;
+  /** The version of the prompt it rendered (ticket 0071); left out, the built-in default. */
+  prompt: PromptChoice | undefined;
   language: string | undefined;
   link: ReceiptLink | undefined;
 };
@@ -366,7 +368,7 @@ async function receiptData(entry: ReceiptEntry): Promise<Prisma.ReceiptUnchecked
     task: entry.task,
     taskKind: AI_TASKS[entry.task].kind,
     promptName,
-    promptVersion: await skillVersion(promptName),
+    promptVersion: entry.prompt?.version ?? (await skillVersion(promptName)),
     modelSource: model?.source ?? null,
     approvedModelId: model?.approvedModelId ?? null,
     modelName: model?.provider?.model ?? model?.name ?? null,
@@ -385,6 +387,7 @@ async function receiptData(entry: ReceiptEntry): Promise<Prisma.ReceiptUnchecked
     proposalId: link?.proposal?.id ?? null,
     redraft: link?.proposal?.redraft ?? null,
     requestedById: link?.requestedById ?? null,
+    evalRunId: link?.evalRunId ?? null,
     createdAt: entry.at,
   };
 }

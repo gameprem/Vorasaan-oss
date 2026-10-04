@@ -261,8 +261,16 @@ The record of one AI call: its task, prompt and Prompt Version, Approved Model, 
 _Avoid_: Log, trace, usage record, telemetry
 
 **Prompt Version**:
-An immutable, numbered version of one of the AI's prompts held by an Organization, on top of the built-in default. The AI or an Admin proposes it, an Admin approves it after seeing its eval scores, and it can be rolled back.
+An immutable, numbered version of one of the AI's prompts held by an Organization, on top of the built-in default. The AI or an Admin proposes it, an Admin approves it after seeing its eval scores, and it can be rolled back. One version of each prompt is active at a time; with none approved, or after a rollback to it, the built-in default is.
 _Avoid_: Prompt template, prompt revision, prompt draft, skill (that is an Agent Skill)
+
+**Eval Run**:
+One evaluation of a version of a prompt (the built-in default or a Prompt Version) on an Approved Model an Admin picks: the checked-in eval cases, a Replay, or both. Each case is scored by the share of its checks it passes, and the run's cost comes from its Receipts. Two Eval Runs are compared case by case.
+_Avoid_: Benchmark, test run, eval job
+
+**Replay**:
+Running the AI calls behind approved proposals again, with the same inputs rebuilt from the records their Receipts point at, and scoring each output by how close it comes to what people approved. A Receipt whose records are gone, or which is past retention, is left out.
+_Avoid_: Re-run, backtest, regression test
 
 ### Agent Skills
 

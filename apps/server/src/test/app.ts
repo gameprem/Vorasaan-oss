@@ -10,6 +10,7 @@ import { ChatEventsService } from '../chat-apps/chat-events.service.ts';
 import { CLOCK } from '../clock/clock.ts';
 import { installVerbatimBody } from '../http/verbatim-body.ts';
 import { PRISMA } from '../prisma/prisma.module.ts';
+import { PromptEvalsService } from '../prompt-versions/prompt-evals.service.ts';
 import { ReceiptsService } from '../receipts/receipts.service.ts';
 import { RedraftsService } from '../redrafts/redrafts.service.ts';
 import { EscalationJob } from '../response-windows/escalation.job.ts';
@@ -32,6 +33,8 @@ export type TestApp = {
   clock: FakeClock;
   /** Receipts (ticket 0070): `drain()` before reading them, `purge()` runs the daily job. */
   receipts: ReceiptsService;
+  /** Eval runs (ticket 0071): `drain()` waits for the runs in progress. */
+  evals: PromptEvalsService;
   /** The escalation job, which tests run by hand (its every-minute timer is off). */
   escalation: EscalationJob;
   /** The SQL statements the app sends while `run` runs, to check a read stays a fixed few. */
@@ -84,7 +87,12 @@ export async function createTestApp(): Promise<TestApp> {
   beforeTruncate.add(() => redrafts.drain());
   // Receipts are written off the request path (ticket 0070); the Redrafts above write some.
   const receipts = app.get(ReceiptsService);
-  beforeTruncate.add(() => receipts.drain());
+  // Eval runs (ticket 0071) run in the background and leave Receipts: they end first.
+  const evals = app.get(PromptEvalsService);
+  beforeTruncate.add(async () => {
+    await evals.drain();
+    await receipts.drain();
+  });
   const chatCards = app.get(ChatCardsService);
   const chatEvents = app.get(ChatEventsService);
   beforeTruncate.add(async () => {
@@ -98,6 +106,7 @@ export async function createTestApp(): Promise<TestApp> {
     embeddings,
     clock,
     receipts,
+    evals,
     escalation: app.get(EscalationJob),
     drainIndexing: () => indexing.drain(),
     recordQueries: async (run) => {

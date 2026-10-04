@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import {
   expandPartials,
+  isSkillName,
   LANGUAGE_PLACEHOLDERS,
   loadPartial,
   loadSkill,
+  placeholdersOf,
+  promptVersionOf,
   readSkillSource,
   renderTemplate,
   SKILLS,
@@ -68,5 +71,21 @@ describe('Prompt Versions of the built-in prompts (ticket 0070)', () => {
     const template = await loadSkill('chat');
     const hash = new Bun.CryptoHasher('sha256').update(template).digest('hex').slice(0, 12);
     expect(await skillVersion('chat')).toBe(`default@${hash}`);
+  });
+});
+
+describe('Organization Prompt Versions (ticket 0071)', () => {
+  test('are v<number>@ and a hash of the expanded template', async () => {
+    const template = await readSkillSource('chat');
+    const expanded = await loadSkill('chat');
+    const hash = new Bun.CryptoHasher('sha256').update(expanded).digest('hex').slice(0, 12);
+    expect(await promptVersionOf(3, template)).toBe(`v3@${hash}`);
+    expect(await promptVersionOf(4, `${template}\nShorter.`)).not.toContain(hash);
+  });
+
+  test('placeholders are listed once each; names are checked', () => {
+    expect(placeholdersOf('{{a}} {{b}} {{a}} {{>language}}')).toEqual(['a', 'b']);
+    expect(isSkillName('generate-choices')).toBe(true);
+    expect(isSkillName('nope')).toBe(false);
   });
 });
