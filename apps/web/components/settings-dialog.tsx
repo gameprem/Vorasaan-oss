@@ -20,6 +20,7 @@ export const SETTINGS_SECTIONS = [
   { href: '/settings/delegations', label: 'Delegations' },
   { href: '/settings/notifications', label: 'Notifications' },
   { href: '/settings/feature-guidelines', label: 'Feature Guidelines' },
+  { href: '/settings/platforms', label: 'Platforms' },
   { href: '/settings/response-windows', label: 'Response Windows' },
   { href: '/settings/chat-apps', label: 'Chat apps' },
   { href: '/settings/ai', label: 'AI models' },

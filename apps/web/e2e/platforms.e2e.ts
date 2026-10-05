@@ -30,7 +30,9 @@ test("a Feature targets its Project's Platforms, and its first Spec gets a secti
 
   // The header lists them, and the first Spec starts with their sections.
   const header = page.getByRole('list', { name: 'Target Platforms' });
-  await expect(header.getByRole('listitem')).toHaveText(['Back-End', 'Mobile']);
+  // As Coverage chips (ticket 0052): nothing is written for them yet, so both are missing.
+  await expect(header.getByRole('button')).toHaveText(['!Back-End', '!Mobile']);
+  await expect(header.getByRole('button', { name: 'Back-End: missing' })).toBeVisible();
   const editor = page.getByRole('region', { name: 'Spec editor' });
   await expect(editor.getByRole('heading', { name: title, level: 1 })).toBeVisible();
   await expect(editor.getByRole('heading', { name: 'Back-End', level: 2 })).toBeVisible();
