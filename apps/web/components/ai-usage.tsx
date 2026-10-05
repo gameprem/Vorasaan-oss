@@ -661,6 +661,9 @@ function RedraftsTable({ view }: { view: AiUsageView }) {
 // ─── Cheaper models (ticket 0076) ───────────────────────────────────────────
 
 function CheaperModels({ view }: { view: ModelSuggestionsView }) {
+  // The confirmation lives on the section: once a task runs on the cheaper model its
+  // suggestion goes away with the refreshed view, and the message must outlive the row.
+  const [chosen, setChosen] = useState<string>();
   return (
     <section aria-labelledby="usage-cheaper">
       <h3 id="usage-cheaper" className="text-lg font-semibold">
@@ -674,7 +677,7 @@ function CheaperModels({ view }: { view: ModelSuggestionsView }) {
       {view.suggestions.length ? (
         <ul className="mt-4 space-y-5">
           {view.suggestions.map((s) => (
-            <SuggestionRow key={s.task} suggestion={s} />
+            <SuggestionRow key={s.task} suggestion={s} onChosen={setChosen} />
           ))}
         </ul>
       ) : (
@@ -682,6 +685,9 @@ function CheaperModels({ view }: { view: ModelSuggestionsView }) {
           No cheaper model scores as well on any task yet.
         </p>
       )}
+      <p role="status" className="mt-3 text-sm text-jade empty:hidden">
+        {chosen}
+      </p>
       {view.unchecked.length > 0 && (
         <div className="mt-5">
           <h4 className="font-medium">Cheaper, not evaluated yet</h4>
@@ -711,8 +717,15 @@ function CheaperModels({ view }: { view: ModelSuggestionsView }) {
   );
 }
 
-function SuggestionRow({ suggestion: s }: { suggestion: ModelSuggestion }) {
-  const { pending, run, status } = useAction();
+function SuggestionRow({
+  suggestion: s,
+  onChosen,
+}: {
+  suggestion: ModelSuggestion;
+  onChosen: (message: string) => void;
+}) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string>();
   const task = TASK_LABEL[s.task].label;
   const saved = s.currentCostUsd - s.suggestedCostUsd;
   return (
@@ -753,15 +766,20 @@ function SuggestionRow({ suggestion: s }: { suggestion: ModelSuggestion }) {
           variant="secondary"
           isDisabled={pending}
           onPress={() =>
-            run(
-              () => chooseTaskModel(s.task, s.suggested.approvedModelId),
-              `${task} now run on ${s.suggested.name}.`,
-            )
+            start(async () => {
+              const result = await chooseTaskModel(s.task, s.suggested.approvedModelId);
+              setError(result.error);
+              if (!result.error) onChosen(`${task} now run on ${s.suggested.name}.`);
+            })
           }
         >
           Use {s.suggested.name} for {task}
         </Button>
-        {status}
+        {error && (
+          <p role="alert" className="text-lacquer">
+            {error}
+          </p>
+        )}
       </div>
     </li>
   );

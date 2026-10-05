@@ -167,7 +167,8 @@ test('an Admin is shown a cheaper model whose eval scores hold, and chooses it (
   ).json()) as AiSettingsView;
   expect(before.tasks.find((t) => t.task === 'SUMMARIES')?.approvedModelId).toBeNull();
   await summaries.getByRole('button', { name: 'Use Fast e2e for Summaries' }).click();
-  await expect(summaries.getByRole('status')).toHaveText('Summaries now run on Fast e2e.');
+  // The suggestion goes away once taken; the section keeps the confirmation.
+  await expect(cheaper.getByRole('status')).toHaveText('Summaries now run on Fast e2e.');
   const after = (await (
     await request.get(`${E2E.apiUrl}/settings/ai`, { headers: asPim })
   ).json()) as AiSettingsView;
