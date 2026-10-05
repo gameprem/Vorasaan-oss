@@ -14,6 +14,7 @@ import { BriefModule } from './brief/brief.module.ts';
 import { ChatAppsModule } from './chat-apps/chat-apps.module.ts';
 import { ClockModule } from './clock/clock.ts';
 import { ConversationsModule } from './conversations/conversations.module.ts';
+import { CoverageModule } from './coverage/coverage.module.ts';
 import { DecisionRequestsModule } from './decision-requests/decision-requests.module.ts';
 import { DecisionStatsModule } from './decision-stats/decision-stats.module.ts';
 import {
@@ -57,6 +58,7 @@ import { SpecModule } from './spec/spec.module.ts';
     ResponseWindowsModule,
     FeatureGuidelinesModule,
     PlatformsModule,
+    CoverageModule,
     GrillingModule,
     FeatureSuggestionsModule,
     DecisionRequestsModule,

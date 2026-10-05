@@ -1,6 +1,6 @@
 import { Prisma, type PrismaClient, type TeamRole } from '@vorasaan/db';
 import { SEED, SEED_PASSWORD, SEED_SPEC_V1, seed, seedFullTeam } from '@vorasaan/db/seed';
-import type { RedraftContent } from '@vorasaan/shared';
+import { BUILT_IN_PLATFORMS, type RedraftContent } from '@vorasaan/shared';
 import { SecretBox } from '../crypto/secret-box.ts';
 import { escalationTimes } from '../response-windows/escalation.job.ts';
 import { addWorkingTime, MINUTE, type WorkingCalendar } from '../response-windows/working-time.ts';
@@ -231,7 +231,24 @@ export async function seedLargeOrganization(
       await db.team.create({
         data: { id: teamId, projectId, name: `Team ${p + 1}` },
       });
+      // The built-in Platforms, as a Project created in the app gets them (ticket 0050);
+      // the first Project has the seed's. Their ids come from the database, not the random
+      // source, so the rest of the data is the same as before Platforms.
+      await db.platform.createMany({
+        data: BUILT_IN_PLATFORMS.map((platform, position) => ({
+          projectId,
+          position,
+          ...platform,
+        })),
+      });
     }
+    // Every Feature targets Back-End and Front-End, and every other one Mobile too, so
+    // Coverage (ticket 0051) has gaps to find: the generated Specs have no Platform sections.
+    const platformIds = new Map(
+      (await db.platform.findMany({ where: { projectId }, select: { id: true, name: true } })).map(
+        (x) => [x.name, x.id],
+      ),
+    );
     const roster: Roster = first
       ? {
           PO: [pim.id, mint.id],
@@ -304,6 +321,13 @@ export async function seedLargeOrganization(
           owners[role].map((userId) => ({ featureId: id, userId, role })),
         ),
         skipDuplicates: true,
+      });
+      const targets = ['Back-End', 'Front-End', ...(f % 2 === 1 ? ['Mobile'] : [])];
+      await db.featurePlatform.createMany({
+        data: targets.flatMap((name) => {
+          const platformId = platformIds.get(name);
+          return platformId ? [{ featureId: id, platformId }] : [];
+        }),
       });
       const themes = Array.from({ length: 12 }, () => random.pick(vocabulary));
       features.push({ id, title, team, themes });

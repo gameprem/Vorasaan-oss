@@ -270,7 +270,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
     - [x] Token optimization with an eval guard (0076).
 12. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why (Spec section, someone to ask, open Blockers, QA ready), using the checks each Platform switches on. The AI fills or asks about the gaps. Design Docs wait for a Platform's Coverage.
     - [x] Platforms per Project, targeted by Features (0050).
-    - [ ] Coverage per Platform, used by the AI (0051).
+    - [x] Coverage per Platform, used by the AI (0051).
     - [ ] Web and CLI: Platform chips and the Coverage matrix (0052).
 13. **Agent Skills** ([ADR 0017](./docs/adr/0017-agent-skills-installable-skill-md-packages.md)): the AI can use Agent Skills in the open SKILL.md format (the same folders coding assistants use, such as [diagram-design](https://github.com/cathrynlavery/diagram-design)). An Admin installs one from a GitHub URL or a zip, pinned to the version installed, approves it and enables it per Project; an update shows a diff first. Skills are text and templates only: no script in them ever runs. The AI sees only their names and descriptions and loads a Skill or one of its files when it needs it. What it makes with a Skill (a diagram, say) is shown sandboxed and reaches a Spec or Design Doc only as a proposal a person approves. Receipts record which Skills a call used.
     - [ ] Agent Skills (0078).

@@ -202,6 +202,15 @@ export async function runTokenScenarios(
     'Spec from Attachments',
   );
 
+  // Acceptance criteria for a target Platform that isn't QA ready (ticket 0051): the large
+  // Organization's Features target Back-End, whose section the Spec doesn't have yet.
+  await ok(
+    asPim('POST', `/features/${FEATURE}/coverage/acceptance-criteria`, {
+      platformId: SEED.platforms.backEnd,
+    }),
+    'Acceptance criteria',
+  );
+
   // Feature Suggestions, a Redraft of one, a first Spec of another, and the fit check.
   const suggestions = await ok(
     asPim<FeatureSuggestionView[]>('POST', `/projects/${PROJECT}/feature-suggestions/generate`, {

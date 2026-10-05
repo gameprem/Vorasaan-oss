@@ -36,6 +36,7 @@ import {
 } from '../ai/workflow-memory.ts';
 import { assertCanEditProject, type ProjectAccess, projectAccess } from '../brief/brief-access.ts';
 import { toConversationMessageView } from '../conversations/conversation.view.ts';
+import { CoverageService } from '../coverage/coverage.service.ts';
 import { FeatureGuidelinesService } from '../feature-guidelines/feature-guidelines.service.ts';
 import { EventBus } from '../inbox/event-bus.ts';
 import { NotificationsService, type Tx } from '../inbox/notifications.service.ts';
@@ -137,6 +138,7 @@ export class GrillingService {
     private readonly guidelines: FeatureGuidelinesService,
     private readonly notifications: NotificationsService,
     private readonly bus: EventBus,
+    private readonly coverage: CoverageService,
   ) {}
 
   /** The Project's POs and Admins start one; at most one runs per Project. */
@@ -373,7 +375,11 @@ export class GrillingService {
     answers: GrillingAnswerForAi[],
     from: number,
   ): Promise<Plan> {
-    const guidelines = await this.guidelinesFor(project.id);
+    const [guidelines, uncoveredPlatforms] = await Promise.all([
+      this.guidelinesFor(project.id),
+      // Coverage (ticket 0051): the Platforms no Feature covers, for the rounds to ask about.
+      this.coverage.uncoveredForGrilling(project.id),
+    ]);
     // Written for a Team Role's holders and for the Project, not for whoever moved the
     // Grilling on: in the Organization's language (ticket 0068).
     const language = await projectLanguage(this.db, project.id);
@@ -415,6 +421,7 @@ export class GrillingService {
             projectContext,
             guidelines,
             memory: memoryNow,
+            uncoveredPlatforms,
           },
           {
             model,

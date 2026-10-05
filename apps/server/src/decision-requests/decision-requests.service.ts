@@ -36,6 +36,7 @@ import { ContextBudgets } from '../ai/context-budget.ts';
 import { personLanguage } from '../ai/language.ts';
 import { describeDecision } from '../ai/prompts.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
+import { CoverageService } from '../coverage/coverage.service.ts';
 import { activeDelegates } from '../delegations/active-delegations.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
 import { NotificationsService, type Outbox, type Tx } from '../inbox/notifications.service.ts';
@@ -81,6 +82,7 @@ export class DecisionRequestsService {
     private readonly windows: ResponseWindowsService,
     @InjectClock() private readonly clock: Clock,
     private readonly receipts: ReceiptsService,
+    private readonly coverage: CoverageService,
   ) {}
 
   /**
@@ -522,10 +524,11 @@ export class DecisionRequestsService {
     const { model, budget } = await this.budgets.forTask('draftSpecProposal', 'decisionRequest', {
       fixed: estimateTokens(base?.markdown ?? ''),
     });
-    const { foundation, contextBudget } = await this.foundation.forFeature(
-      request.featureId,
-      budget,
-    );
+    const [{ foundation, contextBudget }, missingSections] = await Promise.all([
+      this.foundation.forFeature(request.featureId, budget),
+      // Coverage (ticket 0051): the target Platforms the Spec has no section for yet.
+      this.coverage.missingSections(request.featureId, base?.markdown ?? ''),
+    ]);
     const { context } = splitFeatureSpec(
       await this.retriever.forFeature(
         request.featureId,
@@ -545,6 +548,7 @@ export class DecisionRequestsService {
           specMarkdown: base?.markdown ?? '',
           context: withoutBrief(context),
           foundation,
+          missingSections,
           request: {
             kind: request.kind,
             title: request.title,

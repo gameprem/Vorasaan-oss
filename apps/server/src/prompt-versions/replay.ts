@@ -14,6 +14,7 @@ import type {
 import { ContextBudgets } from '../ai/context-budget.ts';
 import { asReplyLanguage } from '../ai/language.ts';
 import { describeDecision } from '../ai/prompts.ts';
+import { CoverageService } from '../coverage/coverage.service.ts';
 import { allText } from '../evals/eval-case.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
@@ -98,6 +99,7 @@ export class PromptReplay {
     private readonly retriever: ContextRetriever,
     private readonly foundation: ProjectFoundation,
     private readonly budgets: ContextBudgets,
+    private readonly coverage: CoverageService,
   ) {}
 
   /** The approved Receipts of a prompt a replay would consider, newest first. */
@@ -288,6 +290,8 @@ export class PromptReplay {
             specMarkdown,
             context,
             foundation,
+            // As drafted: the Platforms the base Spec has no section for (ticket 0051).
+            missingSections: await this.coverage.missingSections(request.featureId, specMarkdown),
             request: {
               kind: request.kind,
               title: request.title,

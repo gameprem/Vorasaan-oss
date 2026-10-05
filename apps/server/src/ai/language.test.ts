@@ -72,7 +72,14 @@ const BUILDERS: Record<AiTask, (lang: PromptLanguage) => Promise<Prompt>> = {
   summarizeAttachment: (lang) =>
     prompts.summarizeAttachmentPrompt({ title: 'บันทึก', source: 'FILE', text: QUOTE }, lang),
   draftSpecFromAttachments: (lang) =>
-    prompts.draftSpecFromAttachmentsPrompt(feature, MIXED, context, lang),
+    prompts.draftSpecFromAttachmentsPrompt(feature, MIXED, context, lang, [
+      { name: 'Flutter', roles: ['MOBILE'] },
+    ]),
+  draftAcceptanceCriteria: (lang) =>
+    prompts.draftAcceptanceCriteriaPrompt(
+      { feature, platform: { name: 'Flutter', roles: ['MOBILE'] }, specMarkdown: MIXED, context },
+      lang,
+    ),
   grillingQuestions: (lang) =>
     prompts.grillingQuestionsPrompt(
       {

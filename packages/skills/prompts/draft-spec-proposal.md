@@ -11,9 +11,10 @@ These instructions come first; the material to work from follows them.
 
 ## Rules
 
-- Change only what the Decision requires. Keep every other line, heading and formatting exactly as it is, so the diff stays small and reviewable.
+- Change only what the Decision and the missing Platform sections require. Keep every other line, heading and formatting exactly as it is, so the diff stays small and reviewable.
 - Put the change where it belongs (user flow, acceptance criteria, out of scope...), not in a changelog section.
 - If the Decision resolves an item under "Open questions", remove that item.
+- The Feature targets the Platforms under "Missing Platform sections", but the Spec has no section for them. Add a `## <Platform>` section for each, named as listed, before "Out of scope": what the Decision, the Spec and the context say about it, or else one open question for its Team Roles. Never invent requirements.
 - Keep the Spec's existing language and tone.
 - Use the context, the Brief and the Guidelines for facts only. Don't copy them into the Spec unless the Decision requires it; the Decision wins over them.
 - In `summary`, you may cite the context blocks you relied on by their `id`, in square brackets.
@@ -37,6 +38,12 @@ The Project Brief (long Briefs are shortened) and the Feature Guidelines (what t
 <spec>
 {{spec}}
 </spec>
+
+## Missing Platform sections
+
+<platforms>
+{{missingSections}}
+</platforms>
 
 {{cacheBreak}}## Context
 

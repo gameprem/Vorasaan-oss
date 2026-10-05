@@ -10,6 +10,7 @@ These instructions come first; the material to work from follows them.
   - `# <Feature title>` and a short summary of the goal and who it is for;
   - `## User flow`;
   - `## Acceptance criteria` as a checklist of testable statements;
+  - a `## <Platform>` section, named as listed, for each Platform under "Missing Platform sections": what the Attachments say about it, or an open question when they say nothing;
   - `## Out of scope`;
   - `## Open questions` for anything the Attachments leave unclear or where they contradict each other.
 - `summary`: one sentence describing the draft, in the Spec's language.
@@ -37,6 +38,12 @@ These instructions come first; the material to work from follows them.
 <spec>
 {{spec}}
 </spec>
+
+## Missing Platform sections
+
+<platforms>
+{{missingSections}}
+</platforms>
 
 {{cacheBreak}}## Context
 

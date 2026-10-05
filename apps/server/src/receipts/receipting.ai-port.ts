@@ -173,6 +173,15 @@ export class ReceiptingAiPort implements AiPort {
     return this.run('checkFeatureFit', options, (o) => this.engine.checkFeatureFit(input, o));
   }
 
+  draftAcceptanceCriteria(
+    input: Parameters<AiPort['draftAcceptanceCriteria']>[0],
+    options?: AiCallOptions,
+  ) {
+    return this.run('draftAcceptanceCriteria', options, (o) =>
+      this.engine.draftAcceptanceCriteria(input, o),
+    );
+  }
+
   redraftChoices(input: Parameters<AiPort['redraftChoices']>[0], options?: AiCallOptions) {
     return this.run('redraftChoices', options, (o) => this.engine.redraftChoices(input, o));
   }

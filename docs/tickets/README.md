@@ -213,7 +213,7 @@ Measure first on a large seeded Organization, then make the database faster and 
 
 ## Platforms and Coverage (Post-MVP 12)
 
-Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anything a team adds). Features target them, and Coverage shows which are covered or missing and why (ADR 0009). Platforms are done: each Project copies the Organization's default list (the built-in Back-End, Front-End and Mobile until an Admin changes it) and edits its own, Features target them, and a first Spec starts with a section per target Platform (0050).
+Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anything a team adds). Features target them, and Coverage shows which are covered or missing and why (ADR 0009). Platforms are done: each Project copies the Organization's default list (the built-in Back-End, Front-End and Mobile until an Admin changes it) and edits its own, Features target them, and a first Spec starts with a section per target Platform (0050). Coverage is done: each Feature's target Platforms, and a Project's Feature × Platform matrix, are covered or missing by the checks each Platform switches on; Spec drafts fill or ask about missing Platform sections, Grilling asks about Platforms no Feature covers, and the AI drafts a Platform's acceptance criteria as a Spec Proposal (0051).
 
 | # | Ticket | Depends on |
 | --- | --- | --- |

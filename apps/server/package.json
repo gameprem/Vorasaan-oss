@@ -16,6 +16,7 @@
     "eval:conversation": "bun scripts/eval-conversation.ts",
     "eval:redrafts": "bun scripts/eval-redrafts.ts",
     "eval:prompt-proposals": "bun scripts/eval-prompt-proposals.ts",
+    "eval:coverage": "bun scripts/eval-coverage.ts",
     "tokens:fixture": "bun scripts/token-fixture.ts",
     "tokens:tasks": "bun scripts/token-report.ts",
     "bench": "bun scripts/bench.ts"

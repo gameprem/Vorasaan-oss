@@ -1,6 +1,7 @@
 import type { SkillName } from '@vorasaan/skills';
 import { CHOICES_EVAL_CASES } from './cases/choices.ts';
 import { CONVERSATION_EVAL_CASES } from './cases/conversation.ts';
+import { COVERAGE_EVAL_CASES } from './cases/coverage.ts';
 import { FEATURE_SUGGESTION_EVAL_CASES } from './cases/feature-suggestions.ts';
 import { GRILLING_EVAL_CASES } from './cases/grilling.ts';
 import { PROMPT_PROPOSAL_EVAL_CASES } from './cases/prompt-proposals.ts';
@@ -21,6 +22,7 @@ export const EVAL_CASES: EvalCase[] = [
   ...CONVERSATION_EVAL_CASES,
   ...REDRAFT_EVAL_CASES,
   ...PROMPT_PROPOSAL_EVAL_CASES,
+  ...COVERAGE_EVAL_CASES,
 ];
 
 /** The checked-in cases that evaluate one prompt. */

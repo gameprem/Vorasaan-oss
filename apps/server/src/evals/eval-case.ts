@@ -20,6 +20,7 @@ export const EVAL_SETS = [
   'conversation',
   'redrafts',
   'prompt-proposals',
+  'coverage',
 ] as const;
 export type EvalSetName = (typeof EVAL_SETS)[number];
 

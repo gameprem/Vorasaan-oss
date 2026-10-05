@@ -42,6 +42,10 @@ _Avoid_: Platform preset, default stack
 For each Feature and each of its target Platforms, whether that Platform is covered or missing (for example no Spec section, nobody in the Team to ask, open Blockers, or no QA: no acceptance criteria or test cases, or nobody holding QA), using the checks that Platform has switched on.
 _Avoid_: Completeness score, progress
 
+**Coverage check**:
+One of the four tests Coverage can apply to a Platform, each switched on or off per Platform: Spec section (the latest Spec Version has a non-empty section for it), someone to ask (someone in the Team holds one of its Team Roles), no open Blockers (none names it in its title or Choices), and QA ready (its section has acceptance criteria or test cases, and someone in the Team holds QA). A Platform no Feature covers is one that no Feature targeting it passes every check of.
+_Avoid_: Rule, criterion, gate
+
 **Role Owner**:
 One of the people responsible for a given Team Role on a specific Feature. A Feature may have several Role Owners for the same Team Role.
 _Avoid_: Assignee, owner

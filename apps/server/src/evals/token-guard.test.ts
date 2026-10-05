@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { AI_TASKS, type AiTask } from '../ai/ai.config.ts';
+import { AI_TASKS } from '../ai/ai.config.ts';
 import type { CallUsage, ChatChunk } from '../ai/ai.port.ts';
 import { FAKE_USAGE, FakeAiPort } from '../ai/fake-ai.port.ts';
 import { generateChoicesPrompt, TASK_PROMPTS } from '../ai/prompts.ts';
@@ -92,7 +92,7 @@ describe('the eval guard on the checked-in cases', () => {
     const summary = summarizeCases(await measureEvalCases());
     expect(summary.map((s): string => s.task).sort()).toEqual(Object.keys(EVAL_CASE_GUARD).sort());
     for (const s of summary) {
-      const guard = EVAL_CASE_GUARD[s.task as Exclude<AiTask, 'draftSpecProposal'>];
+      const guard = EVAL_CASE_GUARD[s.task];
       expect(s.tokens, `${s.task} tokens`).toBeLessThanOrEqual(guard.tokens);
       expect(s.score, `${s.task} score`).toBeGreaterThanOrEqual(guard.score);
       if (guard.thai !== undefined) {

@@ -42,6 +42,7 @@ export const SpecVersionSource = z.enum([
   'DECISION',
   'REVERT',
   'CONVERSATION',
+  'ACCEPTANCE_CRITERIA',
 ]);
 export type SpecVersionSource = z.infer<typeof SpecVersionSource>;
 

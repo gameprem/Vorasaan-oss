@@ -87,6 +87,13 @@ export type ContextBlock = {
 
 export type FeatureForAi = { title: string; description: string };
 
+/**
+ * A Platform of the Project (ADR 0009) as AI input: its name, which is its Spec section's
+ * `##` heading, and the Team Roles who can answer for it. Names are written by people:
+ * untrusted, fenced like any data.
+ */
+export type PlatformForAi = { name: string; roles: TeamRole[] };
+
 export const AttachmentSummary = z.object({
   summary: z.string().trim().min(1),
 });
@@ -557,6 +564,11 @@ export interface AiPort {
       decision: DecisionForAi;
       context: ContextBlock[];
       foundation?: ProjectFoundationForAi;
+      /**
+       * Target Platforms the Spec has no section for (Coverage, ticket 0051): the draft fills
+       * each section or puts an open question in it. None when left out.
+       */
+      missingSections?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ): Promise<SpecProposalDraft>;
@@ -572,6 +584,8 @@ export interface AiPort {
       feature: FeatureForAi;
       specMarkdown: string;
       context: ContextBlock[];
+      /** Target Platforms the Spec has no section for (ticket 0051); none when left out. */
+      missingSections?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ): Promise<SpecProposalDraft>;
@@ -590,6 +604,8 @@ export interface AiPort {
       guidelines: GuidelineForAi[];
       /** Summaries of the rounds already done. */
       memory: WorkflowMemory;
+      /** The Project's Platforms no Feature covers (ticket 0051), to ask about; none when left out. */
+      uncoveredPlatforms?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ): Promise<GrillingQuestionDrafts>;
@@ -660,6 +676,23 @@ export interface AiPort {
       /** Retrieved Project context, the current Brief first. */
       projectContext: ContextBlock[];
       guidelines: GuidelineForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<SpecProposalDraft>;
+
+  /**
+   * The complete next Spec with acceptance criteria for one target Platform that isn't QA
+   * ready (Coverage, ticket 0051), drafted from the Spec and the Feature's Decisions in the
+   * context, as a Spec Proposal a person approves.
+   */
+  draftAcceptanceCriteria(
+    input: {
+      feature: FeatureForAi;
+      platform: PlatformForAi;
+      /** The whole latest Spec: the base the draft edits. */
+      specMarkdown: string;
+      /** Retrieved Feature context (its Decisions and requests first), without its Spec. */
+      context: ContextBlock[];
     },
     options?: AiCallOptions,
   ): Promise<SpecProposalDraft>;

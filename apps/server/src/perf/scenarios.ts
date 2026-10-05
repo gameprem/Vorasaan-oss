@@ -52,6 +52,14 @@ export const QUERY_BUDGETS = {
   chatTurn: 81, // its context includes the same retrieval
   // Identity, Admin check, the Organization, then four aggregates at once (ticket 0075).
   aiUsage: 8,
+  // Coverage (ticket 0051), each a fixed few queries run together however many Features,
+  // Platforms and Blockers there are. A Feature's: identity, then the Feature, its targets,
+  // its latest Spec Version, its Team's roles and its open Blockers (their Choices are one
+  // more). A Project's: identity and the Project's access check, then its Platforms, Features,
+  // targets, each Feature's latest Spec Version (one statement), its Teams' roles and the
+  // open Blockers with their Choices.
+  featureCoverage: 7,
+  projectCoverage: 11,
 } as const;
 
 /**
@@ -184,6 +192,24 @@ export async function hotPaths(
       iterations,
       warmup: 3,
       queryBudget: QUERY_BUDGETS.aiUsage,
+    },
+    {
+      name: 'GET /features/:id/coverage',
+      description: "A Feature's Coverage: its target Platforms, each covered or missing and why",
+      run: get(`/features/${FEATURE}/coverage`),
+      iterations,
+      warmup: 3,
+      queryBudget: QUERY_BUDGETS.featureCoverage,
+    },
+    {
+      name: 'GET /projects/:id/coverage',
+      description:
+        "The seeded Project's Coverage matrix: every Feature × Platform, from each Feature's " +
+        'latest Spec Version, its Team and its open Blockers with their Choices',
+      run: get(`/projects/${SEED.projectId}/coverage`),
+      iterations,
+      warmup: 3,
+      queryBudget: QUERY_BUDGETS.projectCoverage,
     },
     {
       name: 'Escalation job (every open request)',

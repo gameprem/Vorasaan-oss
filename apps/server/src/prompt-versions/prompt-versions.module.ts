@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { CoverageModule } from '../coverage/coverage.module.ts';
 import { FeatureGuidelinesModule } from '../feature-guidelines/feature-guidelines.module.ts';
 import { RedraftsModule } from '../redrafts/redrafts.module.ts';
 import { ModelSuggestionsController, ModelSuggestionsService } from './model-suggestions.ts';
@@ -15,7 +16,7 @@ import { PromptReplay } from './replay.ts';
 // which version of its prompt to render. The AI's proposals (ticket 0072) are redrafted
 // through RedraftsService, like every AI proposal.
 @Module({
-  imports: [FeatureGuidelinesModule, RedraftsModule],
+  imports: [FeatureGuidelinesModule, RedraftsModule, CoverageModule],
   controllers: [
     PromptVersionsController,
     PromptAnalysisSettingsController,
