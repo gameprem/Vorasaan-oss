@@ -310,6 +310,28 @@ describe('a Receipt per AI call (0070)', () => {
     });
   }
 
+  test("a Receipt keeps the Project it worked for: given, or its Feature's (ticket 0075)", async () => {
+    const org = await db.organization.create({ data: { name: 'Acme' } });
+    const project = await db.project.create({ data: { organizationId: org.id, name: 'Cards' } });
+    const team = await db.team.create({ data: { projectId: project.id, name: 'Core' } });
+    const feature = await db.feature.create({ data: { teamId: team.id, title: 'Tap to pay' } });
+    await CALLS.generateChoices(ai, { receipt: { featureId: feature.id } });
+    await CALLS.suggestFeatures(ai, { receipt: { projectId: project.id } });
+    await CALLS.analyzeFeedback(ai, {});
+    await CALLS.generateChoices(ai, { receipt: { featureId: crypto.randomUUID() } });
+    await receipts.drain();
+    const rows = await db.receipt.findMany();
+    // A Feature that is gone leaves the Receipt without a Project.
+    expect(rows.map((r) => `${r.task} ${r.projectId}`).sort()).toEqual(
+      [
+        `generateChoices ${project.id}`,
+        `suggestFeatures ${project.id}`,
+        'analyzeFeedback null',
+        'generateChoices null',
+      ].sort(),
+    );
+  });
+
   test('a call retried after an invalid answer sums the usage of both requests', async () => {
     const twice: AiPort = Object.assign(Object.create(fake), {
       generateChoices: async (input: unknown, o?: AiCallOptions) => {

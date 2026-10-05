@@ -144,6 +144,7 @@ export class DecisionRequestsService {
               requestedById: user.id,
               output: { kind: 'CHOICES', id: requestId },
               proposal: { kind: 'CHOICES', id: requestId, redraft: 1 },
+              featureId: input.featureId,
             },
           },
         );
@@ -558,6 +559,7 @@ export class DecisionRequestsService {
             requestedById: user.id,
             output: { kind: 'SPEC_PROPOSAL', id: proposalId },
             proposal: { kind: 'SPEC_PROPOSAL', id: proposalId, redraft: 1 },
+            featureId: request.featureId,
           },
         },
       );

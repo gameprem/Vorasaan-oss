@@ -579,6 +579,7 @@ export class ConversationsService {
             receipt: {
               requestedById: user.id,
               output: { kind: 'CONVERSATION_MESSAGE', id: replyId },
+              projectId: conversation.projectId,
             },
           },
         );
@@ -821,7 +822,7 @@ export class ConversationsService {
    * turn without counting.
    */
   private async compact(
-    conversation: { id: string; summary: string; summarizedThrough: number },
+    conversation: { id: string; summary: string; summarizedThrough: number; projectId: string },
     rows: MessageRow[],
     turn: {
       user: User;
@@ -880,7 +881,7 @@ export class ConversationsService {
    */
   private async summarize(
     user: User,
-    conversation: { id: string; summary: string },
+    conversation: { id: string; summary: string; projectId: string },
     older: MessageRow[],
     turn: {
       scope: ConversationScopeForAi;
@@ -905,6 +906,7 @@ export class ConversationsService {
           receipt: {
             requestedById: user.id,
             output: { kind: 'CONVERSATION', id: conversation.id },
+            projectId: conversation.projectId,
           },
         },
       );

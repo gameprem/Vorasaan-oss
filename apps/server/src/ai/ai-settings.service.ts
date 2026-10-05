@@ -18,6 +18,7 @@ import {
   type CreateAiProviderInput,
   type CreateApprovedModelInput,
   DEFAULT_PROVIDER_NAMES,
+  type ModelPrices,
   type OpenRouterModelsView,
   type RecordedModel,
   type SetAiTaskModelsInput,
@@ -352,6 +353,7 @@ export class AiSettingsService {
             displayName: input.displayName,
             note: input.note ?? null,
             contextWindow,
+            ...priceColumns(input.prices ?? null),
             position: last ? last.position + 1 : 0,
             isDefault,
           },
@@ -394,6 +396,7 @@ export class AiSettingsService {
             ...(input.displayName ? { displayName: input.displayName } : {}),
             ...(input.note !== undefined ? { note: input.note } : {}),
             ...(contextWindow !== undefined ? { contextWindow } : {}),
+            ...(input.prices !== undefined ? priceColumns(input.prices) : {}),
             ...(input.isDefault ? { isDefault: true } : {}),
           },
           include: { integration: true },
@@ -619,8 +622,20 @@ function modelSettingsView(m: ModelWithProvider): ApprovedModelSettingsView {
     displayName: m.displayName,
     note: m.note,
     contextWindow: m.contextWindow,
+    prices:
+      m.inputPricePerMillion === null || m.outputPricePerMillion === null
+        ? null
+        : { inputPerMillion: m.inputPricePerMillion, outputPerMillion: m.outputPricePerMillion },
     position: m.position,
     isDefault: m.isDefault,
+  };
+}
+
+/** An Approved Model's price columns (ticket 0075): both set, or both null. */
+function priceColumns(prices: ModelPrices | null) {
+  return {
+    inputPricePerMillion: prices?.inputPerMillion ?? null,
+    outputPricePerMillion: prices?.outputPerMillion ?? null,
   };
 }
 

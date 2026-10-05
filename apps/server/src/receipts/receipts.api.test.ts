@@ -131,6 +131,8 @@ describe('Receipts and their outcomes (ticket 0070)', () => {
       proposalId: res.body.id,
       redraft: 1,
       requestedById: beam.id,
+      // Its Feature's Project, looked up when written (ticket 0075).
+      projectId: SEED.projectId,
     });
     expect(rows[0]?.latencyMs).toBeGreaterThanOrEqual(0);
   });

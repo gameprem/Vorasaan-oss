@@ -83,6 +83,17 @@ function nextDay({ y, m, d }: LocalDate): LocalDate {
 const isoDate = ({ y, m, d }: LocalDate) =>
   `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
+/** The date ("2026-10-05") instant `t` falls on in `timeZone`. */
+export function localIsoDate(t: Date, timeZone: string): string {
+  return isoDate(localDateOf(t.getTime(), timeZone));
+}
+
+/** When the day `date` ("2026-10-05") starts in `timeZone`: its local midnight. */
+export function startOfLocalDate(date: string, timeZone: string): Date {
+  const [y = 1970, m = 1, d = 1] = date.split('-').map(Number);
+  return new Date(instantOf({ y, m, d }, 0, timeZone));
+}
+
 function isWorkingDay(date: LocalDate, cal: WorkingCalendar): boolean {
   const weekday = new Date(Date.UTC(date.y, date.m - 1, date.d)).getUTCDay() || 7;
   return cal.workingDays.has(weekday) && !cal.holidays.has(isoDate(date));

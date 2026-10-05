@@ -168,6 +168,8 @@ enum NotificationType {
   REQUEST_REMINDER // escalation step 1: to the Decider, or the Recipients while nobody has Claimed it
   REQUEST_ESCALATED // escalation step 2: to each active Delegate added as a Recipient
   REQUEST_OVERDUE // escalation step 3: to the Raiser and the Team's Tech Leads
+  AI_BUDGET_WARNING // the AI's estimated cost this month passed 80% of the budget: to the Admins (ticket 0075)
+  AI_BUDGET_REACHED // ... and 100%; nothing is blocked
 }
 
 // How a Response Window is counted (ADR 0011): in working hours or working days of the
@@ -313,6 +315,9 @@ model Organization {
   // The AI analyses a prompt's feedback once this many new outcomes are linked to its
   // Receipts (ticket 0072); 0 never analyses on its own (an Admin still can).
   promptAnalysisAfter  Int      @default(20)
+  // A monthly budget for the AI's estimated cost, in US dollars (ticket 0075); null: none.
+  // The Admins get a Notification at 80% and at 100% of it. Nothing is ever blocked.
+  aiMonthlyBudget      Float?
   createdAt            DateTime @default(now())
 
   memberships       OrgMembership[]
@@ -331,6 +336,20 @@ model Organization {
   promptActivations PromptActivation[]
   promptEvalRuns    PromptEvalRun[]
   promptAnalyses    PromptAnalysis[]
+  aiBudgetAlerts    AiBudgetAlert[]
+}
+
+// One AI budget threshold (80 or 100 percent) crossed in one month of the Organization's
+// time zone (ticket 0075): its Notification went to the Admins. The key keeps it to one
+// each, however many Receipts cross it at once. Changing the budget clears the month's.
+model AiBudgetAlert {
+  organizationId String
+  month          String // "2026-10", in the Organization's Working Time zone
+  threshold      Int // 80 or 100
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, month, threshold])
 }
 
 // The Organization's working calendar and default Response Windows (ADR 0011).
@@ -427,6 +446,10 @@ model ApprovedModel {
   // How many tokens one call to it may hold, prompt and reply together (ticket 0060):
   // prefilled for known models, else VORASAAN_CONTEXT_WINDOW; an Admin can edit it.
   contextWindow  Int
+  // What a million tokens cost on it, in US dollars, as the Admin set them (ticket 0075):
+  // the AI usage dashboard's estimated cost. Both null: no cost is shown, only tokens.
+  inputPricePerMillion  Float?
+  outputPricePerMillion Float?
   position       Int
   isDefault      Boolean        @default(false)
   createdAt      DateTime       @default(now())
@@ -1413,6 +1436,9 @@ model Receipt {
   // The eval run (ticket 0071) the call was made for; null for the product's own calls.
   // A replay never picks these.
   evalRunId        String?
+  // The Project the call worked for (ticket 0075), a plain id so the Receipt outlives it;
+  // null for Organization-wide work (Prompt proposals, Eval Runs).
+  projectId        String?
   createdAt        DateTime           @default(now())
   requestedBy      User?              @relation("ReceiptRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   outcomes         ReceiptOutcome[]   @relation("ReceiptOutcomes")

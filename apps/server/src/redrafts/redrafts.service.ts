@@ -90,6 +90,20 @@ type Guard =
       raiserId: string;
     };
 
+/** Where a Redraft's Receipt says the call worked (ticket 0075): its Feature or Project. */
+function receiptScope(guard: Guard): { featureId?: string; projectId?: string } {
+  switch (guard.kind) {
+    case 'SPEC_PROPOSAL':
+    case 'CHOICES':
+      return { featureId: guard.featureId };
+    case 'BRIEF_PROPOSAL':
+    case 'FEATURE_SUGGESTION':
+      return { projectId: guard.projectId };
+    case 'PROMPT_VERSION':
+      return {};
+  }
+}
+
 type Written = {
   content: RedraftContent;
   summary: string;
@@ -333,6 +347,7 @@ export class RedraftsService {
         requestedById: user.id,
         output: { kind: 'REDRAFT', id: writing.id },
         proposal: { kind: ref.kind, id: ref.id, redraft: writing.number },
+        ...receiptScope(target.guard),
       });
       await this.store(target, writing, written);
       await this.rememberPreferences(ref, written.preferences);
