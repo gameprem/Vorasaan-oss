@@ -45,6 +45,7 @@ const VERSION_TEXT: Record<DecisionGraphNode['source'], string> = {
   DECISION: 'From a Decision',
   REVERT: 'Reverted',
   CONVERSATION: 'Drafted in a Conversation',
+  ACCEPTANCE_CRITERIA: "Drafted a Platform's acceptance criteria",
 };
 
 /** The stroke of a branch, by where it stands. */

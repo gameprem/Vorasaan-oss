@@ -17,6 +17,7 @@ export const SKILLS = [
   'suggest-features',
   'draft-spec-from-suggestion',
   'check-feature-fit',
+  'draft-acceptance-criteria',
   'chat',
   'summarize-conversation',
   'redraft-choices',

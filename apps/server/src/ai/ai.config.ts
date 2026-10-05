@@ -19,6 +19,7 @@ export type AiTask =
   | 'suggestFeatures'
   | 'draftSpecFromSuggestion'
   | 'checkFeatureFit'
+  | 'draftAcceptanceCriteria'
   | 'chat'
   | 'summarizeConversation'
   | 'redraftChoices'
@@ -47,6 +48,11 @@ export const AI_TASKS: Record<AiTask, { kind: AiTaskKind; env: string }> = {
     env: 'VORASAAN_MODEL_DRAFT_SPEC_FROM_SUGGESTION',
   },
   checkFeatureFit: { kind: 'FIT_CHECK', env: 'VORASAAN_MODEL_CHECK_FEATURE_FIT' },
+  // Coverage (ticket 0051): a Platform's acceptance criteria, drafted as a Spec Proposal.
+  draftAcceptanceCriteria: {
+    kind: 'SPEC_PROPOSAL',
+    env: 'VORASAAN_MODEL_DRAFT_ACCEPTANCE_CRITERIA',
+  },
   chat: { kind: 'CHAT', env: 'VORASAAN_MODEL_CHAT' },
   summarizeConversation: { kind: 'SUMMARIES', env: 'VORASAAN_MODEL_SUMMARIZE_CONVERSATION' },
   // Request changes (ticket 0065): a Redraft runs on the model of the task that drafted it.

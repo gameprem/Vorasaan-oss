@@ -1,4 +1,10 @@
-import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
+import {
+  ACCEPTANCE_HEADINGS,
+  type GrillingRoundKind,
+  headingKey,
+  specHeadings,
+  type TeamRole,
+} from '@vorasaan/shared';
 import type {
   ActionCardForAi,
   AiCallOptions,
@@ -22,6 +28,7 @@ import type {
   GrillingFollowUpForAi,
   GuidelineForAi,
   ModelChoice,
+  PlatformForAi,
   ProjectForAi,
   ProjectFoundationForAi,
   PromptChoice,
@@ -193,6 +200,79 @@ export const FAKE_FEEDBACK_PATTERNS = [
 /** The line each pattern adds to the fake's proposed Prompt Version. */
 export function fakeGuidance(title: string): string {
   return `- Learned from feedback: ${title}.`;
+}
+
+/**
+ * The sections the fake adds for missing Platforms (ticket 0051): each with one open question
+ * for the Team Roles who answer for it, since the fake knows nothing about the Platform.
+ */
+export function fakePlatformSections(missing: readonly PlatformForAi[] | undefined): string {
+  return (missing ?? []).map((p) => `\n## ${p.name}\n\n${fakePlatformQuestion(p)}\n`).join('');
+}
+
+/** The open question the fake puts in a missing Platform section. */
+export function fakePlatformQuestion(p: PlatformForAi): string {
+  return `- Open question for ${p.roles.join(' or ') || 'the Team'}: what must ${p.name} do for this Feature?`;
+}
+
+/** The question the fake's UX round asks about Platforms no Feature covers (ticket 0051). */
+export function fakeUncoveredQuestion(platforms: readonly PlatformForAi[]): string {
+  const names = platforms.map((p) => p.name).join(', ');
+  return `No Feature covers ${names} yet: what should ${names} do in this Project?`;
+}
+
+/**
+ * The fake's acceptance criteria for a Platform (ticket 0051): the Spec's general acceptance
+ * criteria and the Decisions in the context, each restated "On <Platform>: ...", put in the
+ * Platform's "Acceptance criteria" subsection (added, with its section, when missing).
+ */
+export function fakeAcceptanceCriteria(
+  specMarkdown: string,
+  platform: string,
+  context: readonly ContextBlock[],
+): string {
+  const { lines, headings } = specHeadings(specMarkdown);
+  const general = headings.find(
+    (h) => h.level === 2 && headingKey(h.text) === 'acceptance criteria',
+  );
+  const fromSpec = general
+    ? lines
+        .slice(general.line + 1, general.end)
+        .map((l) => l.match(/^\s*[-*]\s*\[[ xX]?\]\s*(.+)$/)?.[1]?.trim())
+        .filter((t): t is string => Boolean(t))
+        .slice(0, 3)
+    : [];
+  const fromDecisions = context
+    .filter((b) => b.source.kind === 'DECISION')
+    .slice(0, 3)
+    .map((b) => `follows the Decision "${b.source.title}"`);
+  const criteria = [...fromSpec, ...fromDecisions];
+  const items = (criteria.length ? criteria : ['works as the Spec describes']).map(
+    (c) => `- [ ] On ${platform}: ${c}`,
+  );
+
+  const key = headingKey(platform);
+  const section = headings.find((h) => h.level === 2 && headingKey(h.text) === key);
+  const out = [...lines];
+  if (section) {
+    const sub = headings.find(
+      (h) =>
+        h.level === 3 &&
+        h.line > section.line &&
+        h.line < section.end &&
+        (ACCEPTANCE_HEADINGS as readonly string[]).includes(headingKey(h.text)),
+    );
+    if (sub) out.splice(sub.line + 1, 0, '', ...items);
+    else out.splice(section.end, 0, '### Acceptance criteria', '', ...items, '');
+  } else {
+    const outOfScope = headings.find((h) => h.level === 2 && headingKey(h.text) === 'out of scope');
+    const at = outOfScope?.line ?? out.length;
+    out.splice(at, 0, `## ${platform}`, '', '### Acceptance criteria', '', ...items, '');
+  }
+  return `${out
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd()}\n`;
 }
 
 /** What the fake reports as one call's usage, unless a test changes `usage`. */
@@ -417,12 +497,13 @@ export class FakeAiPort implements AiPort {
       decision: DecisionForAi;
       context: ContextBlock[];
       foundation?: ProjectFoundationForAi;
+      missingSections?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ) {
     this.record('draftSpecProposal', input, options);
     return {
-      proposedMarkdown: `${input.specMarkdown.trimEnd()}\n\n## Decisions\n- ${input.request.title}: ${describeDecision(input.decision).split('\n')[0]}\n`,
+      proposedMarkdown: `${input.specMarkdown.trimEnd()}\n${fakePlatformSections(input.missingSections)}\n## Decisions\n- ${input.request.title}: ${describeDecision(input.decision).split('\n')[0]}\n`,
       summary: `Recorded the decision on "${input.request.title}".`,
     };
   }
@@ -438,6 +519,7 @@ export class FakeAiPort implements AiPort {
       feature: FeatureForAi;
       specMarkdown: string;
       context: ContextBlock[];
+      missingSections?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ) {
@@ -447,7 +529,7 @@ export class FakeAiPort implements AiPort {
     );
     const sources = [...titles].map((title) => `- ${title}`).join('\n');
     return {
-      proposedMarkdown: `# ${input.feature.title}\n\n## Sources\n${sources}\n`,
+      proposedMarkdown: `# ${input.feature.title}\n\n## Sources\n${sources}\n${fakePlatformSections(input.missingSections)}`,
       summary: `Drafted from ${titles.size} Attachments.`,
     };
   }
@@ -460,16 +542,19 @@ export class FakeAiPort implements AiPort {
       projectContext: ContextBlock[];
       guidelines: GuidelineForAi[];
       memory: WorkflowMemory;
+      uncoveredPlatforms?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ) {
     this.record('grillingQuestions', input, options);
     const known = input.projectContext.map((b) => b.text.toLowerCase()).join('\n');
-    return {
-      questions: FAKE_GRILLING_TOPICS[input.round]
-        .filter((t) => !known.includes(t.keyword))
-        .map((t) => t.question),
-    };
+    const questions = FAKE_GRILLING_TOPICS[input.round]
+      .filter((t) => !known.includes(t.keyword))
+      .map((t) => t.question);
+    // Platforms no Feature covers (ticket 0051): asked once, in the round about platforms.
+    const uncovered = input.uncoveredPlatforms ?? [];
+    if (input.round === 'UX' && uncovered.length) questions.push(fakeUncoveredQuestion(uncovered));
+    return { questions };
   }
 
   /**
@@ -605,6 +690,21 @@ export class FakeAiPort implements AiPort {
           question: met ? null : `How does it meet "${g.title}"?`,
         };
       }),
+    };
+  }
+
+  async draftAcceptanceCriteria(
+    input: Parameters<AiPort['draftAcceptanceCriteria']>[0],
+    options?: AiCallOptions,
+  ) {
+    this.record('draftAcceptanceCriteria', input, options);
+    return {
+      proposedMarkdown: fakeAcceptanceCriteria(
+        input.specMarkdown,
+        input.platform.name,
+        input.context,
+      ),
+      summary: `Added acceptance criteria for ${input.platform.name}.`,
     };
   }
 

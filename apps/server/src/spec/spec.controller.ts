@@ -11,6 +11,7 @@ import {
 import type { User } from '@vorasaan/db';
 import {
   ApproveProposalInput,
+  DraftAcceptanceCriteriaInput,
   RejectProposalInput,
   RevertSpecInput,
   SpecDiffQuery,
@@ -48,6 +49,16 @@ export class SpecController {
   @Post('features/:id/spec-proposals/from-attachments')
   proposeFromAttachments(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
     return this.spec.proposeFromAttachments(user, id);
+  }
+
+  /** The AI drafts a Platform's acceptance criteria when it isn't QA ready (ticket 0051). */
+  @Post('features/:id/coverage/acceptance-criteria')
+  proposeAcceptanceCriteria(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: DraftAcceptanceCriteriaInput }) body: DraftAcceptanceCriteriaInput,
+  ) {
+    return this.spec.proposeAcceptanceCriteria(user, id, body.platformId);
   }
 
   @Get('features/:id/spec-versions')

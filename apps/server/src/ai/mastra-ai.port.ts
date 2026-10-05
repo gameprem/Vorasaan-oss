@@ -403,6 +403,19 @@ export class MastraAiPort implements AiPort {
     return generateStructured(generate, 'check-feature-fit', prompt, FeatureFitDraft);
   }
 
+  async draftAcceptanceCriteria(
+    input: Parameters<AiPort['draftAcceptanceCriteria']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await TASK_PROMPTS.draftAcceptanceCriteria(input, this.lang(options));
+    const generate = agentGenerate(
+      'draft-acceptance-criteria',
+      await this.resolveModel('draftAcceptanceCriteria', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'draft-acceptance-criteria', prompt, SpecProposalDraft);
+  }
+
   async redraftChoices(input: Parameters<AiPort['redraftChoices']>[0], options?: AiCallOptions) {
     const prompt = await TASK_PROMPTS.redraftChoices(input, this.lang(options));
     const generate = agentGenerate(

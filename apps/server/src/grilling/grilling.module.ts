@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConversationLocksModule } from '../conversations/conversation-locks.ts';
+import { CoverageModule } from '../coverage/coverage.module.ts';
 import { FeatureGuidelinesModule } from '../feature-guidelines/feature-guidelines.module.ts';
 import { InboxModule } from '../inbox/inbox.module.ts';
 import { GrillingController } from './grilling.controller.ts';
@@ -11,7 +12,7 @@ import { GrillingConversationsService } from './grilling-conversations.service.t
  * each holder's Grilling Conversations (0044), which ConversationsModule routes here.
  */
 @Module({
-  imports: [InboxModule, FeatureGuidelinesModule, ConversationLocksModule],
+  imports: [InboxModule, FeatureGuidelinesModule, ConversationLocksModule, CoverageModule],
   controllers: [GrillingController],
   providers: [GrillingService, GrillingConversationsService],
   exports: [GrillingConversationsService],

@@ -19,6 +19,7 @@ import type {
   GrillingFollowUpForAi,
   GuidelineForAi,
   PatternForAi,
+  PlatformForAi,
   ProjectForAi,
   ProjectFoundationForAi,
   PromptForAi,
@@ -66,6 +67,7 @@ export const TASK_SKILLS: Record<AiTask, SkillName> = {
   suggestFeatures: 'suggest-features',
   draftSpecFromSuggestion: 'draft-spec-from-suggestion',
   checkFeatureFit: 'check-feature-fit',
+  draftAcceptanceCriteria: 'draft-acceptance-criteria',
   chat: 'chat',
   summarizeConversation: 'summarize-conversation',
   redraftChoices: 'redraft-choices',
@@ -102,11 +104,11 @@ const KIND_MEANING = {
  * prompt's data blocks (<attachment>, <context>, <spec>, <brief>, <guidelines>,
  * <memory>, <answers>, <answer>, <decisions>, <dismissed>, <suggestions>, <suggestion>,
  * <feature>, <summary>, <message>, <question>, <exchange>, <proposal>, <choices>, <feedback>,
- * <earlier>, <description>), so retrieved content can't escape its fence in the prompt.
+ * <earlier>, <description>, <platforms>), so retrieved content can't escape its fence in the prompt.
  */
 export function fence(text: string): string {
   return text.replace(
-    /<(\s*\/?\s*(?:attachment|context|spec|brief|guidelines|memory|answers?|decisions|dismissed|suggestions?|feature|summary|messages?|questions?|exchange|proposal|choices|feedback|earlier|description|focus|record)\b)/gi,
+    /<(\s*\/?\s*(?:attachment|context|spec|brief|guidelines|memory|answers?|decisions|dismissed|suggestions?|feature|summary|messages?|questions?|exchange|proposal|choices|feedback|earlier|description|focus|record|platforms)\b)/gi,
     '‹$1',
   );
 }
@@ -190,6 +192,22 @@ export function renderBrief(brief: ProjectFoundationForAi['brief']): string {
 
 const NO_FOUNDATION: ProjectFoundationForAi = { brief: null, guidelines: [] };
 
+/**
+ * Platforms (ADR 0009) as the inside of a <platforms> block: one line each, with the Team
+ * Roles who answer for it. Names are written by people, so fenced and kept to one line.
+ */
+export function renderPlatforms(platforms: readonly PlatformForAi[], none: string): string {
+  if (platforms.length === 0) return none;
+  return platforms
+    .map((p) => {
+      const roles = p.roles.length ? p.roles.join(', ') : 'no Team Role named';
+      return `- ${attribute(p.name)} (${roles})`;
+    })
+    .join('\n');
+}
+
+const NO_MISSING_SECTIONS = '(None.)';
+
 export function generateChoicesPrompt(
   specMarkdown: string,
   request: RequestForAi,
@@ -229,9 +247,11 @@ export function draftSpecProposalPrompt(
   context: ContextBlock[],
   foundation: ProjectFoundationForAi = NO_FOUNDATION,
   lang: PromptOptions = {},
+  missingSections: readonly PlatformForAi[] = [],
 ) {
   return renderPrompt(lang, 'draft-spec-proposal', {
     spec: fence(specMarkdown),
+    missingSections: renderPlatforms(missingSections, NO_MISSING_SECTIONS),
     brief: renderBrief(foundation.brief),
     guidelines: renderGuidelines(foundation.guidelines),
     context: renderContext(context),
@@ -253,11 +273,13 @@ export function draftSpecFromAttachmentsPrompt(
   specMarkdown: string,
   context: ContextBlock[],
   lang: PromptOptions = {},
+  missingSections: readonly PlatformForAi[] = [],
 ) {
   return renderPrompt(lang, 'draft-spec-from-attachments', {
     featureTitle: feature.title,
     featureDescription: feature.description || '(No description.)',
     spec: fence(specMarkdown) || '(No Spec yet: this will be the first version.)',
+    missingSections: renderPlatforms(missingSections, NO_MISSING_SECTIONS),
     context: renderContext(context),
   });
 }
@@ -356,10 +378,12 @@ export function grillingQuestionsPrompt(
     projectContext: ContextBlock[];
     guidelines: GuidelineForAi[];
     memory: WorkflowMemory;
+    uncoveredPlatforms?: PlatformForAi[];
   },
   lang: PromptOptions = {},
 ) {
   return renderPrompt(lang, 'grilling-questions', {
+    uncoveredPlatforms: renderPlatforms(input.uncoveredPlatforms ?? [], '(None.)'),
     projectName: attribute(input.project.name),
     round: input.round,
     role: input.role,
@@ -472,6 +496,28 @@ export function checkFeatureFitPrompt(
     feature: fence(feature),
     context: renderContextAfterLead(input.projectContext, 'PROJECT_BRIEF', { projectLevel: true }),
     guidelines: renderGuidelines(input.guidelines),
+  });
+}
+
+/** A Platform's acceptance criteria, drafted from the Spec and the Decisions (ticket 0051). */
+export function draftAcceptanceCriteriaPrompt(
+  input: {
+    feature: FeatureForAi;
+    platform: PlatformForAi;
+    specMarkdown: string;
+    context: ContextBlock[];
+  },
+  lang: PromptOptions = {},
+) {
+  return renderPrompt(lang, 'draft-acceptance-criteria', {
+    platformName: attribute(input.platform.name),
+    platformRoles: input.platform.roles.length
+      ? input.platform.roles.join(', ')
+      : 'no Team Role named',
+    featureTitle: attribute(input.feature.title),
+    featureDescription: fence(input.feature.description || '(No description.)'),
+    spec: fence(input.specMarkdown),
+    context: renderContext(input.context),
   });
 }
 
@@ -836,16 +882,24 @@ export const TASK_PROMPTS: {
       input.context,
       input.foundation,
       lang,
+      input.missingSections,
     ),
   summarizeAttachment: (input, lang) => summarizeAttachmentPrompt(input.attachment, lang),
   draftSpecFromAttachments: (input, lang) =>
-    draftSpecFromAttachmentsPrompt(input.feature, input.specMarkdown, input.context, lang),
+    draftSpecFromAttachmentsPrompt(
+      input.feature,
+      input.specMarkdown,
+      input.context,
+      lang,
+      input.missingSections,
+    ),
   grillingQuestions: grillingQuestionsPrompt,
   grillingFollowUp: grillingFollowUpPrompt,
   draftBriefFromGrilling: draftBriefFromGrillingPrompt,
   suggestFeatures: suggestFeaturesPrompt,
   draftSpecFromSuggestion: draftSpecFromSuggestionPrompt,
   checkFeatureFit: checkFeatureFitPrompt,
+  draftAcceptanceCriteria: draftAcceptanceCriteriaPrompt,
   summarizeConversation: summarizeConversationPrompt,
   redraftChoices: redraftChoicesPrompt,
   redraftSpecProposal: redraftSpecProposalPrompt,

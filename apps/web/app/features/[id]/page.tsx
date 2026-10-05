@@ -46,6 +46,7 @@ const SOURCE_TEXT: Record<SpecVersionView['source'], string> = {
   DECISION: 'From a Decision',
   REVERT: 'Reverted',
   CONVERSATION: 'Drafted in a Conversation',
+  ACCEPTANCE_CRITERIA: "Drafted a Platform's acceptance criteria",
 };
 
 /** Loads what only one tab needs; an error there is shown in the tab, not as the whole page. */

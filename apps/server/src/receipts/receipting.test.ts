@@ -121,6 +121,16 @@ const CALLS: Record<AiTask, (ai: AiPort, options: AiCallOptions) => Promise<unkn
     ai.draftSpecFromSuggestion({ project, suggestion, projectContext: [], guidelines: [] }, o),
   checkFeatureFit: (ai, o) =>
     ai.checkFeatureFit({ project, feature, projectContext: [], guidelines: [] }, o),
+  draftAcceptanceCriteria: (ai, o) =>
+    ai.draftAcceptanceCriteria(
+      {
+        feature,
+        platform: { name: 'Flutter', roles: ['MOBILE'] },
+        specMarkdown: '# Spec',
+        context,
+      },
+      o,
+    ),
   chat: async (ai, o) => {
     const chunks = [];
     for await (const chunk of ai.chat(
