@@ -16,11 +16,11 @@ import type {
   SpecVersionView,
 } from '@vorasaan/shared';
 import { DEV_USER_HEADER } from '../auth/identity.guard.ts';
-import { createTestApp } from '../test/app.ts';
+import { createTestApp, type TestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 import { as } from '../test/http.ts';
 import { CHUNKING } from './chunker.ts';
-import { ContentChunkRepository } from './content-chunk.repository.ts';
+import { ContentChunkRepository, EXACT_SEARCH_MAX_CHUNKS } from './content-chunk.repository.ts';
 import { ContextRetriever } from './context-retriever.ts';
 import { EmbeddingError } from './embedding.port.ts';
 import { type FakeEmbeddings, fakeEmbedding } from './fake-embedding.port.ts';
@@ -67,6 +67,7 @@ describe('Indexing and search (pgvector)', () => {
   let embeddings: FakeEmbeddings;
   let drain: () => Promise<void>;
   let chunks: ContentChunkRepository;
+  let recordQueries: TestApp['recordQueries'];
   let storageDir: string;
   let pages: ReturnType<typeof Bun.serve>;
   let pageHtml: string;
@@ -124,6 +125,7 @@ describe('Indexing and search (pgvector)', () => {
     const testApp = await createTestApp();
     ({ app, embeddings } = testApp);
     drain = testApp.drainIndexing;
+    recordQueries = testApp.recordQueries;
     chunks = app.get(ContentChunkRepository);
     db = createTestPrisma();
     asPim = as(app, pim.id);
@@ -343,6 +345,54 @@ describe('Indexing and search (pgvector)', () => {
     expect(plan.map((r) => r['QUERY PLAN']).join('\n')).toContain(
       'ContentChunk_embedding_hnsw_256',
     );
+  });
+
+  test('a scope of up to exactSearchMaxChunks is ranked exactly; a larger one uses the HNSW index (0074)', async () => {
+    await configure();
+    await upload(SEED.featureId, 'handbook.md', HANDBOOK);
+    // Most of the Organization's chunks are in another Project, so the HNSW index would
+    // hand back mostly candidates outside this scope.
+    const other = await otherProjectFeature();
+    const sections = Array.from(
+      { length: 12 },
+      (_, i) => `## Card topic ${i}
+${repeat(`Card limit ${i} applies to refunds and chargebacks.`)}`,
+    );
+    await upload(
+      other.featureId,
+      'cards.md',
+      `# Cards
+
+${sections.join('\n\n')}`,
+    );
+    await drain();
+
+    const scope = { organizationId: SEED.organizationId, projectId: SEED.projectId };
+    const q = query('how do support agents issue a refund');
+    const vector = `[${q.embedding.join(',')}]`;
+    // The exact answer: every chunk in scope, by distance, without any index.
+    const exact = await db.$transaction(async (tx) => {
+      await tx.$executeRaw`SET LOCAL enable_indexscan = off`;
+      return tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "ContentChunk"
+        WHERE "organizationId" = ${SEED.organizationId} AND "projectId" = ${SEED.projectId}
+          AND "embeddingModel" = ${PROVIDER.model} AND "embeddingDims" = 256
+        ORDER BY embedding::vector(256) <=> ${vector}::vector(256), id LIMIT 3`;
+    });
+    expect(exact.length).toBe(3);
+
+    const { result, sql } = await recordQueries(() => chunks.search(scope, q, 3));
+    expect(result.map((r) => r.id)).toEqual(exact.map((r) => r.id));
+    expect(sql).toHaveLength(1); // one statement, no ef_search transaction
+
+    chunks.exactSearchMaxChunks = 1;
+    try {
+      const viaIndex = await recordQueries(() => chunks.search(scope, q, 3));
+      expect(viaIndex.sql.some((s) => s.includes('hnsw.ef_search'))).toBe(true);
+      expect(viaIndex.result.every((r) => r.featureId === SEED.featureId)).toBe(true);
+    } finally {
+      chunks.exactSearchMaxChunks = EXACT_SEARCH_MAX_CHUNKS;
+    }
   });
 
   test('with no provider configured, actions still succeed and chunks have null embeddings', async () => {

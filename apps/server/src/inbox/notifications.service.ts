@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { NotificationType, Prisma, PrismaClient } from '@vorasaan/db';
 import type {
@@ -15,13 +16,25 @@ export type Tx = Prisma.TransactionClient;
 
 type MaybeId = string | null | undefined;
 
+export type NotificationInput = {
+  type: NotificationType;
+  to: readonly MaybeId[];
+  /** Who acted, never notified; null when the system acted (escalation). */
+  actorId: string | null;
+  featureId?: string;
+  requestId?: string;
+  specVersionId?: string;
+  delegationId?: string;
+};
+
 /**
  * What one change did to people's attention, collected inside its transaction and
  * pushed over `GET /events` only once that transaction has committed.
  */
 export class Outbox {
   readonly inbox = new Set<string>();
-  readonly notificationIds: string[] = [];
+  /** The Notifications written, and whom each is for. */
+  readonly notifications: { id: string; userId: string }[] = [];
   readonly chatCards: ChatCardSignal[] = [];
 
   /** These people's Inbox Items may have changed. */
@@ -70,28 +83,39 @@ export class NotificationsService {
   }
 
   /** Notifies `to`, minus the actor and duplicates, as part of `tx`. */
-  async notify(
+  async notify(tx: Tx, outbox: Outbox, notification: NotificationInput): Promise<void> {
+    await this.notifyAll(tx, outbox, [notification]);
+  }
+
+  /** Several `notify` calls in one statement (the escalation job's batches, ticket 0074). */
+  async notifyAll(
     tx: Tx,
     outbox: Outbox,
-    notification: {
-      type: NotificationType;
-      to: readonly MaybeId[];
-      /** Who acted, never notified; null when the system acted (escalation). */
-      actorId: string | null;
-      featureId?: string;
-      requestId?: string;
-      specVersionId?: string;
-      delegationId?: string;
-    },
+    notifications: readonly NotificationInput[],
   ): Promise<void> {
-    const { to, actorId, ...fields } = notification;
-    const userIds = [...new Set(to.filter((id): id is string => !!id && id !== actorId))];
-    if (!userIds.length) return;
-    const rows = await tx.notification.createManyAndReturn({
-      data: userIds.map((userId) => ({ userId, ...fields })),
-      select: { id: true },
-    });
-    outbox.notificationIds.push(...rows.map((r) => r.id));
+    const rows = notifications.flatMap(({ to, actorId, ...fields }) =>
+      [...new Set(to.filter((id): id is string => !!id && id !== actorId))].map((userId) => ({
+        id: randomUUID(),
+        userId,
+        ...fields,
+      })),
+    );
+    if (!rows.length) return;
+    // One INSERT from arrays, however many rows (an escalation batch writes hundreds).
+    const column = (pick: (row: (typeof rows)[number]) => string | undefined) =>
+      rows.map((row) => pick(row) ?? null);
+    await tx.$executeRaw`
+      INSERT INTO "Notification"
+        ("id", "userId", "type", "featureId", "requestId", "specVersionId", "delegationId", "createdAt")
+      SELECT n.id, n."userId", n.type::"NotificationType", n."featureId", n."requestId",
+             n."specVersionId", n."delegationId", ${new Date().toISOString()}::timestamptz AT TIME ZONE 'UTC'
+      FROM unnest(
+        ${column((r) => r.id)}::text[], ${column((r) => r.userId)}::text[],
+        ${column((r) => r.type)}::text[], ${column((r) => r.featureId)}::text[],
+        ${column((r) => r.requestId)}::text[], ${column((r) => r.specVersionId)}::text[],
+        ${column((r) => r.delegationId)}::text[]
+      ) AS n(id, "userId", type, "featureId", "requestId", "specVersionId", "delegationId")`;
+    outbox.notifications.push(...rows.map(({ id, userId }) => ({ id, userId })));
   }
 
   /** SPEC_VERSION_CREATED to the Feature's PO Role Owners, except whoever approved it. */
@@ -121,9 +145,11 @@ export class NotificationsService {
       for (const userId of outbox.inbox) {
         this.bus.emit(userId, { event: 'inbox.changed', data: {} });
       }
-      if (!outbox.notificationIds.length) return;
+      // Read back only what someone connected to this process will receive.
+      const heard = outbox.notifications.filter((n) => this.bus.listening(n.userId));
+      if (!heard.length) return;
       const rows = await this.db.notification.findMany({
-        where: { id: { in: outbox.notificationIds } },
+        where: { id: { in: heard.map((n) => n.id) } },
         orderBy: { createdAt: 'asc' },
         include: notificationInclude,
       });
@@ -161,9 +187,9 @@ export class NotificationsService {
     const rows = await this.db.notification.createManyAndReturn({
       data: due.map((d) => ({ userId, type: 'DELEGATION_STARTED' as const, delegationId: d.id })),
       skipDuplicates: true,
-      select: { id: true },
+      select: { id: true, userId: true },
     });
-    outbox.notificationIds.push(...rows.map((r) => r.id));
+    outbox.notifications.push(...rows);
     await this.publish(outbox);
   }
 

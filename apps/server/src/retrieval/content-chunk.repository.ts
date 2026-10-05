@@ -62,6 +62,12 @@ export type StoredChunk = {
 /** HNSW indexes `vector` columns of at most 2,000 dimensions; larger ones are scanned exactly. */
 export const HNSW_MAX_DIMS = 2_000;
 export const MAX_SEARCH_K = 100;
+/**
+ * Vector search ranks a scope of up to this many chunks exactly, and uses the HNSW
+ * index only above it (ticket 0074; see `search`). Ranking 20,000 chunks exactly takes
+ * tens of milliseconds; a Project-level scope is usually a few thousand.
+ */
+export const EXACT_SEARCH_MAX_CHUNKS = 20_000;
 
 /** A Thai character, as a Postgres regular expression. */
 const THAI_CHARACTER = '[\u0E00-\u0E7F]';
@@ -83,6 +89,8 @@ const OLD_THAI_ESTIMATE_MIN_CHARS = 8;
 export class ContentChunkRepository {
   private readonly logger = new Logger(ContentChunkRepository.name);
   private readonly indexes = new Map<number, Promise<void>>();
+  /** Where `search` switches from exact ranking to the HNSW index (tests lower it). */
+  exactSearchMaxChunks = EXACT_SEARCH_MAX_CHUNKS;
 
   constructor(@InjectPrisma() private readonly db: PrismaClient) {}
 
@@ -144,6 +152,12 @@ export class ContentChunkRepository {
   /**
    * The `k` chunks nearest to `embedding`, among those embedded by the same model,
    * in one Project of one Organization (and one Feature, when given).
+   *
+   * A scope of up to `exactSearchMaxChunks` chunks is ranked exactly, in one statement
+   * (ticket 0074): pgvector filters HNSW candidates only after the index scan, so when
+   * the scope is a small share of the Organization's chunks, most of the `ef_search`
+   * candidates fall outside it and the nearest chunks in it are missed. Only a larger
+   * scope goes through the HNSW index.
    */
   async search(
     scope: SearchScope,
@@ -155,8 +169,26 @@ export class ContentChunkRepository {
     const dims = Prisma.raw(String(checkedDims(query.embedding.length)));
     const limit = Math.min(Math.max(1, Math.floor(k) || 1), MAX_SEARCH_K);
     const vector = toVectorLiteral(query.embedding);
+    const exact = await this.db.$queryRaw<(ChunkMatch & { scoped: bigint })[]>`
+      WITH scoped AS MATERIALIZED (
+        SELECT "id", "embedding"::vector(${dims}) <=> ${vector}::vector(${dims}) AS "distance"
+        FROM "ContentChunk"
+        WHERE ${scopeCondition(scope)}
+          AND "embeddingModel" = ${query.model}
+          AND "embeddingDims" = ${dims}
+        LIMIT ${this.exactSearchMaxChunks + 1}
+      ), nearest AS (
+        SELECT "id", "distance" FROM scoped ORDER BY "distance" LIMIT ${limit}
+      )
+      SELECT c."id", c."source", c."sourceId", c."featureId", c."position", c."text",
+             c."tokenCount", n."distance", (SELECT count(*) FROM scoped) AS "scoped"
+      FROM nearest n JOIN "ContentChunk" c ON c."id" = n."id"
+      ORDER BY n."distance", c."id"`;
+    if (Number(exact[0]?.scoped ?? 0) <= this.exactSearchMaxChunks) {
+      return exact.map(({ scoped: _, ...row }) => ({ ...row, distance: Number(row.distance) }));
+    }
     // HNSW returns ef_search candidates before the Organization/Project filter:
-    // widen it so a small Project still gets its k results.
+    // widen it so the scope still gets its k results.
     const efSearch = String(Math.min(1_000, Math.max(100, limit * 10)));
     const [, rows] = await this.db.$transaction([
       this.db.$queryRaw`SELECT set_config('hnsw.ef_search', ${efSearch}, true)`,

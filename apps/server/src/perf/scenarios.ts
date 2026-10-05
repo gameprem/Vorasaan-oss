@@ -1,8 +1,9 @@
 import type { PrismaClient } from '@vorasaan/db';
 import { SEED } from '@vorasaan/db/seed';
-import type { ConversationView } from '@vorasaan/shared';
+import { type ConversationView, ESCALATION_STEPS } from '@vorasaan/shared';
 import { CONTEXT_CEILINGS } from '../ai/context-budget.ts';
 import { ChatCardsService } from '../chat-apps/chat-cards.service.ts';
+import { ESCALATION_BATCH_SIZE } from '../response-windows/escalation.job.ts';
 import { ContextRetriever } from '../retrieval/context-retriever.ts';
 import { NEEDLE_PARAGRAPH, NEEDLE_QUESTION } from '../retrieval/large-project.fixture.ts';
 import type { TestApp } from '../test/app.ts';
@@ -26,6 +27,36 @@ export type HotPaths = {
 };
 
 const PIM = SEED.users.pim.id;
+
+/**
+ * The most SQL statements each hot path may send (ticket 0074), checked by
+ * `query-budgets.api.test.ts` and flagged by the benchmark. They are the counts after
+ * 0074's changes, which don't grow with the data: going over one means a new query per
+ * row (an N+1) or another round trip on a hot path. Raise one only on purpose.
+ */
+export const QUERY_BUDGETS = {
+  inbox: 15,
+  featurePage: 31,
+  feature: 5,
+  specVersions: 6,
+  decisionLog: 9,
+  roleOwners: 4,
+  attachments: 7,
+  // Retrieval runs two searches; each may add a keyword top-up when vectors find fewer than k.
+  retrieval: 27,
+  decisionStats: 12,
+  chatTurn: 81, // its context includes the same retrieval
+} as const;
+
+/**
+ * The escalation job's budget grows only with its batches, never per request: the
+ * query for what is due, the calendar once, and a fixed few per batch of
+ * ESCALATION_BATCH_SIZE (lock, re-read, Delegations, Tech Leads, Recipients,
+ * Notifications, names, history, the update, COMMIT, and the chat apps' look-up).
+ */
+export function escalationQueryBudget(due: number): number {
+  return 3 + 14 * Math.ceil(due / ESCALATION_BATCH_SIZE);
+}
 const FEATURE = SEED.featureId;
 const QUERY = `${NEEDLE_QUESTION.title}\n\n${NEEDLE_QUESTION.description}`;
 
@@ -41,12 +72,12 @@ export async function hotPaths(
     if (res.status !== 200) throw new Error(`GET ${url} answered ${res.status}`);
   };
 
-  const featurePage = [
-    `/features/${FEATURE}`,
-    `/features/${FEATURE}/spec-versions`,
-    `/features/${FEATURE}/decision-log`,
-    `/features/${FEATURE}/role-owners`,
-    `/features/${FEATURE}/attachments`,
+  const featurePage: [string, number][] = [
+    [`/features/${FEATURE}`, QUERY_BUDGETS.feature],
+    [`/features/${FEATURE}/spec-versions`, QUERY_BUDGETS.specVersions],
+    [`/features/${FEATURE}/decision-log`, QUERY_BUDGETS.decisionLog],
+    [`/features/${FEATURE}/role-owners`, QUERY_BUDGETS.roleOwners],
+    [`/features/${FEATURE}/attachments`, QUERY_BUDGETS.attachments],
   ];
 
   const retriever = app.get(ContextRetriever);
@@ -66,6 +97,15 @@ export async function hotPaths(
   const conversationId = started.body.id;
 
   const chatCards = app.get(ChatCardsService);
+  // What the escalation job finds due, as seeded (its budget depends on the batches).
+  await restoreBenchState(db);
+  const due = await db.decisionRequest.count({
+    where: {
+      status: 'OPEN',
+      dueAt: { lte: testApp.clock.now() },
+      escalationStep: { lt: ESCALATION_STEPS },
+    },
+  });
 
   const scenarios: Scenario[] = [
     {
@@ -74,23 +114,26 @@ export async function hotPaths(
       run: get('/inbox'),
       iterations,
       warmup: 3,
+      queryBudget: QUERY_BUDGETS.inbox,
     },
     {
       name: 'Feature page (5 requests)',
-      description: `The Feature page's reads, one after another: ${featurePage.join(', ')}`,
+      description: `The Feature page's reads, one after another: ${featurePage.map(([url]) => url).join(', ')}`,
       run: async () => {
-        for (const url of featurePage) await get(url)();
+        for (const [url] of featurePage) await get(url)();
       },
       iterations,
       warmup: 3,
+      queryBudget: QUERY_BUDGETS.featurePage,
     },
     ...featurePage.map(
-      (url): Scenario => ({
+      ([url, queryBudget]): Scenario => ({
         name: `GET ${url.replace(FEATURE, ':id')}`,
         description: 'One read of the Feature page',
         run: get(url),
         iterations,
         warmup: 3,
+        queryBudget,
       }),
     ),
     {
@@ -101,6 +144,7 @@ export async function hotPaths(
       run: retrieve,
       iterations,
       warmup: 3,
+      queryBudget: QUERY_BUDGETS.retrieval,
     },
     {
       name: 'GET /projects/:id/decision-stats',
@@ -108,6 +152,7 @@ export async function hotPaths(
       run: get(`/projects/${SEED.projectId}/decision-stats`),
       iterations,
       warmup: 3,
+      queryBudget: QUERY_BUDGETS.decisionStats,
     },
     {
       name: 'Escalation job (every open request)',
@@ -121,6 +166,7 @@ export async function hotPaths(
       },
       iterations: Math.max(3, Math.round(iterations / 5)),
       warmup: 1,
+      queryBudget: escalationQueryBudget(due),
     },
     {
       name: 'Chat turn (fake AI)',
@@ -138,6 +184,7 @@ export async function hotPaths(
       after: () => testApp.receipts.drain(),
       iterations,
       warmup: 2,
+      queryBudget: QUERY_BUDGETS.chatTurn,
     },
   ];
   return { scenarios, retrievalFoundNeedle };

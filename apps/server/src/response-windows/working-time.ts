@@ -88,13 +88,32 @@ function isWorkingDay(date: LocalDate, cal: WorkingCalendar): boolean {
   return cal.workingDays.has(weekday) && !cal.holidays.has(isoDate(date));
 }
 
+/**
+ * Each calendar's working hours by local date, kept as long as the calendar object
+ * itself (one request, one job run): Decision Lead Time walks the same days for every
+ * request of a Project, and each day costs a few time zone conversions (ticket 0074).
+ */
+const hoursByCalendar = new WeakMap<WorkingCalendar, Map<string, [number, number] | null>>();
+
 /** The working hours of `date` as instants, or null on a day off. */
 function workingHours(date: LocalDate, cal: WorkingCalendar): [number, number] | null {
-  if (!isWorkingDay(date, cal)) return null;
-  return [
-    instantOf(date, cal.startMinute, cal.timeZone),
-    instantOf(date, cal.endMinute, cal.timeZone),
-  ];
+  let days = hoursByCalendar.get(cal);
+  if (!days) {
+    days = new Map();
+    hoursByCalendar.set(cal, days);
+  }
+  const key = isoDate(date);
+  let hours = days.get(key);
+  if (hours === undefined) {
+    hours = isWorkingDay(date, cal)
+      ? [
+          instantOf(date, cal.startMinute, cal.timeZone),
+          instantOf(date, cal.endMinute, cal.timeZone),
+        ]
+      : null;
+    days.set(key, hours);
+  }
+  return hours;
 }
 
 /**

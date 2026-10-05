@@ -9,7 +9,7 @@ import type {
   ResponseWindowSettingsInput,
   ResponseWindowSettingsView,
 } from '@vorasaan/shared';
-import { createTestApp } from '../test/app.ts';
+import { createTestApp, type TestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 import type { FakeClock } from '../test/fake-clock.ts';
 import { as } from '../test/http.ts';
@@ -36,6 +36,7 @@ describe('Response Windows and escalation (ticket 0055)', () => {
   let db: PrismaClient;
   let clock: FakeClock;
   let escalation: EscalationJob;
+  let recordQueries: TestApp['recordQueries'];
   let asPim: ReturnType<typeof as>;
   let asBeam: ReturnType<typeof as>;
 
@@ -81,7 +82,7 @@ describe('Response Windows and escalation (ticket 0055)', () => {
     });
 
   beforeAll(async () => {
-    ({ app, clock, escalation } = await createTestApp());
+    ({ app, clock, escalation, recordQueries } = await createTestApp());
     db = createTestPrisma();
     asPim = as(app, pim.id);
     asBeam = as(app, beam.id);
@@ -394,6 +395,44 @@ describe('Response Windows and escalation (ticket 0055)', () => {
       expect(after.status).toBe('DECIDED');
       expect(after.decision?.decidedBy.id).toBe(pim.id);
       expect(after.history.map((h) => h.kind)).toEqual(['REMINDED']);
+    });
+
+    test('batches due requests: the statements per run do not grow with them (0074)', async () => {
+      await settings(BANGKOK);
+      await team();
+      clock.set(bkk('2026-10-02T16:00'));
+      for (let i = 0; i < 3; i++) await send();
+      clock.set(bkk('2026-10-06T09:00'));
+      const few = await recordQueries(() => escalation.run());
+      expect(few.result.steps).toHaveLength(9);
+
+      clock.set(bkk('2026-10-07T16:00'));
+      for (let i = 0; i < 12; i++) await send();
+      clock.set(bkk('2026-10-09T09:00'));
+      const many = await recordQueries(() => escalation.run());
+      // Every step of the twelve new requests, and none again for the first three.
+      expect(many.result.steps).toHaveLength(36);
+      expect(many.sql.length).toBeLessThanOrEqual(few.sql.length);
+      expect(await db.requestHistoryEntry.count()).toBe(45);
+      expect(await db.notification.count({ where: { type: 'REQUEST_REMINDER' } })).toBe(15);
+    });
+
+    test('a request that fails does not hold back the rest of its batch', async () => {
+      await settings(BANGKOK);
+      clock.set(bkk('2026-10-02T16:00'));
+      const broken = (await send()).body;
+      const fine = (await send()).body;
+      // A reminder entry it should not have yet: writing the real one fails on the unique key.
+      await db.requestHistoryEntry.create({
+        data: { requestId: broken.id, kind: 'REMINDED', people: [], createdAt: new Date() },
+      });
+      clock.set(bkk('2026-10-05T11:00'));
+      expect((await escalation.run()).steps).toEqual([{ requestId: fine.id, step: 1 }]);
+      expect((await view(broken.id)).responseWindow.escalationStep).toBe(0);
+      expect(await notificationsOf(broken.id)).toEqual([]);
+      expect(await notificationsOf(fine.id)).toEqual([
+        { type: 'REQUEST_REMINDER', userId: pim.id },
+      ]);
     });
 
     test('a request sent to several Recipients reminds all of them, and keeps no Decider', async () => {

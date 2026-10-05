@@ -33,6 +33,11 @@ export class EventBus {
     }
   }
 
+  /** Whether this User has a stream open in this process. */
+  listening(userId: string): boolean {
+    return this.listeners.has(userId);
+  }
+
   /** Open listeners across every User (for tests and diagnostics). */
   listenerCount(): number {
     let count = 0;

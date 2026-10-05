@@ -20,6 +20,7 @@
 //   --out PATH                   where to write the JSON, and the table next to it as .md
 //                                (default <repo>/bench-results/<scale>-<time>.json)
 //   --compare PATH               a previous JSON to compare p95 and query counts against
+//   --only TEXT                  measure only the scenarios whose name contains TEXT
 // (Relative paths are from the repository root.)
 import 'reflect-metadata';
 import { mkdir } from 'node:fs/promises';
@@ -61,6 +62,7 @@ const { values: args } = parseArgs({
     'seed-only': { type: 'boolean', default: false },
     out: { type: 'string' },
     compare: { type: 'string' },
+    only: { type: 'string' },
   },
 });
 
@@ -131,7 +133,9 @@ const { scenarios, retrievalFoundNeedle } = await hotPaths(testApp, db, { iterat
 if (!retrievalFoundNeedle) log('Warning: retrieval did not find the fixture needle paragraph');
 
 const results: ScenarioResult[] = [];
+const only = args.only?.toLowerCase();
 for (const scenario of scenarios) {
+  if (only && !scenario.name.toLowerCase().includes(only)) continue;
   const start = performance.now();
   const result = await measure(scenario, (run) => testApp.recordQueries(run));
   results.push(result);
@@ -157,7 +161,7 @@ const [pg] = await db.$queryRaw<{ version: string; vector: string | null }[]>`
   SELECT version() AS version,
          (SELECT extversion FROM pg_extension WHERE extname = 'vector') AS vector`;
 const report = {
-  ticket: '0073',
+  ticket: '0074',
   createdAt: new Date().toISOString(),
   machine: {
     cpu: os.cpus()[0]?.model ?? 'unknown',

@@ -1,5 +1,5 @@
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
-import { createPrismaClient, type PrismaClient } from '@vorasaan/db';
+import { createPrismaClient, type PrismaClient, poolSizeFromEnv } from '@vorasaan/db';
 
 export const PRISMA = Symbol('PRISMA');
 
@@ -14,7 +14,8 @@ export const InjectPrisma = () => Inject(PRISMA);
       useFactory: (): PrismaClient => {
         const url = process.env.DATABASE_URL;
         if (!url) throw new Error('DATABASE_URL is not set');
-        return createPrismaClient(url);
+        // DATABASE_POOL_SIZE: connections per server process (docs/performance.md).
+        return createPrismaClient(url, { poolSize: poolSizeFromEnv() });
       },
     },
   ],

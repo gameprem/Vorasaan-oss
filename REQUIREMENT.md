@@ -265,7 +265,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
     - [x] The AI proposes better prompts (0072).
 11. **Optimization:** measure first on a large seeded Organization, then make the database faster and the AI cheaper without answering worse.
     - [x] Performance baseline (0073).
-    - [ ] Database optimization (0074).
+    - [x] Database optimization (0074).
     - [ ] AI usage dashboard (0075).
     - [ ] Token optimization with an eval guard (0076).
 12. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why (Spec section, someone to ask, open Blockers, QA ready), using the checks each Platform switches on. The AI fills or asks about the gaps. Design Docs wait for a Platform's Coverage.
