@@ -188,14 +188,16 @@ describe('Request changes and Redrafts (ticket 0065)', () => {
     expect(view.detail?.kind === 'SPEC_PROPOSAL' && view.detail.proposedMarkdown).toContain(
       'Name the provider: PayCo.',
     );
-    // The card's owner saw the card change.
-    expect(
+    // The card's owner saw the card change. The card is re-read after the Redraft's own event,
+    // so the update can land just after the response: wait for it.
+    const sawUpdate = () =>
       events.some(
         (e) =>
           e.event.event === 'conversation.actionCard.updated' &&
           (e.event.data as { card: ActionCardView }).card.redraft?.current === 2,
-      ),
-    ).toBe(true);
+      );
+    for (let i = 0; i < 100 && !sawUpdate(); i++) await Bun.sleep(10);
+    expect(sawUpdate()).toBe(true);
 
     // Approving Redraft 1, which the person no longer sees, does nothing.
     const stale = await asPim()('POST', `/action-cards/${card.id}/approve`, { redraft: 1 });
