@@ -260,6 +260,14 @@ _Avoid_: Self-improvement, auto-tuning, training, fine-tuning
 The record of one AI call: its task, prompt and Prompt Version, Approved Model, tokens, cache use, latency, what it produced, and what people then did with it (approved, declined, requested changes, edited by hand). Its export leaves out people's names and Attachment contents.
 _Avoid_: Log, trace, usage record, telemetry
 
+**AI Budget**:
+An Organization's optional monthly limit on the AI's estimated cost, in US dollars, counted in its Working Time's time zone. Its Admins get a Notification when a month passes 80% and again at 100% of it. Nothing is ever blocked.
+_Avoid_: Quota, spending cap, limit, credits
+
+**Cost per decision**:
+What the AI cost on one Decision Request from raise to Decision (its Choices and their Redrafts) plus its Spec Proposal and that proposal's Redrafts, estimated from the Receipts and the prices an Admin sets on each Approved Model.
+_Avoid_: Unit cost, price per request
+
 **Prompt Version**:
 An immutable, numbered version of one of the AI's prompts held by an Organization, on top of the built-in default. The AI or an Admin proposes it, an Admin approves it after seeing its eval scores, and it can be rolled back. One version of each prompt is active at a time; with none approved, or after a rollback to it, the built-in default is.
 _Avoid_: Prompt template, prompt revision, prompt draft, skill (that is an Agent Skill)

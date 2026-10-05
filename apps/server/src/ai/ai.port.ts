@@ -473,6 +473,12 @@ export type ReceiptLink = {
   proposal?: { kind: ProposalKind; id: string; redraft: number } | null;
   /** The eval run (ticket 0071) the call is made for: a replay never picks its Receipt. */
   evalRunId?: string | null;
+  /**
+   * The Project the call works for (ticket 0075), or its Feature, whose Project the Receipt
+   * then looks up in the background. Neither: Organization-wide work.
+   */
+  projectId?: string | null;
+  featureId?: string | null;
 };
 
 // Every method takes an optional last `options?: AiCallOptions`.

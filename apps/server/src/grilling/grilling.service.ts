@@ -415,7 +415,11 @@ export class GrillingService {
             guidelines,
             memory: memoryNow,
           },
-          { model, language, receipt: { output: { kind: 'GRILLING_ROUND', id: roundId } } },
+          {
+            model,
+            language,
+            receipt: { output: { kind: 'GRILLING_ROUND', id: roundId }, projectId: project.id },
+          },
         ),
       );
       const questions = distinct(drafted.questions).slice(0, MAX_GRILLING_QUESTIONS);
@@ -485,6 +489,7 @@ export class GrillingService {
           receipt: {
             output: { kind: 'BRIEF_PROPOSAL', id: proposalId },
             proposal: { kind: 'BRIEF_PROPOSAL', id: proposalId, redraft: 1 },
+            projectId: project.id,
           },
         },
       ),

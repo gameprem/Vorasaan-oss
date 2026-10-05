@@ -138,6 +138,7 @@ export class FeatureSuggestionsService {
           receipt: {
             requestedById: user.id,
             output: { kind: 'FEATURE_SUGGESTION_BATCH', id: batchId },
+            projectId,
           },
         },
       ),
@@ -278,6 +279,7 @@ export class FeatureSuggestionsService {
             requestedById: user.id,
             output: { kind: 'SPEC_PROPOSAL', id: proposalId },
             proposal: { kind: 'SPEC_PROPOSAL', id: proposalId, redraft: 1 },
+            projectId: suggestion.projectId,
           },
         },
       ),
@@ -388,7 +390,7 @@ export class FeatureSuggestionsService {
           projectContext,
           guidelines: guidelines.map(({ criterion: _, ...g }) => g),
         },
-        { model, language, receipt: { requestedById: user.id } },
+        { model, language, receipt: { requestedById: user.id, projectId } },
       ),
     );
     return { projectId, ...fitOf(guidelines, checked.results) };

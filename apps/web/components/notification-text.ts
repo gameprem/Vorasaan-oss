@@ -1,6 +1,9 @@
 import type { NotificationView } from '@vorasaan/shared';
 import { ROLE_LABEL } from './ui';
 
+/** Settings → AI usage (ticket 0075), where the budget Notifications lead. */
+export const AI_USAGE_PATH = '/settings/ai/usage';
+
 const dateFmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 
 /** One sentence describing a Notification (used on screen and by the live region). */
@@ -27,6 +30,10 @@ export function notificationText(n: NotificationView): string {
       return n.delegation
         ? `${n.delegation.delegator.name} delegated their ${ROLE_LABEL[n.delegation.role]} role to you until ${dateFmt.format(new Date(n.delegation.endsAt))}.`
         : 'A Delegation to you has started.';
+    case 'AI_BUDGET_WARNING':
+      return 'The AI’s estimated cost this month passed 80% of its budget.';
+    case 'AI_BUDGET_REACHED':
+      return 'The AI’s estimated cost this month reached its budget. Nothing is blocked.';
   }
 }
 
@@ -36,6 +43,7 @@ export function notificationHref(n: NotificationView): string | null {
   if (n.type === 'SPEC_VERSION_CREATED' && n.feature)
     return `/features/${n.feature.id}?tab=history`;
   if (n.delegation) return `/teams/${n.delegation.teamId}`;
+  if (n.type === 'AI_BUDGET_WARNING' || n.type === 'AI_BUDGET_REACHED') return AI_USAGE_PATH;
   if (n.feature) return `/features/${n.feature.id}`;
   return null;
 }

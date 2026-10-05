@@ -168,6 +168,23 @@ export type OpenRouterModelsView = z.infer<typeof OpenRouterModelsView>;
 
 // ─── Approved Models (Admin) ────────────────────────────────────────────────
 
+/** The most a million tokens may cost (US dollars): a typo guard, far above any real price. */
+export const MAX_PRICE_PER_MILLION = 10_000;
+const Price = z
+  .number('Enter a price')
+  .min(0, 'A price can’t be negative')
+  .max(MAX_PRICE_PER_MILLION, `At most $${MAX_PRICE_PER_MILLION.toLocaleString('en')}`);
+
+/**
+ * What a million tokens cost on an Approved Model, in US dollars (ticket 0075), for the AI
+ * usage dashboard's estimated cost. Input tokens include those read from the cache.
+ */
+export const ModelPrices = z.object({
+  inputPerMillion: Price,
+  outputPerMillion: Price,
+});
+export type ModelPrices = z.infer<typeof ModelPrices>;
+
 const DisplayName = z.string().trim().min(1, 'Name the model, e.g. "Fast"').max(60);
 const Note = z.string().trim().max(300).nullable();
 
@@ -179,6 +196,8 @@ export const CreateApprovedModelInput = z.object({
   note: Note.optional(),
   /** Tokens; left out, it is prefilled for a known model, else the server's default. */
   contextWindow: ContextWindow.optional(),
+  /** Null or left out: no price, so no cost is shown for it (only tokens). */
+  prices: ModelPrices.nullable().optional(),
   isDefault: z.boolean().optional(),
 });
 export type CreateApprovedModelInput = z.infer<typeof CreateApprovedModelInput>;
@@ -193,6 +212,8 @@ export const UpdateApprovedModelInput = z.object({
   displayName: DisplayName.optional(),
   note: Note.optional(),
   contextWindow: ContextWindow.optional(),
+  /** Null clears the price. */
+  prices: ModelPrices.nullable().optional(),
   isDefault: z.literal(true).optional(),
 });
 export type UpdateApprovedModelInput = z.infer<typeof UpdateApprovedModelInput>;
@@ -207,6 +228,8 @@ export const ApprovedModelSettingsView = z.object({
   note: z.string().nullable(),
   /** Tokens one call may hold, prompt and reply together: every AI task's budget is a share of it. */
   contextWindow: z.number().int(),
+  /** Null: no price set, so the AI usage dashboard shows its tokens but no cost. */
+  prices: ModelPrices.nullable(),
   position: z.number().int(),
   isDefault: z.boolean(),
 });

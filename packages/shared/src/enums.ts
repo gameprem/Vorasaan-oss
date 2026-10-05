@@ -63,6 +63,8 @@ export const NotificationType = z.enum([
   'REQUEST_REMINDER',
   'REQUEST_ESCALATED',
   'REQUEST_OVERDUE',
+  'AI_BUDGET_WARNING',
+  'AI_BUDGET_REACHED',
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 

@@ -40,6 +40,22 @@ export type ReceiptEntry = {
   link: ReceiptLink | undefined;
 };
 
+/** The Organization's Receipt settings, and its AI budget (ticket 0075). */
+export type ReceiptSettings = {
+  enabled: boolean;
+  retentionDays: number;
+  /** Null before setup. */
+  organizationId: string | null;
+  /** US dollars a month; null: none. */
+  aiMonthlyBudget: number | null;
+};
+
+/** Told each Receipt saved, with the settings it was saved under. */
+export type RecordedListener = (
+  receipt: Prisma.ReceiptUncheckedCreateInput,
+  settings: ReceiptSettings,
+) => Promise<void>;
+
 /** A human outcome of a proposal (ticket 0070). */
 export type OutcomeEntry = {
   kind: ReceiptOutcomeKind;
@@ -96,6 +112,8 @@ export class ReceiptsService {
   private readonly outcomeWrites = new Set<Promise<unknown>>();
   /** Told the prompts of the Receipts each new outcome is linked to (ticket 0072). */
   private readonly outcomeListeners = new Set<(promptNames: string[]) => void>();
+  /** Told each new Receipt once saved (ticket 0075: the AI budget). */
+  private readonly recordedListeners = new Set<RecordedListener>();
 
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
@@ -107,9 +125,39 @@ export class ReceiptsService {
   /** Saves one AI call's Receipt in the background. Never throws. */
   record(entry: ReceiptEntry): void {
     this.track(this.receiptWrites, async () => {
-      if (!(await this.settings()).enabled) return;
-      await this.persist(await receiptData(entry));
+      const settings = await this.settings();
+      if (!settings.enabled) return;
+      const data = await receiptData(entry);
+      data.projectId = await this.projectOf(entry.link);
+      await this.persist(data);
+      for (const listener of this.recordedListeners) {
+        try {
+          await listener(data, settings);
+        } catch (error) {
+          this.logger.warn(`A Receipt listener failed: ${(error as Error)?.message ?? error}`);
+        }
+      }
     });
+  }
+
+  /**
+   * Calls `listener` once each new Receipt is saved, with the Organization's Receipt settings
+   * (the AI budget among them), inside the write: `drain()` waits for it too (ticket 0075).
+   */
+  onRecorded(listener: RecordedListener): () => void {
+    this.recordedListeners.add(listener);
+    return () => this.recordedListeners.delete(listener);
+  }
+
+  /** The Project of the call: given, or its Feature's (looked up here, off the request path). */
+  private async projectOf(link: ReceiptLink | undefined): Promise<string | null> {
+    if (link?.projectId) return link.projectId;
+    if (!link?.featureId) return null;
+    const feature = await this.db.feature.findUnique({
+      where: { id: link.featureId },
+      select: { team: { select: { projectId: true } } },
+    });
+    return feature?.team.projectId ?? null;
   }
 
   /** Links a human outcome to the Receipt that drafted the proposal, in the background. */
@@ -311,24 +359,31 @@ export class ReceiptsService {
   // ─── Settings ─────────────────────────────────────────────────────────────
 
   /** Collection and retention: the Organization's, or the defaults before setup. */
-  async settings(): Promise<{ enabled: boolean; retentionDays: number }> {
+  async settings(): Promise<ReceiptSettings> {
     const org = await this.db.organization.findFirst({
       orderBy: { createdAt: 'asc' },
-      select: { receiptsEnabled: true, receiptRetentionDays: true },
+      select: {
+        id: true,
+        receiptsEnabled: true,
+        receiptRetentionDays: true,
+        aiMonthlyBudget: true,
+      },
     });
     return {
       enabled: org?.receiptsEnabled ?? true,
       retentionDays: org?.receiptRetentionDays ?? DEFAULT_RECEIPT_RETENTION_DAYS,
+      organizationId: org?.id ?? null,
+      aiMonthlyBudget: org?.aiMonthlyBudget ?? null,
     };
   }
 
   async view(): Promise<ReceiptSettingsView> {
-    const [settings, count, oldest] = await Promise.all([
+    const [{ enabled, retentionDays }, count, oldest] = await Promise.all([
       this.settings(),
       this.db.receipt.count(),
       this.db.receipt.findFirst({ orderBy: { createdAt: 'asc' }, select: { createdAt: true } }),
     ]);
-    return { ...settings, count, oldestAt: oldest?.createdAt.toISOString() ?? null };
+    return { enabled, retentionDays, count, oldestAt: oldest?.createdAt.toISOString() ?? null };
   }
 
   async update(input: ReceiptSettingsInput): Promise<ReceiptSettingsView> {

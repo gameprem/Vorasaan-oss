@@ -117,6 +117,7 @@ export class SpecService {
             requestedById: user.id,
             output: { kind: 'SPEC_PROPOSAL', id: proposalId },
             proposal: { kind: 'SPEC_PROPOSAL', id: proposalId, redraft: 1 },
+            featureId,
           },
         },
       );

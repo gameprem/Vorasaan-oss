@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { PrismaClient } from '@vorasaan/db';
+import { SEED } from '@vorasaan/db/seed';
+import type { AiUsageView } from '@vorasaan/shared';
 import { createTestApp, type TestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
+import { as } from '../test/http.ts';
 import { measure, type Scenario, type ScenarioResult } from './bench.ts';
 import { LARGE_ORG_NOW, LARGE_ORG_SCALES, seedLargeOrganization } from './large-organization.ts';
-import { hotPaths, QUERY_BUDGETS, snapshotBenchState } from './scenarios.ts';
+import { AI_USAGE_URL, hotPaths, QUERY_BUDGETS, snapshotBenchState } from './scenarios.ts';
 
 /**
  * Every hot path the benchmark measures has a query budget (ticket 0074), checked here on
@@ -16,6 +19,7 @@ describe('Query budgets of the hot paths (ticket 0074)', () => {
   let db: PrismaClient;
   let scenarios: Scenario[];
   const results = new Map<string, ScenarioResult>();
+  let usage: AiUsageView | undefined;
 
   beforeAll(async () => {
     testApp = await createTestApp();
@@ -28,6 +32,7 @@ describe('Query budgets of the hot paths (ticket 0074)', () => {
     for (const scenario of scenarios) {
       results.set(scenario.name, await measure(scenario, (run) => testApp.recordQueries(run)));
     }
+    usage = (await as(testApp.app, SEED.users.pim.id)<AiUsageView>('GET', AI_USAGE_URL)).body;
   }, 120_000);
 
   afterAll(async () => {
@@ -39,7 +44,7 @@ describe('Query budgets of the hot paths (ticket 0074)', () => {
   });
 
   test('every measured endpoint and job has a budget, and stays within it', () => {
-    expect(scenarios.length).toBe(11);
+    expect(scenarios.length).toBe(12);
     for (const scenario of scenarios) {
       const result = results.get(scenario.name);
       expect(scenario.queryBudget, scenario.name).toBeGreaterThan(0);
@@ -47,6 +52,10 @@ describe('Query budgets of the hot paths (ticket 0074)', () => {
       expect(result?.overBudget, scenario.name).toBe(false);
       expect(result?.nPlusOne, scenario.name).toBe(false);
     }
+    // The AI usage dashboard read Receipts of decided requests: its budget was exercised too.
+    expect(usage?.totals.calls).toBeGreaterThan(100);
+    expect(usage?.costPerDecision.decisions).toBeGreaterThan(10);
+    expect(usage?.redraftsBeforeApproval.length).toBeGreaterThan(0);
     // The escalation job had steps to take: its budget was really exercised.
     expect(results.get('Escalation job (every open request)')?.queries.max).toBeGreaterThan(5);
   });

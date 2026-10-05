@@ -24,6 +24,7 @@ export const SETTINGS_SECTIONS = [
   { href: '/settings/chat-apps', label: 'Chat apps' },
   { href: '/settings/ai', label: 'AI models' },
   { href: '/settings/ai/prompts', label: 'AI prompts' },
+  { href: '/settings/ai/usage', label: 'AI usage' },
   { href: '/settings/tokens', label: 'Access tokens' },
 ] as const;
 
@@ -63,6 +64,17 @@ export function SettingsLink({
     </a>
   );
 }
+/**
+ * Goes to another URL of the same Settings section, such as a new date range: over the
+ * app ("overlay") a soft replace the modal route intercepts, so Back still leaves Settings
+ * in one step; on its own ("page") a full load, as the nav does.
+ */
+export function useSettingsNavigate(): (href: string) => void {
+  const mode = useContext(SettingsMode);
+  const router = useRouter();
+  return (href) => (mode === 'overlay' ? router.replace(href) : window.location.assign(href));
+}
+
 /** Never made inert: Next announces route changes from here. */
 const KEEP_LIVE = new Set(['NEXT-ROUTE-ANNOUNCER', 'SCRIPT', 'STYLE', 'TEMPLATE']);
 const FOCUSABLE =

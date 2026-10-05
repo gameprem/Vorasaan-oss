@@ -102,6 +102,10 @@ export function notificationLine(n: NotificationView): string {
       return `${unread}Overdue: ${n.decisionRequest?.title ?? 'a Decision Request'}${feature}`;
     case 'DELEGATION_STARTED':
       return `${unread}You are now the Delegate of ${n.delegation?.delegator.name ?? 'someone'} (${n.delegation ? ROLE_LABEL[n.delegation.role] : ''})`;
+    case 'AI_BUDGET_WARNING':
+      return `${unread}The AI's estimated cost this month passed 80% of its budget`;
+    case 'AI_BUDGET_REACHED':
+      return `${unread}The AI's estimated cost this month reached its budget (nothing is blocked)`;
   }
 }
 

@@ -49,6 +49,7 @@ because the benchmark empties it). It never touches the dev or test databases.
    | Feature page (5 requests) | the five reads of the Feature page, one after another; each also on its own |
    | Retrieval (Feature, pgvector) | `ContextRetriever.forFeature` with the fixture question and the Decision Request budget |
    | `GET /projects/:id/decision-stats` | Decision Lead Time, default range |
+   | `GET /settings/ai/usage` | The AI usage dashboard (ticket 0075) over 90 days, as Pim (an Admin), from a Receipt per Choices, Spec Proposal and Choices Redraft written by `seedUsageReceipts` when the scenarios start |
    | Escalation job | `EscalationJob.run()` over every OPEN request due, from the same seeded state each run (a fifth as many runs) |
    | Chat turn (fake AI) | `POST /conversations/:id/messages` in a Feature Conversation |
 

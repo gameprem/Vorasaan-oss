@@ -1,5 +1,6 @@
 export * from './action-card.ts';
 export * from './ai-settings.ts';
+export * from './ai-usage.ts';
 export * from './atlassian.ts';
 export * from './attachment.ts';
 export * from './auth.ts';

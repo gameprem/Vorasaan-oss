@@ -25,6 +25,7 @@ import {
   updateAiProvider,
   updateApprovedModel,
 } from '@/lib/ai-settings-actions';
+import { TASK_LABEL } from './ai-task-labels';
 import { OpenRouterModelPicker } from './openrouter-model-picker';
 import { PROVIDERS, ProviderKindPicker } from './provider-fields';
 import { field, primaryButton, secondaryButton } from './ui';
@@ -33,23 +34,6 @@ import { Select } from './ui/select';
 
 // Settings → AI models (ADR 0010): the providers (with their keys), the Approved
 // Models people may use with one default, and the model of each AI task.
-
-const TASK_LABEL: Record<AiTask, { label: string; hint: string }> = {
-  CHOICES: { label: 'Choices', hint: 'Options suggested for a Decision Request' },
-  SPEC_PROPOSAL: {
-    label: 'Spec Proposals',
-    hint: 'Spec changes after a Decision, or a first Spec',
-  },
-  SUMMARIES: { label: 'Summaries', hint: 'Attachment and Conversation summaries' },
-  GRILLING: { label: 'Grilling', hint: 'Questions, and the Brief Proposal from the answers' },
-  FEATURE_SUGGESTIONS: { label: 'Feature Suggestions', hint: 'Features proposed from the Brief' },
-  FIT_CHECK: { label: 'Fit check', hint: 'A new Feature against the Feature Guidelines' },
-  CHAT: { label: 'Chat', hint: 'Replies in Conversations' },
-  PROMPT_PROPOSALS: {
-    label: 'Prompt proposals',
-    hint: 'Reading feedback on a prompt and proposing a Prompt Version',
-  },
-};
 
 const kindLabel = (kind: AiProvider) => PROVIDERS.find((p) => p.value === kind)?.label ?? kind;
 

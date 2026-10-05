@@ -379,6 +379,7 @@ export class GrillingConversationsService {
           receipt: {
             requestedById: conv.ownerId,
             output: { kind: 'GRILLING_QUESTION', id: question.id },
+            projectId: round.grilling.projectId,
           },
         },
       );

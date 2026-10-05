@@ -3,6 +3,7 @@ import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { AiModelsController } from './ai/ai-models.controller.ts';
 import { DevFakeAiController } from './ai/dev-fake-ai.controller.ts';
 import { MastraModule } from './ai/mastra.module.ts';
+import { AiUsageModule } from './ai-usage/ai-usage.module.ts';
 import { AttachmentsModule } from './attachments/attachments.module.ts';
 import { AdminGuard } from './auth/admin.guard.ts';
 import { AuthController } from './auth/auth.controller.ts';
@@ -62,6 +63,7 @@ import { SpecModule } from './spec/spec.module.ts';
     BriefModule,
     RedraftsModule,
     ReceiptsModule,
+    AiUsageModule,
     PromptVersionsModule,
     ConversationsModule,
     ChatAppsModule,
