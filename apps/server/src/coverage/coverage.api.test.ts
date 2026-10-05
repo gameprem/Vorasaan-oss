@@ -256,7 +256,8 @@ describe('Coverage per Platform (ticket 0051)', () => {
   test('the Project matrix: a row per Feature, a cell per target, and the Platforms no Feature covers', async () => {
     await writeSpec(`${BACK_END_ONLY}`);
     const other = await asPim<{ id: string }>('POST', `/teams/${SEED.teamId}/features`, {
-      title: 'A web receipt',
+      // Sorts after "Async checkout" under any collation (C puts "A " before "As", en_US doesn't).
+      title: 'Web receipt',
     });
     expect(other.status).toBe(201);
 
@@ -271,10 +272,10 @@ describe('Coverage per Platform (ticket 0051)', () => {
     expect(
       res.body.features.map((f) => [f.title, f.platforms.map((p) => p.platform.name)]),
     ).toEqual([
-      ['A web receipt', []],
       ['Async checkout', ['Back-End', 'Flutter']],
+      ['Web receipt', []],
     ]);
-    const checkout = res.body.features[1];
+    const checkout = res.body.features[0];
     expect(checkout?.specVersion).toBe(2);
     expect(checkout?.platforms).toEqual((await coverage()).platforms);
     // Back-End misses QA, Flutter misses everything, the others nobody targets.
