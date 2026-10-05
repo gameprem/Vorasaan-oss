@@ -122,6 +122,7 @@ export class DecisionRequestsService {
           input.featureId,
           `${input.title}\n\n${input.description}`,
           contextBudget,
+          { k: budget.topK },
         ),
       );
       try {
@@ -530,7 +531,7 @@ export class DecisionRequestsService {
         request.featureId,
         `${request.title}\n\n${request.description}\n\n${describeDecision(decision)}`,
         contextBudget,
-        { excludeRequestId: request.id },
+        { excludeRequestId: request.id, k: budget.topK },
       ),
     );
 

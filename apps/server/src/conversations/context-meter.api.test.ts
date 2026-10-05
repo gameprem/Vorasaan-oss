@@ -155,7 +155,7 @@ describe('The context meter and /compact (0066)', () => {
     expect(usage.contextWindow).toBe(200_000);
 
     const system = await featureSystem();
-    const { window: _, ...plan } = planBudget(200_000, 'conversationFeature', { system });
+    const { window: _, topK: __, ...plan } = planBudget(200_000, 'conversationFeature', { system });
     expect(usage.plan).toEqual(plan);
     expect(usage.history.share).toBe(plan.history);
     expect(usage.history.compactAt).toBe(Math.floor(BUDGET_CONFIG.compaction.at * plan.history));
@@ -186,7 +186,11 @@ describe('The context meter and /compact (0066)', () => {
     expect(res.status).toBe(200);
     expect(res.body.contextWindow).toBe(8_000);
     expect(res.body.model.approvedModelId).toBe(small.id);
-    const { window: _, ...plan } = planBudget(8_000, 'conversationFeature', {
+    const {
+      window: _,
+      topK: __,
+      ...plan
+    } = planBudget(8_000, 'conversationFeature', {
       system: await featureSystem(),
     });
     expect(res.body.plan).toEqual(plan);

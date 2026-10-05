@@ -4,6 +4,7 @@ import { estimateTokens } from '../retrieval/token-estimate.ts';
 import type { AiTask } from './ai.config.ts';
 import type {
   ActionCardForAi,
+  AiPort,
   AttachmentForAi,
   ChatMessageForAi,
   ContextBlock,
@@ -813,6 +814,47 @@ export function redraftPromptVersionPrompt(
     ...values,
   });
 }
+
+/** Every AI task that renders one prompt from its input (a chat also sends its messages). */
+export type PromptTask = Exclude<AiTask, 'chat'>;
+
+/**
+ * Each task's prompt from the input its `AiPort` method takes (ticket 0076): the one
+ * place a call's input becomes its prompt, used by `MastraAiPort` and by the token
+ * measurements, so what is measured is exactly what a provider is sent.
+ */
+export const TASK_PROMPTS: {
+  [T in PromptTask]: (input: Parameters<AiPort[T]>[0], lang: PromptOptions) => Promise<Prompt>;
+} = {
+  generateChoices: (input, lang) =>
+    generateChoicesPrompt(input.specMarkdown, input.request, input.context, input.foundation, lang),
+  draftSpecProposal: (input, lang) =>
+    draftSpecProposalPrompt(
+      input.specMarkdown,
+      input.request,
+      input.decision,
+      input.context,
+      input.foundation,
+      lang,
+    ),
+  summarizeAttachment: (input, lang) => summarizeAttachmentPrompt(input.attachment, lang),
+  draftSpecFromAttachments: (input, lang) =>
+    draftSpecFromAttachmentsPrompt(input.feature, input.specMarkdown, input.context, lang),
+  grillingQuestions: grillingQuestionsPrompt,
+  grillingFollowUp: grillingFollowUpPrompt,
+  draftBriefFromGrilling: draftBriefFromGrillingPrompt,
+  suggestFeatures: suggestFeaturesPrompt,
+  draftSpecFromSuggestion: draftSpecFromSuggestionPrompt,
+  checkFeatureFit: checkFeatureFitPrompt,
+  summarizeConversation: summarizeConversationPrompt,
+  redraftChoices: redraftChoicesPrompt,
+  redraftSpecProposal: redraftSpecProposalPrompt,
+  redraftBriefProposal: redraftBriefProposalPrompt,
+  redraftFeatureSuggestion: redraftFeatureSuggestionPrompt,
+  analyzeFeedback: analyzeFeedbackPrompt,
+  proposePromptVersion: proposePromptVersionPrompt,
+  redraftPromptVersion: redraftPromptVersionPrompt,
+};
 
 /** A stored Conversation Summary read back into its sections (the inverse of rendering it). */
 export function parseConversationSummary(summary: string): ConversationSummaryDraft {

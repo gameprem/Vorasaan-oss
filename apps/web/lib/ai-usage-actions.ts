@@ -1,11 +1,12 @@
 'use server';
 
-import type { AiBudgetInput, ModelPrices } from '@vorasaan/shared';
+import type { AiBudgetInput, AiTask, ModelPrices } from '@vorasaan/shared';
 import { revalidatePath } from 'next/cache';
 import { ApiError, api } from './api';
 
 // Settings → AI usage (ticket 0075): the monthly budget and the price of each Approved
-// Model. The API checks that the caller is an Admin.
+// Model; and (ticket 0076) the Admin's choice of a cheaper model for a task. The API
+// checks that the caller is an Admin.
 
 export type ActionResult = { error?: string };
 
@@ -28,5 +29,12 @@ export async function saveAiBudget(input: AiBudgetInput) {
 export async function saveModelPrices(modelId: string, prices: ModelPrices | null) {
   return attempt(() =>
     api(`/settings/ai/models/${modelId}`, { method: 'PATCH', body: { prices } }),
+  );
+}
+
+/** The Admin takes a suggested cheaper model for one task (ticket 0076). */
+export async function chooseTaskModel(task: AiTask, approvedModelId: string) {
+  return attempt(() =>
+    api('/settings/ai/tasks', { method: 'PUT', body: { tasks: { [task]: approvedModelId } } }),
   );
 }

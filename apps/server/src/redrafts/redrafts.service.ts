@@ -505,6 +505,7 @@ export class RedraftsService {
             guard.featureId,
             `${feature.title}\n\n${query}`,
             contextBudget,
+            { k: budget.topK },
           ),
         );
         const out = await this.ai.redraftSpecProposal(
@@ -549,6 +550,7 @@ export class RedraftsService {
             guard.projectId,
             `${project.name}\n\n${query}`,
             projectBudget(budget),
+            { k: budget.topK },
           )
         ).filter((b) => b.source.kind !== 'BRIEF_VERSION');
         const out = await this.ai.redraftBriefProposal(
@@ -590,6 +592,7 @@ export class RedraftsService {
           guard.projectId,
           `${content.title}\n\n${content.rationale}\n\n${query}`,
           projectBudget(budget),
+          { k: budget.topK },
         );
         const { kind: _, ...suggestion } = content;
         const out = await this.ai.redraftFeatureSuggestion(
@@ -678,7 +681,7 @@ export class RedraftsService {
             guard.featureId,
             `${request.title}\n\n${request.description}\n\n${query}`,
             contextBudget,
-            { excludeRequestId: target.ref.id },
+            { excludeRequestId: target.ref.id, k: budget.topK },
           ),
         );
         const out = await this.ai.redraftChoices(

@@ -259,6 +259,40 @@ describe('ContextRetriever (real Postgres with pgvector)', () => {
     expectNoLeak(blocks);
   });
 
+  test('a section copied into another Attachment, and the overlap of a long one, are sent once (0076)', async () => {
+    await configureEmbeddings();
+    const sentences = Array.from(
+      { length: 40 },
+      (_, i) =>
+        `Payout rule ${i + 1}: batches after 22:30 settle on working day ${i + 2} for PromptPay.`,
+    );
+    const paragraphs = Array.from({ length: 10 }, (_, i) =>
+      sentences.slice(i * 4, i * 4 + 4).join(' '),
+    );
+    const section = `## Payouts\n${paragraphs.join('\n\n')}`;
+    const handbook = await attach(SEED.featureId, 'Payouts handbook', `# Handbook\n\n${section}`);
+    const archive = await attach(
+      SEED.featureId,
+      'Handbook archive',
+      `# Archive\n\n${section.replace('## Payouts', '## Payouts (2025 archive)')}`,
+    );
+    for (const id of [handbook, archive]) await indexing.index({ source: 'ATTACHMENT', id });
+    // The long section is cut into pieces that overlap, and the archive repeats them all.
+    const pieces = await chunks.chunksOf({ source: 'ATTACHMENT', sourceId: handbook });
+    expect(pieces.length).toBeGreaterThan(1);
+
+    const blocks = await retriever.forFeature(
+      SEED.featureId,
+      'When do payout batches settle for PromptPay?',
+      CONTEXT_CEILINGS.decisionRequest,
+    );
+    const sent = blocks.map((b) => b.text).join('\n\n');
+    for (const sentence of sentences) {
+      // Every rule is sent, and none twice: no overlap, no archive copy.
+      expect(sent.split(sentence).length - 1, sentence).toBe(1);
+    }
+  });
+
   test('without embeddings, the keyword fallback returns the same paragraph', async () => {
     await buildProject();
     const handbook = await chunks.chunksOf({ source: 'ATTACHMENT', sourceId: fixture.handbookId });

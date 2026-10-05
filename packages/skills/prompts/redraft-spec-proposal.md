@@ -16,7 +16,7 @@ These instructions come first; the material to work from follows them.
 - Do everything the feedback asks for. When it points at a part (a section or lines), change that part, and other parts only where the change requires it.
 - Follow the earlier feedback on this proposal too, unless the latest feedback says otherwise. Don't undo what earlier feedback asked for.
 - Stay consistent with the current Spec and the context. When the feedback asks for something that contradicts the Spec, the context or the Decision this proposal records, do it, and say so in `summary`.
-- Keep the proposal's language and tone, unless the feedback asks for another. Keep exact numbers, names and terms.
+- Keep the proposal's language and tone, unless the feedback asks for another.
 - Don't invent facts the Spec, the context and the feedback don't give. Where you have to assume, say so in the Spec's "Open questions".
 
 {{>language}}

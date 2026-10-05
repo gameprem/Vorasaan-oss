@@ -182,6 +182,7 @@ export class PromptReplay {
     const { context } = splitFeatureSpec(
       await this.retriever.forFeature(featureId, query, contextBudget, {
         excludeRequestId: requestId,
+        k: budget.topK,
       }),
     );
     return { foundation, context: withoutBrief(context) };

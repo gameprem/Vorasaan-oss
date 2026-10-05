@@ -9,6 +9,7 @@ import {
   MAX_SEARCH_K,
   type SearchScope,
 } from './content-chunk.repository.ts';
+import { type ShownText, shown, unrepeated } from './context-dedupe.ts';
 import { assertVectors } from './embedding.port.ts';
 import { EmbeddingSettingsService } from './embedding-settings.service.ts';
 import { decisionText } from './source-text.ts';
@@ -81,7 +82,9 @@ type Scope = { organizationId: string; projectId: string };
  *    Attachments needs all of them, not only those that share words with it).
  *
  * Blocks are de-duplicated and kept in that order while they fit; a whole block
- * (Spec, Decision, unindexed Attachment) is shortened to fit, a chunk is skipped.
+ * (Spec, Decision, unindexed Attachment) is shortened to fit, a chunk is skipped. A
+ * chunk whose text an earlier block already holds is skipped too, and a start it repeats
+ * from its own source (the chunker's overlap) is cut (ticket 0076, `context-dedupe.ts`).
  *
  * Ranking uses the Organization's embeddings when a provider is set; without one,
  * or when the query can't be embedded, it falls back to Postgres full-text
@@ -539,8 +542,16 @@ function dedupe(candidates: Candidate[]): Candidate[] {
 function fit(candidates: Candidate[], budget: number, anchoredFirst: boolean): ContextBlock[] {
   let remaining = Math.max(0, Math.floor(budget));
   const blocks: ContextBlock[] = [];
+  const before: ShownText[] = [];
   for (const [i, candidate] of candidates.entries()) {
-    const { key: _key, clippable, ...block } = candidate;
+    const { key: _key, clippable, ...found } = candidate;
+    let block: ContextBlock = found;
+    // A chunk never repeats what the prompt already shows (ticket 0076).
+    if (!clippable) {
+      const text = unrepeated(block, before);
+      if (text === null) continue;
+      if (text !== block.text) block = { ...block, text };
+    }
     const cost = blockTokens(block);
     let taken: ContextBlock | null = null;
     if (cost <= remaining) {
@@ -556,6 +567,7 @@ function fit(candidates: Candidate[], budget: number, anchoredFirst: boolean): C
       continue;
     }
     blocks.push(taken);
+    before.push(shown(taken));
     remaining -= blockTokens(taken);
   }
   return blocks;

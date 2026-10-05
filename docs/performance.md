@@ -173,3 +173,18 @@ FROM pg_stat_user_tables ORDER BY seq_tup_read DESC LIMIT 20;
 ```
 
 A large table with a high `seq_tup_read` and few `idx_scan` is read whole by some query.
+
+## Tokens per AI task (ticket 0076)
+
+```bash
+cd apps/server
+bun run tokens:tasks                          # eval cases + the product's calls, from their Receipts
+bun run tokens:tasks --out before.json        # keep a run
+bun run tokens:tasks --compare before.json    # tokens before/after, and any lower score (exit 1)
+```
+
+Every prompt is rendered exactly as `MastraAiPort` sends it and sized by the 0059 estimate; the
+FakeAiPort answers, so scores show structure only (a real model is checked with `bun run eval:*`).
+The product's calls run on the small large Organization in `TOKENS_DATABASE_URL` (default
+`vorasaan_tokens_bench`). The recorded numbers in `src/evals/token-guard.ts` are checked by
+`bun run test`, like the query budgets.

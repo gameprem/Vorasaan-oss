@@ -16,7 +16,7 @@ These instructions come first; the material to work from follows them.
 - Do everything the feedback asks for. When it points at a part (a section or lines), change that part, and other parts only where the change requires it.
 - Follow the earlier feedback on this proposal too, unless the latest feedback says otherwise.
 - Keep the Brief's sections and describe the Project as a whole; don't turn it into a list of Features.
-- Keep the proposal's language and tone, unless the feedback asks for another. Keep exact numbers, names and terms.
+- Keep the proposal's language and tone, unless the feedback asks for another.
 - Don't invent goals, numbers, users or systems the Brief, the context and the feedback don't give; put gaps under "Open questions".
 
 {{>language}}

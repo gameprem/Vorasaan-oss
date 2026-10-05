@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@vorasaan/db';
 import { SEED } from '@vorasaan/db/seed';
 import { type ConversationView, ESCALATION_STEPS } from '@vorasaan/shared';
-import { CONTEXT_CEILINGS } from '../ai/context-budget.ts';
+import { CONTEXT_CEILINGS, RETRIEVAL_TOP_K } from '../ai/context-budget.ts';
 import { ChatCardsService } from '../chat-apps/chat-cards.service.ts';
 import { ESCALATION_BATCH_SIZE } from '../response-windows/escalation.job.ts';
 import { ContextRetriever } from '../retrieval/context-retriever.ts';
@@ -92,7 +92,11 @@ export async function hotPaths(
   ];
 
   const retriever = app.get(ContextRetriever);
-  const retrieve = () => retriever.forFeature(FEATURE, QUERY, CONTEXT_CEILINGS.decisionRequest);
+  // As the Choices retrieve: the Decision Request budget, its top-k (ticket 0076).
+  const retrieve = () =>
+    retriever.forFeature(FEATURE, QUERY, CONTEXT_CEILINGS.decisionRequest, {
+      k: RETRIEVAL_TOP_K.decisionRequest,
+    });
   const blocks = await retrieve();
   const retrievalFoundNeedle = blocks.some((b) => b.text.includes(NEEDLE_PARAGRAPH));
 
@@ -154,7 +158,7 @@ export async function hotPaths(
       name: 'Retrieval (Feature, pgvector)',
       description:
         'ContextRetriever.forFeature with the fixture question and the Decision Request budget ' +
-        `(${CONTEXT_CEILINGS.decisionRequest} tokens), ranked by FakeEmbeddingPort vectors`,
+        `(${CONTEXT_CEILINGS.decisionRequest} tokens, top ${RETRIEVAL_TOP_K.decisionRequest}), ranked by FakeEmbeddingPort vectors`,
       run: retrieve,
       iterations,
       warmup: 3,

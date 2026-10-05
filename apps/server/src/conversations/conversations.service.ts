@@ -1083,11 +1083,20 @@ export class ConversationsService {
         conversation.featureId,
         budget,
       );
-      const context = await this.retriever.forFeature(conversation.featureId, query, contextBudget);
+      const context = await this.retriever.forFeature(
+        conversation.featureId,
+        query,
+        contextBudget,
+        {
+          k: budget.topK,
+        },
+      );
       return { context: withoutBrief(context), foundation };
     }
     const [blocks, criteria] = await Promise.all([
-      this.retriever.forProject(conversation.projectId, query, projectBudget(budget)),
+      this.retriever.forProject(conversation.projectId, query, projectBudget(budget), {
+        k: budget.topK,
+      }),
       this.guidelines.effective(conversation.projectId),
     ]);
     const { brief, context } = splitProjectBrief(blocks);
