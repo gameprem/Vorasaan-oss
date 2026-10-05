@@ -1,4 +1,4 @@
-import type { AiSettingsView, AiUsageView } from '@vorasaan/shared';
+import type { AiSettingsView, AiUsageView, ModelSuggestionsView } from '@vorasaan/shared';
 import { unstable_rethrow } from 'next/navigation';
 import { AiUsageDashboard } from '@/components/ai-usage';
 import { Notice } from '@/components/bits';
@@ -19,10 +19,12 @@ export default async function AiUsagePage({
   if (to && DATE.test(to)) query.set('to', to);
   let view: AiUsageView;
   let settings: AiSettingsView;
+  let suggestions: ModelSuggestionsView;
   try {
-    [view, settings] = await Promise.all([
+    [view, settings, suggestions] = await Promise.all([
       api<AiUsageView>(`/settings/ai/usage${query.size ? `?${query}` : ''}`),
       api<AiSettingsView>('/settings/ai'),
+      api<ModelSuggestionsView>('/settings/ai/model-suggestions'),
     ]);
   } catch (error) {
     unstable_rethrow(error);
@@ -42,7 +44,7 @@ export default async function AiUsagePage({
         What the AI costs, where, and what it buys, from the Receipts of its calls: tokens, an
         estimated cost from the prices you set, cache use and latency, by task, Project and model.
       </p>
-      <AiUsageDashboard view={view} models={settings.models} />
+      <AiUsageDashboard view={view} models={settings.models} suggestions={suggestions} />
     </section>
   );
 }

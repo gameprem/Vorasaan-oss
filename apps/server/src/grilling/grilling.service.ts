@@ -402,6 +402,7 @@ export class GrillingService {
         project.id,
         `${project.name}\n${ROUND_QUERY[kind]}`,
         projectBudget(budget),
+        { k: budget.topK },
       );
       const memoryNow = known;
       const roundId = randomUUID();
@@ -468,6 +469,7 @@ export class GrillingService {
         project.id,
         `${project.name}\n${DRAFT_QUERY}`,
         projectBudget(budget),
+        { k: budget.topK },
       ),
     );
     const memoryNow = known;

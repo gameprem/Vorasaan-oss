@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { FeatureGuidelinesModule } from '../feature-guidelines/feature-guidelines.module.ts';
 import { RedraftsModule } from '../redrafts/redrafts.module.ts';
+import { ModelSuggestionsController, ModelSuggestionsService } from './model-suggestions.ts';
 import { PromptEvalsService } from './prompt-evals.service.ts';
 import { PromptProposalsService } from './prompt-proposals.service.ts';
 import {
@@ -15,8 +16,18 @@ import { PromptReplay } from './replay.ts';
 // through RedraftsService, like every AI proposal.
 @Module({
   imports: [FeatureGuidelinesModule, RedraftsModule],
-  controllers: [PromptVersionsController, PromptAnalysisSettingsController],
-  providers: [PromptSettings, PromptEvalsService, PromptReplay, PromptProposalsService],
+  controllers: [
+    PromptVersionsController,
+    PromptAnalysisSettingsController,
+    ModelSuggestionsController,
+  ],
+  providers: [
+    PromptSettings,
+    PromptEvalsService,
+    PromptReplay,
+    PromptProposalsService,
+    ModelSuggestionsService,
+  ],
   exports: [PromptEvalsService, PromptProposalsService],
 })
 export class PromptVersionsModule {}

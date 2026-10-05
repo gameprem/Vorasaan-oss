@@ -165,3 +165,55 @@ export const AiBudgetInput = z.strictObject({
     .nullable(),
 });
 export type AiBudgetInput = z.infer<typeof AiBudgetInput>;
+
+// ─── Cheaper models (ticket 0076) ────────────────────────────────────────────
+
+/** The days of a task's Receipts a model suggestion prices its calls from. */
+export const MODEL_SUGGESTION_DAYS = 30;
+
+/** One prompt of a task, scored on both models by Eval Runs of its active version. */
+export const ModelSuggestionPrompt = z.object({
+  /** The packages/skills name. */
+  prompt: z.string(),
+  /** The active version both runs evaluated (`default@…` or `v<n>@…`). */
+  version: z.string(),
+  current: z.object({ runId: Id, score: z.number().min(0).max(1) }),
+  suggested: z.object({ runId: Id, score: z.number().min(0).max(1) }),
+});
+export type ModelSuggestionPrompt = z.infer<typeof ModelSuggestionPrompt>;
+
+/**
+ * An Approved Model the Admin could set for a task instead of the one it runs on: priced
+ * lower, and scoring at least as well on every prompt of the task in the latest Eval Runs
+ * of the active versions on both models, with the same sources. Only a suggestion: the
+ * task's model changes when an Admin sets it.
+ */
+export const ModelSuggestion = z.object({
+  task: AiTask,
+  current: z.object({ approvedModelId: Id, name: z.string() }),
+  suggested: z.object({ approvedModelId: Id, name: z.string() }),
+  prompts: z.array(ModelSuggestionPrompt),
+  /** The task's calls on its current model in the last MODEL_SUGGESTION_DAYS days... */
+  calls: z.int().min(0),
+  /** ...their estimated cost there, and what the same tokens would cost on the suggested model. */
+  currentCostUsd: Usd,
+  suggestedCostUsd: Usd,
+});
+export type ModelSuggestion = z.infer<typeof ModelSuggestion>;
+
+/** A cheaper model whose scores are not known yet for some prompts of a task: evals to run. */
+export const UncheckedModel = z.object({
+  task: AiTask,
+  current: z.object({ approvedModelId: Id, name: z.string() }),
+  suggested: z.object({ approvedModelId: Id, name: z.string() }),
+  /** The prompts with no comparable Eval Runs on both models yet. */
+  prompts: z.array(z.string()),
+});
+export type UncheckedModel = z.infer<typeof UncheckedModel>;
+
+/** `GET /settings/ai/model-suggestions` (Admin). */
+export const ModelSuggestionsView = z.object({
+  suggestions: z.array(ModelSuggestion),
+  unchecked: z.array(UncheckedModel),
+});
+export type ModelSuggestionsView = z.infer<typeof ModelSuggestionsView>;

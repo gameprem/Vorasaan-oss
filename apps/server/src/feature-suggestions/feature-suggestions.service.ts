@@ -36,6 +36,7 @@ import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { ReceiptsService } from '../receipts/receipts.service.ts';
 import { assertNotRedrafting, currentRedraft } from '../redrafts/redraft-guard.ts';
+import { withoutShown } from '../retrieval/context-dedupe.ts';
 import { ContextRetriever } from '../retrieval/context-retriever.ts';
 import { decisionText } from '../retrieval/source-text.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
@@ -99,6 +100,7 @@ export class FeatureSuggestionsService {
         projectId,
         `${project.name}\n${SUGGEST_QUERY}`,
         projectBudget(budget),
+        { k: budget.topK },
       ),
       this.decisionLog(projectId),
       this.db.featureSuggestion.findMany({
@@ -126,7 +128,11 @@ export class FeatureSuggestionsService {
         {
           project: { name: project.name },
           count,
-          projectContext,
+          // The Decision Log has its own section: retrieval doesn't repeat it (ticket 0076).
+          projectContext: withoutShown(
+            projectContext,
+            decisions.map((d) => d.text),
+          ),
           guidelines: guidelines.map(({ criterion: _, ...g }) => g),
           decisions,
           dismissed,
@@ -254,6 +260,7 @@ export class FeatureSuggestionsService {
         suggestion.projectId,
         `${suggestion.title}\n\n${suggestion.rationale}\n\n${suggestion.businessValue}`,
         projectBudget(budget),
+        { k: budget.topK },
       ),
     ]);
     const language = await personLanguage(this.db, user.id);
@@ -380,6 +387,7 @@ export class FeatureSuggestionsService {
       projectId,
       `${feature.title}\n\n${feature.description}`,
       projectBudget(budget),
+      { k: budget.topK },
     );
     const language = await personLanguage(this.db, user.id);
     const checked = await this.callAi(() =>

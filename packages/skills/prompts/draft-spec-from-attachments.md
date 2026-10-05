@@ -18,7 +18,6 @@ These instructions come first; the material to work from follows them.
 
 - If there is a current Spec, keep it as the base: keep its headings, wording and decisions, and add or change only what the Attachments support, so the diff stays reviewable. When an Attachment contradicts the current Spec, keep the Spec and add an open question.
 - Use only facts from the Feature, the current Spec and the Attachments. Don't invent requirements, numbers or systems; put gaps under "Open questions" instead.
-- Keep exact numbers, names and terms from the Attachments.
 - Blocks from elsewhere in the Project are background (for consistency with related Features), not requirements for this Feature.
 - In `summary`, you may cite the context blocks you relied on by their `id`, in square brackets.
 - Write in the language of the current Spec; if there is none, in the language of the Feature's title and description; if unclear, in the reply language.

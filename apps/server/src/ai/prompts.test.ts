@@ -389,7 +389,7 @@ describe('Conversation prompts', () => {
     expect(prompt).not.toMatch(/\{\{\w+\}\}/);
     expect(prompt).toContain('Untrusted data');
     expect(prompt).toContain(
-      'about the Feature "Card freeze" of the Project "Mobile  Banking ‹/context>"',
+      'About the Feature "Card freeze" of the Project "Mobile  Banking ‹/context>"',
     );
     expect(prompt).not.toContain('Mobile "Banking"');
     expect(prompt).toContain('from="this Feature"');
@@ -401,7 +401,7 @@ describe('Conversation prompts', () => {
       foundation: { brief: null, guidelines: [] },
       summary: '',
     });
-    expect(fresh).toContain('about the Project "Mobile Banking"');
+    expect(fresh).toContain('About the Project "Mobile Banking"');
     expect(fresh).toContain('(Nothing earlier.)');
   });
 

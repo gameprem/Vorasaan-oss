@@ -113,6 +113,82 @@ test('an Admin sees the AI usage, sets a price and a budget, and is told the bud
   await request.post(`${E2E.apiUrl}/notifications/read-all`, { headers: asPim });
 });
 
+test('an Admin is shown a cheaper model whose eval scores hold, and chooses it (0076)', async ({
+  as,
+  request,
+}) => {
+  const best = await approvedModel(request);
+  const priced = await request.patch(`${E2E.apiUrl}/settings/ai/models/${best.id}`, {
+    headers: asPim,
+    data: { prices: { inputPerMillion: 15, outputPerMillion: 75 } },
+  });
+  expect(priced.status()).toBe(200);
+  const fast = await request.post(`${E2E.apiUrl}/settings/ai/models`, {
+    headers: asPim,
+    data: {
+      providerId: best.providerId,
+      modelId: 'fake-fast',
+      displayName: 'Fast e2e',
+      prices: { inputPerMillion: 1, outputPerMillion: 5 },
+    },
+  });
+  expect(fast.status()).toBe(201);
+  const fastId = ((await fast.json()) as { id: string }).id;
+  // Evals of both Summaries prompts on both models; the fake scores them the same.
+  for (const prompt of ['summarize-attachment', 'summarize-conversation']) {
+    for (const approvedModelId of [best.id, fastId]) {
+      const run = await request.post(`${E2E.apiUrl}/settings/ai/prompts/${prompt}/evals`, {
+        headers: asPim,
+        data: { version: 0, approvedModelId, sources: ['CHECKED_IN'] },
+      });
+      expect(run.status()).toBe(201);
+      const { id } = (await run.json()) as { id: string };
+      await expect
+        .poll(async () => {
+          const res = await request.get(`${E2E.apiUrl}/settings/ai/prompts/${prompt}/evals/${id}`, {
+            headers: asPim,
+          });
+          return ((await res.json()) as { status: string }).status;
+        })
+        .toBe('DONE');
+    }
+  }
+
+  const page = await as(pim);
+  await page.goto('/settings/ai/usage');
+  await settled(page);
+  const cheaper = page.getByRole('region', { name: 'Cheaper models' });
+  const summaries = cheaper.getByTestId('suggestion-SUMMARIES');
+  await expect(summaries).toContainText(`Summaries: Fast e2e instead of ${best.displayName}`);
+  await expect(summaries.getByRole('table')).toContainText('summarize-conversation');
+  // Nothing is switched until the Admin chooses it.
+  const before = (await (
+    await request.get(`${E2E.apiUrl}/settings/ai`, { headers: asPim })
+  ).json()) as AiSettingsView;
+  expect(before.tasks.find((t) => t.task === 'SUMMARIES')?.approvedModelId).toBeNull();
+  await summaries.getByRole('button', { name: 'Use Fast e2e for Summaries' }).click();
+  await expect(summaries.getByRole('status')).toHaveText('Summaries now run on Fast e2e.');
+  const after = (await (
+    await request.get(`${E2E.apiUrl}/settings/ai`, { headers: asPim })
+  ).json()) as AiSettingsView;
+  expect(after.tasks.find((t) => t.task === 'SUMMARIES')?.approvedModelId).toBe(fastId);
+
+  // Leave nothing behind for other specs.
+  await request.put(`${E2E.apiUrl}/settings/ai/tasks`, {
+    headers: asPim,
+    data: { tasks: { SUMMARIES: null } },
+  });
+  expect(
+    (
+      await request.delete(`${E2E.apiUrl}/settings/ai/models/${fastId}`, { headers: asPim })
+    ).status(),
+  ).toBeLessThan(300);
+  await request.patch(`${E2E.apiUrl}/settings/ai/models/${best.id}`, {
+    headers: asPim,
+    data: { prices: null },
+  });
+});
+
 for (const theme of THEMES) {
   test(`the charts have a summary and a table view, work by keyboard, axe-clean in ${theme}`, async ({
     as,

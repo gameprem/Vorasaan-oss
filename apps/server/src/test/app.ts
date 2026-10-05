@@ -1,6 +1,7 @@
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
 import { createPrismaClient } from '@vorasaan/db';
+import type { AiPort } from '../ai/ai.port.ts';
 import { AI_CONNECTION_TESTER, type AiConnectionTester } from '../ai/ai-settings.service.ts';
 import { FakeAiPort } from '../ai/fake-ai.port.ts';
 import { AI_ENGINE } from '../ai/mastra.module.ts';
@@ -57,6 +58,11 @@ export type RecordedQuery = { sql: string; durationMs: number };
 export type TestAppOptions = {
   /** Another database than the test one, such as the benchmark's (name ending in _bench). */
   databaseUrl?: string;
+  /**
+   * The AI engine around the fake, such as the token measurements of ticket 0076
+   * (`measuringAiPort`); the fake by default. `ai` stays the fake either way.
+   */
+  engine?: (fake: FakeAiPort) => AiPort;
 };
 
 /** Boots the real app against the test database, with FakeAiPort, ready for `app.inject()`. */
@@ -84,7 +90,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     .overrideProvider(CLOCK)
     .useValue(clock)
     .overrideProvider(AI_ENGINE)
-    .useValue(ai)
+    .useValue(options.engine ? options.engine(ai) : ai)
     .overrideProvider(EMBEDDING_PORT_FACTORY)
     .useValue(embeddings.factory)
     .overrideProvider(AI_CONNECTION_TESTER)

@@ -7,13 +7,21 @@ import {
   type AiUsageView,
   type ApprovedModelSettingsView,
   MAX_PRICE_PER_MILLION,
+  MODEL_SUGGESTION_DAYS,
+  type ModelSuggestion,
+  type ModelSuggestionsView,
   type ProposalKind,
 } from '@vorasaan/shared';
 import { type KeyboardEvent, type ReactNode, useId, useRef, useState, useTransition } from 'react';
-import { type ActionResult, saveAiBudget, saveModelPrices } from '@/lib/ai-usage-actions';
+import {
+  type ActionResult,
+  chooseTaskModel,
+  saveAiBudget,
+  saveModelPrices,
+} from '@/lib/ai-usage-actions';
 import { TASK_LABEL } from './ai-task-labels';
 import { AI_USAGE_PATH } from './notification-text';
-import { useSettingsNavigate } from './settings-dialog';
+import { SettingsLink, useSettingsNavigate } from './settings-dialog';
 import { field } from './ui';
 import { Button } from './ui/button';
 import { DateRangePicker } from './ui/date-picker';
@@ -74,9 +82,11 @@ const SERIES = [
 export function AiUsageDashboard({
   view,
   models,
+  suggestions,
 }: {
   view: AiUsageView;
   models: ApprovedModelSettingsView[];
+  suggestions: ModelSuggestionsView;
 }) {
   const { totals, costPerDecision: perDecision } = view;
   return (
@@ -168,6 +178,7 @@ export function AiUsageDashboard({
         }))}
       />
       <RedraftsTable view={view} />
+      <CheaperModels view={suggestions} />
 
       <BudgetForm view={view} />
       <PricesForm models={models} />
@@ -644,6 +655,115 @@ function RedraftsTable({ view }: { view: AiUsageView }) {
         <p className="mt-3 text-sm text-fg-soft">Nothing approved in this range.</p>
       )}
     </section>
+  );
+}
+
+// ─── Cheaper models (ticket 0076) ───────────────────────────────────────────
+
+function CheaperModels({ view }: { view: ModelSuggestionsView }) {
+  return (
+    <section aria-labelledby="usage-cheaper">
+      <h3 id="usage-cheaper" className="text-lg font-semibold">
+        Cheaper models
+      </h3>
+      <p className="mt-1 text-sm text-fg-soft">
+        An Approved Model priced lower than the one a task runs on, whose latest Eval Runs score at
+        least as well on every prompt of the task (the active versions, same sources). Nothing
+        changes until you choose it.
+      </p>
+      {view.suggestions.length ? (
+        <ul className="mt-4 space-y-5">
+          {view.suggestions.map((s) => (
+            <SuggestionRow key={s.task} suggestion={s} />
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-fg-soft">
+          No cheaper model scores as well on any task yet.
+        </p>
+      )}
+      {view.unchecked.length > 0 && (
+        <div className="mt-5">
+          <h4 className="font-medium">Cheaper, not evaluated yet</h4>
+          <ul className="mt-2 space-y-1.5 text-sm">
+            {view.unchecked.map((u) => (
+              <li key={`${u.task}-${u.suggested.approvedModelId}`}>
+                {TASK_LABEL[u.task].label}: {u.suggested.name} instead of {u.current.name}. Run
+                evals of{' '}
+                {u.prompts.map((p, i) => (
+                  <span key={p}>
+                    {i > 0 && ', '}
+                    <SettingsLink
+                      href={`/settings/ai/prompts/${p}`}
+                      className="underline underline-offset-2"
+                    >
+                      {p}
+                    </SettingsLink>
+                  </span>
+                ))}{' '}
+                on both models to see whether it holds.
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SuggestionRow({ suggestion: s }: { suggestion: ModelSuggestion }) {
+  const { pending, run, status } = useAction();
+  const task = TASK_LABEL[s.task].label;
+  const saved = s.currentCostUsd - s.suggestedCostUsd;
+  return (
+    <li data-testid={`suggestion-${s.task}`}>
+      <p className="font-medium">
+        {task}: {s.suggested.name} instead of {s.current.name}
+      </p>
+      <p className="text-sm text-fg-soft">
+        {s.calls
+          ? `${calls(s.calls)} in the last ${MODEL_SUGGESTION_DAYS} days: ${usd(s.currentCostUsd)} on ${s.current.name}, about ${usd(s.suggestedCostUsd)} on ${s.suggested.name} (${usd(saved)} less).`
+          : `No calls in the last ${MODEL_SUGGESTION_DAYS} days yet; ${s.suggested.name} is priced lower.`}
+      </p>
+      <table className="mt-2 w-full text-left text-sm">
+        <caption className="sr-only">
+          Eval scores of {task} on {s.current.name} and {s.suggested.name}
+        </caption>
+        <thead className="text-fg-soft">
+          <tr>
+            <th className="py-1.5 pr-3 font-medium">Prompt</th>
+            <Num head>{s.current.name}</Num>
+            <Num head>{s.suggested.name}</Num>
+          </tr>
+        </thead>
+        <tbody>
+          {s.prompts.map((p) => (
+            <tr key={p.prompt} className="border-t border-line">
+              <th scope="row" className="py-1.5 pr-3 font-normal">
+                {p.prompt}
+              </th>
+              <Num>{percent(p.current.score)}</Num>
+              <Num>{percent(p.suggested.score)}</Num>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <Button
+          variant="secondary"
+          isDisabled={pending}
+          onPress={() =>
+            run(
+              () => chooseTaskModel(s.task, s.suggested.approvedModelId),
+              `${task} now run on ${s.suggested.name}.`,
+            )
+          }
+        >
+          Use {s.suggested.name} for {task}
+        </Button>
+        {status}
+      </div>
+    </li>
   );
 }
 

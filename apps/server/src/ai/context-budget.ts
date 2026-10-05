@@ -31,6 +31,26 @@ export const CONTEXT_CEILINGS = {
 export type Workflow = keyof typeof CONTEXT_CEILINGS;
 
 /**
+ * How many chunks each search of a workflow's retrieval returns (ticket 0076); none
+ * fills the budget. Until then every search returned enough chunks to fill the context
+ * ceiling (its budget over 400-token chunks: 30 for a Decision Request, about 70 for a
+ * Project-level task), and since the ceilings doubled (0060) the second half was mostly
+ * chunks ranked far down. These are the sizes before 0060: the top chunks of each search,
+ * with the Feature's own Spec, requests and Decisions (or the Brief and the Feature
+ * overview) still first and whole. The ceiling stays the limit. Drafting a Spec from
+ * Attachments keeps filling its budget: the Attachments are its input.
+ */
+export const RETRIEVAL_TOP_K: Record<Workflow, number | undefined> = {
+  decisionRequest: 15,
+  specFromAttachments: undefined,
+  grilling: 30,
+  featureSuggestions: 30,
+  featureFit: 15,
+  conversationFeature: 15,
+  conversationProject: 30,
+};
+
+/**
  * The one config of every budget (ADR 0012, ticket 0060). A call's window is
  * split into four shares; each has a floor, so a small model still gets
  * something useful, and a ceiling, so a large one isn't filled for its own sake.
@@ -91,6 +111,8 @@ export type Budget = {
   /** A Conversation's summary and messages; 0 for a one-shot task. */
   history: number;
   reply: number;
+  /** How many chunks each search returns (`RETRIEVAL_TOP_K`); none fills `context`. */
+  topK?: number;
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -133,7 +155,15 @@ export function planBudget(
   foundation = give(foundation, 0);
   context = give(context, 0);
   history = give(history, 0);
-  return { window: w, system, foundation, context, history, reply };
+  return {
+    window: w,
+    system,
+    foundation,
+    context,
+    history,
+    reply,
+    topK: RETRIEVAL_TOP_K[workflow],
+  };
 }
 
 /**

@@ -17,6 +17,7 @@
     "eval:redrafts": "bun scripts/eval-redrafts.ts",
     "eval:prompt-proposals": "bun scripts/eval-prompt-proposals.ts",
     "tokens:fixture": "bun scripts/token-fixture.ts",
+    "tokens:tasks": "bun scripts/token-report.ts",
     "bench": "bun scripts/bench.ts"
   },
   "dependencies": {
