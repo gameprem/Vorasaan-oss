@@ -4,6 +4,7 @@ import {
   DECISION_STATS_DEFAULT_WEEKS,
   DECISION_STATS_MAX_DAYS,
   type DecisionRequestKind,
+  type DecisionRequestStatus,
   type DecisionStatsQuery,
   type DecisionStatsView,
   type LeadTimeStats,
@@ -31,6 +32,20 @@ type Timeline = RequestTimeline & {
   kind: DecisionRequestKind;
   role: TeamRole;
   decidedAt: Date | null;
+};
+
+type TimelineRow = {
+  id: string;
+  kind: DecisionRequestKind;
+  role: TeamRole;
+  status: DecisionRequestStatus;
+  submittedAt: Date;
+  closedAt: Date | null;
+  decidedAt: Date | null;
+  recipients: string[];
+  messages: { kind: 'QUESTION' | 'ANSWER' | 'NOTE'; at: number }[];
+  delegatesAdded: { people: { id: string }[]; at: number }[];
+  deciderChanges: { userId: string; at: number }[];
 };
 
 const round = (minutes: number | null) => (minutes === null ? null : Math.round(minutes));
@@ -124,61 +139,61 @@ export class DecisionStatsService {
     return weeks;
   }
 
-  /** The Project's requests sent before `to` and not closed before `from`. */
+  /**
+   * The Project's requests sent before `to` and not closed before `from`, each with the
+   * rows its timeline is rebuilt from, in one statement (ticket 0074). Times inside the
+   * aggregates come back as epoch milliseconds.
+   */
   private async timelines(projectId: string, from: Date, to: Date): Promise<Timeline[]> {
-    const rows = await this.db.decisionRequest.findMany({
-      where: {
-        feature: { team: { projectId } },
-        submittedAt: { not: null, lt: to },
-        OR: [
-          { status: { in: ['OPEN', 'NEEDS_INFO'] } },
-          { status: 'WITHDRAWN', closedAt: { gte: from } },
-          { decision: { createdAt: { gte: from } } },
-        ],
-      },
-      select: {
-        id: true,
-        kind: true,
-        deciderRole: true,
-        status: true,
-        submittedAt: true,
-        closedAt: true,
-        recipients: { select: { userId: true } },
-        decision: { select: { createdAt: true } },
-        messages: { select: { kind: true, createdAt: true } },
-        history: { where: { kind: 'DELEGATES_ADDED' }, select: { people: true, createdAt: true } },
-        deciderChanges: {
-          select: { deciderId: true, createdAt: true },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    });
-    return rows.flatMap((r): Timeline[] => {
-      if (!r.submittedAt) return [];
+    const fromAt = from.toISOString();
+    const toAt = to.toISOString();
+    const rows = await this.db.$queryRaw<TimelineRow[]>`
+      SELECT d.id, d.kind::text AS kind, d."deciderRole"::text AS role, d.status::text AS status,
+             d."submittedAt", d."closedAt", dn."createdAt" AS "decidedAt",
+             ARRAY(SELECT r."userId" FROM "RequestRecipient" r WHERE r."requestId" = d.id)
+               AS recipients,
+             (SELECT coalesce(json_agg(json_build_object(
+                       'kind', m.kind, 'at', floor(extract(epoch FROM m."createdAt") * 1000))), '[]')
+              FROM "RequestMessage" m WHERE m."requestId" = d.id) AS messages,
+             (SELECT coalesce(json_agg(json_build_object(
+                       'people', h.people, 'at', floor(extract(epoch FROM h."createdAt") * 1000))), '[]')
+              FROM "RequestHistoryEntry" h
+              WHERE h."requestId" = d.id AND h.kind = 'DELEGATES_ADDED') AS "delegatesAdded",
+             (SELECT coalesce(json_agg(json_build_object(
+                       'userId', c."deciderId", 'at', floor(extract(epoch FROM c."createdAt") * 1000))
+                       ORDER BY c."createdAt"), '[]')
+              FROM "DeciderChange" c WHERE c."requestId" = d.id) AS "deciderChanges"
+      FROM "DecisionRequest" d
+      JOIN "Feature" f ON f.id = d."featureId"
+      JOIN "Team" t ON t.id = f."teamId"
+      LEFT JOIN "Decision" dn ON dn."requestId" = d.id
+      WHERE t."projectId" = ${projectId}
+        AND d."submittedAt" < (${toAt}::timestamptz AT TIME ZONE 'UTC')
+        AND (d.status IN ('OPEN', 'NEEDS_INFO')
+          OR (d.status = 'WITHDRAWN' AND d."closedAt" >= (${fromAt}::timestamptz AT TIME ZONE 'UTC'))
+          OR dn."createdAt" >= (${fromAt}::timestamptz AT TIME ZONE 'UTC'))`;
+    return rows.map((r): Timeline => {
       const sentAt = r.submittedAt;
       // A Delegate added by escalation holds the request from that step on.
       const addedAt = new Map<string, Date>();
-      for (const h of r.history) {
-        for (const p of h.people as { id: string }[]) addedAt.set(p.id, h.createdAt);
+      for (const h of r.delegatesAdded) {
+        for (const p of h.people) addedAt.set(p.id, new Date(h.at));
       }
-      const decidedAt = r.decision?.createdAt ?? null;
-      return [
-        {
-          id: r.id,
-          kind: r.kind,
-          role: r.deciderRole,
-          sentAt,
-          decidedAt,
-          decided: decidedAt !== null,
-          endedAt: decidedAt ?? (r.status === 'WITHDRAWN' ? (r.closedAt ?? sentAt) : null),
-          pauses: needsInfoPauses(r.messages),
-          recipients: r.recipients.map((x) => ({
-            userId: x.userId,
-            from: addedAt.get(x.userId) ?? sentAt,
-          })),
-          deciderChanges: r.deciderChanges.map((c) => ({ userId: c.deciderId, at: c.createdAt })),
-        },
-      ];
+      const decidedAt = r.decidedAt;
+      return {
+        id: r.id,
+        kind: r.kind,
+        role: r.role,
+        sentAt,
+        decidedAt,
+        decided: decidedAt !== null,
+        endedAt: decidedAt ?? (r.status === 'WITHDRAWN' ? (r.closedAt ?? sentAt) : null),
+        pauses: needsInfoPauses(
+          r.messages.map((m) => ({ kind: m.kind, createdAt: new Date(m.at) })),
+        ),
+        recipients: r.recipients.map((userId) => ({ userId, from: addedAt.get(userId) ?? sentAt })),
+        deciderChanges: r.deciderChanges.map((c) => ({ userId: c.userId, at: new Date(c.at) })),
+      };
     });
   }
 

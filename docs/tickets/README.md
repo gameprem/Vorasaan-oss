@@ -202,7 +202,7 @@ Every AI call leaves a Receipt with what people did with its proposal; an Organi
 
 ## Optimization (Post-MVP 11)
 
-Measure first on a large seeded Organization, then make the database faster and the AI cheaper without answering worse. The baseline is done: `bun run bench` seeds the large Organization and measures the hot paths ([guide](../performance.md)); the numbers are in 0073.
+Measure first on a large seeded Organization, then make the database faster and the AI cheaper without answering worse. The baseline is done: `bun run bench` seeds the large Organization and measures the hot paths ([guide](../performance.md)); the numbers are in 0073. The database optimization is done too: the escalation job, the Inbox and Decision Lead Time are faster, every measured path has a query budget checked in tests, and vector search ranks small scopes exactly (0074).
 
 | # | Ticket | Depends on |
 | --- | --- | --- |

@@ -112,11 +112,13 @@ export class ChatCardsService implements OnModuleInit {
 
   onModuleInit() {
     this.signals.listen((signals) => {
+      const cards: Exclude<ChatCardSignal, { kind: 'REDRAFTED' }>[] = [];
       for (const signal of signals) {
-        this.background(() =>
-          signal.kind === 'REDRAFTED' ? this.refresh(signal) : this.deliver(signal),
-        );
+        if (signal.kind === 'REDRAFTED') this.background(() => this.refresh(signal));
+        else cards.push(signal);
       }
+      // One change's signals share one look at the Organization's chat apps (ticket 0074).
+      if (cards.length) this.background(() => this.deliver(cards));
     });
   }
 
@@ -166,22 +168,26 @@ export class ChatCardsService implements OnModuleInit {
     }
   }
 
-  /** Creates the cards a signal asks for, and sends those not held by Quiet Hours. */
-  async deliver(signal: Exclude<ChatCardSignal, { kind: 'REDRAFTED' }>): Promise<void> {
+  /** Creates the cards these signals ask for, and sends those not held by Quiet Hours. */
+  async deliver(signals: readonly Exclude<ChatCardSignal, { kind: 'REDRAFTED' }>[]): Promise<void> {
     const organizationId = await this.settings.organizationId();
     if (!organizationId) return;
     const enabled = [...(await this.settings.enabled(organizationId))];
     if (!enabled.length) return;
-    const event = eventOf(signal);
     const now = this.clock.now();
-    for (const userId of signal.to) {
-      try {
-        await this.deliverTo(userId, signal, event, organizationId, enabled, now);
-      } catch (error) {
-        // One person's cards never stop the others'.
-        this.logger.warn(failure(error, 'Could not send a chat card'));
-      }
-    }
+    await Promise.all(
+      signals.map(async (signal) => {
+        const event = eventOf(signal);
+        for (const userId of signal.to) {
+          try {
+            await this.deliverTo(userId, signal, event, organizationId, enabled, now);
+          } catch (error) {
+            // One person's cards never stop the others'.
+            this.logger.warn(failure(error, 'Could not send a chat card'));
+          }
+        }
+      }),
+    );
   }
 
   private async deliverTo(

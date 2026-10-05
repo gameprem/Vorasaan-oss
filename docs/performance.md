@@ -1,7 +1,8 @@
 # Performance: the benchmark and query diagnostics
 
-How fast the hot paths are on a large Organization, and where the time goes (ticket 0073).
-Measure here first; optimize after (0074 for the database, 0076 for tokens).
+How fast the hot paths are on a large Organization, and where the time goes (ticket 0073), and
+how they stay fast (ticket 0074: query budgets, the connection pool, vector search). Measure here
+first; optimize after (0076 for tokens).
 
 ## The benchmark
 
@@ -10,6 +11,7 @@ docker compose up -d db          # or any Postgres with pgvector
 bun run bench                    # the baseline: the large Organization
 bun run bench --scale medium     # a tenth of it (what CI runs)
 bun run bench --compare docs/performance-baseline.json
+bun run bench --only inbox       # only the scenarios whose name contains "inbox"
 ```
 
 It runs against its own database, `BENCH_DATABASE_URL` (default
@@ -61,11 +63,46 @@ because the benchmark empties it). It never touches the dev or test databases.
      often within one run. **N+1** is flagged at 10 or more: something runs a query per row;
    - the five statements with the most database time over all runs (`topStatements`), and
      `pg_stat_statements`' top 15 when the server loads it (below);
-   - **over budget** when a scenario has a `queryBudget` and sends more (0074 sets them).
+   - **over budget** when a scenario sends more statements than its `queryBudget` (below).
 
 `--compare <previous.json>` adds each scenario's p95 and query count against that file. The
-baseline of ticket 0073 is `docs/performance-baseline.json` (with its machine in it): compare
-only with runs on similar hardware.
+current baseline is `docs/performance-baseline.json`, taken after ticket 0074 (with its machine
+in it; 0073's first numbers are in that ticket): compare only with runs on similar hardware.
+p95 over 30 runs moves by a few milliseconds between runs on the fast reads: use
+`--iterations 100` (and `--only`) before calling a small change a regression.
+
+## Query budgets
+
+Every scenario has a budget: the most SQL statements one run may send (`QUERY_BUDGETS` and
+`escalationQueryBudget` in `apps/server/src/perf/scenarios.ts`). They are the counts after
+0074 and don't grow with the data, so going over one means a query per row (an N+1) or a new
+round trip on a hot path. `perf/query-budgets.api.test.ts`, part of `bun run test`, seeds the
+small scale of the large Organization, runs every scenario and fails when one goes over its
+budget or repeats a statement 10 times. The escalation job's budget grows only per batch of
+`ESCALATION_BATCH_SIZE` due requests, never per request. Raise a budget only on purpose, in the
+same change that needs it.
+
+## Connection pool
+
+Each server process opens at most `DATABASE_POOL_SIZE` connections (default 10, pg's default),
+in one pool shared by requests and the background jobs running in that process (escalation,
+chat cards, indexing, Receipts). Why 10 is enough: the widest request, the Inbox, runs 5
+statements at once; the escalation job holds one connection per batch and runs its batches one
+after another; the rest is short statements. Raise it only when requests wait for a connection
+(Prisma's query durations grow while the database's own times, in `pg_stat_statements`, don't),
+and keep *instances × pool size* below Postgres' `max_connections` (100 by default), leaving a
+few for migrations and `psql`.
+
+## Vector search and `ef_search`
+
+`ContentChunkRepository.search` ranks a scope of up to 20,000 chunks (`EXACT_SEARCH_MAX_CHUNKS`)
+exactly, in one statement, and uses the HNSW index only for a larger scope. pgvector (0.6 on
+the measuring server) filters HNSW candidates after the index scan: when the scope (a Project,
+a Feature's Attachments) is a small share of the Organization's chunks, most of the
+`ef_search` candidates fall outside it and the nearest chunks in it are missed. On the medium
+dataset this made recall@30 0.13 at `ef_search` 300; exact ranking of a few thousand chunks
+takes a few milliseconds. To check recall, compare the search with an exact ranking:
+`SET LOCAL enable_indexscan = off` makes Postgres sort the whole scope by distance.
 
 ### In CI
 
@@ -121,10 +158,11 @@ docker compose -f docker-compose.yml -f docker-compose.perf.yml logs db | grep d
 ```
 
 Copy one into `psql` (`docker compose exec db psql -U vorasaan vorasaan_bench`), put its
-parameters in, and `EXPLAIN (ANALYZE, BUFFERS)` it. For vector search, the plan should show
-`Index Scan using "ContentChunk_embedding_hnsw_<dims>"`; the app sets `hnsw.ef_search` per query
-(`ContentChunkRepository.search`), so set it the same way (`SET hnsw.ef_search = 300`) before
-explaining.
+parameters in, and `EXPLAIN (ANALYZE, BUFFERS)` it. Vector search over a scope of up to
+20,000 chunks is meant to scan the scope (through `ContentChunk_organizationId_projectId_featureId_idx`)
+and sort it exactly; only a larger scope's statement should show
+`Index Scan using "ContentChunk_embedding_hnsw_<dims>"`, and for that one the app sets
+`hnsw.ef_search` per query, so set it the same way (`SET hnsw.ef_search = 300`) before explaining.
 
 Unused or missing indexes:
 
