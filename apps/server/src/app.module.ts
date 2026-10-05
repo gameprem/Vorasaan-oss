@@ -32,6 +32,7 @@ import { HealthController } from './health/health.controller.ts';
 import { InboxModule } from './inbox/inbox.module.ts';
 import { OrgController } from './org/org.controller.ts';
 import { OrgService } from './org/org.service.ts';
+import { PlatformsModule } from './platforms/platforms.module.ts';
 import { PrismaModule } from './prisma/prisma.module.ts';
 import { PromptVersionsModule } from './prompt-versions/prompt-versions.module.ts';
 import { ReceiptsModule } from './receipts/receipts.module.ts';
@@ -55,6 +56,7 @@ import { SpecModule } from './spec/spec.module.ts';
     InboxModule,
     ResponseWindowsModule,
     FeatureGuidelinesModule,
+    PlatformsModule,
     GrillingModule,
     FeatureSuggestionsModule,
     DecisionRequestsModule,

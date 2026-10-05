@@ -7,6 +7,12 @@ export const SEED = {
   projectId: '00000000-0000-4000-8000-000000000002',
   teamId: '00000000-0000-4000-8000-000000000003',
   featureId: '00000000-0000-4000-8000-000000000004',
+  // The seeded Project's Platforms: the built-in template (ticket 0050).
+  platforms: {
+    backEnd: '00000000-0000-4000-8000-000000000021',
+    frontEnd: '00000000-0000-4000-8000-000000000022',
+    mobile: '00000000-0000-4000-8000-000000000023',
+  },
   users: {
     pim: { id: '00000000-0000-4000-8000-000000000101', email: 'pim@acme.test', name: 'Pim' },
     beam: { id: '00000000-0000-4000-8000-000000000102', email: 'beam@acme.test', name: 'Beam' },
@@ -90,6 +96,20 @@ export async function seed(db: PrismaClient) {
       jiraKey: 'MB',
     },
   });
+
+  // As a Project created in the app would get them: the built-in template, every check on.
+  const platforms = [
+    { id: SEED.platforms.backEnd, name: 'Back-End', roles: ['BACKEND'] },
+    { id: SEED.platforms.frontEnd, name: 'Front-End', roles: ['FRONTEND'] },
+    { id: SEED.platforms.mobile, name: 'Mobile', roles: ['MOBILE'] },
+  ] as const;
+  for (const [position, { id, name, roles }] of platforms.entries()) {
+    await db.platform.upsert({
+      where: { id },
+      update: {},
+      create: { id, projectId: SEED.projectId, name, position, roles: [...roles] },
+    });
+  }
 
   await db.team.upsert({
     where: { id: SEED.teamId },

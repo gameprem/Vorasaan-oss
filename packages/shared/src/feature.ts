@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { JiraIssueKey } from './atlassian.ts';
 import { TeamRole } from './enums.ts';
+import { PlatformRef } from './platform.ts';
 
 export const FeatureSummaryView = z.object({
   id: z.uuid(),
@@ -23,6 +24,8 @@ export const FeatureView = FeatureSummaryView.extend({
   jiraIssueUrl: z.string().nullable(),
   /** Blockers on this Feature that are OPEN or NEEDS_INFO; the Feature is Blocked while > 0. */
   openBlockers: z.int().nonnegative(),
+  /** The Platforms it targets (ADR 0009), in its Project's order. */
+  platforms: z.array(PlatformRef),
 });
 export type FeatureView = z.infer<typeof FeatureView>;
 

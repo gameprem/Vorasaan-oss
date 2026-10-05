@@ -3,8 +3,10 @@ import type {
   DecisionGraphView,
   DecisionLogEntry,
   FeatureView,
+  ProjectPlatformsView,
   RoleOwnerView,
   SpecDiff,
+  SpecTemplateView,
   SpecVersionView,
   TeamView,
 } from '@vorasaan/shared';
@@ -15,6 +17,7 @@ import { AttachmentsPanel } from '@/components/attachments-panel';
 import { BlockedBadge, KindBadge, Notice, relativeTime } from '@/components/bits';
 import { DecisionGraph } from '@/components/decision-graph';
 import { DraftedWith } from '@/components/drafted-with';
+import { FeaturePlatformsEditor } from '@/components/feature-platforms-editor';
 import { RevertButton } from '@/components/revert-button';
 import { RoleOwnersEditor } from '@/components/role-owners-editor';
 import { VersionDiff } from '@/components/spec-diff';
@@ -93,6 +96,15 @@ export default async function FeaturePage({
   const canEditAttachments = Boolean(me?.isAdmin || feature.myRoles.length > 0);
 
   const team = tab === 'team' ? await api<TeamView>(`/teams/${feature.teamId}`) : null;
+  // Who writes the Spec also picks its target Platforms; a first Spec starts from a template
+  // with a section for each of them (ADR 0009).
+  const [projectPlatforms, specTemplate] =
+    tab === 'spec' && canEditSpec
+      ? await Promise.all([
+          load(() => api<ProjectPlatformsView>(`/projects/${feature.projectId}/platforms`)),
+          latest ? null : load(() => api<SpecTemplateView>(`/features/${id}/spec-template`)),
+        ])
+      : [null, null];
   const attachments =
     tab === 'attachments'
       ? await load(() => api<AttachmentView[]>(`/features/${id}/attachments`))
@@ -129,6 +141,15 @@ export default async function FeaturePage({
             <h1 className="text-3xl font-semibold tracking-tight">{feature.title}</h1>
             <BlockedBadge openBlockers={feature.openBlockers} />
           </div>
+          {feature.platforms.length > 0 && (
+            <ul aria-label="Target Platforms" className="mt-2 flex flex-wrap gap-2">
+              {feature.platforms.map((p) => (
+                <li key={p.id} className="rounded-full bg-surface px-3 py-0.5 text-sm text-fg-soft">
+                  {p.name}
+                </li>
+              ))}
+            </ul>
+          )}
           {feature.jiraIssueKey && (
             <p className="mt-2 text-sm text-fg-soft">
               Jira Epic{' '}
@@ -175,8 +196,16 @@ export default async function FeaturePage({
       </nav>
 
       <div className="mt-8">
+        {tab === 'spec' && projectPlatforms?.data && projectPlatforms.data.platforms.length > 0 && (
+          <FeaturePlatformsEditor
+            featureId={id}
+            platforms={projectPlatforms.data.platforms}
+            targets={feature.platforms.map((p) => p.id)}
+          />
+        )}
         {tab === 'spec' && (
           <SpecPanel
+            template={specTemplate?.data?.markdown}
             featureId={id}
             markdown={latest?.markdown ?? null}
             version={latest?.version ?? 0}
