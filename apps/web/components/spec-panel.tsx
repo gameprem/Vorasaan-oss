@@ -15,8 +15,11 @@ export function SpecPanel({
   version,
   meta,
   canEdit,
+  template,
 }: {
   featureId: string;
+  /** What a first Spec starts from: a section per target Platform (from the server). */
+  template?: string;
   markdown: string | null;
   version: number;
   meta: string | null;
@@ -39,7 +42,7 @@ export function SpecPanel({
           </Link>
           .
         </p>
-        <SpecEditor save={save} current={null} baseVersion={0} />
+        <SpecEditor key={template} save={save} current={null} baseVersion={0} template={template} />
       </div>
     ) : (
       <p className="text-fg-soft">This Feature has no Spec yet. Its PO writes the first version.</p>

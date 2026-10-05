@@ -31,8 +31,12 @@ A unit of product work owned by one Team, described by one Spec. It is epic-size
 _Avoid_: FeatureSpec, ticket, story
 
 **Platform**:
-A part of the product a Feature can ship on, such as Back-End, Front-End, Mobile or Flutter. Each Project has its own list, started from a template. A Feature names the Platforms it targets.
+A part of the product a Feature can ship on, such as Back-End, Front-End, Mobile or Flutter. Each Project has its own list, copied from the Platform template when the Project is created. A Feature names the Platforms it targets, and its Spec has a section for each. A Platform names the Team Roles who can answer for it, and switches its Coverage checks on or off.
 _Avoid_: Tag, label, component, stack
+
+**Platform template**:
+The Organization's default list of Platforms, with their Team Roles and checks, that each new Project starts from. Until an Admin changes it, it is the built-in one: Back-End, Front-End and Mobile. Changing it never changes existing Projects.
+_Avoid_: Platform preset, default stack
 
 **Coverage**:
 For each Feature and each of its target Platforms, whether that Platform is covered or missing (for example no Spec section, nobody in the Team to ask, open Blockers, or no QA: no acceptance criteria or test cases, or nobody holding QA), using the checks that Platform has switched on.

@@ -1,5 +1,6 @@
 'use client';
 
+import { specTemplate } from '@vorasaan/shared';
 import dynamic from 'next/dynamic';
 import { useRef, useState, useTransition } from 'react';
 import { field, primaryButton, secondaryButton } from './ui';
@@ -14,28 +15,7 @@ const BlockEditor = dynamic(() => import('./block-editor'), {
   ),
 });
 
-const SPEC_TEMPLATE = `# Feature title
-
-## Goal
-
-What problem this solves, for whom.
-
-## User flow
-
-1. …
-
-## Acceptance criteria
-
-- [ ] …
-
-## Out of scope
-
-- …
-
-## Open questions
-
-- …
-`;
+const SPEC_TEMPLATE = specTemplate();
 
 /**
  * The Markdown as stored: LF endings, one final newline (as the server normalizes it), and no

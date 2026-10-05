@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { JiraIssueKey } from './atlassian.ts';
 import { Password } from './auth.ts';
 import { OrgRole, TeamRole } from './enums.ts';
+import { SetFeaturePlatformsInput } from './platform.ts';
 
 const Name = z.string().trim().min(1, 'Enter a name').max(100);
 
@@ -115,6 +116,8 @@ export const CreateFeatureInput = z.object({
   title: z.string().trim().min(1, 'Give the Feature a title').max(200),
   description: z.string().trim().max(2000).optional(),
   jiraIssueKey: JiraIssueKey.optional().or(z.literal('').transform(() => undefined)),
+  /** The Platforms of its Project it targets (ADR 0009); none when left out. */
+  platformIds: SetFeaturePlatformsInput.shape.platformIds.optional(),
 });
 export type CreateFeatureInput = z.input<typeof CreateFeatureInput>;
 

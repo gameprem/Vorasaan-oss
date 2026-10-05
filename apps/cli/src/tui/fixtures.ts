@@ -273,6 +273,7 @@ export function fakeApi(options: FakeOptions = {}): { api: TuiApi; calls: FakeCa
         jiraIssueKey: null,
         jiraIssueUrl: null,
         openBlockers: 0,
+        platforms: [],
       })),
     team: () => guard('team', () => team),
     myTeams: () => guard('myTeams', () => myTeams),

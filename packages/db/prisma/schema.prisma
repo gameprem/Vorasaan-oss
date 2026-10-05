@@ -337,6 +337,7 @@ model Organization {
   promptEvalRuns    PromptEvalRun[]
   promptAnalyses    PromptAnalysis[]
   aiBudgetAlerts    AiBudgetAlert[]
+  platformTemplate  OrgPlatformTemplate[]
 }
 
 // One AI budget threshold (80 or 100 percent) crossed in one month of the Organization's
@@ -514,6 +515,7 @@ model Project {
   grillings          Grilling[]
   suggestions        FeatureSuggestion[]
   conversations      Conversation[]
+  platforms          Platform[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -587,9 +589,67 @@ model Feature {
   chunks           ContentChunk[]
   suggestion       FeatureSuggestion? // the Feature Suggestion it was accepted from, if any
   conversations    Conversation[]
+  platforms        FeaturePlatform[] // the Platforms it targets (ADR 0009)
 
   @@index([teamId])
   @@index([jiraIssueKey])
+}
+
+// ─── Platforms (ADR 0009, ticket 0050) ──────────────────────────────────────
+
+// A part of the product a Feature can ship on, in its Project's own ordered list (copied
+// from the Organization's default when the Project is created). `roles` are the Team
+// Roles who can answer for it; the four booleans are the Coverage checks it switches on.
+// Names are unique per Project ignoring case (a unique index on lower(name) in the
+// migration), since a Spec section matches its name case-insensitively.
+model Platform {
+  id             String            @id @default(uuid())
+  projectId      String
+  name           String
+  position       Int
+  roles          TeamRole[]
+  specSection    Boolean           @default(true)
+  someoneToAsk   Boolean           @default(true)
+  noOpenBlockers Boolean           @default(true)
+  qaReady        Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  features       FeaturePlatform[]
+
+  @@index([projectId, position])
+}
+
+// A Feature targets a Platform of its own Project (checked by the service). Removing a
+// Platform that Features target is refused by the service, which names them; the cascade
+// is only for deleting a whole Project (a NO ACTION key would trip on its cascade order).
+model FeaturePlatform {
+  featureId  String
+  platformId String
+  createdAt  DateTime @default(now())
+  feature    Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  platform   Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+
+  @@id([featureId, platformId])
+  @@index([platformId])
+}
+
+// One entry of the Organization's default Platform list, copied into each new Project.
+// No rows: the built-in template (Back-End, Front-End, Mobile) is the default. Changing
+// it never rewrites existing Projects.
+model OrgPlatformTemplate {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  position       Int
+  roles          TeamRole[]
+  specSection    Boolean      @default(true)
+  someoneToAsk   Boolean      @default(true)
+  noOpenBlockers Boolean      @default(true)
+  qaReady        Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, position])
 }
 
 // A Feature may have several Role Owners for the same Team Role.

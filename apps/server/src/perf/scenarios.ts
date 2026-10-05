@@ -37,8 +37,11 @@ const PIM = SEED.users.pim.id;
  */
 export const QUERY_BUDGETS = {
   inbox: 15,
-  featurePage: 31,
-  feature: 5,
+  featurePage: 32,
+  // One more than 0074's 5 since ticket 0050: the Feature's target Platforms, one query
+  // run alongside the Feature's own (Prisma would load the link table and the Platforms
+  // as two through an include).
+  feature: 6,
   specVersions: 6,
   decisionLog: 9,
   roleOwners: 4,
