@@ -8,6 +8,9 @@ import { beam, expect, expectNoViolations, pim, SEED, THEMES, test, unique } fro
 // charts have a text summary and a table view, work with the keyboard, and are axe-clean in
 // light and dark. A Member gets neither the page nor the API. The price and the budget are
 // cleared again, and the Notification read, so no other spec sees them.
+//
+// Named to run after the chat specs: they expect no Approved Model until chat.e2e adds its
+// own, and this spec reuses that default model instead of adding one first.
 
 const asPim = { 'x-vorasaan-user': pim.id };
 const asBeam = { 'x-vorasaan-user': beam.id };
