@@ -8,7 +8,17 @@ export function visibleWindow(count: number, selected: number, height: number) {
   return { start, end: start + height };
 }
 
-export type Row = { key: string; label: string; highlight?: boolean; header?: string };
+/** A Coverage chip after a row's label: "✓ Back-End" in green, "! Flutter" in yellow. */
+export type Chip = { text: string; color: string };
+
+export type Row = {
+  key: string;
+  label: string;
+  highlight?: boolean;
+  header?: string;
+  /** Shown after the label, each in its own colour. */
+  chips?: Chip[];
+};
 
 /** A list with a cursor; navigation is handled by the owner (it knows the view state). */
 export function ListView({
@@ -43,6 +53,12 @@ export function ListView({
               wrap="truncate-end"
             >
               {active ? '›' : ' '} {row.label}
+              {row.chips?.map((chip) => (
+                <Text key={chip.text} color={chip.color}>
+                  {'  '}
+                  {chip.text}
+                </Text>
+              ))}
             </Text>
           </Box>
         );

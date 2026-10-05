@@ -14,6 +14,7 @@ import type {
   NotificationList,
   NotificationView,
   PostRequestMessageInput,
+  ProjectCoverageView,
   ProjectView,
   RaiseDecisionRequestInput,
   ReadAllNotificationsResult,
@@ -79,6 +80,14 @@ export class VorasaanApi {
     return this.request<SpecVersionView[]>(
       'GET',
       `/features/${encodeURIComponent(featureId)}/spec-versions`,
+    );
+  }
+
+  /** A Project's Coverage matrix (ticket 0051): each Feature's target Platforms, covered or not. */
+  projectCoverage(projectId: string) {
+    return this.request<ProjectCoverageView>(
+      'GET',
+      `/projects/${encodeURIComponent(projectId)}/coverage`,
     );
   }
 

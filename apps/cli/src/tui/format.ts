@@ -4,6 +4,7 @@ import {
   diffLines,
   type InboxItem,
   type NotificationView,
+  type PlatformCoverage,
   type ResponseWindowState,
   responseWindowLabels,
 } from '@vorasaan/shared';
@@ -210,4 +211,14 @@ export function diffView(
     added: diff.filter((l) => l.kind === 'ADDED').length,
     removed: diff.filter((l) => l.kind === 'REMOVED').length,
   };
+}
+
+/**
+ * A target Platform as a Coverage chip (ADR 0009, ticket 0052): "✓ Back-End" when covered,
+ * "! Flutter" when missing. The mark, not only the colour, says which.
+ */
+export function coverageChip(p: PlatformCoverage): { text: string; color: string } {
+  return p.covered
+    ? { text: `✓ ${p.platform.name}`, color: 'green' }
+    : { text: `! ${p.platform.name}`, color: 'yellow' };
 }

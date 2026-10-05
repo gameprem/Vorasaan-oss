@@ -95,6 +95,33 @@ describe('vorasaan TUI', () => {
     await waitFor(frame, 'lines 1-10 of 40');
   });
 
+  test("Features: each Feature's target Platforms as Coverage chips; without Coverage, none", async () => {
+    const { stdin, frame, calls } = open();
+    await settle();
+    await press(stdin, '3');
+    await waitFor(frame, '✓ Back-End');
+    const line = frame()
+      .split('\n')
+      .find((l) => l.includes('Async checkout'));
+    expect(line).toContain('✓ Back-End  ! Flutter');
+    expect(
+      frame()
+        .split('\n')
+        .find((l) => l.includes('Loyalty points')),
+    ).not.toContain('✓');
+    // One Coverage matrix per Project listed.
+    expect(calls.loads.filter((l) => l === 'projectCoverage')).toHaveLength(2);
+
+    cleanup();
+    const failing = open({ fail: ['projectCoverage'] });
+    await settle();
+    await press(failing.stdin, '3');
+    await waitFor(failing.frame, 'Async checkout');
+    await settle();
+    expect(failing.frame()).not.toContain('Flutter');
+    expect(failing.frame()).not.toContain('Cannot reach');
+  });
+
   test('an unbound repo lists every Feature and says how to bind it', async () => {
     const { stdin, frame } = open();
     await settle();
