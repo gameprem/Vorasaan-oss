@@ -101,13 +101,23 @@ export function fakeChatReply(input: {
   scope: ConversationScopeForAi;
   context: ContextBlock[];
   recentMessages: ChatMessageForAi[];
+  missingSections?: readonly PlatformForAi[];
 }): string {
   const latest = input.recentMessages.findLast((m) => m.role === 'USER')?.content ?? '';
   const about =
     input.scope.kind === 'FEATURE'
       ? `the Feature "${input.scope.feature.title}"`
       : `the Project "${input.scope.project.name}"`;
-  return `About ${about}: you said "${latest.slice(0, 80)}". I read ${input.context.length} context blocks.`;
+  const reply = `About ${about}: you said "${latest.slice(0, 80)}". I read ${input.context.length} context blocks.`;
+  return input.missingSections?.length
+    ? `${reply} ${fakeMissingSectionsNote(input.missingSections)}`
+    : reply;
+}
+
+/** What the fake's chat reply adds when the Spec lacks target Platforms' sections (ticket 0052). */
+export function fakeMissingSectionsNote(missing: readonly PlatformForAi[]): string {
+  const names = missing.map((p) => p.name).join(', ');
+  return `The Spec has no section for ${names} yet; I can propose adding one.`;
 }
 
 /**
@@ -360,6 +370,7 @@ export class FakeAiPort implements AiPort {
       summary: string;
       recentMessages: ChatMessageForAi[];
       tools: ChatTool[];
+      missingSections?: PlatformForAi[];
       signal?: AbortSignal;
     },
     options?: AiCallOptions,

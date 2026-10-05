@@ -509,6 +509,12 @@ export interface AiPort {
       recentMessages: ChatMessageForAi[];
       /** The tools offered on this step; none on the last step of a turn. */
       tools: ChatTool[];
+      /**
+       * In a Feature Conversation, its target Platforms the latest Spec has no section for
+       * (Coverage, ticket 0052): the AI may offer to add one as a Spec Proposal Action Card.
+       * None when left out.
+       */
+      missingSections?: PlatformForAi[];
       signal?: AbortSignal;
     },
     options?: AiCallOptions,

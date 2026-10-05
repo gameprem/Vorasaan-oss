@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ActionCardsController } from '../action-cards/action-cards.controller.ts';
 import { ActionCardsService } from '../action-cards/action-cards.service.ts';
 import { BriefModule } from '../brief/brief.module.ts';
+import { CoverageModule } from '../coverage/coverage.module.ts';
 import { DecisionRequestsModule } from '../decision-requests/decision-requests.module.ts';
 import { FeatureGuidelinesModule } from '../feature-guidelines/feature-guidelines.module.ts';
 import { FeatureSuggestionsModule } from '../feature-suggestions/feature-suggestions.module.ts';
@@ -33,6 +34,7 @@ import { ConversationsService } from './conversations.service.ts';
     GrillingModule,
     ConversationLocksModule,
     RedraftsModule,
+    CoverageModule,
   ],
   controllers: [ConversationsController, GrillingConversationsController, ActionCardsController],
   providers: [ConversationsService, ActionCardsService],

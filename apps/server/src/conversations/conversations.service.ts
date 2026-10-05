@@ -41,6 +41,7 @@ import {
   ContextTooLongError,
   type ConversationScopeForAi,
   type ModelChoice,
+  type PlatformForAi,
   type ProjectFoundationForAi,
   type RecordForAi,
 } from '../ai/ai.port.ts';
@@ -63,6 +64,7 @@ import {
   MESSAGE_OVERHEAD_TOKENS,
 } from '../ai/token-count.ts';
 import { projectAccess } from '../brief/brief-access.ts';
+import { CoverageService } from '../coverage/coverage.service.ts';
 import { FeatureGuidelinesService } from '../feature-guidelines/feature-guidelines.service.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
 import {
@@ -181,6 +183,7 @@ export class ConversationsService {
     private readonly grilling: GrillingConversationsService,
     private readonly models: AiSettingsService,
     private readonly budgets: ContextBudgets,
+    private readonly coverage: CoverageService,
   ) {}
 
   /** Anyone in the scope's Organization starts one; the AI replies to the first message. */
@@ -544,7 +547,11 @@ export class ConversationsService {
     );
     const compacting = { user, scope, budget, model: model.choice };
     let { summary, recent, scale } = await this.compact(conversation, rows, compacting);
-    const { context, foundation } = await this.contextFor(conversation, recent, budget);
+    const { context, foundation, missingSections } = await this.contextFor(
+      conversation,
+      recent,
+      budget,
+    );
 
     let recentMessages = forAi(recent, budget.history - estimateTokens(summary));
     let retried = false;
@@ -571,6 +578,7 @@ export class ConversationsService {
             summary,
             recentMessages: [...recentMessages],
             tools: offered,
+            ...(missingSections?.length ? { missingSections } : {}),
             signal: stopped,
           },
           {
@@ -1071,7 +1079,11 @@ export class ConversationsService {
     conversation: { projectId: string; featureId: string | null },
     recent: MessageRow[],
     budget: Budget,
-  ): Promise<{ context: ContextBlock[]; foundation: ProjectFoundationForAi }> {
+  ): Promise<{
+    context: ContextBlock[];
+    foundation: ProjectFoundationForAi;
+    missingSections?: PlatformForAi[];
+  }> {
     // The person's newest messages, before any tool round of the turn being replied to.
     const trailing: string[] = [];
     let i = recent.length - 1;
@@ -1079,10 +1091,11 @@ export class ConversationsService {
     for (; i >= 0 && recent[i]?.role === 'USER'; i--) trailing.unshift(recent[i]?.content ?? '');
     const query = trailing.join('\n\n');
     if (conversation.featureId) {
-      const { foundation, contextBudget } = await this.foundation.forFeature(
-        conversation.featureId,
-        budget,
-      );
+      // Its target Platforms the Spec has no section for (ticket 0052), read alongside.
+      const [{ foundation, contextBudget }, missingSections] = await Promise.all([
+        this.foundation.forFeature(conversation.featureId, budget),
+        this.coverage.missingSectionsOfLatest(conversation.featureId),
+      ]);
       const context = await this.retriever.forFeature(
         conversation.featureId,
         query,
@@ -1091,7 +1104,7 @@ export class ConversationsService {
           k: budget.topK,
         },
       );
-      return { context: withoutBrief(context), foundation };
+      return { context: withoutBrief(context), foundation, missingSections };
     }
     const [blocks, criteria] = await Promise.all([
       this.retriever.forProject(conversation.projectId, query, projectBudget(budget), {

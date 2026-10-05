@@ -44,6 +44,15 @@ type BlockerRow = {
   choices: { title: string; description: string }[];
 };
 
+function missingIn(
+  platforms: { name: string; roles: TeamRole[] }[],
+  specMarkdown: string,
+): PlatformForAi[] {
+  return platforms
+    .filter((p) => !hasPlatformSection(specMarkdown, p.name))
+    .map((p) => ({ name: p.name, roles: p.roles }));
+}
+
 function asBlocker(b: BlockerRow): CoverageBlocker {
   return { id: b.id, title: b.title, choices: b.choices.flatMap((c) => [c.title, c.description]) };
 }
@@ -123,14 +132,32 @@ export class CoverageService {
    * or asks about (ticket 0051).
    */
   async missingSections(featureId: string, specMarkdown: string): Promise<PlatformForAi[]> {
-    const platforms = await this.db.platform.findMany({
+    return missingIn(await this.sectionPlatforms(featureId), specMarkdown);
+  }
+
+  /**
+   * The same for the Feature's latest Spec Version (none before the first): what a Feature
+   * Conversation offers to add as a Spec Proposal (ticket 0052). Two queries run together.
+   */
+  async missingSectionsOfLatest(featureId: string): Promise<PlatformForAi[]> {
+    const [platforms, latest] = await Promise.all([
+      this.sectionPlatforms(featureId),
+      this.db.specVersion.findFirst({
+        where: { featureId },
+        orderBy: { version: 'desc' },
+        select: { markdown: true },
+      }),
+    ]);
+    return missingIn(platforms, latest?.markdown ?? '');
+  }
+
+  /** The Feature's target Platforms that switch the "Spec section" check on, in order. */
+  private sectionPlatforms(featureId: string) {
+    return this.db.platform.findMany({
       where: { features: { some: { featureId } }, specSection: true },
       orderBy: ordered,
       select: { name: true, roles: true },
     });
-    return platforms
-      .filter((p) => !hasPlatformSection(specMarkdown, p.name))
-      .map((p) => ({ name: p.name, roles: p.roles }));
   }
 
   /**

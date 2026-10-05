@@ -49,7 +49,10 @@ export const QUERY_BUDGETS = {
   // Retrieval runs two searches; each may add a keyword top-up when vectors find fewer than k.
   retrieval: 27,
   decisionStats: 12,
-  chatTurn: 81, // its context includes the same retrieval
+  // Its context includes the same retrieval. Two more since ticket 0052: a Feature
+  // Conversation reads its target Platforms and latest Spec for the missing sections, run
+  // alongside the foundation.
+  chatTurn: 83,
   // Identity, Admin check, the Organization, then four aggregates at once (ticket 0075).
   aiUsage: 8,
   // Coverage (ticket 0051), each a fixed few queries run together however many Features,
