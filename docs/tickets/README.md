@@ -231,7 +231,7 @@ The AI can use Agent Skills in the open SKILL.md format, installed by an Admin f
 
 ## Design Docs (Post-MVP 14)
 
-Once a Feature's Spec is approved and a Platform is covered, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA), and the Platform's people approve it. The Spec stays the source of truth (ADR 0014).
+Once a Feature's Spec is approved and a Platform is covered, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA), and the Platform's people approve it. The Spec stays the source of truth (ADR 0014). Done: each target Platform's Design Doc, and QA's once every target is covered, is drafted in the background from a settled Spec and the Platform's template (built in, or the Project's own; a Platform names its template); a Tech Lead or a Role Owner of the Platform's Team Roles approves, declines or Requests changes, everyone else gets a 403; approved versions follow a Spec Version and have diffs and revert; a Spec change that touches what a Design Doc covers makes it stale and the AI proposes an update; what the design needs that the Spec leaves open becomes a draft Question on the Feature; the web app has a Design Docs tab, a page per Design Doc, the templates on the Project's Platforms tab, Inbox Items and a sub-lane under the Decision Graph (0069).
 
 | # | Ticket | Depends on |
 | --- | --- | --- |
