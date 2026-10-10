@@ -67,6 +67,13 @@ export type SkillReadBudget = { read: number; left: number };
 /** A tool's result for the AI, and the Skill it read (for the Receipts of the next calls). */
 export type AgentSkillToolRun = { content: string; read: ReceiptAgentSkillLink | null };
 
+/**
+ * Files in code-point order of their paths, so the list doesn't depend on the database's
+ * collation (C puts "SKILL.md" before "assets/", en_US doesn't).
+ */
+const byPath = <T extends { path: string }>(files: readonly T[]): T[] =>
+  [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+
 const versionInclude = {
   files: { select: { path: true, bytes: true }, orderBy: { path: 'asc' } },
   fetchedBy: { select: { name: true } },
@@ -495,7 +502,7 @@ export class AgentSkillsService {
       return refusal(`The Agent Skill "${skill.name}" is no longer available here`);
     const file = files.find((f) => f.path === path);
     if (!file) {
-      const listed = files
+      const listed = byPath(files)
         .filter((f) => f.path !== SKILL_FILE)
         .slice(0, 50)
         .map((f) => f.path);
@@ -515,7 +522,7 @@ export class AgentSkillsService {
         truncated: clipped.length < text.length,
         files:
           path === SKILL_FILE
-            ? files
+            ? byPath(files)
                 .filter((f) => f.path !== SKILL_FILE)
                 .map((f) => ({ path: f.path, bytes: f.bytes }))
             : undefined,
@@ -692,7 +699,7 @@ function toVersionView(v: VersionRow): AgentSkillVersionView {
     name: v.name,
     description: v.description,
     license: v.license,
-    files: v.files,
+    files: byPath(v.files),
     skipped: SKIPPED.parse(v.skippedFiles),
     totalBytes: v.totalBytes,
     fetchedAt: v.createdAt.toISOString(),
