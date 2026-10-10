@@ -5,6 +5,7 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { saveSpec } from '@/lib/feature-actions';
+import { markdownComponents } from './chat/markdown';
 import { type SaveMarkdownInput, SpecEditor } from './spec-editor';
 import { secondaryButton } from './ui';
 
@@ -71,7 +72,9 @@ export function SpecPanel({
         )}
       </div>
       <div className="spec rounded-sheet bg-rail p-6 sm:p-10">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          {markdown}
+        </ReactMarkdown>
       </div>
     </>
   );

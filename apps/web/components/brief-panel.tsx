@@ -5,6 +5,7 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { saveBrief } from '@/lib/project-actions';
+import { markdownComponents } from './chat/markdown';
 import { type SaveMarkdownInput, SpecEditor } from './spec-editor';
 import { secondaryButton } from './ui';
 
@@ -60,7 +61,9 @@ export function BriefPanel({
       <div
         className={`spec rounded-sheet bg-rail p-6 sm:p-10 ${version === 0 ? 'text-fg-soft' : ''}`}
       >
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          {markdown}
+        </ReactMarkdown>
       </div>
     </>
   );
