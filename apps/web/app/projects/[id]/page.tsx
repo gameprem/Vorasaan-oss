@@ -5,6 +5,7 @@ import {
   type BriefVersionView,
   DEFAULT_FEATURE_SUGGESTIONS,
   type DecisionStatsView,
+  type DesignTemplatesView,
   type EffectiveFeatureGuidelinesView,
   type FeatureSuggestionStatus,
   type FeatureSuggestionView,
@@ -27,6 +28,7 @@ import { Notice, relativeTime } from '@/components/bits';
 import { BriefPanel } from '@/components/brief-panel';
 import { CoverageMatrix } from '@/components/coverage-matrix';
 import { DecisionSpeedPanel } from '@/components/decision-speed-panel';
+import { DesignTemplatesEditor } from '@/components/design-templates-editor';
 import { DraftedWith } from '@/components/drafted-with';
 import { GrillingSection } from '@/components/grilling-section';
 import { ProjectGuidelinesEditor } from '@/components/guidelines-editor';
@@ -427,7 +429,10 @@ async function GuidelinesTab({ projectId, canEdit }: { projectId: string; canEdi
 }
 
 async function PlatformsTab({ projectId }: { projectId: string }) {
-  const platforms = await load(() => api<ProjectPlatformsView>(`/projects/${projectId}/platforms`));
+  const [platforms, templates] = await Promise.all([
+    load(() => api<ProjectPlatformsView>(`/projects/${projectId}/platforms`)),
+    load(() => api<DesignTemplatesView>(`/projects/${projectId}/design-templates`)),
+  ]);
   if (!platforms.data) return <Notice tone="error">{platforms.error}</Notice>;
   return (
     <div className="max-w-3xl">
@@ -452,6 +457,25 @@ async function PlatformsTab({ projectId }: { projectId: string }) {
           </>
         )}
       </div>
+      <section aria-labelledby="design-templates" className="mt-12">
+        <h2 id="design-templates" className="text-xl font-semibold">
+          Design Doc templates
+        </h2>
+        <p className="mt-1 text-fg-soft">
+          What each target Platform’s Design Doc, and QA’s, starts from. The AI fills each{' '}
+          <code>##</code> section from the approved Spec and the Decisions, and lists what they
+          leave open. A Platform names its template above.
+        </p>
+        {templates.data ? (
+          <DesignTemplatesEditor
+            projectId={projectId}
+            templates={templates.data.templates}
+            canEdit={templates.data.canEdit}
+          />
+        ) : (
+          <Notice tone="error">{templates.error}</Notice>
+        )}
+      </section>
     </div>
   );
 }

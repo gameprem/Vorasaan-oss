@@ -12,6 +12,10 @@ export const TASK_LABEL: Record<AiTask, { label: string; hint: string }> = {
   FEATURE_SUGGESTIONS: { label: 'Feature Suggestions', hint: 'Features proposed from the Brief' },
   FIT_CHECK: { label: 'Fit check', hint: 'A new Feature against the Feature Guidelines' },
   CHAT: { label: 'Chat', hint: 'Replies in Conversations' },
+  DESIGN_DOCS: {
+    label: 'Design Docs',
+    hint: 'Design Docs drafted from the approved Spec, and their Redrafts',
+  },
   PROMPT_PROPOSALS: {
     label: 'Prompt proposals',
     hint: 'Reading feedback on a prompt and proposing a Prompt Version',

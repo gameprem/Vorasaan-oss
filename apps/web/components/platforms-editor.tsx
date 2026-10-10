@@ -1,9 +1,12 @@
 'use client';
 
 import {
+  DESIGN_TEMPLATE_LABEL,
   MAX_PLATFORMS,
   type PlatformDefinition,
+  PlatformDesignTemplate,
   type PlatformView,
+  platformDesignTemplate,
   type TeamRole,
 } from '@vorasaan/shared';
 import { useLayoutEffect, useRef, useState, useTransition } from 'react';
@@ -14,6 +17,13 @@ import {
 } from '@/lib/platform-actions';
 import { field, primaryButton, ROLE_LABEL, secondaryButton } from './ui';
 import { Checkbox } from './ui/checkbox';
+import { LazySelect as Select } from './ui/lazy';
+
+/** The Design Doc template a Platform starts from (ticket 0069); '' chooses it from its roles. */
+const TEMPLATE_OPTIONS = [
+  { id: '', label: 'From its Team Roles' },
+  ...PlatformDesignTemplate.options.map((t) => ({ id: t, label: DESIGN_TEMPLATE_LABEL[t] })),
+];
 
 // Editors for Platforms (ADR 0009, ticket 0052): the Organization's Platform template
 // (Settings, Admins) and a Project's own list (its Platforms tab, its POs and Admins). Both
@@ -60,6 +70,7 @@ const blank = (): Row => ({
   someoneToAsk: true,
   noOpenBlockers: true,
   qaReady: true,
+  designTemplate: null,
 });
 
 const definitionOf = (r: Row): PlatformDefinition => ({
@@ -69,6 +80,7 @@ const definitionOf = (r: Row): PlatformDefinition => ({
   someoneToAsk: r.someoneToAsk,
   noOpenBlockers: r.noOpenBlockers,
   qaReady: r.qaReady,
+  designTemplate: r.designTemplate ?? null,
 });
 
 /** One Platform's name, Team Roles and checks. */
@@ -115,6 +127,17 @@ function PlatformFields({
           ))}
         </div>
       </fieldset>
+      <Select
+        label="Design Doc template"
+        description="What its Design Doc starts from. A Project edits the templates below."
+        className="max-w-sm"
+        options={TEMPLATE_OPTIONS}
+        value={row.designTemplate ?? ''}
+        onChange={(value) => {
+          const parsed = PlatformDesignTemplate.safeParse(value);
+          onChange({ ...row, designTemplate: parsed.success ? parsed.data : null });
+        }}
+      />
       <fieldset>
         <legend className="text-sm">Coverage checks</legend>
         <div className="mt-1 grid gap-2 sm:grid-cols-2">
@@ -361,6 +384,8 @@ export function PlatformsList({ platforms }: { platforms: PlatformDefinition[] }
               Team Roles: {p.roles.length ? p.roles.map((r) => ROLE_LABEL[r]).join(', ') : 'none'}
               {' · '}
               Checks: {on.length ? on.join(', ') : 'none'}
+              {' · '}
+              Design Doc: {DESIGN_TEMPLATE_LABEL[platformDesignTemplate(p)]} template
             </span>
           </li>
         );

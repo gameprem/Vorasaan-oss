@@ -71,6 +71,7 @@ const PROPOSAL_NAME: Record<ProposalKind, string> = {
   BRIEF_PROPOSAL: 'Brief Proposals',
   FEATURE_SUGGESTION: 'Feature Suggestions',
   PROMPT_VERSION: 'Prompt Versions',
+  DESIGN_DOC_PROPOSAL: 'Design Docs',
 };
 
 /** Tokens in and out, the two series of every chart. */

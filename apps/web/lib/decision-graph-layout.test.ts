@@ -50,6 +50,7 @@ const view = (nodes: DecisionGraphNode[], branches: DecisionGraphBranch[]): Deci
   featureId: id(1),
   nodes,
   branches,
+  designDocs: [],
 });
 
 describe('Decision Graph layout', () => {
