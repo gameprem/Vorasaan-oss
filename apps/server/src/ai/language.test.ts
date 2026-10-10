@@ -80,6 +80,43 @@ const BUILDERS: Record<AiTask, (lang: PromptLanguage) => Promise<Prompt>> = {
       { feature, platform: { name: 'Flutter', roles: ['MOBILE'] }, specMarkdown: MIXED, context },
       lang,
     ),
+  draftDesignDoc: (lang) =>
+    prompts.draftDesignDocPrompt(
+      {
+        feature,
+        doc: {
+          name: 'Back-End',
+          platform: { name: 'Back-End', roles: ['BACKEND'] },
+          targets: [{ name: 'Back-End', roles: ['BACKEND'] }],
+          template: '## API contract\n\n## Open questions',
+        },
+        specVersion: 2,
+        specMarkdown: MIXED,
+        current: null,
+        specChange: null,
+        asked: [QUOTE],
+        context,
+      },
+      lang,
+    ),
+  redraftDesignDoc: (lang) =>
+    prompts.redraftDesignDocPrompt(
+      {
+        ...feedback,
+        feature,
+        doc: {
+          name: 'QA',
+          platform: null,
+          targets: [{ name: 'Back-End', roles: ['BACKEND'] }],
+          template: '## Test plan',
+        },
+        specVersion: 2,
+        specMarkdown: MIXED,
+        proposedMarkdown: MIXED,
+        context,
+      },
+      lang,
+    ),
   grillingQuestions: (lang) =>
     prompts.grillingQuestionsPrompt(
       {

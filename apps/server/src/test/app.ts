@@ -10,6 +10,7 @@ import { AppModule } from '../app.module.ts';
 import { ChatCardsService } from '../chat-apps/chat-cards.service.ts';
 import { ChatEventsService } from '../chat-apps/chat-events.service.ts';
 import { CLOCK } from '../clock/clock.ts';
+import { DesignDocsService } from '../design-docs/design-docs.service.ts';
 import { installVerbatimBody } from '../http/verbatim-body.ts';
 import { PRISMA } from '../prisma/prisma.module.ts';
 import { PromptEvalsService } from '../prompt-versions/prompt-evals.service.ts';
@@ -44,6 +45,8 @@ export type TestApp = {
    * start, and the Receipts and outcomes all of it leaves.
    */
   proposals: PromptProposalsService;
+  /** Design Docs (ticket 0069): `drain()` waits for the syncs and drafts in the background. */
+  designDocs: DesignDocsService;
   /** The fake GitHub that Agent Skills are fetched from (ticket 0078); nothing leaves the process. */
   github: FakeGitHub;
   /** The escalation job, which tests run by hand (its every-minute timer is off). */
@@ -126,6 +129,9 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   // Analyses (ticket 0072) start evals and are started by outcomes: drain them all together.
   const proposals = app.get(PromptProposalsService);
   beforeTruncate.add(() => proposals.drain());
+  // Design Docs are drafted in the background after Spec changes (ticket 0069).
+  const designDocs = app.get(DesignDocsService);
+  beforeTruncate.add(() => designDocs.drain());
   const chatCards = app.get(ChatCardsService);
   const chatEvents = app.get(ChatEventsService);
   beforeTruncate.add(async () => {
@@ -141,6 +147,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     receipts,
     evals,
     proposals,
+    designDocs,
     github,
     escalation: app.get(EscalationJob),
     drainIndexing: () => indexing.drain(),

@@ -199,4 +199,15 @@ export class ModelRoutingAiPort implements AiPort {
       await this.options('redraftPromptVersion', options),
     );
   }
+
+  async draftDesignDoc(input: Parameters<AiPort['draftDesignDoc']>[0], options?: AiCallOptions) {
+    return this.engine.draftDesignDoc(input, await this.options('draftDesignDoc', options));
+  }
+
+  async redraftDesignDoc(
+    input: Parameters<AiPort['redraftDesignDoc']>[0],
+    options?: AiCallOptions,
+  ) {
+    return this.engine.redraftDesignDoc(input, await this.options('redraftDesignDoc', options));
+  }
 }

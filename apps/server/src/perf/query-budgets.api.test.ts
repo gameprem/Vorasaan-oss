@@ -44,7 +44,7 @@ describe('Query budgets of the hot paths (ticket 0074)', () => {
   });
 
   test('every measured endpoint and job has a budget, and stays within it', () => {
-    expect(scenarios.length).toBe(14);
+    expect(scenarios.length).toBe(15);
     for (const scenario of scenarios) {
       const result = results.get(scenario.name);
       expect(scenario.queryBudget, scenario.name).toBeGreaterThan(0);

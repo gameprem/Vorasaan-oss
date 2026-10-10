@@ -25,6 +25,7 @@ import { personLanguage } from '../ai/language.ts';
 import { fromRecordedModelColumns, toRecordedModelColumns } from '../ai/recorded-model.ts';
 import { CoverageService } from '../coverage/coverage.service.ts';
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
+import { SpecChanges } from '../design-docs/spec-changes.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { ReceiptsService } from '../receipts/receipts.service.ts';
@@ -59,6 +60,7 @@ export class SpecService {
     private readonly budgets: ContextBudgets,
     private readonly receipts: ReceiptsService,
     private readonly coverage: CoverageService,
+    private readonly specChanges: SpecChanges,
   ) {}
 
   /**
@@ -368,6 +370,8 @@ export class SpecService {
       });
       await this.notifications.publish(outbox);
       this.indexing.schedule({ source: 'SPEC_VERSION', id: version.id });
+      // A new Spec Version: Design Docs may be due, or stale (ticket 0069).
+      this.specChanges.changed(version.featureId);
       this.receipts.outcome({
         kind: 'APPROVE',
         proposal: { kind: 'SPEC_PROPOSAL', id },
@@ -394,6 +398,8 @@ export class SpecService {
       include: specProposalInclude,
     });
     await this.notifications.publish(this.notifications.outbox().inboxChanged(user.id));
+    // No Spec Proposal awaits approval any more: Design Docs may be due (ticket 0069).
+    this.specChanges.changed(updated.featureId);
     this.receipts.outcome({
       kind: 'DECLINE',
       proposal: { kind: 'SPEC_PROPOSAL', id },
@@ -486,6 +492,7 @@ export class SpecService {
       });
       await this.notifications.publish(outbox);
       this.indexing.schedule({ source: 'SPEC_VERSION', id: created.id });
+      this.specChanges.changed(featureId);
       return toSpecVersionView(created);
     } catch (error) {
       if (error instanceof StaleStateError) throw new ConflictException(error.message);

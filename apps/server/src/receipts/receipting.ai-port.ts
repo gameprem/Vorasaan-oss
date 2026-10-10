@@ -234,4 +234,12 @@ export class ReceiptingAiPort implements AiPort {
       this.engine.redraftPromptVersion(input, o),
     );
   }
+
+  draftDesignDoc(input: Parameters<AiPort['draftDesignDoc']>[0], options?: AiCallOptions) {
+    return this.run('draftDesignDoc', options, (o) => this.engine.draftDesignDoc(input, o));
+  }
+
+  redraftDesignDoc(input: Parameters<AiPort['redraftDesignDoc']>[0], options?: AiCallOptions) {
+    return this.run('redraftDesignDoc', options, (o) => this.engine.redraftDesignDoc(input, o));
+  }
 }

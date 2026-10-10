@@ -156,6 +156,31 @@ export class RedraftsController {
     return this.redrafts.diff(user, { kind: 'PROMPT_VERSION', id }, query.from, query.to);
   }
 
+  // ─── Design Doc proposals (ticket 0069) ───────────────────────────────────
+
+  @Post('design-doc-proposals/:id/request-changes')
+  designDocRequest(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: RequestChangesInput }) body: RequestChangesInput,
+  ) {
+    return this.request(user, 'DESIGN_DOC_PROPOSAL', id, body);
+  }
+
+  @Get('design-doc-proposals/:id/redrafts')
+  designDocList(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.redrafts.list(user, { kind: 'DESIGN_DOC_PROPOSAL', id });
+  }
+
+  @Get('design-doc-proposals/:id/redrafts/diff')
+  designDocDiff(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query({ schema: RedraftDiffQuery }) query: RedraftDiffQuery,
+  ) {
+    return this.redrafts.diff(user, { kind: 'DESIGN_DOC_PROPOSAL', id }, query.from, query.to);
+  }
+
   // ─── Evals ────────────────────────────────────────────────────────────────
 
   /** Every Request changes as an eval case for the redraft prompts. Admins only. */

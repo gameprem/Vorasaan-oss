@@ -28,7 +28,9 @@ export type AiTask =
   | 'redraftFeatureSuggestion'
   | 'analyzeFeedback'
   | 'proposePromptVersion'
-  | 'redraftPromptVersion';
+  | 'redraftPromptVersion'
+  | 'draftDesignDoc'
+  | 'redraftDesignDoc';
 
 /** The Settings task each call belongs to, and the env var that overrides its model. */
 export const AI_TASKS: Record<AiTask, { kind: AiTaskKind; env: string }> = {
@@ -67,6 +69,9 @@ export const AI_TASKS: Record<AiTask, { kind: AiTaskKind; env: string }> = {
   analyzeFeedback: { kind: 'PROMPT_PROPOSALS', env: 'VORASAAN_MODEL_ANALYZE_FEEDBACK' },
   proposePromptVersion: { kind: 'PROMPT_PROPOSALS', env: 'VORASAAN_MODEL_PROPOSE_PROMPT_VERSION' },
   redraftPromptVersion: { kind: 'PROMPT_PROPOSALS', env: 'VORASAAN_MODEL_REDRAFT_PROMPT_VERSION' },
+  // Design Docs (ticket 0069): drafted from the approved Spec, and redrafted on request.
+  draftDesignDoc: { kind: 'DESIGN_DOCS', env: 'VORASAAN_MODEL_DRAFT_DESIGN_DOC' },
+  redraftDesignDoc: { kind: 'DESIGN_DOCS', env: 'VORASAAN_MODEL_REDRAFT_DESIGN_DOC' },
 };
 
 /** The per-task env override, or undefined when it isn't set. */

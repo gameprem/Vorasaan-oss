@@ -44,6 +44,8 @@ export function inboxItemLine(item: InboxItem, now: Date = new Date()): string {
       return `Answer Grilling (${item.grilling.round.toLowerCase()}, ${item.grilling.unanswered} open) · ${item.project.name}`;
     case 'APPROVE_BRIEF_PROPOSAL':
       return `Approve Brief Proposal · ${item.project.name}`;
+    case 'APPROVE_DESIGN_DOC':
+      return `Approve ${item.designDoc.name} Design Doc${item.designDoc.reason === 'SPEC_CHANGED' ? ' update' : ''} · ${item.feature.title}`;
   }
 }
 
@@ -67,6 +69,8 @@ export function inboxItemKey(item: InboxItem): string {
       return `grilling:${item.grilling.id}:${item.grilling.round}:${item.grilling.role}`;
     case 'APPROVE_BRIEF_PROPOSAL':
       return `brief-proposal:${item.briefProposal.id}`;
+    case 'APPROVE_DESIGN_DOC':
+      return `design-doc:${item.designDoc.proposalId}`;
   }
 }
 
@@ -77,6 +81,11 @@ export function inboxItemDetail(item: InboxItem): string[] {
       return [
         `Grilling of "${item.project.name}": ${item.grilling.unanswered} question(s) of the ${item.grilling.round.toLowerCase()} round are asked to the ${ROLE_LABEL[item.grilling.role]}s.`,
         'Answer them in the web app.',
+      ];
+    case 'APPROVE_DESIGN_DOC':
+      return [
+        `The AI drafted the ${item.designDoc.name} Design Doc of "${item.feature.title}"${item.designDoc.reason === 'SPEC_CHANGED' ? ' again, because the Spec changed what it covers' : ''}.`,
+        'Approve it, decline it or Request changes in the web app: the Feature → Design Docs.',
       ];
     default:
       return [inboxItemLine(item)];

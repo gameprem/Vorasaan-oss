@@ -12,6 +12,7 @@ import type {
   ConversationScopeForAi,
   ConversationSummaryDraft,
   DecisionForAi,
+  DesignDocForAi,
   DismissedSuggestionForAi,
   FeatureForAi,
   FeedbackCaseForAi,
@@ -78,6 +79,8 @@ export const TASK_SKILLS: Record<AiTask, SkillName> = {
   analyzeFeedback: 'analyze-feedback',
   proposePromptVersion: 'propose-prompt-version',
   redraftPromptVersion: 'redraft-prompt-version',
+  draftDesignDoc: 'draft-design-doc',
+  redraftDesignDoc: 'redraft-design-doc',
 };
 
 const skillCosts = new Map<SkillName, Promise<number>>();
@@ -523,6 +526,70 @@ export function draftAcceptanceCriteriaPrompt(
   });
 }
 
+// ─── Design Docs (ADR 0014, ticket 0069) ─────────────────────────────────────
+
+/** Which Design Doc this is, in one or a few lines: its Platform and Team Roles, or QA's targets. */
+function describeDesignDoc(doc: DesignDocForAi): string {
+  if (doc.platform) {
+    const roles = doc.platform.roles.length ? doc.platform.roles.join(', ') : 'no Team Role named';
+    return `The Design Doc of the Platform "${attribute(doc.platform.name)}" (its Team Roles: ${roles}).`;
+  }
+  return `The QA Design Doc: a test plan and test cases across the Feature's target Platforms:\n${renderPlatforms(doc.targets, '- (The Feature targets no Platform.)')}`;
+}
+
+/** What part of the Spec the Design Doc is given, in one line. */
+function describeDesignScope(doc: DesignDocForAi): string {
+  if (!doc.platform) return 'The whole Spec: QA covers every target Platform.';
+  const own = doc.platform.name.toLowerCase();
+  const others = doc.targets.filter((t) => t.name.toLowerCase() !== own);
+  if (others.length === 0) return 'The whole Spec.';
+  return `The Spec without the sections of the Feature's other target Platforms (${others.map((t) => attribute(t.name)).join(', ')}): this Design Doc covers its own section and the general ones.`;
+}
+
+/** A Project's template, as data in a <template> block: fenced, and unable to close it. */
+function renderDesignTemplate(template: string): string {
+  return fenceTemplate(fence(template.trim() || '(No template: use sensible sections.)'));
+}
+
+/** A Design Doc drafted from the approved Spec, or updated after it changed (ticket 0069). */
+export function draftDesignDocPrompt(
+  input: Parameters<AiPort['draftDesignDoc']>[0],
+  lang: PromptOptions = {},
+) {
+  return renderPrompt(lang, 'draft-design-doc', {
+    docLine: describeDesignDoc(input.doc),
+    template: renderDesignTemplate(input.doc.template),
+    featureTitle: attribute(input.feature.title),
+    featureDescription: fence(input.feature.description || '(No description.)'),
+    specVersion: String(input.specVersion),
+    scopeLine: describeDesignScope(input.doc),
+    spec: fence(input.specMarkdown),
+    current: input.current === null ? '(None: this is the first draft.)' : fence(input.current),
+    specChange:
+      input.specChange === null ? '(None: this is the first draft.)' : fence(input.specChange),
+    asked: input.asked.length
+      ? fence(input.asked.map((t) => `- ${oneLineOf(t)}`).join('\n'))
+      : '(None.)',
+    context: renderContext(input.context),
+  });
+}
+
+export function redraftDesignDocPrompt(
+  input: Parameters<AiPort['redraftDesignDoc']>[0],
+  lang: PromptOptions = {},
+) {
+  return renderPrompt(lang, 'redraft-design-doc', {
+    docLine: describeDesignDoc(input.doc),
+    featureTitle: attribute(input.feature.title),
+    specVersion: String(input.specVersion),
+    scopeLine: describeDesignScope(input.doc),
+    spec: fence(input.specMarkdown),
+    context: renderContext(input.context),
+    proposal: fence(input.proposedMarkdown),
+    ...feedbackValues(input),
+  });
+}
+
 /** What a Conversation is about, for the prompt's first line. Names are untrusted. */
 export function describeConversationScope(scope: ConversationScopeForAi): string {
   const project = `the Project "${attribute(scope.project.name)}"`;
@@ -956,6 +1023,8 @@ export const TASK_PROMPTS: {
   analyzeFeedback: analyzeFeedbackPrompt,
   proposePromptVersion: proposePromptVersionPrompt,
   redraftPromptVersion: redraftPromptVersionPrompt,
+  draftDesignDoc: draftDesignDocPrompt,
+  redraftDesignDoc: redraftDesignDocPrompt,
 };
 
 /** A stored Conversation Summary read back into its sections (the inverse of rendering it). */

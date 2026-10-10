@@ -247,6 +247,7 @@ export const AiTask = z.enum([
   'FIT_CHECK',
   'CHAT',
   'PROMPT_PROPOSALS',
+  'DESIGN_DOCS',
 ]);
 export type AiTask = z.infer<typeof AiTask>;
 

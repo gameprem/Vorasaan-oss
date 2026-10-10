@@ -4,6 +4,8 @@ import {
   DecisionRequestKind,
   DecisionRequestStatus,
   DecisionSource,
+  DesignDocProposalReason,
+  DesignDocVersionSource,
   SpecVersionSource,
   TeamRole,
 } from './enums.ts';
@@ -107,6 +109,37 @@ export const DecisionGraphBranch = z.object({
 });
 export type DecisionGraphBranch = z.infer<typeof DecisionGraphBranch>;
 
+/**
+ * A Design Doc's sub-lane (ticket 0069): its approved versions, each drawn against the Spec
+ * Version it follows, and the proposal waiting for approval. Stale when the latest Spec
+ * changed what its latest version covers.
+ */
+export const DecisionGraphDesignDoc = z.object({
+  /** The Platform's id, or `qa`. */
+  key: z.string(),
+  /** "Back-End", or "QA". */
+  name: z.string(),
+  stale: z.boolean(),
+  /** Oldest first. */
+  versions: z.array(
+    z.object({
+      version: z.int().positive(),
+      specVersion: z.int().positive(),
+      source: DesignDocVersionSource,
+      approvedBy: PersonRef,
+      createdAt: Timestamp,
+    }),
+  ),
+  pending: z
+    .object({
+      reason: DesignDocProposalReason,
+      specVersion: z.int().positive(),
+      createdAt: Timestamp,
+    })
+    .nullable(),
+});
+export type DecisionGraphDesignDoc = z.infer<typeof DecisionGraphDesignDoc>;
+
 /** `GET /features/:id/decision-graph`: 404 for anyone who can't read the Feature. */
 export const DecisionGraphView = z.object({
   featureId: Id,
@@ -114,5 +147,7 @@ export const DecisionGraphView = z.object({
   nodes: z.array(DecisionGraphNode),
   /** Sent Decision Requests (never drafts), oldest sent first. */
   branches: z.array(DecisionGraphBranch),
+  /** The Design Docs drafted so far, as sub-lanes under the main one (ticket 0069). */
+  designDocs: z.array(DecisionGraphDesignDoc),
 });
 export type DecisionGraphView = z.infer<typeof DecisionGraphView>;

@@ -13,6 +13,7 @@ export * from './decision-graph.ts';
 export * from './decision-request.ts';
 export * from './decision-stats.ts';
 export * from './delegation.ts';
+export * from './design-doc.ts';
 export * from './diff.ts';
 export * from './embeddings.ts';
 export * from './enums.ts';

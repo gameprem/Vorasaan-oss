@@ -94,6 +94,37 @@ export type FeatureForAi = { title: string; description: string };
  */
 export type PlatformForAi = { name: string; roles: TeamRole[] };
 
+/**
+ * A Design Doc (ADR 0014, ticket 0069) as AI input: its name ("Back-End", or "QA"), the
+ * Platform it is for (null for QA), the Feature's target Platforms (which QA covers, and
+ * whose sections a Platform's Design Doc leaves out), and the template it follows. Names and
+ * the template are written by people: untrusted, fenced like any data.
+ */
+export type DesignDocForAi = {
+  name: string;
+  platform: PlatformForAi | null;
+  targets: PlatformForAi[];
+  template: string;
+};
+
+/** The most questions one Design Doc draft raises as Decision Requests. */
+export const MAX_DESIGN_DOC_QUESTIONS = 5;
+
+export const DesignDocDraft = z.object({
+  proposedMarkdown: z.string().trim().min(1),
+  summary: z.string().trim().min(1).max(1_000),
+  /** What the design needs that the Spec and the Decisions don't settle: each a Question. */
+  questions: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(200),
+        description: z.string().trim().max(2_000),
+      }),
+    )
+    .max(MAX_DESIGN_DOC_QUESTIONS),
+});
+export type DesignDocDraft = z.infer<typeof DesignDocDraft>;
+
 export const AttachmentSummary = z.object({
   summary: z.string().trim().min(1),
 });
@@ -727,6 +758,45 @@ export interface AiPort {
     },
     options?: AiCallOptions,
   ): Promise<SpecProposalDraft>;
+
+  /**
+   * A Design Doc (ticket 0069) drafted from the approved Spec and the Feature's Decisions: the
+   * first version, or (with `current` and `specChange`) the update a new Spec Version needs.
+   * What the design needs that they leave open comes back as `questions`.
+   */
+  draftDesignDoc(
+    input: {
+      feature: FeatureForAi;
+      doc: DesignDocForAi;
+      /** The Spec Version it is drafted from. */
+      specVersion: number;
+      /** What the Design Doc covers of that Spec (`designDocScope`). */
+      specMarkdown: string;
+      /** The approved Design Doc an update starts from; null for the first draft. */
+      current: string | null;
+      /** For an update, the lines of what the Spec changed in its scope ("- " removed, "+ " added). */
+      specChange: string | null;
+      /** The titles of the questions earlier drafts already raised. */
+      asked: string[];
+      /** Retrieved Feature context (its Decisions and requests first), without its Spec. */
+      context: ContextBlock[];
+    },
+    options?: AiCallOptions,
+  ): Promise<DesignDocDraft>;
+
+  /** A Redraft of a Design Doc proposal from a person's feedback (tickets 0065, 0069). */
+  redraftDesignDoc(
+    input: RedraftFeedbackForAi & {
+      feature: FeatureForAi;
+      doc: DesignDocForAi;
+      specVersion: number;
+      specMarkdown: string;
+      /** The current Redraft. */
+      proposedMarkdown: string;
+      context: ContextBlock[];
+    },
+    options?: AiCallOptions,
+  ): Promise<RedraftedMarkdown>;
 
   /** A Redraft of a Decision Request's Choices from a person's feedback (ticket 0065). */
   redraftChoices(

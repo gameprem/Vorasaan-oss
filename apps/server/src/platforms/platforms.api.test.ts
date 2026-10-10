@@ -16,7 +16,14 @@ import { as } from '../test/http.ts';
 
 const { pim, beam } = SEED.users;
 const TEMPLATE = '/settings/platform-template';
-const CHECKS_ON = { specSection: true, someoneToAsk: true, noOpenBlockers: true, qaReady: true };
+// Every check on, and the Design Doc template chosen from the Team Roles (ticket 0069).
+const CHECKS_ON = {
+  specSection: true,
+  someoneToAsk: true,
+  noOpenBlockers: true,
+  qaReady: true,
+  designTemplate: null,
+};
 const BUILT_IN = [
   { name: 'Back-End', roles: ['BACKEND'], ...CHECKS_ON },
   { name: 'Front-End', roles: ['FRONTEND'], ...CHECKS_ON },

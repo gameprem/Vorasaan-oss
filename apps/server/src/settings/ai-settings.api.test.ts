@@ -114,6 +114,7 @@ describe('AI providers and Approved Models', () => {
       'FIT_CHECK',
       'CHAT',
       'PROMPT_PROPOSALS',
+      'DESIGN_DOCS',
     ]);
     expect(res.body.tasks.every((t) => t.approvedModelId === null)).toBe(true);
     expect(await choose('chat')).toEqual({

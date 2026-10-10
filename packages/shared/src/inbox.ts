@@ -15,6 +15,7 @@ import {
   BriefVersionSource,
   DecisionRequestKind,
   DecisionRequestStatus,
+  DesignDocProposalReason,
   GrillingRoundKind,
   NotificationType,
   SpecVersionSource,
@@ -106,6 +107,22 @@ export const InboxItem = z.discriminatedUnion('kind', [
     kind: z.literal('APPROVE_BRIEF_PROPOSAL'),
     ...projectItemBase,
     briefProposal: z.object({ id: Id, source: BriefVersionSource }),
+  }),
+  /**
+   * Approve, decline or Request changes on a PENDING Design Doc proposal (ticket 0069) of a
+   * Feature where I'm a Tech Lead or a Role Owner of its Platform's Team Roles.
+   */
+  z.object({
+    kind: z.literal('APPROVE_DESIGN_DOC'),
+    ...itemBase,
+    designDoc: z.object({
+      proposalId: Id,
+      /** The Platform's id, or `qa`. */
+      key: z.string(),
+      /** "Back-End", or "QA". */
+      name: z.string(),
+      reason: DesignDocProposalReason,
+    }),
   }),
 ]);
 export type InboxItem = z.infer<typeof InboxItem>;

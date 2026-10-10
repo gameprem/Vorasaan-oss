@@ -23,6 +23,8 @@ import {
   MyDelegationsController,
 } from './delegations/delegations.controller.ts';
 import { DelegationsService } from './delegations/delegations.service.ts';
+import { DesignDocsModule } from './design-docs/design-docs.module.ts';
+import { SpecChangesModule } from './design-docs/spec-changes.ts';
 import { FeatureGuidelinesModule } from './feature-guidelines/feature-guidelines.module.ts';
 import { FeatureSuggestionsModule } from './feature-suggestions/feature-suggestions.module.ts';
 import { DecisionGraphController } from './features/decision-graph.controller.ts';
@@ -51,6 +53,7 @@ import { SpecModule } from './spec/spec.module.ts';
   imports: [
     PrismaModule,
     ClockModule,
+    SpecChangesModule,
     MastraModule,
     RetrievalModule,
     AtlassianModule,
@@ -65,6 +68,7 @@ import { SpecModule } from './spec/spec.module.ts';
     DecisionRequestsModule,
     DecisionStatsModule,
     SpecModule,
+    DesignDocsModule,
     BriefModule,
     RedraftsModule,
     ReceiptsModule,
