@@ -46,6 +46,10 @@ _Avoid_: Completeness score, progress
 One of the four tests Coverage can apply to a Platform, each switched on or off per Platform: Spec section (the latest Spec Version has a non-empty section for it), someone to ask (someone in the Team holds one of its Team Roles), no open Blockers (none names it in its title or Choices), and QA ready (its section has acceptance criteria or test cases, and someone in the Team holds QA). A Platform no Feature covers is one that no Feature targeting it passes every check of.
 _Avoid_: Rule, criterion, gate
 
+**Coverage matrix**:
+A Project's Features against its Platforms, one cell per target Platform saying covered or missing and why, filterable to what is missing and for which reason, such as missing QA.
+_Avoid_: Coverage report, heat map, dashboard
+
 **Role Owner**:
 One of the people responsible for a given Team Role on a specific Feature. A Feature may have several Role Owners for the same Team Role.
 _Avoid_: Assignee, owner

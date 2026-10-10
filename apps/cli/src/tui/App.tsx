@@ -3,6 +3,7 @@ import type {
   FeatureSummaryView,
   InboxItem,
   NotificationList,
+  PlatformCoverage,
   ServerEvent,
   SpecVersionView,
 } from '@vorasaan/shared';
@@ -14,6 +15,7 @@ import type { LiveStatus } from '../events.ts';
 import type { Notifier } from '../notify.ts';
 import { ListView, type Row, ScrollText } from './components.tsx';
 import {
+  coverageChip,
   errorMessage,
   inboxItemDetail,
   inboxItemKey,
@@ -35,6 +37,7 @@ export type TuiApi = Pick<
   | 'notifications'
   | 'myRequests'
   | 'listFeatures'
+  | 'projectCoverage'
   | 'feature'
   | 'team'
   | 'myTeams'
@@ -87,6 +90,7 @@ const FULL_HELP = [
   'Enter                     open the selected item · Esc  back to the list',
   'r                         raise a Blocker or Question with context from this repository',
   'R                         refresh · a  (Features) all Projects / only the bound Project',
+  '✓ / !                     (Features) a target Platform covered / missing (Coverage)',
   'm / M                     (Inbox) mark the Notification read / all Notifications read',
   'In a request              d decide · c Claim · i ask for info · s reassign · a answer',
   '                          n note · w withdraw · p open its Spec Proposal',
@@ -224,6 +228,8 @@ export function App({
   const [inbox, setInbox] = useState<Remote<InboxData>>({ status: 'loading' });
   const [requests, setRequests] = useState<Remote<DecisionRequestView[]>>({ status: 'loading' });
   const [features, setFeatures] = useState<Remote<FeatureSummaryView[]>>({ status: 'loading' });
+  /** Each Feature's target Platforms, covered or missing (ticket 0052); a nicety, never an error. */
+  const [coverage, setCoverage] = useState<ReadonlyMap<string, PlatformCoverage[]>>(new Map());
   const [meId, setMeId] = useState<string>();
   const [liveStatus, setLiveStatus] = useState<LiveStatus>();
   /** Bumped by live events and actions: open screens reload quietly. */
@@ -274,7 +280,25 @@ export function App({
           }),
         );
       } else if (which === 1) settle(setRequests, api.myRequests());
-      else settle(setFeatures, api.listFeatures());
+      else
+        settle(
+          setFeatures,
+          api.listFeatures().then((list) => {
+            // One Coverage matrix per Project in the list, read alongside; a failure only
+            // leaves that Project's Features without chips.
+            const projects = [...new Set(list.map((f) => f.projectId))];
+            Promise.all(projects.map((p) => api.projectCoverage(p).catch(() => null))).then(
+              (views) => {
+                const next = new Map<string, PlatformCoverage[]>();
+                for (const view of views) {
+                  for (const row of view?.features ?? []) next.set(row.featureId, row.platforms);
+                }
+                setCoverage(next);
+              },
+            );
+            return list;
+          }),
+        );
     },
     [api],
   );
@@ -373,6 +397,7 @@ export function App({
     key: f.id,
     label: `${f.projectId === bound ? '● ' : ''}${f.title}  ${f.projectName} / ${f.teamName} · ${f.myRoles.join(', ')}`,
     highlight: Boolean(bound) && f.projectId === bound,
+    chips: coverage.get(f.id)?.map(coverageChip),
   }));
   const rowsOf = [inboxRows, requestRows, featureRows] as const;
   const current = cursorRow(selected[tab], rowsOf[tab]);

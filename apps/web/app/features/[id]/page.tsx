@@ -2,6 +2,7 @@ import type {
   AttachmentView,
   DecisionGraphView,
   DecisionLogEntry,
+  FeatureCoverageView,
   FeatureView,
   ProjectPlatformsView,
   RoleOwnerView,
@@ -15,6 +16,7 @@ import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { AttachmentsPanel } from '@/components/attachments-panel';
 import { BlockedBadge, KindBadge, Notice, relativeTime } from '@/components/bits';
+import { CoverageChips } from '@/components/coverage-chips';
 import { DecisionGraph } from '@/components/decision-graph';
 import { DraftedWith } from '@/components/drafted-with';
 import { FeaturePlatformsEditor } from '@/components/feature-platforms-editor';
@@ -92,7 +94,13 @@ export default async function FeaturePage({
     );
   }
   const latest = versions[0];
-  const me = await currentUser();
+  // Coverage per target Platform (ADR 0009): the header's chips. Without it, plain names.
+  const [me, coverage] = await Promise.all([
+    currentUser(),
+    feature.platforms.length > 0
+      ? load(() => api<FeatureCoverageView>(`/features/${id}/coverage`))
+      : null,
+  ]);
   const canEditSpec = Boolean(me?.isAdmin || feature.myRoles.includes('PO'));
   const canEditAttachments = Boolean(me?.isAdmin || feature.myRoles.length > 0);
 
@@ -142,14 +150,25 @@ export default async function FeaturePage({
             <h1 className="text-3xl font-semibold tracking-tight">{feature.title}</h1>
             <BlockedBadge openBlockers={feature.openBlockers} />
           </div>
-          {feature.platforms.length > 0 && (
-            <ul aria-label="Target Platforms" className="mt-2 flex flex-wrap gap-2">
-              {feature.platforms.map((p) => (
-                <li key={p.id} className="rounded-full bg-surface px-3 py-0.5 text-sm text-fg-soft">
-                  {p.name}
-                </li>
-              ))}
-            </ul>
+          {coverage?.data ? (
+            <CoverageChips
+              featureId={id}
+              platforms={coverage.data.platforms}
+              canDraft={canEditSpec}
+            />
+          ) : (
+            feature.platforms.length > 0 && (
+              <ul aria-label="Target Platforms" className="mt-2 flex flex-wrap gap-2">
+                {feature.platforms.map((p) => (
+                  <li
+                    key={p.id}
+                    className="rounded-full bg-surface px-3 py-0.5 text-sm text-fg-soft"
+                  >
+                    {p.name}
+                  </li>
+                ))}
+              </ul>
+            )
           )}
           {feature.jiraIssueKey && (
             <p className="mt-2 text-sm text-fg-soft">

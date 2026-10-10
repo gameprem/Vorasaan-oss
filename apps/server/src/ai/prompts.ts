@@ -528,6 +528,24 @@ export function describeConversationScope(scope: ConversationScopeForAi): string
   return `the Feature "${attribute(scope.feature.title)}" of ${project}`;
 }
 
+/**
+ * A Feature Conversation's target Platforms that the Spec has no section for (Coverage,
+ * ticket 0052), with the one rule about them; nothing at all when there are none, so a
+ * Conversation without gaps pays no tokens for it.
+ */
+function renderChatMissingSections(missing: readonly PlatformForAi[]): string {
+  if (missing.length === 0) return '';
+  return `## Missing Platform sections
+
+This Feature targets these Platforms, but its latest Spec has no section for them (with the Team Roles who answer for each). When the person asks about them or agrees, offer to add one: draft a Spec Proposal that adds a \`## <Platform>\` section, named as listed, from what the Spec, the Decisions and the context say, or else one open question for its Team Roles. Never invent requirements.
+
+<platforms>
+${renderPlatforms(missing, '')}
+</platforms>
+
+`;
+}
+
 /** The instructions of a Conversation's reply; the recent messages follow as the chat itself. */
 export function chatPrompt(
   input: {
@@ -535,11 +553,13 @@ export function chatPrompt(
     context: ContextBlock[];
     foundation: ProjectFoundationForAi;
     summary: string;
+    missingSections?: readonly PlatformForAi[];
   },
   lang: PromptOptions = {},
 ) {
   return renderPrompt(lang, 'chat', {
     scope: describeConversationScope(input.scope),
+    missingSections: renderChatMissingSections(input.missingSections ?? []),
     scopeKind: input.scope.kind === 'FEATURE' ? 'Feature' : 'Project',
     brief: renderBrief(input.foundation.brief),
     guidelines: renderGuidelines(input.foundation.guidelines),

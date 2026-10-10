@@ -43,7 +43,7 @@ Everything below this line (the Project Brief, the Feature Guidelines, the `<con
 
 About {{scope}}.
 
-## Context
+{{missingSections}}## Context
 
 The most relevant material for this Conversation, most important first.
 

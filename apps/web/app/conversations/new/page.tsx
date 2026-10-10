@@ -1,4 +1,9 @@
-import type { ConversationScopeView, FeatureSummaryView, InboxItem } from '@vorasaan/shared';
+import {
+  type ConversationScopeView,
+  type FeatureSummaryView,
+  type InboxItem,
+  PlatformName,
+} from '@vorasaan/shared';
 import { redirect } from 'next/navigation';
 import {
   NewConversation,
@@ -8,6 +13,7 @@ import {
 import { ROUND_LABEL } from '@/components/ui';
 import { api, currentUser } from '@/lib/api';
 import { chipsFor, grillingConversationHref, loadModels } from '@/lib/chat-data';
+import { addSectionAsk } from '@/lib/coverage-text';
 import { isId } from '@/lib/ids';
 import { type Lang, requestLanguage } from '@/lib/lang';
 import { scopeKey } from '@/lib/scope-key';
@@ -159,15 +165,21 @@ function scopeOptions(projects: SidebarProject[]): ScopeOption[] {
 }
 
 // A new Conversation (ADR 0008). `?feature=` or `?project=` starts it in that scope (the
-// Sidebar opens one there when it has none yet).
+// Sidebar opens one there when it has none yet). With a Feature, `?section=<Platform>` (from
+// a missing Platform's Coverage chip, ticket 0052) offers "Add a <Platform> section to the
+// Spec" first; it only fills the composer, and the AI drafts a Spec Proposal to approve.
 export default async function NewConversationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ feature?: string | string[]; project?: string | string[] }>;
+  searchParams: Promise<{
+    feature?: string | string[];
+    project?: string | string[];
+    section?: string | string[];
+  }>;
 }) {
   const me = await currentUser();
   if (!me) redirect('/login');
-  const { feature, project } = await searchParams;
+  const { feature, project, section } = await searchParams;
   const lang = await requestLanguage();
   const [sidebar, inbox, myFeatures, models] = await Promise.all([
     loadSidebar(),
@@ -179,6 +191,16 @@ export default async function NewConversationPage({
   const wanted = isId(feature) ? `f:${feature}` : isId(project) ? `p:${project}` : null;
   const initialScope = options.find((o) => o.value === wanted)?.scope ?? null;
   const chips = Object.fromEntries(options.map((o) => [scopeKey(o.scope), chipsFor(o.scope)]));
+  const platform = PlatformName.safeParse(section);
+  const starters = startersFrom(lang, inbox, myFeatures, sidebar.projects);
+  if (initialScope?.kind === 'FEATURE' && platform.success) {
+    starters.unshift({
+      text: addSectionAsk(platform.data),
+      sub: initialScope.feature.title,
+      tag: 'Coverage',
+      scope: initialScope,
+    });
+  }
 
   return (
     <NewConversation
@@ -188,7 +210,7 @@ export default async function NewConversationPage({
       lang={lang}
       options={options}
       initialScope={initialScope}
-      starters={startersFrom(lang, inbox, myFeatures, sidebar.projects)}
+      starters={starters}
       chipsFor={chips}
       models={models}
     />

@@ -35,6 +35,7 @@ import {
   type GuidelineForAi,
   isContextTooLong,
   type ModelChoice,
+  type PlatformForAi,
   type ProjectForAi,
   type ProjectFoundationForAi,
   ProposedPromptVersion,
@@ -509,6 +510,7 @@ export class MastraAiPort implements AiPort {
       summary: string;
       recentMessages: ChatMessageForAi[];
       tools: ChatTool[];
+      missingSections?: PlatformForAi[];
       signal?: AbortSignal;
     },
     options?: AiCallOptions,
