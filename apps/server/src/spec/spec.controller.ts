@@ -9,7 +9,13 @@ import {
   Query,
 } from '@nestjs/common';
 import type { User } from '@vorasaan/db';
-import { RevertSpecInput, SpecDiffQuery } from '@vorasaan/shared';
+import {
+  ApproveProposalInput,
+  DraftAcceptanceCriteriaInput,
+  RejectProposalInput,
+  RevertSpecInput,
+  SpecDiffQuery,
+} from '@vorasaan/shared';
 import { CurrentUser } from '../auth/identity.guard.ts';
 import { SpecService } from './spec.service.ts';
 
@@ -23,18 +29,36 @@ export class SpecController {
   }
 
   @Post('spec-proposals/:id/approve')
-  approve(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
-    return this.spec.approve(user, id);
+  approve(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: ApproveProposalInput }) body: ApproveProposalInput,
+  ) {
+    return this.spec.approve(user, id, body?.redraft);
   }
 
   @Post('spec-proposals/:id/reject')
-  reject(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
-    return this.spec.reject(user, id);
+  reject(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: RejectProposalInput }) body: RejectProposalInput,
+  ) {
+    return this.spec.reject(user, id, body?.reason);
   }
 
   @Post('features/:id/spec-proposals/from-attachments')
   proposeFromAttachments(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
     return this.spec.proposeFromAttachments(user, id);
+  }
+
+  /** The AI drafts a Platform's acceptance criteria when it isn't QA ready (ticket 0051). */
+  @Post('features/:id/coverage/acceptance-criteria')
+  proposeAcceptanceCriteria(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: DraftAcceptanceCriteriaInput }) body: DraftAcceptanceCriteriaInput,
+  ) {
+    return this.spec.proposeAcceptanceCriteria(user, id, body.platformId);
   }
 
   @Get('features/:id/spec-versions')

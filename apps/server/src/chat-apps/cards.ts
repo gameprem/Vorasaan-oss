@@ -13,8 +13,8 @@ export function webUrl(env: Record<string, string | undefined> = process.env): s
 }
 
 export const requestUrl = (requestId: string) => `${webUrl()}/requests/${requestId}`;
-export const proposalUrl = (featureId: string, proposalId: string) =>
-  `${webUrl()}/features/${featureId}/proposals/${proposalId}`;
+export const proposalUrl = (featureId: string, proposalId: string, redraft?: number) =>
+  `${webUrl()}/features/${featureId}/proposals/${proposalId}${redraft ? `?redraft=${redraft}` : ''}`;
 
 /** What every card is read with: the person's language and time zone, and now. */
 export type CardContext = { lang: ChatLanguage; timeZone: string; now: Date };
@@ -122,6 +122,13 @@ export function decisionCard(
       t.askPlaceholder,
     ),
     own: input({ kind: 'own' }, t.own, t.ownTitle, t.ownLabel, t.ownPlaceholder),
+    redraft: input(
+      { kind: 'redraft' },
+      t.redraft,
+      t.redraftTitle,
+      t.redraftChoicesLabel,
+      t.redraftPlaceholder,
+    ),
     ownShortLabel: t.ownShort,
     link: { label: t.open, url: requestUrl(request.id) },
   });
@@ -146,6 +153,7 @@ export function noticeCard(
     choices: [],
     ask: null,
     own: null,
+    redraft: null,
     ownShortLabel: chatText(ctx.lang).ownShort,
     link: input.link,
   });
@@ -189,22 +197,53 @@ export function overdueCard(
   );
 }
 
-/** A Spec Proposal only links to Vorasaan: a diff needs a real screen (ADR 0011). */
+/**
+ * A Spec Proposal links to Vorasaan, where a diff has a real screen (ADR 0011); its only
+ * button is Request changes (ticket 0065), whose text is the feedback. Approving needs
+ * the diff, so it stays in Vorasaan.
+ */
 export function specProposalCard(
-  proposal: { id: string; featureId: string; featureTitle: string; requestTitle: string | null },
+  proposal: {
+    id: string;
+    featureId: string;
+    featureTitle: string;
+    requestTitle: string | null;
+    /** The Redraft it holds, when it has been redrafted. */
+    redraft: number | null;
+  },
   ctx: CardContext,
+  sign: Sign,
 ): ChatMessage {
   const t = chatText(ctx.lang);
-  return noticeCard(
+  const notice = noticeCard(
     {
       accent: 'default',
       eyebrow: `${t.proposalHeading} · ${proposal.featureTitle}`,
       title: proposal.requestTitle ?? proposal.featureTitle,
-      lines: [t.proposalLine],
-      link: { label: t.review, url: proposalUrl(proposal.featureId, proposal.id) },
+      lines: [proposal.redraft ? t.redraftNow(proposal.redraft) : null, t.proposalLine],
+      link: {
+        label: t.review,
+        url: proposalUrl(proposal.featureId, proposal.id, proposal.redraft ?? undefined),
+      },
     },
     ctx,
   );
+  if (!notice.card) return notice;
+  return {
+    ...notice,
+    card: {
+      ...notice.card,
+      redraft: {
+        label: t.redraft,
+        token: sign({ kind: 'redraft' }),
+        title: t.redraftTitle,
+        inputLabel: t.redraftProposalLabel,
+        placeholder: t.redraftPlaceholder,
+        submit: t.send,
+        cancel: t.cancel,
+      },
+    },
+  };
 }
 
 /** What a card becomes after a press: what happened, and the link; no buttons left. */

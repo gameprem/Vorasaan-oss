@@ -1,0 +1,653 @@
+{
+  "ticket": "0074",
+  "createdAt": "2026-10-05T00:34:17.668Z",
+  "machine": {
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+    "cores": 4,
+    "memoryGb": 16,
+    "os": "Linux 6.18.44-fc-v70 x64",
+    "bun": "1.4.2",
+    "postgres": "PostgreSQL 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit",
+    "pgvector": "0.6.0"
+  },
+  "dataset": {
+    "scale": "large",
+    "seed": 73,
+    "now": "2026-06-01T10:00:00.000Z",
+    "counts": {
+      "users": 200,
+      "projects": 50,
+      "teams": 50,
+      "features": 500,
+      "roleOwners": 4500,
+      "delegations": 75,
+      "decisionRequests": 20000,
+      "requestsByStatus": {
+        "DRAFT": 1326,
+        "OPEN": 3971,
+        "NEEDS_INFO": 1374,
+        "DECIDED": 6392,
+        "SPEC_UPDATED": 4726,
+        "WITHDRAWN": 2211
+      },
+      "recipients": 28983,
+      "choices": 48192,
+      "redrafts": 3282,
+      "deciderChanges": 7893,
+      "requestMessages": 6924,
+      "historyEntries": 6813,
+      "decisions": 11118,
+      "specVersions": 5226,
+      "specProposals": 8514,
+      "briefVersions": 50,
+      "attachments": 6050,
+      "notifications": 20438,
+      "chunks": 200000
+    }
+  },
+  "iterations": 60,
+  "retrievalFoundNeedle": true,
+  "results": [
+    {
+      "name": "GET /inbox",
+      "description": "Pim's Inbox: every Decision Request, Spec Proposal and Brief Proposal for her",
+      "iterations": 60,
+      "ms": {
+        "p50": 40.7,
+        "p95": 63.1,
+        "mean": 44.5,
+        "min": 32,
+        "max": 74.4
+      },
+      "queries": {
+        "p50": 15,
+        "max": 15
+      },
+      "dbMs": {
+        "p50": 61.9,
+        "p95": 106.7
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"Project\".\"id\", \"public\".\"Project\".\"name\" FROM \"public\".\"Project\" WHERE \"public\".\"Project\".\"id\" IN (NULL) OFFSET ?",
+        "count": 2,
+        "totalMs": 1.7
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT d.id, d.title, d.kind::text AS kind, d.\"deciderId\", d.\"deciderRole\"::text AS \"deciderRole\", d.\"updatedAt\", d.\"dueAt\", d.\"pausedAt\", d.\"escalationStep\", json_build_object('id', f.id, 'title', f.title) AS feature, json_build_object('id', raiser.id, 'name', raiser.name) AS raiser, CASE WHEN behalf.id IS NULL THEN NULL ELSE json_build_object('id', behalf.id, 'name', behalf.name) END AS \"onBehalfOf\" FROM \"DecisionRequest\" d JOIN \"Feature\" f ON f.id = d.\"featureId\" JOIN \"User\" raiser ON raiser.id = d.\"raiserId\" LEFT JOIN \"RequestRecipient\" me ON me.\"requestId\" = d.id AND me.\"userId\" = ? LEFT JOIN \"User\" behalf ON behalf.id = me.\"onBehalfOfId\" WHERE d.status = 'OPEN' AND (d.\"deciderId\" = ? OR (d.\"deciderId\" IS NULL AND me.id IS NOT NULL))",
+          "count": 60,
+          "totalMs": 1223.8
+        },
+        {
+          "sql": "SELECT p.id, p.source::text AS source, p.\"createdAt\", json_build_object('id', f.id, 'title', f.title) AS feature, CASE WHEN r.id IS NULL THEN NULL ELSE json_build_object('id', r.id, 'title', r.title, 'kind', r.kind) END AS \"decisionRequest\" FROM \"SpecProposal\" p JOIN \"Feature\" f ON f.id = p.\"featureId\" LEFT JOIN \"Decision\" dn ON dn.id = p.\"decisionId\" LEFT JOIN \"DecisionRequest\" r ON r.id = dn.\"requestId\" WHERE p.status = 'PENDING' AND p.\"approverId\" = ?",
+          "count": 60,
+          "totalMs": 1072
+        },
+        {
+          "sql": "SELECT \"public\".\"Grilling\".\"id\", \"public\".\"Grilling\".\"projectId\", \"public\".\"Grilling\".\"startedById\", \"public\".\"Grilling\".\"status\"::text, \"public\".\"Grilling\".\"currentRound\"::text, \"public\".\"Grilling\".\"memory\", \"public\".\"Grilling\".\"revision\", \"public\".\"Grilling\".\"proposalId\", \"public\".\"Grilling\".\"createdAt\", \"public\".\"Grilling\".\"updatedAt\" FROM \"public\".\"Grilling\" WHERE (\"public\".\"Grilling\".\"status\" = CAST(?::text AS \"public\".\"GrillingStatus\") AND ((\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t0\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t0\" WHERE (\"t0\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t0\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t0\".\"grillingId\") AND \"t0\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t1\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t1\" WHERE (\"t1\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t1\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t1\".\"grillingId\") AND \"t1\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t2\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t2\" WHERE (\"t2\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t2\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t2\".\"grillingId\") AND \"t2\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t3\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t3\" WHERE (\"t3\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t3\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t3\".\"grillingId\") AND \"t3\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t4\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t4\" WHERE (\"t4\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t4\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t4\".\"grillingId\") AND \"t4\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t5\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t5\" WHERE (\"t5\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t5\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t5\".\"grillingId\") AND \"t5\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t6\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t6\" WHERE (\"t6\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t6\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t6\".\"grillingId\") AND \"t6\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t7\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t7\" WHERE (\"t7\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t7\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t7\".\"grillingId\") AND \"t7\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t8\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t8\" WHERE (\"t8\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t8\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t8\".\"grillingId\") AND \"t8\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t9\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t9\" WHERE (\"t9\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t9\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t9\".\"grillingId\") AND \"t9\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t10\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t10\" WHERE (\"t10\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t10\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t10\".\"grillingId\") AND \"t10\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t11\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t11\" WHERE (\"t11\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t11\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t11\".\"grillingId\") AND \"t11\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t12\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t12\" WHERE (\"t12\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t12\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t12\".\"grillingId\") AND \"t12\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t13\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t13\" WHERE (\"t13\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t13\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t13\".\"grillingId\") AND \"t13\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t14\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t14\" WHERE (\"t14\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t14\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t14\".\"grillingId\") AND \"t14\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t15\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t15\" WHERE (\"t15\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t15\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t15\".\"grillingId\") AND \"t15\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t16\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t16\" WHERE (\"t16\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t16\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t16\".\"grillingId\") AND \"t16\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t17\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t17\" WHERE (\"t17\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t17\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t17\".\"grillingId\") AND \"t17\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t18\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t18\" WHERE (\"t18\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t18\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t18\".\"grillingId\") AND \"t18\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t19\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t19\" WHERE (\"t19\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t19\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t19\".\"grillingId\") AND \"t19\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t20\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t20\" WHERE (\"t20\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t20\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t20\".\"grillingId\") AND \"t20\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t21\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t21\" WHERE (\"t21\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t21\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t21\".\"grillingId\") AND \"t21\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t22\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t22\" WHERE (\"t22\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t22\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t22\".\"grillingId\") AND \"t22\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t23\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t23\" WHERE (\"t23\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t23\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t23\".\"grillingId\") AND \"t23\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t24\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t24\" WHERE (\"t24\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t24\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t24\".\"grillingId\") AND \"t24\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t25\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t25\" WHERE (\"t25\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t25\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t25\".\"grillingId\") AND \"t25\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t26\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t26\" WHERE (\"t26\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t26\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t26\".\"grillingId\") AND \"t26\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t27\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t27\" WHERE (\"t27\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t27\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t27\".\"grillingId\") AND \"t27\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t28\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t28\" WHERE (\"t28\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t28\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t28\".\"grillingId\") AND \"t28\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t29\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t29\" WHERE (\"t29\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t29\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t29\".\"grillingId\") AND \"t29\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t30\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t30\" WHERE (\"t30\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t30\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t30\".\"grillingId\") AND \"t30\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t31\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t31\" WHERE (\"t31\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t31\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t31\".\"grillingId\") AND \"t31\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t32\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t32\" WHERE (\"t32\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t32\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t32\".\"grillingId\") AND \"t32\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t33\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t33\" WHERE (\"t33\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t33\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t33\".\"grillingId\") AND \"t33\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t34\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t34\" WHERE (\"t34\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t34\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t34\".\"grillingId\") AND \"t34\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t35\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t35\" WHERE (\"t35\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t35\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t35\".\"grillingId\") AND \"t35\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t36\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t36\" WHERE (\"t36\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t36\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t36\".\"grillingId\") AND \"t36\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t37\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t37\" WHERE (\"t37\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t37\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t37\".\"grillingId\") AND \"t37\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t38\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t38\" WHERE (\"t38\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t38\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t38\".\"grillingId\") AND \"t38\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t39\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t39\" WHERE (\"t39\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t39\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t39\".\"grillingId\") AND \"t39\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t40\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t40\" WHERE (\"t40\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t40\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t40\".\"grillingId\") AND \"t40\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t41\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t41\" WHERE (\"t41\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t41\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t41\".\"grillingId\") AND \"t41\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t42\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t42\" WHERE (\"t42\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t42\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t42\".\"grillingId\") AND \"t42\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t43\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t43\" WHERE (\"t43\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t43\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t43\".\"grillingId\") AND \"t43\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t44\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t44\" WHERE (\"t44\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t44\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t44\".\"grillingId\") AND \"t44\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t45\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t45\" WHERE (\"t45\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t45\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t45\".\"grillingId\") AND \"t45\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t46\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t46\" WHERE (\"t46\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t46\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t46\".\"grillingId\") AND \"t46\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t47\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t47\" WHERE (\"t47\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t47\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t47\".\"grillingId\") AND \"t47\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t48\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t48\" WHERE (\"t48\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t48\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t48\".\"grillingId\") AND \"t48\".\"grillingId\" IS NOT NULL))) OR (\"public\".\"Grilling\".\"projectId\" = ? AND EXISTS(SELECT \"t49\".\"grillingId\" FROM \"public\".\"GrillingRound\" AS \"t49\" WHERE (\"t49\".\"status\" = CAST(?::text AS \"public\".\"GrillingRoundStatus\") AND \"t49\".\"role\" = CAST(?::text AS \"public\".\"TeamRole\") AND (\"public\".\"Grilling\".\"id\") = (\"t49\".\"grillingId\") AND \"t49\".\"grillingId\" IS NOT NULL))))) OFFSET ?",
+          "count": 60,
+          "totalMs": 571.6
+        },
+        {
+          "sql": "SELECT \"public\".\"DecisionRequest\".\"id\", \"public\".\"DecisionRequest\".\"featureId\", \"public\".\"DecisionRequest\".\"kind\"::text, \"public\".\"DecisionRequest\".\"withChoices\", \"public\".\"DecisionRequest\".\"raiserId\", \"public\".\"DecisionRequest\".\"title\", \"public\".\"DecisionRequest\".\"description\", \"public\".\"DecisionRequest\".\"suggestedRole\"::text, \"public\".\"DecisionRequest\".\"deciderRole\"::text, \"public\".\"DecisionRequest\".\"deciderId\", \"public\".\"DecisionRequest\".\"status\"::text, \"public\".\"DecisionRequest\".\"submittedAt\", \"public\".\"DecisionRequest\".\"closedAt\", \"public\".\"DecisionRequest\".\"responseWindowMinutes\", \"public\".\"DecisionRequest\".\"dueAt\", \"public\".\"DecisionRequest\".\"pausedAt\", \"public\".\"DecisionRequest\".\"escalationStep\", \"public\".\"DecisionRequest\".\"choicesApprovedModelId\", \"public\".\"DecisionRequest\".\"choicesModelDisplayName\", \"public\".\"DecisionRequest\".\"choicesModelName\", \"public\".\"DecisionRequest\".\"createdAt\", \"public\".\"DecisionRequest\".\"updatedAt\" FROM \"public\".\"DecisionRequest\" WHERE (\"public\".\"DecisionRequest\".\"status\" = CAST(?::text AS \"public\".\"DecisionRequestStatus\") AND \"public\".\"DecisionRequest\".\"raiserId\" = ?) OFFSET ?",
+          "count": 60,
+          "totalMs": 239.4
+        },
+        {
+          "sql": "SELECT \"public\".\"BriefProposal\".\"id\", \"public\".\"BriefProposal\".\"projectId\", \"public\".\"BriefProposal\".\"baseVersionId\", \"public\".\"BriefProposal\".\"source\"::text, \"public\".\"BriefProposal\".\"proposedMarkdown\", \"public\".\"BriefProposal\".\"summary\", \"public\".\"BriefProposal\".\"status\"::text, \"public\".\"BriefProposal\".\"approverId\", \"public\".\"BriefProposal\".\"reviewedAt\", \"public\".\"BriefProposal\".\"approvedModelId\", \"public\".\"BriefProposal\".\"modelDisplayName\", \"public\".\"BriefProposal\".\"modelName\", \"public\".\"BriefProposal\".\"createdAt\" FROM \"public\".\"BriefProposal\" WHERE (\"public\".\"BriefProposal\".\"status\" = CAST(?::text AS \"public\".\"ProposalStatus\") AND \"public\".\"BriefProposal\".\"approverId\" = ?) OFFSET ?",
+          "count": 60,
+          "totalMs": 236.7
+        }
+      ],
+      "queryBudget": 15,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "Feature page (5 requests)",
+      "description": "The Feature page's reads, one after another: /features/00000000-0000-4000-8000-000000000004, /features/00000000-0000-4000-8000-000000000004/spec-versions, /features/00000000-0000-4000-8000-000000000004/decision-log, /features/00000000-0000-4000-8000-000000000004/role-owners, /features/00000000-0000-4000-8000-000000000004/attachments",
+      "iterations": 60,
+      "ms": {
+        "p50": 19.3,
+        "p95": 29.1,
+        "mean": 20.6,
+        "min": 16.4,
+        "max": 40.9
+      },
+      "queries": {
+        "p50": 31,
+        "max": 31
+      },
+      "dbMs": {
+        "p50": 15.4,
+        "p95": 22.8
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+        "count": 5,
+        "totalMs": 2
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+          "count": 300,
+          "totalMs": 149
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"email\", \"public\".\"User\".\"name\", \"public\".\"User\".\"passwordHash\", \"public\".\"User\".\"createdAt\", \"public\".\"User\".\"updatedAt\" FROM \"public\".\"User\" WHERE (\"public\".\"User\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 300,
+          "totalMs": 116.7
+        },
+        {
+          "sql": "SELECT \"public\".\"Attachment\".\"id\", \"public\".\"Attachment\".\"featureId\", \"public\".\"Attachment\".\"projectId\", \"public\".\"Attachment\".\"source\"::text, \"public\".\"Attachment\".\"title\", \"public\".\"Attachment\".\"url\", \"public\".\"Attachment\".\"storageKey\", \"public\".\"Attachment\".\"mimeType\", \"public\".\"Attachment\".\"snapshotText\", \"public\".\"Attachment\".\"snapshotAt\", \"public\".\"Attachment\".\"summary\", \"public\".\"Attachment\".\"addedById\", \"public\".\"Attachment\".\"createdAt\" FROM \"public\".\"Attachment\" WHERE \"public\".\"Attachment\".\"featureId\" = ? ORDER BY \"public\".\"Attachment\".\"createdAt\" ASC OFFSET ?",
+          "count": 60,
+          "totalMs": 108.6
+        },
+        {
+          "sql": "SELECT \"public\".\"Choice\".\"id\", \"public\".\"Choice\".\"label\", \"public\".\"Choice\".\"title\" FROM \"public\".\"Choice\" WHERE \"public\".\"Choice\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 60.7
+        },
+        {
+          "sql": "SELECT \"public\".\"SpecProposal\".\"id\", \"public\".\"SpecProposal\".\"decisionId\" FROM \"public\".\"SpecProposal\" WHERE \"public\".\"SpecProposal\".\"decisionId\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 52.3
+        }
+      ],
+      "queryBudget": 31,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /features/:id",
+      "description": "One read of the Feature page",
+      "iterations": 60,
+      "ms": {
+        "p50": 2.3,
+        "p95": 3,
+        "mean": 2.4,
+        "min": 1.6,
+        "max": 7.1
+      },
+      "queries": {
+        "p50": 5,
+        "max": 5
+      },
+      "dbMs": {
+        "p50": 2,
+        "p95": 2.5
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"Feature\".\"id\", \"public\".\"Feature\".\"teamId\", \"public\".\"Feature\".\"title\", \"public\".\"Feature\".\"description\", \"public\".\"Feature\".\"status\"::text, \"public\".\"Feature\".\"jiraIssueKey\", \"public\".\"Feature\".\"createdAt\", \"public\".\"Feature\".\"updatedAt\", COALESCE(\"aggr_selection_0_DecisionRequest\".\"_aggr_count_decisionRequests\", 0) AS \"_aggr_count_decisionRequests\" FROM \"public\".\"Feature\" LEFT JOIN (SELECT \"public\".\"DecisionRequest\".\"featureId\", COUNT(*) AS \"_aggr_count_decisionRequests\" FROM \"public\".\"DecisionRequest\" WHERE (\"public\".\"DecisionRequest\".\"kind\" = CAST(?::text AS \"public\".\"DecisionRequestKind\") AND \"public\".\"DecisionRequest\".\"status\" IN (CAST(?::text AS \"public\".\"DecisionRequestStatus\"),CAST(?::text AS \"public\".\"DecisionRequestStatus\"))) GROUP BY \"public\".\"DecisionRequest\".\"featureId\") AS \"aggr_selection_0_DecisionRequest\" ON (\"public\".\"Feature\".\"id\" = \"aggr_selection_0_DecisionRequest\".\"featureId\") WHERE (\"public\".\"Feature\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+        "count": 1,
+        "totalMs": 1.2
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"Feature\".\"id\", \"public\".\"Feature\".\"teamId\", \"public\".\"Feature\".\"title\", \"public\".\"Feature\".\"description\", \"public\".\"Feature\".\"status\"::text, \"public\".\"Feature\".\"jiraIssueKey\", \"public\".\"Feature\".\"createdAt\", \"public\".\"Feature\".\"updatedAt\", COALESCE(\"aggr_selection_0_DecisionRequest\".\"_aggr_count_decisionRequests\", 0) AS \"_aggr_count_decisionRequests\" FROM \"public\".\"Feature\" LEFT JOIN (SELECT \"public\".\"DecisionRequest\".\"featureId\", COUNT(*) AS \"_aggr_count_decisionRequests\" FROM \"public\".\"DecisionRequest\" WHERE (\"public\".\"DecisionRequest\".\"kind\" = CAST(?::text AS \"public\".\"DecisionRequestKind\") AND \"public\".\"DecisionRequest\".\"status\" IN (CAST(?::text AS \"public\".\"DecisionRequestStatus\"),CAST(?::text AS \"public\".\"DecisionRequestStatus\"))) GROUP BY \"public\".\"DecisionRequest\".\"featureId\") AS \"aggr_selection_0_DecisionRequest\" ON (\"public\".\"Feature\".\"id\" = \"aggr_selection_0_DecisionRequest\".\"featureId\") WHERE (\"public\".\"Feature\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 60,
+          "totalMs": 37.4
+        },
+        {
+          "sql": "SELECT \"public\".\"RoleOwner\".\"id\", \"public\".\"RoleOwner\".\"role\"::text, \"public\".\"RoleOwner\".\"featureId\" FROM \"public\".\"RoleOwner\" WHERE (\"public\".\"RoleOwner\".\"userId\" = ? AND \"public\".\"RoleOwner\".\"featureId\" = ?) OFFSET ?",
+          "count": 60,
+          "totalMs": 26.9
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"email\", \"public\".\"User\".\"name\", \"public\".\"User\".\"passwordHash\", \"public\".\"User\".\"createdAt\", \"public\".\"User\".\"updatedAt\" FROM \"public\".\"User\" WHERE (\"public\".\"User\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 60,
+          "totalMs": 21.3
+        },
+        {
+          "sql": "SELECT \"public\".\"Team\".\"id\", \"public\".\"Team\".\"name\", \"public\".\"Team\".\"projectId\" FROM \"public\".\"Team\" WHERE \"public\".\"Team\".\"id\" = ? OFFSET ?",
+          "count": 60,
+          "totalMs": 20.2
+        },
+        {
+          "sql": "SELECT \"public\".\"Project\".\"id\", \"public\".\"Project\".\"name\" FROM \"public\".\"Project\" WHERE \"public\".\"Project\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 15.4
+        }
+      ],
+      "queryBudget": 5,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /features/:id/spec-versions",
+      "description": "One read of the Feature page",
+      "iterations": 60,
+      "ms": {
+        "p50": 2,
+        "p95": 2.5,
+        "mean": 2.1,
+        "min": 1.8,
+        "max": 2.8
+      },
+      "queries": {
+        "p50": 6,
+        "max": 6
+      },
+      "dbMs": {
+        "p50": 1.8,
+        "p95": 2.2
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"SpecVersion\".\"id\", \"public\".\"SpecVersion\".\"version\" FROM \"public\".\"SpecVersion\" WHERE \"public\".\"SpecVersion\".\"id\" IN (?...) OFFSET ?",
+        "count": 1,
+        "totalMs": 0.4
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"SpecProposal\".\"id\", \"public\".\"SpecProposal\".\"approvedModelId\", \"public\".\"SpecProposal\".\"modelDisplayName\", \"public\".\"SpecProposal\".\"modelName\" FROM \"public\".\"SpecProposal\" WHERE \"public\".\"SpecProposal\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 22.9
+        },
+        {
+          "sql": "SELECT \"public\".\"SpecVersion\".\"id\", \"public\".\"SpecVersion\".\"featureId\", \"public\".\"SpecVersion\".\"version\", \"public\".\"SpecVersion\".\"markdown\", \"public\".\"SpecVersion\".\"source\"::text, \"public\".\"SpecVersion\".\"summary\", \"public\".\"SpecVersion\".\"approvedById\", \"public\".\"SpecVersion\".\"proposalId\", \"public\".\"SpecVersion\".\"revertedFromId\", \"public\".\"SpecVersion\".\"createdAt\" FROM \"public\".\"SpecVersion\" WHERE \"public\".\"SpecVersion\".\"featureId\" = ? ORDER BY \"public\".\"SpecVersion\".\"version\" DESC OFFSET ?",
+          "count": 60,
+          "totalMs": 22.4
+        },
+        {
+          "sql": "SELECT \"public\".\"SpecVersion\".\"id\", \"public\".\"SpecVersion\".\"version\" FROM \"public\".\"SpecVersion\" WHERE \"public\".\"SpecVersion\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 19.3
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 17.6
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"email\", \"public\".\"User\".\"name\", \"public\".\"User\".\"passwordHash\", \"public\".\"User\".\"createdAt\", \"public\".\"User\".\"updatedAt\" FROM \"public\".\"User\" WHERE (\"public\".\"User\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 60,
+          "totalMs": 16.2
+        }
+      ],
+      "queryBudget": 6,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /features/:id/decision-log",
+      "description": "One read of the Feature page",
+      "iterations": 60,
+      "ms": {
+        "p50": 4,
+        "p95": 5,
+        "mean": 4.2,
+        "min": 3,
+        "max": 9.7
+      },
+      "queries": {
+        "p50": 9,
+        "max": 9
+      },
+      "dbMs": {
+        "p50": 5.1,
+        "p95": 7.7
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+        "count": 2,
+        "totalMs": 1.3
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+          "count": 120,
+          "totalMs": 82.9
+        },
+        {
+          "sql": "SELECT \"public\".\"Choice\".\"id\", \"public\".\"Choice\".\"label\", \"public\".\"Choice\".\"title\" FROM \"public\".\"Choice\" WHERE \"public\".\"Choice\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 51.7
+        },
+        {
+          "sql": "SELECT \"public\".\"SpecProposal\".\"id\", \"public\".\"SpecProposal\".\"decisionId\" FROM \"public\".\"SpecProposal\" WHERE \"public\".\"SpecProposal\".\"decisionId\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 47.8
+        },
+        {
+          "sql": "SELECT \"public\".\"Decision\".\"id\", \"public\".\"Decision\".\"requestId\", \"public\".\"Decision\".\"decidedById\", \"public\".\"Decision\".\"onBehalfOfId\", \"public\".\"Decision\".\"choiceId\", \"public\".\"Decision\".\"customAnswer\", \"public\".\"Decision\".\"rationale\", \"public\".\"Decision\".\"source\"::text, \"public\".\"Decision\".\"createdAt\" FROM \"public\".\"Decision\" LEFT JOIN \"public\".\"DecisionRequest\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"Decision\".\"requestId\") WHERE (\"j0\".\"featureId\" = ? AND (\"j0\".\"id\" IS NOT NULL)) ORDER BY \"public\".\"Decision\".\"createdAt\" ASC OFFSET ?",
+          "count": 60,
+          "totalMs": 42.1
+        },
+        {
+          "sql": "SELECT \"public\".\"DecisionRequest\".\"id\", \"public\".\"DecisionRequest\".\"title\", \"public\".\"DecisionRequest\".\"kind\"::text, \"public\".\"DecisionRequest\".\"choicesApprovedModelId\", \"public\".\"DecisionRequest\".\"choicesModelDisplayName\", \"public\".\"DecisionRequest\".\"choicesModelName\" FROM \"public\".\"DecisionRequest\" WHERE \"public\".\"DecisionRequest\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 40.6
+        }
+      ],
+      "queryBudget": 9,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /features/:id/role-owners",
+      "description": "One read of the Feature page",
+      "iterations": 60,
+      "ms": {
+        "p50": 1.9,
+        "p95": 2.7,
+        "mean": 2.1,
+        "min": 1.6,
+        "max": 8.2
+      },
+      "queries": {
+        "p50": 4,
+        "max": 4
+      },
+      "dbMs": {
+        "p50": 1.2,
+        "p95": 1.7
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"RoleOwner\".\"id\", \"public\".\"RoleOwner\".\"featureId\", \"public\".\"RoleOwner\".\"userId\", \"public\".\"RoleOwner\".\"role\"::text FROM \"public\".\"RoleOwner\" LEFT JOIN \"public\".\"User\" AS \"orderby_1\" ON (\"orderby_1\".\"id\") = (\"public\".\"RoleOwner\".\"userId\") WHERE \"public\".\"RoleOwner\".\"featureId\" = ? ORDER BY \"public\".\"RoleOwner\".\"role\" ASC, \"orderby_1\".\"name\" ASC OFFSET ?",
+        "count": 1,
+        "totalMs": 0.4
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"RoleOwner\".\"id\", \"public\".\"RoleOwner\".\"featureId\", \"public\".\"RoleOwner\".\"userId\", \"public\".\"RoleOwner\".\"role\"::text FROM \"public\".\"RoleOwner\" LEFT JOIN \"public\".\"User\" AS \"orderby_1\" ON (\"orderby_1\".\"id\") = (\"public\".\"RoleOwner\".\"userId\") WHERE \"public\".\"RoleOwner\".\"featureId\" = ? ORDER BY \"public\".\"RoleOwner\".\"role\" ASC, \"orderby_1\".\"name\" ASC OFFSET ?",
+          "count": 60,
+          "totalMs": 28.1
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 17.1
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"email\", \"public\".\"User\".\"name\", \"public\".\"User\".\"passwordHash\", \"public\".\"User\".\"createdAt\", \"public\".\"User\".\"updatedAt\" FROM \"public\".\"User\" WHERE (\"public\".\"User\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 60,
+          "totalMs": 16.6
+        },
+        {
+          "sql": "SELECT \"public\".\"Feature\".\"id\", \"public\".\"Feature\".\"teamId\" FROM \"public\".\"Feature\" WHERE (\"public\".\"Feature\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 60,
+          "totalMs": 14.5
+        }
+      ],
+      "queryBudget": 4,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /features/:id/attachments",
+      "description": "One read of the Feature page",
+      "iterations": 60,
+      "ms": {
+        "p50": 7,
+        "p95": 11.1,
+        "mean": 7.6,
+        "min": 5.2,
+        "max": 13.4
+      },
+      "queries": {
+        "p50": 7,
+        "max": 7
+      },
+      "dbMs": {
+        "p50": 3.4,
+        "p95": 4.7
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"Attachment\".\"id\", \"public\".\"Attachment\".\"featureId\", \"public\".\"Attachment\".\"projectId\", \"public\".\"Attachment\".\"source\"::text, \"public\".\"Attachment\".\"title\", \"public\".\"Attachment\".\"url\", \"public\".\"Attachment\".\"storageKey\", \"public\".\"Attachment\".\"mimeType\", \"public\".\"Attachment\".\"snapshotText\", \"public\".\"Attachment\".\"snapshotAt\", \"public\".\"Attachment\".\"summary\", \"public\".\"Attachment\".\"addedById\", \"public\".\"Attachment\".\"createdAt\" FROM \"public\".\"Attachment\" WHERE \"public\".\"Attachment\".\"featureId\" = ? ORDER BY \"public\".\"Attachment\".\"createdAt\" ASC OFFSET ?",
+        "count": 1,
+        "totalMs": 1.7
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT \"public\".\"Attachment\".\"id\", \"public\".\"Attachment\".\"featureId\", \"public\".\"Attachment\".\"projectId\", \"public\".\"Attachment\".\"source\"::text, \"public\".\"Attachment\".\"title\", \"public\".\"Attachment\".\"url\", \"public\".\"Attachment\".\"storageKey\", \"public\".\"Attachment\".\"mimeType\", \"public\".\"Attachment\".\"snapshotText\", \"public\".\"Attachment\".\"snapshotAt\", \"public\".\"Attachment\".\"summary\", \"public\".\"Attachment\".\"addedById\", \"public\".\"Attachment\".\"createdAt\" FROM \"public\".\"Attachment\" WHERE \"public\".\"Attachment\".\"featureId\" = ? ORDER BY \"public\".\"Attachment\".\"createdAt\" ASC OFFSET ?",
+          "count": 60,
+          "totalMs": 99.9
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"email\", \"public\".\"User\".\"name\", \"public\".\"User\".\"passwordHash\", \"public\".\"User\".\"createdAt\", \"public\".\"User\".\"updatedAt\" FROM \"public\".\"User\" WHERE (\"public\".\"User\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 60,
+          "totalMs": 29.6
+        },
+        {
+          "sql": "SELECT COUNT(*) AS \"_count$_all\" FROM (SELECT \"public\".\"OrgMembership\".\"id\" FROM \"public\".\"OrgMembership\" WHERE (\"public\".\"OrgMembership\".\"userId\" = ? AND \"public\".\"OrgMembership\".\"organizationId\" = ?) OFFSET ?) AS \"sub\"",
+          "count": 60,
+          "totalMs": 23.4
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 18.1
+        },
+        {
+          "sql": "SELECT \"public\".\"Feature\".\"id\", \"public\".\"Feature\".\"teamId\" FROM \"public\".\"Feature\" WHERE (\"public\".\"Feature\".\"id\" = ? AND 1=1) LIMIT ? OFFSET ?",
+          "count": 60,
+          "totalMs": 17.6
+        }
+      ],
+      "queryBudget": 7,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "Retrieval (Feature, pgvector)",
+      "description": "ContextRetriever.forFeature with the fixture question and the Decision Request budget (12000 tokens), ranked by FakeEmbeddingPort vectors",
+      "iterations": 60,
+      "ms": {
+        "p50": 14.4,
+        "p95": 21.5,
+        "mean": 15.8,
+        "min": 11.4,
+        "max": 52.8
+      },
+      "queries": {
+        "p50": 25,
+        "max": 25
+      },
+      "dbMs": {
+        "p50": 38.4,
+        "p95": 62.4
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"SpecVersion\".\"id\", \"public\".\"SpecVersion\".\"version\", \"public\".\"SpecVersion\".\"featureId\" FROM \"public\".\"SpecVersion\" LEFT JOIN \"public\".\"Feature\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"SpecVersion\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"teamId\") LEFT JOIN \"public\".\"Project\" AS \"j2\" ON (\"j2\".\"id\") = (\"j1\".\"projectId\") WHERE (1=0 AND (\"j2\".\"id\" = ? AND \"j2\".\"organizationId\" = ? AND (\"j2\".\"id\" IS NOT NULL) AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL))) OFFSET ?",
+        "count": 2,
+        "totalMs": 6.1
+      },
+      "topStatements": [
+        {
+          "sql": "WITH scoped AS MATERIALIZED ( SELECT \"id\", \"embedding\"::vector(256) <=> ?::vector(256) AS \"distance\" FROM \"ContentChunk\" WHERE \"organizationId\" = ? AND \"projectId\" = ? AND \"featureId\" IS DISTINCT FROM ?::text AND (\"source\" <> 'ATTACHMENT' OR \"featureId\" IS NULL) AND \"embeddingModel\" = ? AND \"embeddingDims\" = 256 LIMIT ? ), nearest AS ( SELECT \"id\", \"distance\" FROM scoped ORDER BY \"distance\" LIMIT ? ) SELECT c.\"id\", c.\"source\", c.\"sourceId\", c.\"featureId\", c.\"position\", c.\"text\", c.\"tokenCount\", n.\"distance\", (SELECT count(*) FROM scoped) AS \"scoped\" FROM nearest n JOIN \"ContentChunk\" c ON c.\"id\" = n.\"id\" ORDER BY n.\"distance\", c.\"id\"",
+          "count": 60,
+          "totalMs": 329.2
+        },
+        {
+          "sql": "SELECT \"public\".\"SpecVersion\".\"id\", \"public\".\"SpecVersion\".\"version\", \"public\".\"SpecVersion\".\"featureId\" FROM \"public\".\"SpecVersion\" LEFT JOIN \"public\".\"Feature\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"SpecVersion\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"teamId\") LEFT JOIN \"public\".\"Project\" AS \"j2\" ON (\"j2\".\"id\") = (\"j1\".\"projectId\") WHERE (1=0 AND (\"j2\".\"id\" = ? AND \"j2\".\"organizationId\" = ? AND (\"j2\".\"id\" IS NOT NULL) AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL))) OFFSET ?",
+          "count": 120,
+          "totalMs": 260
+        },
+        {
+          "sql": "SELECT \"public\".\"Decision\".\"id\", \"public\".\"Decision\".\"requestId\" FROM \"public\".\"Decision\" LEFT JOIN \"public\".\"DecisionRequest\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"Decision\".\"requestId\") LEFT JOIN \"public\".\"Feature\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j2\" ON (\"j2\".\"id\") = (\"j1\".\"teamId\") LEFT JOIN \"public\".\"Project\" AS \"j3\" ON (\"j3\".\"id\") = (\"j2\".\"projectId\") WHERE (\"public\".\"Decision\".\"id\" IN (?...) AND (\"j3\".\"id\" = ? AND \"j3\".\"organizationId\" = ? AND (\"j3\".\"id\" IS NOT NULL) AND (\"j2\".\"id\" IS NOT NULL) AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL))) OFFSET ?",
+          "count": 60,
+          "totalMs": 220.6
+        },
+        {
+          "sql": "SELECT \"public\".\"Attachment\".\"id\", \"public\".\"Attachment\".\"title\" FROM \"public\".\"Attachment\" LEFT JOIN \"public\".\"Feature\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"Attachment\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"teamId\") LEFT JOIN \"public\".\"Project\" AS \"j2\" ON (\"j2\".\"id\") = (\"j1\".\"projectId\") LEFT JOIN \"public\".\"Project\" AS \"j3\" ON (\"j3\".\"id\") = (\"public\".\"Attachment\".\"projectId\") WHERE (\"public\".\"Attachment\".\"id\" IN (?...) AND ((\"j2\".\"id\" = ? AND \"j2\".\"organizationId\" = ? AND (\"j2\".\"id\" IS NOT NULL) AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL)) OR (\"j3\".\"id\" = ? AND \"j3\".\"organizationId\" = ? AND (\"j3\".\"id\" IS NOT NULL)))) OFFSET ?",
+          "count": 60,
+          "totalMs": 152.9
+        },
+        {
+          "sql": "WITH scoped AS MATERIALIZED ( SELECT \"id\", \"embedding\"::vector(256) <=> ?::vector(256) AS \"distance\" FROM \"ContentChunk\" WHERE \"organizationId\" = ? AND \"projectId\" = ? AND \"featureId\" = ? AND \"source\" IN (?::\"ChunkSource\") AND \"embeddingModel\" = ? AND \"embeddingDims\" = 256 LIMIT ? ), nearest AS ( SELECT \"id\", \"distance\" FROM scoped ORDER BY \"distance\" LIMIT ? ) SELECT c.\"id\", c.\"source\", c.\"sourceId\", c.\"featureId\", c.\"position\", c.\"text\", c.\"tokenCount\", n.\"distance\", (SELECT count(*) FROM scoped) AS \"scoped\" FROM nearest n JOIN \"ContentChunk\" c ON c.\"id\" = n.\"id\" ORDER BY n.\"distance\", c.\"id\"",
+          "count": 60,
+          "totalMs": 151.5
+        }
+      ],
+      "queryBudget": 27,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "GET /projects/:id/decision-stats",
+      "description": "Decision Lead Time of the seeded Project, default range (12 weeks)",
+      "iterations": 60,
+      "ms": {
+        "p50": 38.9,
+        "p95": 54.1,
+        "mean": 40,
+        "min": 31.6,
+        "max": 56.3
+      },
+      "queries": {
+        "p50": 12,
+        "max": 12
+      },
+      "dbMs": {
+        "p50": 17.8,
+        "p95": 30.9
+      },
+      "mostRepeated": {
+        "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+        "count": 3,
+        "totalMs": 1.7
+      },
+      "topStatements": [
+        {
+          "sql": "SELECT d.id, d.kind::text AS kind, d.\"deciderRole\"::text AS role, d.status::text AS status, d.\"submittedAt\", d.\"closedAt\", dn.\"createdAt\" AS \"decidedAt\", ARRAY(SELECT r.\"userId\" FROM \"RequestRecipient\" r WHERE r.\"requestId\" = d.id) AS recipients, (SELECT coalesce(json_agg(json_build_object( 'kind', m.kind, 'at', floor(extract(epoch FROM m.\"createdAt\") * 1000))), '[]') FROM \"RequestMessage\" m WHERE m.\"requestId\" = d.id) AS messages, (SELECT coalesce(json_agg(json_build_object( 'people', h.people, 'at', floor(extract(epoch FROM h.\"createdAt\") * 1000))), '[]') FROM \"RequestHistoryEntry\" h WHERE h.\"requestId\" = d.id AND h.kind = 'DELEGATES_ADDED') AS \"delegatesAdded\", (SELECT coalesce(json_agg(json_build_object( 'userId', c.\"deciderId\", 'at', floor(extract(epoch FROM c.\"createdAt\") * 1000)) ORDER BY c.\"createdAt\"), '[]') FROM \"DeciderChange\" c WHERE c.\"requestId\" = d.id) AS \"deciderChanges\" FROM \"DecisionRequest\" d JOIN \"Feature\" f ON f.id = d.\"featureId\" JOIN \"Team\" t ON t.id = f.\"teamId\" LEFT JOIN \"Decision\" dn ON dn.\"requestId\" = d.id WHERE t.\"projectId\" = ? AND d.\"submittedAt\" < (?::timestamptz AT TIME ZONE 'UTC') AND (d.status IN ('OPEN', 'NEEDS_INFO') OR (d.status = 'WITHDRAWN' AND d.\"closedAt\" >= (?::timestamptz AT TIME ZONE 'UTC')) OR dn.\"createdAt\" >= (?::timestamptz AT TIME ZONE 'UTC'))",
+          "count": 60,
+          "totalMs": 630.2
+        },
+        {
+          "sql": "SELECT \"public\".\"User\".\"id\", \"public\".\"User\".\"name\" FROM \"public\".\"User\" WHERE \"public\".\"User\".\"id\" IN (?...) OFFSET ?",
+          "count": 180,
+          "totalMs": 151.7
+        },
+        {
+          "sql": "SELECT \"public\".\"DecisionRequest\".\"id\", \"public\".\"DecisionRequest\".\"title\", \"public\".\"DecisionRequest\".\"kind\"::text, \"public\".\"DecisionRequest\".\"featureId\", \"public\".\"DecisionRequest\".\"deciderRole\"::text, \"public\".\"DecisionRequest\".\"dueAt\", \"public\".\"DecisionRequest\".\"pausedAt\", \"public\".\"DecisionRequest\".\"escalationStep\", \"public\".\"DecisionRequest\".\"deciderId\" FROM \"public\".\"DecisionRequest\" LEFT JOIN \"public\".\"Feature\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"DecisionRequest\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"teamId\") WHERE ((\"j1\".\"projectId\" = ? AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL)) AND \"public\".\"DecisionRequest\".\"status\" = CAST(?::text AS \"public\".\"DecisionRequestStatus\") AND \"public\".\"DecisionRequest\".\"dueAt\" <= ?) ORDER BY \"public\".\"DecisionRequest\".\"dueAt\" ASC, \"public\".\"DecisionRequest\".\"id\" ASC OFFSET ?",
+          "count": 60,
+          "totalMs": 104.2
+        },
+        {
+          "sql": "SELECT \"public\".\"RequestRecipient\".\"id\", \"public\".\"RequestRecipient\".\"userId\", \"public\".\"RequestRecipient\".\"requestId\" FROM \"public\".\"RequestRecipient\" LEFT JOIN \"public\".\"User\" AS \"orderby_1\" ON (\"orderby_1\".\"id\") = (\"public\".\"RequestRecipient\".\"userId\") WHERE \"public\".\"RequestRecipient\".\"requestId\" IN (?...) ORDER BY \"orderby_1\".\"name\" ASC OFFSET ?",
+          "count": 60,
+          "totalMs": 93.7
+        },
+        {
+          "sql": "SELECT \"public\".\"Feature\".\"id\", \"public\".\"Feature\".\"title\" FROM \"public\".\"Feature\" WHERE \"public\".\"Feature\".\"id\" IN (?...) OFFSET ?",
+          "count": 60,
+          "totalMs": 58.6
+        }
+      ],
+      "queryBudget": 12,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "Escalation job (every open request)",
+      "description": "EscalationJob.run() over every OPEN Decision Request due at \"now\", from the same state each run (reset before), plus the chat card dispatch it queues",
+      "iterations": 12,
+      "ms": {
+        "p50": 282.2,
+        "p95": 403.8,
+        "mean": 291.8,
+        "min": 243.6,
+        "max": 403.8
+      },
+      "queries": {
+        "p50": 72,
+        "max": 72
+      },
+      "dbMs": {
+        "p50": 207.2,
+        "p95": 334.1
+      },
+      "mostRepeated": {
+        "sql": "INSERT INTO \"Notification\" (\"id\", \"userId\", \"type\", \"featureId\", \"requestId\", \"specVersionId\", \"delegationId\", \"createdAt\") SELECT n.id, n.\"userId\", n.type::\"NotificationType\", n.\"featureId\", n.\"requestId\", n.\"specVersionId\", n.\"delegationId\", ?::timestamptz AT TIME ZONE 'UTC' FROM unnest( ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[] ) AS n(id, \"userId\", type, \"featureId\", \"requestId\", \"specVersionId\", \"delegationId\")",
+        "count": 6,
+        "totalMs": 87.3
+      },
+      "topStatements": [
+        {
+          "sql": "INSERT INTO \"Notification\" (\"id\", \"userId\", \"type\", \"featureId\", \"requestId\", \"specVersionId\", \"delegationId\", \"createdAt\") SELECT n.id, n.\"userId\", n.type::\"NotificationType\", n.\"featureId\", n.\"requestId\", n.\"specVersionId\", n.\"delegationId\", ?::timestamptz AT TIME ZONE 'UTC' FROM unnest( ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[], ?::text[] ) AS n(id, \"userId\", type, \"featureId\", \"requestId\", \"specVersionId\", \"delegationId\")",
+          "count": 72,
+          "totalMs": 1018.4
+        },
+        {
+          "sql": "INSERT INTO \"RequestHistoryEntry\" (\"id\", \"requestId\", \"kind\", \"people\", \"createdAt\") SELECT h.id, h.\"requestId\", h.kind::\"RequestHistoryKind\", h.people::jsonb, ?::timestamptz AT TIME ZONE 'UTC' FROM unnest( ?::text[], ?::text[], ?::text[], ?::text[] ) AS h(id, \"requestId\", kind, people)",
+          "count": 72,
+          "totalMs": 430.9
+        },
+        {
+          "sql": "SELECT d.id, d.\"featureId\", d.\"raiserId\", d.\"deciderId\", d.\"deciderRole\"::text AS \"deciderRole\", d.\"dueAt\", d.\"responseWindowMinutes\", d.\"escalationStep\", f.\"teamId\", p.\"organizationId\", ARRAY(SELECT r.\"userId\" FROM \"RequestRecipient\" r WHERE r.\"requestId\" = d.id) AS recipients FROM \"DecisionRequest\" d JOIN \"Feature\" f ON f.id = d.\"featureId\" JOIN \"Team\" t ON t.id = f.\"teamId\" JOIN \"Project\" p ON p.id = t.\"projectId\" WHERE d.id = ANY(?::text[])",
+          "count": 72,
+          "totalMs": 255.5
+        },
+        {
+          "sql": "COMMIT",
+          "count": 72,
+          "totalMs": 198
+        },
+        {
+          "sql": "SELECT id FROM \"DecisionRequest\" WHERE id = ANY(?::text[]) AND status = 'OPEN' ORDER BY id FOR UPDATE SKIP LOCKED",
+          "count": 72,
+          "totalMs": 180.3
+        }
+      ],
+      "queryBudget": 87,
+      "overBudget": false,
+      "nPlusOne": false
+    },
+    {
+      "name": "Chat turn (fake AI)",
+      "description": "POST /conversations/:id/messages in a Feature Conversation, with FakeAiPort; its Receipt is written after the reply and not counted",
+      "iterations": 60,
+      "ms": {
+        "p50": 40.5,
+        "p95": 55.6,
+        "mean": 41.9,
+        "min": 33.9,
+        "max": 62.3
+      },
+      "queries": {
+        "p50": 79,
+        "max": 79
+      },
+      "dbMs": {
+        "p50": 55,
+        "p95": 69.4
+      },
+      "mostRepeated": {
+        "sql": "COMMIT",
+        "count": 3,
+        "totalMs": 2
+      },
+      "topStatements": [
+        {
+          "sql": "WITH scoped AS MATERIALIZED ( SELECT \"id\", \"embedding\"::vector(256) <=> ?::vector(256) AS \"distance\" FROM \"ContentChunk\" WHERE \"organizationId\" = ? AND \"projectId\" = ? AND \"featureId\" IS DISTINCT FROM ?::text AND (\"source\" <> 'ATTACHMENT' OR \"featureId\" IS NULL) AND \"embeddingModel\" = ? AND \"embeddingDims\" = 256 LIMIT ? ), nearest AS ( SELECT \"id\", \"distance\" FROM scoped ORDER BY \"distance\" LIMIT ? ) SELECT c.\"id\", c.\"source\", c.\"sourceId\", c.\"featureId\", c.\"position\", c.\"text\", c.\"tokenCount\", n.\"distance\", (SELECT count(*) FROM scoped) AS \"scoped\" FROM nearest n JOIN \"ContentChunk\" c ON c.\"id\" = n.\"id\" ORDER BY n.\"distance\", c.\"id\"",
+          "count": 60,
+          "totalMs": 270.9
+        },
+        {
+          "sql": "SELECT \"public\".\"BriefVersion\".\"id\", \"public\".\"BriefVersion\".\"version\" FROM \"public\".\"BriefVersion\" LEFT JOIN \"public\".\"Project\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"BriefVersion\".\"projectId\") WHERE (1=0 AND (\"j0\".\"id\" = ? AND \"j0\".\"organizationId\" = ? AND (\"j0\".\"id\" IS NOT NULL))) OFFSET ?",
+          "count": 120,
+          "totalMs": 180
+        },
+        {
+          "sql": "SELECT \"public\".\"Decision\".\"id\", \"public\".\"Decision\".\"requestId\" FROM \"public\".\"Decision\" LEFT JOIN \"public\".\"DecisionRequest\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"Decision\".\"requestId\") LEFT JOIN \"public\".\"Feature\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j2\" ON (\"j2\".\"id\") = (\"j1\".\"teamId\") LEFT JOIN \"public\".\"Project\" AS \"j3\" ON (\"j3\".\"id\") = (\"j2\".\"projectId\") WHERE (\"public\".\"Decision\".\"id\" IN (?...) AND (\"j3\".\"id\" = ? AND \"j3\".\"organizationId\" = ? AND (\"j3\".\"id\" IS NOT NULL) AND (\"j2\".\"id\" IS NOT NULL) AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL))) OFFSET ?",
+          "count": 60,
+          "totalMs": 153.4
+        },
+        {
+          "sql": "WITH scoped AS MATERIALIZED ( SELECT \"id\", \"embedding\"::vector(256) <=> ?::vector(256) AS \"distance\" FROM \"ContentChunk\" WHERE \"organizationId\" = ? AND \"projectId\" = ? AND \"featureId\" = ? AND \"source\" IN (?::\"ChunkSource\") AND \"embeddingModel\" = ? AND \"embeddingDims\" = 256 LIMIT ? ), nearest AS ( SELECT \"id\", \"distance\" FROM scoped ORDER BY \"distance\" LIMIT ? ) SELECT c.\"id\", c.\"source\", c.\"sourceId\", c.\"featureId\", c.\"position\", c.\"text\", c.\"tokenCount\", n.\"distance\", (SELECT count(*) FROM scoped) AS \"scoped\" FROM nearest n JOIN \"ContentChunk\" c ON c.\"id\" = n.\"id\" ORDER BY n.\"distance\", c.\"id\"",
+          "count": 60,
+          "totalMs": 123.1
+        },
+        {
+          "sql": "SELECT \"public\".\"SpecVersion\".\"id\", \"public\".\"SpecVersion\".\"version\", \"public\".\"SpecVersion\".\"featureId\" FROM \"public\".\"SpecVersion\" LEFT JOIN \"public\".\"Feature\" AS \"j0\" ON (\"j0\".\"id\") = (\"public\".\"SpecVersion\".\"featureId\") LEFT JOIN \"public\".\"Team\" AS \"j1\" ON (\"j1\".\"id\") = (\"j0\".\"teamId\") LEFT JOIN \"public\".\"Project\" AS \"j2\" ON (\"j2\".\"id\") = (\"j1\".\"projectId\") WHERE (\"public\".\"SpecVersion\".\"id\" IN (?...) AND (\"j2\".\"id\" = ? AND \"j2\".\"organizationId\" = ? AND (\"j2\".\"id\" IS NOT NULL) AND (\"j1\".\"id\" IS NOT NULL) AND (\"j0\".\"id\" IS NOT NULL))) OFFSET ?",
+          "count": 60,
+          "totalMs": 119.6
+        }
+      ],
+      "queryBudget": 81,
+      "overBudget": false,
+      "nPlusOne": false
+    }
+  ],
+  "pgStatStatements": null
+}

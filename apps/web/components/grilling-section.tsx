@@ -13,8 +13,10 @@ import {
   skipGrillingRound,
   startGrilling,
 } from '@/lib/project-actions';
+import { sectionPointers } from '@/lib/redrafts';
 import { ActionButton, ActionForm } from './action-form';
 import { relativeTime } from './bits';
+import { loadRedrafts, RedraftsSection } from './redrafts-section';
 import { ReviewProposal } from './review-proposal';
 import { SpecDiff } from './spec-diff';
 import { field, primaryButton, ROLE_LABEL, ROUND_LABEL } from './ui';
@@ -283,7 +285,7 @@ function CurrentRound({
   );
 }
 
-function BriefProposalReview({
+async function BriefProposalReview({
   projectId,
   proposal,
   meId,
@@ -292,6 +294,8 @@ function BriefProposalReview({
   proposal: BriefProposalView;
   meId: string | null;
 }) {
+  const redrafts = await loadRedrafts('BRIEF_PROPOSAL', proposal.id);
+  const current = redrafts?.current ?? 1;
   return (
     <section
       id="brief-proposal"
@@ -310,11 +314,19 @@ function BriefProposalReview({
       <div className="mt-4">
         <SpecDiff before={proposal.baseMarkdown} after={proposal.proposedMarkdown} />
       </div>
+      <div className="mt-4">
+        <RedraftsSection
+          kind="BRIEF_PROPOSAL"
+          id={proposal.id}
+          redrafts={redrafts}
+          pointers={sectionPointers(proposal.proposedMarkdown)}
+        />
+      </div>
       {meId === proposal.approver.id ? (
         <ReviewProposal
-          approveAction={approveBriefProposal.bind(null, projectId, proposal.id)}
+          approveAction={approveBriefProposal.bind(null, projectId, proposal.id, current)}
           rejectAction={rejectBriefProposal.bind(null, projectId, proposal.id)}
-          approveLabel="Approve Brief change"
+          approveLabel={current > 1 ? `Approve Redraft ${current}` : 'Approve Brief change'}
           note="Rejecting leaves the Project Brief as it is."
         />
       ) : (

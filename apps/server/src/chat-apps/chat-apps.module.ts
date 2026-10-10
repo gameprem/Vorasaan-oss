@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DecisionRequestsModule } from '../decision-requests/decision-requests.module.ts';
 import { InboxModule } from '../inbox/inbox.module.ts';
+import { RedraftsModule } from '../redrafts/redrafts.module.ts';
 import { OpenIdKeySource, TEAMS_KEY_SOURCE } from './adapters/teams-keys.ts';
 import { ChatAccountsService } from './chat-accounts.service.ts';
 import { ChatActionsService } from './chat-actions.service.ts';
@@ -21,7 +22,7 @@ import { ChatEventsService } from './chat-events.service.ts';
  * (ticket 0058).
  */
 @Module({
-  imports: [InboxModule, DecisionRequestsModule],
+  imports: [InboxModule, DecisionRequestsModule, RedraftsModule],
   controllers: [ChatAppSettingsController, MyChatAppsController, ChatEventsController],
   providers: [
     { provide: TEAMS_KEY_SOURCE, useFactory: () => new OpenIdKeySource() },

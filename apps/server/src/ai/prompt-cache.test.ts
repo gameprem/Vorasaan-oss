@@ -2,15 +2,18 @@ import { describe, expect, spyOn, test } from 'bun:test';
 import { Logger } from '@nestjs/common';
 import type { ContextBlock, GuidelineForAi, RequestForAi } from './ai.port.ts';
 import {
-  anthropicSystem,
-  anthropicUserMessage,
+  ANTHROPIC_CACHE_MARK,
   CACHE_BREAK,
   cacheBreakpoints,
+  cacheMarkOf,
   cacheUsageOf,
   isAnthropicModel,
   logCacheUsage,
   MAX_CACHE_BREAKPOINTS,
   MIN_CACHE_PREFIX_TOKENS,
+  markedSystem,
+  markedUserMessage,
+  OPENROUTER_CACHE_MARK,
   type Prompt,
   splitPrompt,
 } from './prompt-cache.ts';
@@ -248,28 +251,50 @@ describe('every workflow orders its prompt stable to volatile', () => {
     expect(partOf(project, CHUNK)).toBe(1);
   });
 
-  test('tasks with nothing stable to cache are not cut', async () => {
-    const prompts = [
-      await summarizeAttachmentPrompt({ title: 'A', source: 'URL', text: 'T' }),
-      await grillingFollowUpPrompt({
+  test('Attachment summary, Grilling follow-up, Conversation Summary: instructions | the data (0076)', async () => {
+    const attachment = (data: string) =>
+      summarizeAttachmentPrompt({ title: data, source: 'URL', text: data });
+    const followUp = (data: string) =>
+      grillingFollowUpPrompt({
         project: { name: 'P' },
         round: 'UX',
         role: 'DESIGNER',
-        question: 'Q',
-        answer: 'A',
+        question: data,
+        answer: data,
         followUps: [],
-        remaining: 1,
-      }),
-      await summarizeConversationPrompt({
-        scope: { kind: 'PROJECT', project: { name: 'P' } },
-        summary: '',
-        messages: [{ role: 'USER', content: 'Hi' }],
-      }),
-    ];
-    for (const prompt of prompts) {
-      expectWellFormed(prompt);
-      expect(prompt.parts).toHaveLength(1);
+        remaining: data.length,
+      });
+    const fold = (data: string) =>
+      summarizeConversationPrompt({
+        scope: { kind: 'PROJECT', project: { name: data } },
+        summary: data,
+        messages: [{ role: 'USER', content: data }],
+      });
+    for (const render of [attachment, followUp, fold]) {
+      // The same task with other data: the stable prefix holds none of it, so it is the same.
+      const one = await render('DATA-ONE');
+      const two = await render('DATA-TWO-LONGER');
+      expectWellFormed(one);
+      expect(one.parts).toHaveLength(2);
+      expect(partOf(one, '## Rules')).toBe(0);
+      expect(partOf(one, '## Language')).toBe(0);
+      expect(partOf(one, 'DATA-ONE')).toBe(1);
+      expect(one.parts[0]).toBe(two.parts[0] ?? '');
     }
+  });
+
+  test('chat: the stable prefix is the same in every Conversation of a Project (0076)', async () => {
+    const of = (title: string) =>
+      chatPrompt({
+        scope: { kind: 'FEATURE', project: { name: 'P' }, feature: { title, description: '' } },
+        context: [featureSpecBlock, chunk],
+        foundation,
+        summary: '',
+      });
+    const [one, two] = [await of('FEATURE-ONE'), await of('FEATURE-TWO')];
+    expect(one.parts[0]).toBe(two.parts[0] ?? '');
+    expect(partOf(one, 'FEATURE-ONE')).toBe(1);
+    expectOrder(one, [BRIEF, GUIDELINE, 'FEATURE-ONE', SPEC, CHUNK]);
   });
 });
 
@@ -305,13 +330,13 @@ describe('cache breaks', () => {
 
   test('Anthropic messages carry the mark on stable parts only', () => {
     const prompt = splitPrompt(`${long('stable')}${CACHE_BREAK}volatile`);
-    const message = anthropicUserMessage(prompt);
+    const message = markedUserMessage(prompt, ANTHROPIC_CACHE_MARK);
     expect(message.content.map((p) => p.text).join('')).toBe(prompt.text);
     expect(message.content[0]?.providerOptions).toEqual({
       anthropic: { cacheControl: { type: 'ephemeral' } },
     });
     expect(message.content[1]?.providerOptions).toBeUndefined();
-    const system = anthropicSystem(prompt);
+    const system = markedSystem(prompt, ANTHROPIC_CACHE_MARK);
     expect(system.map((s) => s.content).join('')).toBe(prompt.text);
     expect(system[0]?.providerOptions).toBeDefined();
     expect(system[1]?.providerOptions).toBeUndefined();
@@ -330,6 +355,35 @@ describe('cache breaks', () => {
         apiKey: 'k',
       }),
     ).toBe(false);
+  });
+
+  test('the cache mark of a model: Anthropic, Anthropic via OpenRouter, else none (ticket 0064)', () => {
+    expect(cacheMarkOf('anthropic/some-model')).toBe(ANTHROPIC_CACHE_MARK);
+    expect(cacheMarkOf({ id: 'anthropic/some-model', apiKey: 'k' })).toBe(ANTHROPIC_CACHE_MARK);
+    expect(cacheMarkOf({ id: 'openrouter/anthropic/example-model', apiKey: 'k' })).toBe(
+      OPENROUTER_CACHE_MARK,
+    );
+    expect(cacheMarkOf('openrouter/anthropic/example-model')).toBe(OPENROUTER_CACHE_MARK);
+    expect(OPENROUTER_CACHE_MARK).toEqual({
+      openrouter: { cacheControl: { type: 'ephemeral' } },
+    });
+    expect(cacheMarkOf({ id: 'openrouter/example/model', apiKey: 'k' })).toBeNull();
+    expect(cacheMarkOf({ id: 'openrouter/openai/example-model', apiKey: 'k' })).toBeNull();
+    expect(cacheMarkOf('openai/some-model')).toBeNull();
+    expect(
+      cacheMarkOf({ providerId: 'custom', modelId: 'anthropic/x', url: 'http://x', apiKey: 'k' }),
+    ).toBeNull();
+  });
+
+  test('OpenRouter messages carry its mark on stable parts only', () => {
+    const prompt = splitPrompt(`${long('stable')}${CACHE_BREAK}volatile`);
+    const message = markedUserMessage(prompt, OPENROUTER_CACHE_MARK);
+    expect(message.content.map((p) => p.providerOptions)).toEqual([
+      OPENROUTER_CACHE_MARK,
+      undefined,
+    ]);
+    const system = markedSystem(prompt, OPENROUTER_CACHE_MARK);
+    expect(system.map((s) => s.providerOptions)).toEqual([OPENROUTER_CACHE_MARK, undefined]);
   });
 });
 

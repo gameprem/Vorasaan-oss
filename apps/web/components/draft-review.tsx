@@ -14,6 +14,8 @@ import {
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { type RequestActionState, submitDraft } from '@/lib/request-actions';
 import { field, primaryButton, ROLE_LABEL, secondaryButton } from './ui';
+import { Radio, RadioGroup } from './ui/radio-group';
+import { Select } from './ui/select';
 
 const MIN_CHOICES = 2;
 const MAX_CHOICES = 4;
@@ -126,21 +128,16 @@ export function DraftReview({
             : 'Pick the Team Role that should decide.'}
         </p>
 
-        <label className="mt-4 block max-w-xs">
-          <span className="text-sm">Decider role</span>
-          <select
-            value={role}
-            onChange={(e) => changeRole(e.target.value as TeamRole)}
-            className={field}
-          >
-            {TeamRole.options.map((r) => (
-              <option key={r} value={r}>
-                {ROLE_LABEL[r]}
-                {r === request.suggestedRole ? ' (suggested)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label="Decider role"
+          className="mt-4 max-w-xs"
+          options={TeamRole.options.map((r) => ({
+            id: r,
+            label: `${ROLE_LABEL[r]}${r === request.suggestedRole ? ' (suggested)' : ''}`,
+          }))}
+          value={role}
+          onChange={(r) => changeRole(r as TeamRole)}
+        />
 
         {noCandidates ? (
           <p role="alert" className="mt-4 text-lacquer">
@@ -153,35 +150,24 @@ export function DraftReview({
             {ROLE_LABEL[role]} for this Feature.
           </p>
         ) : (
-          <fieldset className="mt-4">
-            <legend className="text-sm">Send to</legend>
+          <RadioGroup
+            label="Send to"
+            className="mt-4"
+            name="recipient"
+            value={recipient}
+            onChange={setRecipient}
+          >
             <div className="mt-2 space-y-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="recipient"
-                  value={ALL}
-                  checked={recipient === ALL}
-                  onChange={() => setRecipient(ALL)}
-                  className="accent-jade"
-                />
+              <Radio value={ALL}>
                 All {candidates.length} {ROLE_LABEL[role]}s. The first to Claim it decides.
-              </label>
+              </Radio>
               {candidates.map((p) => (
-                <label key={p.id} className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="recipient"
-                    value={p.id}
-                    checked={recipient === p.id}
-                    onChange={() => setRecipient(p.id)}
-                    className="accent-jade"
-                  />
+                <Radio key={p.id} value={p.id}>
                   Only {p.name}
-                </label>
+                </Radio>
               ))}
             </div>
-          </fieldset>
+          </RadioGroup>
         )}
       </section>
 
@@ -209,22 +195,18 @@ export function DraftReview({
                 className={field}
               />
             </label>
-            <label className="block flex-1">
-              <span className="text-sm">Unit</span>
-              <select
-                value={responseWindow.unit}
-                onChange={(e) =>
-                  setResponseWindow({
-                    ...responseWindow,
-                    unit: e.target.value as ResponseWindowUnit,
-                  })
-                }
-                className={field}
-              >
-                <option value="WORKING_HOURS">working hours</option>
-                <option value="WORKING_DAYS">working days</option>
-              </select>
-            </label>
+            <Select
+              label="Unit"
+              className="flex-1"
+              options={[
+                { id: 'WORKING_HOURS', label: 'working hours' },
+                { id: 'WORKING_DAYS', label: 'working days' },
+              ]}
+              value={responseWindow.unit}
+              onChange={(unit) =>
+                setResponseWindow({ ...responseWindow, unit: unit as ResponseWindowUnit })
+              }
+            />
           </div>
         </section>
       )}

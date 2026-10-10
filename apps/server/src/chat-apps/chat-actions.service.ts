@@ -11,16 +11,17 @@ import type { ChatCard, PrismaClient, User } from '@vorasaan/db';
 import {
   type ChatLanguage,
   type ChatProvider,
-  DEFAULT_CHAT_LANGUAGE,
   DecideInput,
   PostRequestMessageInput,
+  RequestChangesInput,
 } from '@vorasaan/shared';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import { DecisionRequestsService } from '../decision-requests/decision-requests.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { type ProposalRef, RedraftsService } from '../redrafts/redrafts.service.ts';
 import type { ActionToken, CardAction } from './action-token.ts';
 import type { CardInput, ChatMessage, ChatUser } from './adapters/adapter.ts';
-import { type CardContext, outcomeCard, proposalUrl } from './cards.ts';
+import { type CardContext, outcomeCard, proposalUrl, requestUrl } from './cards.ts';
 import { ChatAccountsService } from './chat-accounts.service.ts';
 import {
   ChatCardsService,
@@ -69,6 +70,7 @@ export class ChatActionsService {
     private readonly accounts: ChatAccountsService,
     private readonly cards: ChatCardsService,
     private readonly requests: DecisionRequestsService,
+    private readonly redrafts: RedraftsService,
   ) {}
 
   /** The reply prompt waiting for this chat account's next message, taken once. */
@@ -85,7 +87,7 @@ export class ChatActionsService {
     const account = await this.accounts.accountFor(press.organizationId, provider, press.user.id);
     const lang: ChatLanguage = account
       ? await this.accounts.languageOf(account.userId)
-      : DEFAULT_CHAT_LANGUAGE;
+      : await this.accounts.organizationLanguage(press.organizationId);
     const t = chatText(lang);
     const say = (text: string) => this.reply(press, { text });
 
@@ -103,6 +105,14 @@ export class ChatActionsService {
 
     const prefs = await this.accounts.deliveryPreferences(user);
     const ctx: CardContext = { lang, timeZone: prefs.timeZone, now: this.clock.now() };
+    // A Spec Proposal card's only button: Request changes on the proposal (0065).
+    if (card.event === 'SPEC_PROPOSAL') {
+      if (token.action.kind !== 'redraft' || !card.specProposalId) return say(t.invalidButton);
+      return this.redraft(press, card, user, ctx, {
+        kind: 'SPEC_PROPOSAL',
+        id: card.specProposalId,
+      });
+    }
     const request = await this.cards.loadRequest(card.requestId);
     if (!request) return say(t.invalidButton);
 
@@ -111,6 +121,9 @@ export class ChatActionsService {
     if (changed) return this.finish(press, card, request, ctx, changed);
 
     const { action } = token;
+    if (action.kind === 'redraft') {
+      return this.redraft(press, card, user, ctx, { kind: 'CHOICES', id: request.id });
+    }
     if (action.kind !== 'choice' && press.text === null) {
       return this.askForText(press, card, action, request, ctx);
     }
@@ -139,6 +152,67 @@ export class ChatActionsService {
     }
   }
 
+  /**
+   * Request changes pressed (ADR 0013, ticket 0065), on a decision card (the Choices) or a
+   * Spec Proposal card: first the text input, as Ask for more info does; then, with the
+   * feedback, the same RedraftsService as the web, as the linked person, so who may
+   * redraft and when is the web's. The reply links to the Redraft in Vorasaan.
+   */
+  private async redraft(
+    press: Press,
+    card: ChatCard,
+    user: User,
+    ctx: CardContext,
+    ref: ProposalRef,
+  ) {
+    const t = chatText(ctx.lang);
+    if (press.text === null) {
+      return this.openText(press, card, { kind: 'redraft' }, ctx, {
+        label: t.redraft,
+        title: t.redraftTitle,
+        inputLabel: ref.kind === 'CHOICES' ? t.redraftChoicesLabel : t.redraftProposalLabel,
+        placeholder: t.redraftPlaceholder,
+        prompt: t.promptRedraft,
+      });
+    }
+    const input = RequestChangesInput.safeParse({ feedback: press.text });
+    if (!input.success) return this.reply(press, { text: t.emptyText });
+    let started: Awaited<ReturnType<RedraftsService['start']>>;
+    try {
+      started = await this.redrafts.start(user, ref, input.data);
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        return this.reply(press, { text: t.redraftNotAllowed });
+      }
+      if (error instanceof ConflictException || error instanceof UnprocessableEntityException) {
+        return this.reply(press, { text: t.redraftRefused });
+      }
+      if (error instanceof NotFoundException) return this.reply(press, { text: t.invalidButton });
+      this.logger.error(`A ${press.provider} Request changes failed`, (error as Error)?.name);
+      return this.reply(press, { text: t.failed });
+    }
+    await this.reply(press, { text: t.redraftStarted(started.number) });
+    try {
+      await started.done;
+    } catch {
+      return this.reply(press, { text: t.redraftFailed });
+    }
+    let url = requestUrl(ref.id);
+    if (ref.kind === 'SPEC_PROPOSAL') {
+      const proposal = await this.db.specProposal.findUnique({
+        where: { id: ref.id },
+        select: { featureId: true },
+      });
+      if (proposal) url = proposalUrl(proposal.featureId, ref.id, started.number);
+    }
+    await this.reply(press, { text: t.redraftReady(started.number, url) });
+    // LINE can't edit the card it sent: the new Choices come as a new card instead.
+    if (ref.kind === 'CHOICES' && !card.messageRef) {
+      const message = await this.cards.build(card, { ...ctx, now: this.clock.now() });
+      if (message) await this.reply(press, message);
+    }
+  }
+
   /** "Ask for more info" or "Write your own answer" pressed: open the text input. */
   private async askForText(
     press: Press,
@@ -148,17 +222,35 @@ export class ChatActionsService {
     ctx: CardContext,
   ) {
     const t = chatText(ctx.lang);
+    const ask = action.kind === 'ask';
+    return this.openText(press, card, action, ctx, {
+      label: ask ? t.ask : t.own,
+      title: ask ? t.askTitle : t.ownTitle,
+      inputLabel: ask ? t.askLabel(request.raiser.name) : t.ownLabel,
+      placeholder: ask ? t.askPlaceholder : t.ownPlaceholder,
+      prompt: ask ? t.promptAsk(request.raiser.name) : t.promptOwn,
+    });
+  }
+
+  /** The text input behind a button: Slack's modal, or LINE's next message. */
+  private async openText(
+    press: Press,
+    card: ChatCard,
+    action: CardAction,
+    ctx: CardContext,
+    text: { label: string; title: string; inputLabel: string; placeholder: string; prompt: string },
+  ) {
+    const t = chatText(ctx.lang);
     const tokens = this.cards.actionTokens();
     if (press.openInput) {
       // Slack: a modal, whose submission comes back with the same signed token.
-      const ask = action.kind === 'ask';
       try {
         await press.openInput({
-          label: ask ? t.ask : t.own,
+          label: text.label,
           token: tokens.sign(card.id, action),
-          title: ask ? t.askTitle : t.ownTitle,
-          inputLabel: ask ? t.askLabel(request.raiser.name) : t.ownLabel,
-          placeholder: ask ? t.askPlaceholder : t.ownPlaceholder,
+          title: text.title,
+          inputLabel: text.inputLabel,
+          placeholder: text.placeholder,
           submit: t.send,
           cancel: t.cancel,
         });
@@ -177,9 +269,7 @@ export class ChatActionsService {
       for (const [key, p] of this.prompts)
         if (p.expiresAt <= ctx.now.getTime()) this.prompts.delete(key);
     }
-    await this.reply(press, {
-      text: action.kind === 'ask' ? t.promptAsk(request.raiser.name) : t.promptOwn,
-    });
+    await this.reply(press, { text: text.prompt });
   }
 
   /** What changed since the card went out, as a reply; null when the person can act. */

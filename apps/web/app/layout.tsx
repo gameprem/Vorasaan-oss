@@ -4,9 +4,11 @@ import { cookies } from 'next/headers';
 import type { ReactNode } from 'react';
 import { LiveUpdates } from '@/components/live-updates';
 import { Shell, SIDEBAR_COOKIE } from '@/components/shell';
+import { UiProvider } from '@/components/ui/provider';
 import { UserSwitcher } from '@/components/user-switcher';
 import { api, currentUser, DEV_USER_COOKIE, type DevUser, devAuth } from '@/lib/api';
 import { logout } from '@/lib/auth-actions';
+import { requestLanguage } from '@/lib/lang';
 import { loadSidebar } from '@/lib/sidebar';
 import './globals.css';
 import './chat.css';
@@ -43,38 +45,40 @@ export default async function RootLayout({
   return (
     <html lang="en" className={`${figtree.variable} ${anuphan.variable} ${jetbrainsMono.variable}`}>
       <body className="min-h-dvh">
-        {me ? (
-          <Shell
-            me={me}
-            data={await loadSidebar()}
-            initiallyCollapsed={jar.get(SIDEBAR_COOKIE)?.value === 'collapsed'}
-            footer={
-              <>
-                {switcher && <div className="dev-only px-3.5 pt-1">{switcher}</div>}
-                {!devUserId && (
-                  <form action={logout} className="collapsible px-3.5">
-                    <button
-                      type="submit"
-                      className="text-sm text-fg-soft hover:text-fg hover:underline"
-                    >
-                      Sign out
-                    </button>
-                  </form>
-                )}
-                <LiveUpdates />
-              </>
-            }
-          >
-            {children}
-          </Shell>
-        ) : (
-          // Signing in, setting up or accepting an invitation: no Sidebar yet.
-          <>
-            {switcher && <header className="flex justify-end px-4 py-3">{switcher}</header>}
-            <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">{children}</main>
-          </>
-        )}
-        {modal}
+        <UiProvider lang={await requestLanguage()}>
+          {me ? (
+            <Shell
+              me={me}
+              data={await loadSidebar()}
+              initiallyCollapsed={jar.get(SIDEBAR_COOKIE)?.value === 'collapsed'}
+              footer={
+                <>
+                  {switcher && <div className="dev-only px-3.5 pt-1">{switcher}</div>}
+                  {!devUserId && (
+                    <form action={logout} className="collapsible px-3.5">
+                      <button
+                        type="submit"
+                        className="text-sm text-fg-soft hover:text-fg hover:underline"
+                      >
+                        Sign out
+                      </button>
+                    </form>
+                  )}
+                  <LiveUpdates />
+                </>
+              }
+            >
+              {children}
+            </Shell>
+          ) : (
+            // Signing in, setting up or accepting an invitation: no Sidebar yet.
+            <>
+              {switcher && <header className="flex justify-end px-4 py-3">{switcher}</header>}
+              <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">{children}</main>
+            </>
+          )}
+          {modal}
+        </UiProvider>
       </body>
     </html>
   );

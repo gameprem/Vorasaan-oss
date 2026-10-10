@@ -7,10 +7,15 @@ import {
   GuidelineCriterionKind,
   GuidelineFitVerdict,
   MAX_GRILLING_QUESTIONS,
+  type ProposalKind,
+  type ReceiptOutcomeKind,
+  type ReceiptOutputKind,
   SuggestionLevel,
   TeamRole,
 } from '@vorasaan/shared';
+import type { SkillName } from '@vorasaan/skills';
 import { z } from 'zod';
+import type { ReplyLanguage } from './language.ts';
 import type { ResolvedProvider } from './model-config.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
 
@@ -81,6 +86,13 @@ export type ContextBlock = {
 };
 
 export type FeatureForAi = { title: string; description: string };
+
+/**
+ * A Platform of the Project (ADR 0009) as AI input: its name, which is its Spec section's
+ * `##` heading, and the Team Roles who can answer for it. Names are written by people:
+ * untrusted, fenced like any data.
+ */
+export type PlatformForAi = { name: string; roles: TeamRole[] };
 
 export const AttachmentSummary = z.object({
   summary: z.string().trim().min(1),
@@ -203,6 +215,13 @@ export type ConversationScopeForAi =
   | { kind: 'PROJECT'; project: ProjectForAi }
   | { kind: 'FEATURE'; project: ProjectForAi; feature: FeatureForAi };
 
+/**
+ * An Agent Skill (ADR 0017, ticket 0078) enabled in the Project and approved, as the prompt
+ * lists it: only its name and description (progressive disclosure). Both come from a
+ * third-party SKILL.md: untrusted, fenced as data.
+ */
+export type AgentSkillForAi = { name: string; description: string };
+
 /** A tool the AI called, as stored on its message. `args` came from the AI: untrusted. */
 export type ChatToolCall = { id: string; name: string; args: unknown };
 
@@ -223,8 +242,21 @@ export type ChatMessageForAi =
  */
 export type ChatTool = { name: string; description: string; inputSchema: z.ZodType };
 
-/** What a chat reply streams: pieces of its text, and the tools it calls. */
-export type ChatChunk = { type: 'text'; delta: string } | { type: 'tool-call'; call: ChatToolCall };
+/**
+ * One step's token usage, as the provider reported it (tickets 0061, 0066): the
+ * input, and the part of it read from the provider's prompt cache. Either is null
+ * when the provider doesn't say.
+ */
+export type ChatUsage = { inputTokens: number | null; cacheReadTokens: number | null };
+
+/**
+ * What a chat reply streams: pieces of its text, the tools it calls, and, last,
+ * the step's usage when the provider reports it.
+ */
+export type ChatChunk =
+  | { type: 'text'; delta: string }
+  | { type: 'tool-call'; call: ChatToolCall }
+  | { type: 'usage'; usage: ChatUsage };
 
 const SummaryItems = z.array(z.string().trim().min(1).max(1_000)).max(60);
 
@@ -248,6 +280,121 @@ export const ConversationSummaryDraft = z.object({
   keyFacts: SummaryItems,
 });
 export type ConversationSummaryDraft = z.infer<typeof ConversationSummaryDraft>;
+
+/**
+ * A fold (ticket 0066): the Conversation Summary, and the agreed points the Spec or
+ * the Brief it was given doesn't record yet (none when it was given neither).
+ */
+export const ConversationFoldDraft = ConversationSummaryDraft.extend({
+  /** Agreed points not yet in the Spec or the Brief given, each as it should be recorded. */
+  unrecorded: SummaryItems,
+});
+export type ConversationFoldDraft = z.infer<typeof ConversationFoldDraft>;
+
+/** The Spec (Feature) or the Project Brief (Project) a fold checks agreed points against. */
+export type RecordForAi = { kind: 'SPEC' | 'BRIEF'; markdown: string };
+
+// ─── Request changes (ADR 0013, ticket 0065) ────────────────────────────────
+
+/**
+ * One Request changes as AI input: the person's words and the part of the proposal they
+ * pointed at (rendered with its text, e.g. "Choice B: Poll every 5 s"), if any. Both are
+ * untrusted: prompts fence them as data that may only change the proposal.
+ */
+export type FeedbackForAi = { redraft: number; feedback: string; pointer: string | null };
+
+const RedraftNotes = {
+  /** What this Redraft changed from the one before. */
+  summary: z.string().trim().min(1).max(1_000),
+  /** Lasting preferences the feedback states (language, length, style); none for a content change. */
+  preferences: z.array(z.string().trim().min(1).max(300)).max(10),
+};
+
+export const RedraftedChoices = z.object({ choices: ChoiceDrafts, ...RedraftNotes });
+export type RedraftedChoices = z.infer<typeof RedraftedChoices>;
+
+export const RedraftedMarkdown = z.object({
+  proposedMarkdown: z.string().trim().min(1),
+  ...RedraftNotes,
+});
+export type RedraftedMarkdown = z.infer<typeof RedraftedMarkdown>;
+
+export const RedraftedSuggestion = z.object({
+  title: z.string().trim().min(1).max(200),
+  rationale: z.string().trim().min(1).max(4_000),
+  businessValue: z.string().trim().min(1).max(2_000),
+  effort: SuggestionLevel,
+  risk: SuggestionLevel,
+  ...RedraftNotes,
+});
+export type RedraftedSuggestion = z.infer<typeof RedraftedSuggestion>;
+
+/** What every redraft takes besides the proposal: the latest feedback and the earlier ones. */
+export type RedraftFeedbackForAi = {
+  /** The number of the Redraft being changed (the current one). */
+  current: number;
+  feedback: FeedbackForAi;
+  /** Feedback on earlier Redrafts of the same proposal, oldest first. */
+  earlier: FeedbackForAi[];
+};
+
+// ─── The AI proposes Prompt Versions (ADR 0015, ticket 0072) ────────────────
+
+/** A prompt as the Learning Loop's AI calls see it: its packages/skills name and the tasks that render it. */
+export type PromptForAi = { name: SkillName; tasks: string[] };
+
+/**
+ * One human outcome of a proposal the prompt drafted (ticket 0070), as AI input. `text` is a
+ * person's own words (a decline reason, Request changes feedback): untrusted.
+ */
+export type FeedbackCaseForAi = {
+  /** 1-based: the AI cites a case by it. */
+  index: number;
+  outcome: ReceiptOutcomeKind;
+  proposal: ProposalKind;
+  /** The Redraft it was given on. */
+  redraft: number;
+  text: string | null;
+  redraftsBeforeApproval: number | null;
+  choiceLabel: string | null;
+  /** MANUAL_EDIT: lines added plus removed. */
+  editSize: number | null;
+};
+
+/** The most patterns one analysis names. */
+export const MAX_FEEDBACK_PATTERNS = 8;
+
+export const FeedbackAnalysis = z.object({
+  patterns: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(300),
+        description: z.string().trim().min(1).max(2_000),
+        /** The `index` of each case that shows it. */
+        cases: z.array(z.int().min(1)).max(1_000),
+      }),
+    )
+    .max(MAX_FEEDBACK_PATTERNS),
+});
+export type FeedbackAnalysis = z.infer<typeof FeedbackAnalysis>;
+
+/** A pattern as the proposal is given it: the cases' own words are untrusted. */
+export type PatternForAi = {
+  title: string;
+  description: string;
+  count: number;
+  /** A few of its cases' words, as written. */
+  examples: string[];
+};
+
+export const ProposedPromptVersion = z.object({
+  template: z.string().trim().min(1).max(100_000),
+  rationale: z.string().trim().min(1).max(4_000),
+});
+export type ProposedPromptVersion = z.infer<typeof ProposedPromptVersion>;
+
+export const RedraftedPromptVersion = ProposedPromptVersion.extend(RedraftNotes);
+export type RedraftedPromptVersion = z.infer<typeof RedraftedPromptVersion>;
 
 /** An Action Card of the Conversation, as the summary is told about it. Its title is untrusted. */
 export type ActionCardForAi = { kind: string; title: string; status: string };
@@ -283,8 +430,83 @@ export type ModelChoice = {
  *   reaches the provider adapter (or the fake). A caller that chose it already
  *   (`AiSettingsService.chooseModel`) passes it, and it is kept as is: a
  *   Conversation's turn chooses once, so all its steps run on one model (0054).
+ * - `language`: the reply language (ticket 0068, `personLanguage` or
+ *   `projectLanguage`); left out, English.
  */
-export type AiCallOptions = { approvedModelId?: string; model?: ModelChoice };
+export type AiCallOptions = {
+  approvedModelId?: string;
+  model?: ModelChoice;
+  language?: ReplyLanguage;
+  /**
+   * The version of the task's prompt (ticket 0071), filled in by `ModelRoutingAiPort`:
+   * the Organization's active Prompt Version, or the built-in default. An eval run
+   * passes the version it evaluates, and it is kept as is.
+   */
+  prompt?: PromptChoice;
+  /** What the call's Receipt links to (ticket 0070): who asked, what it produces. */
+  receipt?: ReceiptLink;
+  /**
+   * Told each provider call's usage (filled in by `ReceiptingAiPort`): a structured call
+   * retried after an invalid answer reports twice, and the Receipt sums them.
+   */
+  onUsage?: (usage: CallUsage) => void;
+};
+
+/**
+ * The version of a prompt one AI call renders (ADR 0015, ticket 0071): the built-in
+ * default (`template` null) or an Organization's Prompt Version.
+ */
+export type PromptChoice = {
+  /** The packages/skills name. */
+  name: SkillName;
+  /** As Receipts name it: `default@<hash>` or `v<n>@<hash>`. */
+  version: string;
+  /** The Prompt Version's number; 0 for the default. */
+  number: number;
+  /** The Prompt Version's template as written; null renders the built-in default. */
+  template: string | null;
+};
+
+/** One provider call's tokens, as reported (tickets 0061, 0070); null when it doesn't say. */
+export type CallUsage = {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+};
+
+/**
+ * What a call's Receipt (ADR 0015, ticket 0070) points at, by id: the person whose action
+ * made the call, what it produces (the Choices of a request, a Redraft, a reply...), and
+ * the proposal it drafts or redrafts with the Redraft's number. Ids may be chosen before
+ * the row is written; a Receipt never holds a copy of the output.
+ */
+export type ReceiptLink = {
+  requestedById?: string | null;
+  output?: { kind: ReceiptOutputKind; id: string } | null;
+  proposal?: { kind: ProposalKind; id: string; redraft: number } | null;
+  /** The eval run (ticket 0071) the call is made for: a replay never picks its Receipt. */
+  evalRunId?: string | null;
+  /**
+   * The Project the call works for (ticket 0075), or its Feature, whose Project the Receipt
+   * then looks up in the background. Neither: Organization-wide work.
+   */
+  projectId?: string | null;
+  featureId?: string | null;
+  /**
+   * The Agent Skills whose text the call reads (ticket 0078): those loaded with `loadSkill`
+   * or `readSkillFile` earlier in its Conversation turn.
+   */
+  agentSkills?: ReceiptAgentSkillLink[];
+};
+
+/** An Agent Skill a call read, as its Receipt records it (by version, and pinned commit or hash). */
+export type ReceiptAgentSkillLink = {
+  skillId: string;
+  versionId: string;
+  name: string;
+  pinned: string;
+};
 
 // Every method takes an optional last `options?: AiCallOptions`.
 export interface AiPort {
@@ -307,6 +529,17 @@ export interface AiPort {
       recentMessages: ChatMessageForAi[];
       /** The tools offered on this step; none on the last step of a turn. */
       tools: ChatTool[];
+      /**
+       * In a Feature Conversation, its target Platforms the latest Spec has no section for
+       * (Coverage, ticket 0052): the AI may offer to add one as a Spec Proposal Action Card.
+       * None when left out.
+       */
+      missingSections?: PlatformForAi[];
+      /**
+       * The Agent Skills enabled in the Project and approved (ticket 0078): names and
+       * descriptions only; the AI reads one with the `loadSkill` tool. None when left out.
+       */
+      agentSkills?: AgentSkillForAi[];
       signal?: AbortSignal;
     },
     options?: AiCallOptions,
@@ -324,9 +557,13 @@ export interface AiPort {
       messages: ChatMessageForAi[];
       /** The Conversation's Action Cards and their state, for "pending Action Cards". */
       actionCards: ActionCardForAi[];
+      /** What the person asked the summary to keep (`/compact <focus>`, ticket 0066). Untrusted. */
+      focus?: string | null;
+      /** Check agreed points against this Spec or Brief (`unrecorded`); left out, none are checked. */
+      record?: RecordForAi | null;
     },
     options?: AiCallOptions,
-  ): Promise<ConversationSummaryDraft>;
+  ): Promise<ConversationFoldDraft>;
 
   /**
    * How many tokens `system` and `messages` cost on the call's model (ticket
@@ -358,6 +595,11 @@ export interface AiPort {
       decision: DecisionForAi;
       context: ContextBlock[];
       foundation?: ProjectFoundationForAi;
+      /**
+       * Target Platforms the Spec has no section for (Coverage, ticket 0051): the draft fills
+       * each section or puts an open question in it. None when left out.
+       */
+      missingSections?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ): Promise<SpecProposalDraft>;
@@ -373,6 +615,8 @@ export interface AiPort {
       feature: FeatureForAi;
       specMarkdown: string;
       context: ContextBlock[];
+      /** Target Platforms the Spec has no section for (ticket 0051); none when left out. */
+      missingSections?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ): Promise<SpecProposalDraft>;
@@ -391,6 +635,8 @@ export interface AiPort {
       guidelines: GuidelineForAi[];
       /** Summaries of the rounds already done. */
       memory: WorkflowMemory;
+      /** The Project's Platforms no Feature covers (ticket 0051), to ask about; none when left out. */
+      uncoveredPlatforms?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ): Promise<GrillingQuestionDrafts>;
@@ -464,6 +710,120 @@ export interface AiPort {
     },
     options?: AiCallOptions,
   ): Promise<SpecProposalDraft>;
+
+  /**
+   * The complete next Spec with acceptance criteria for one target Platform that isn't QA
+   * ready (Coverage, ticket 0051), drafted from the Spec and the Feature's Decisions in the
+   * context, as a Spec Proposal a person approves.
+   */
+  draftAcceptanceCriteria(
+    input: {
+      feature: FeatureForAi;
+      platform: PlatformForAi;
+      /** The whole latest Spec: the base the draft edits. */
+      specMarkdown: string;
+      /** Retrieved Feature context (its Decisions and requests first), without its Spec. */
+      context: ContextBlock[];
+    },
+    options?: AiCallOptions,
+  ): Promise<SpecProposalDraft>;
+
+  /** A Redraft of a Decision Request's Choices from a person's feedback (ticket 0065). */
+  redraftChoices(
+    input: RedraftFeedbackForAi & {
+      specMarkdown: string;
+      request: RequestForAi;
+      /** The current Choices. */
+      choices: ChoiceDraft[];
+      context: ContextBlock[];
+      foundation?: ProjectFoundationForAi;
+    },
+    options?: AiCallOptions,
+  ): Promise<RedraftedChoices>;
+
+  /** A Redraft of a Spec Proposal: the complete proposed Spec, changed as the feedback asks. */
+  redraftSpecProposal(
+    input: RedraftFeedbackForAi & {
+      feature: FeatureForAi;
+      /** The Spec the proposal changes (empty before v1). */
+      specMarkdown: string;
+      /** The current Redraft's proposed Spec. */
+      proposedMarkdown: string;
+      context: ContextBlock[];
+      foundation?: ProjectFoundationForAi;
+    },
+    options?: AiCallOptions,
+  ): Promise<RedraftedMarkdown>;
+
+  /** A Redraft of a Brief Proposal: the complete proposed Brief, changed as the feedback asks. */
+  redraftBriefProposal(
+    input: RedraftFeedbackForAi & {
+      project: ProjectForAi;
+      /** The Brief the proposal changes (the template before v1). */
+      briefMarkdown: string;
+      proposedMarkdown: string;
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<RedraftedMarkdown>;
+
+  /** A Redraft of a Feature Suggestion, changed as the feedback asks. */
+  redraftFeatureSuggestion(
+    input: RedraftFeedbackForAi & {
+      project: ProjectForAi;
+      suggestion: SuggestionForAi;
+      /** Retrieved Project context, the current Brief first. */
+      projectContext: ContextBlock[];
+      guidelines: GuidelineForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<RedraftedSuggestion>;
+
+  /**
+   * The patterns in a prompt's feedback (ticket 0072): what people repeatedly wanted
+   * different from what it proposed, each citing the cases that show it.
+   */
+  analyzeFeedback(
+    input: {
+      prompt: PromptForAi;
+      /** The prompt's active version, as written. */
+      template: string;
+      /** How many calls of it the outcomes come from, as a line for the prompt. */
+      calls: number;
+      /** Oldest first. */
+      cases: FeedbackCaseForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<FeedbackAnalysis>;
+
+  /** A new Prompt Version of a prompt that addresses the patterns, with its rationale. */
+  proposePromptVersion(
+    input: {
+      prompt: PromptForAi;
+      /** The active version, as written: the proposal starts from it. */
+      template: string;
+      /** The `{{placeholders}}` it must keep. */
+      placeholders: string[];
+      patterns: PatternForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<ProposedPromptVersion>;
+
+  /** A Redraft of a proposed Prompt Version from an Admin's feedback (tickets 0065, 0072). */
+  redraftPromptVersion(
+    input: RedraftFeedbackForAi & {
+      prompt: PromptForAi;
+      /** The current Redraft's template and rationale. */
+      template: string;
+      rationale: string;
+      /** The version active now, as written. */
+      active: string;
+      placeholders: string[];
+      patterns: PatternForAi[];
+    },
+    options?: AiCallOptions,
+  ): Promise<RedraftedPromptVersion>;
 
   /** How a Feature about to be created meets each effective Guideline (each with its `ref`). */
   checkFeatureFit(

@@ -18,6 +18,7 @@ import {
   type CreateRepoScanInput,
 } from '@vorasaan/shared';
 import { AI_PORT, type AiPort } from '../ai/ai.port.ts';
+import { personLanguage } from '../ai/language.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
@@ -103,9 +104,9 @@ export class AttachmentsService {
     );
 
     const attachmentTitle = clip(title ?? file.originalname);
-    const summary = await this.summarize(attachmentTitle, 'FILE', text);
-
     const id = randomUUID();
+    const summary = await this.summarize(user, owner, id, attachmentTitle, 'FILE', text);
+
     const storageKey =
       'featureId' in owner
         ? `attachments/${owner.featureId}/${id}`
@@ -154,9 +155,19 @@ export class AttachmentsService {
     });
     const url = snapshot.url ?? ref;
     const attachmentTitle = clip(input.title ?? snapshot.title ?? url);
-    const summary = await this.summarize(attachmentTitle, input.source, snapshot.text);
+    // Chosen now, so the summary's Receipt can point at the Attachment (ticket 0070).
+    const id = randomUUID();
+    const summary = await this.summarize(
+      user,
+      owner,
+      id,
+      attachmentTitle,
+      input.source,
+      snapshot.text,
+    );
     const created = await this.db.attachment.create({
       data: {
+        id,
         ...owner,
         source: input.source,
         title: attachmentTitle,
@@ -190,7 +201,8 @@ export class AttachmentsService {
     const title = clip(
       `Repo Scan: ${input.repoName}${input.commitSha ? ` @ ${input.commitSha.slice(0, 7)}` : ''}`,
     );
-    const summary = await this.summarize(title, 'REPO_SCAN', text);
+    const id = randomUUID();
+    const summary = await this.summarize(user, { projectId }, id, title, 'REPO_SCAN', text);
     const { created, replaced } = await this.db.$transaction(async (tx) => {
       const previous = await tx.attachment.findMany({
         where: { projectId, source: 'REPO_SCAN' },
@@ -199,6 +211,7 @@ export class AttachmentsService {
       await tx.attachment.deleteMany({ where: { id: { in: previous.map((a) => a.id) } } });
       const created = await tx.attachment.create({
         data: {
+          id,
           projectId,
           source: 'REPO_SCAN',
           title,
@@ -228,7 +241,14 @@ export class AttachmentsService {
     }
     const snapshot = await this.capture(attachment.source, attachment);
     // A summary of the old Snapshot would be stale: replace it, or clear it on failure.
-    const summary = await this.summarize(attachment.title, attachment.source, snapshot.text);
+    const summary = await this.summarize(
+      user,
+      ownerOf(attachment),
+      id,
+      attachment.title,
+      attachment.source,
+      snapshot.text,
+    );
     const updated = await this.db.attachment.update({
       where: { id },
       data: {
@@ -279,15 +299,28 @@ export class AttachmentsService {
    * fails: a missing summary never stops an Attachment from being saved.
    */
   private async summarize(
+    user: Pick<User, 'id'>,
+    owner: AttachmentOwner,
+    attachmentId: string,
     title: string,
     source: AttachmentSource,
     text: string | null,
   ): Promise<string | null> {
     if (!text?.trim()) return null;
     try {
-      const { summary } = await this.ai.summarizeAttachment({
-        attachment: { title, source, text: clipForAi(text, ATTACHMENT_CONTEXT_BUDGET.summary) },
-      });
+      const { summary } = await this.ai.summarizeAttachment(
+        {
+          attachment: { title, source, text: clipForAi(text, ATTACHMENT_CONTEXT_BUDGET.summary) },
+        },
+        {
+          language: await personLanguage(this.db, user.id),
+          receipt: {
+            requestedById: user.id,
+            output: { kind: 'ATTACHMENT', id: attachmentId },
+            ...owner,
+          },
+        },
+      );
       return summary;
     } catch (error) {
       this.logger.warn(`Could not summarize Attachment "${title}": ${(error as Error).message}`);

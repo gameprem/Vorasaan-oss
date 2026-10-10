@@ -25,6 +25,7 @@ import {
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort, type ContextBlock } from '../ai/ai.port.ts';
 import { ContextBudgets, projectBudget } from '../ai/context-budget.ts';
+import { personLanguage } from '../ai/language.ts';
 import { clipForAi } from '../attachments/attachment-context.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
 import {
@@ -33,6 +34,9 @@ import {
 } from '../feature-guidelines/project-foundation.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { ReceiptsService } from '../receipts/receipts.service.ts';
+import { assertNotRedrafting, currentRedraft } from '../redrafts/redraft-guard.ts';
+import { withoutShown } from '../retrieval/context-dedupe.ts';
 import { ContextRetriever } from '../retrieval/context-retriever.ts';
 import { decisionText } from '../retrieval/source-text.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
@@ -74,6 +78,7 @@ export class FeatureSuggestionsService {
     private readonly foundation: ProjectFoundation,
     private readonly notifications: NotificationsService,
     private readonly budgets: ContextBudgets,
+    private readonly receipts: ReceiptsService,
   ) {}
 
   /** The Project's POs and Admins ask for up to `count` (default 5, at most 10) new suggestions. */
@@ -95,6 +100,7 @@ export class FeatureSuggestionsService {
         projectId,
         `${project.name}\n${SUGGEST_QUERY}`,
         projectBudget(budget),
+        { k: budget.topK },
       ),
       this.decisionLog(projectId),
       this.db.featureSuggestion.findMany({
@@ -114,18 +120,33 @@ export class FeatureSuggestionsService {
       }));
     const pending = earlier.filter((s) => s.status === 'PENDING').map((s) => s.title);
 
+    const language = await personLanguage(this.db, user.id);
+    // Chosen now, so the call's Receipt can point at the batch it writes (ticket 0070).
+    const batchId = randomUUID();
     const drafted = await this.callAi(() =>
       this.ai.suggestFeatures(
         {
           project: { name: project.name },
           count,
-          projectContext,
+          // The Decision Log has its own section: retrieval doesn't repeat it (ticket 0076).
+          projectContext: withoutShown(
+            projectContext,
+            decisions.map((d) => d.text),
+          ),
           guidelines: guidelines.map(({ criterion: _, ...g }) => g),
           decisions,
           dismissed,
           pending,
         },
-        { model },
+        {
+          model,
+          language,
+          receipt: {
+            requestedById: user.id,
+            output: { kind: 'FEATURE_SUGGESTION_BATCH', id: batchId },
+            projectId,
+          },
+        },
       ),
     );
 
@@ -143,7 +164,6 @@ export class FeatureSuggestionsService {
       })
       .slice(0, count);
 
-    const batchId = randomUUID();
     const ids = fresh.map(() => randomUUID());
     const now = Date.now();
     await this.db.$transaction(async (tx) => {
@@ -223,6 +243,8 @@ export class FeatureSuggestionsService {
       throw new ForbiddenException("Only an Admin or this Team's PO can accept it");
     }
     if (suggestion.status !== 'PENDING') throw alreadyDecided(suggestion.status);
+    // A Redraft being written is about to change it: accepting waits for it (0065).
+    await assertNotRedrafting(this.db, 'FEATURE_SUGGESTION', id);
 
     const project = await this.db.project.findUniqueOrThrow({
       where: { id: suggestion.projectId },
@@ -238,8 +260,11 @@ export class FeatureSuggestionsService {
         suggestion.projectId,
         `${suggestion.title}\n\n${suggestion.rationale}\n\n${suggestion.businessValue}`,
         projectBudget(budget),
+        { k: budget.topK },
       ),
     ]);
+    const language = await personLanguage(this.db, user.id);
+    const proposalId = randomUUID();
     const draft = await this.callAi(() =>
       this.ai.draftSpecFromSuggestion(
         {
@@ -254,9 +279,19 @@ export class FeatureSuggestionsService {
           projectContext,
           guidelines: guidelines.map(({ ref: _, criterion: __, ...g }) => g),
         },
-        { model },
+        {
+          model,
+          language,
+          receipt: {
+            requestedById: user.id,
+            output: { kind: 'SPEC_PROPOSAL', id: proposalId },
+            proposal: { kind: 'SPEC_PROPOSAL', id: proposalId, redraft: 1 },
+            projectId: suggestion.projectId,
+          },
+        },
       ),
     );
+    const redraft = await currentRedraft(this.db, 'FEATURE_SUGGESTION', id);
 
     const { feature, proposal } = await this.db.$transaction(async (tx) => {
       // Waits for a concurrent accept or dismiss, then finds it no longer PENDING.
@@ -278,6 +313,7 @@ export class FeatureSuggestionsService {
       await tx.featureSuggestion.update({ where: { id }, data: { featureId: feature.id } });
       const proposal = await tx.specProposal.create({
         data: {
+          id: proposalId,
           featureId: feature.id,
           baseVersionId: null,
           source: 'AI_SUMMARY',
@@ -290,6 +326,12 @@ export class FeatureSuggestionsService {
     });
     // The Spec Proposal waits in the accepter's Inbox.
     await this.notifications.publish(this.notifications.outbox().inboxChanged(user.id));
+    this.receipts.outcome({
+      kind: 'APPROVE',
+      proposal: { kind: 'FEATURE_SUGGESTION', id },
+      actorId: user.id,
+      redraft,
+    });
     return {
       suggestion: toFeatureSuggestionView(await this.findOrThrow(id)),
       feature,
@@ -305,6 +347,7 @@ export class FeatureSuggestionsService {
   ): Promise<FeatureSuggestionView> {
     const suggestion = await this.findOrThrow(id);
     await assertCanEditProject(this.db, user, suggestion.projectId);
+    const redraft = await currentRedraft(this.db, 'FEATURE_SUGGESTION', id);
     const decided = await this.db.featureSuggestion.updateMany({
       where: { id, status: 'PENDING' },
       data: {
@@ -315,6 +358,13 @@ export class FeatureSuggestionsService {
       },
     });
     if (decided.count !== 1) throw alreadyDecided(suggestion.status);
+    this.receipts.outcome({
+      kind: 'DECLINE',
+      proposal: { kind: 'FEATURE_SUGGESTION', id },
+      actorId: user.id,
+      redraft,
+      reason: input.reason,
+    });
     return toFeatureSuggestionView(await this.findOrThrow(id));
   }
 
@@ -337,7 +387,9 @@ export class FeatureSuggestionsService {
       projectId,
       `${feature.title}\n\n${feature.description}`,
       projectBudget(budget),
+      { k: budget.topK },
     );
+    const language = await personLanguage(this.db, user.id);
     const checked = await this.callAi(() =>
       this.ai.checkFeatureFit(
         {
@@ -346,7 +398,7 @@ export class FeatureSuggestionsService {
           projectContext,
           guidelines: guidelines.map(({ criterion: _, ...g }) => g),
         },
-        { model },
+        { model, language, receipt: { requestedById: user.id, projectId } },
       ),
     );
     return { projectId, ...fitOf(guidelines, checked.results) };

@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Agent } from '@mastra/core/agent';
+import { ConsoleLogger } from '@mastra/core/logger';
 import { createTool } from '@mastra/core/tools';
 import { Logger } from '@nestjs/common';
 import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
@@ -8,6 +9,7 @@ import { estimateTokens } from '../retrieval/token-estimate.ts';
 import type { AiTask } from './ai.config.ts';
 import {
   type ActionCardForAi,
+  type AgentSkillForAi,
   type AiCallOptions,
   type AiPort,
   type AttachmentForAi,
@@ -18,13 +20,14 @@ import {
   type ChatTool,
   type ContextBlock,
   ContextTooLongError,
+  ConversationFoldDraft,
   type ConversationScopeForAi,
-  ConversationSummaryDraft,
   type DecisionForAi,
   type DismissedSuggestionForAi,
   FeatureFitDraft,
   type FeatureForAi,
   FeatureSuggestionDrafts,
+  FeedbackAnalysis,
   GeneratedChoices,
   type GrillingAnswerForAi,
   GrillingFollowUpDecision,
@@ -33,35 +36,31 @@ import {
   type GuidelineForAi,
   isContextTooLong,
   type ModelChoice,
+  type PlatformForAi,
   type ProjectForAi,
   type ProjectFoundationForAi,
+  ProposedPromptVersion,
+  type RecordForAi,
+  RedraftedChoices,
+  RedraftedMarkdown,
+  RedraftedPromptVersion,
+  RedraftedSuggestion,
   type RequestForAi,
   SpecProposalDraft,
   type SuggestionForAi,
 } from './ai.port.ts';
+import type { LanguageStrategy } from './language.ts';
 import { type MastraModel, mastraModelOf } from './model-config.ts';
 import {
-  anthropicSystem,
-  anthropicUserMessage,
-  isAnthropicModel,
+  type CacheUsage,
+  cacheMarkOf,
   logCacheUsage,
+  markedSystem,
+  markedUserMessage,
   type Prompt,
   wholePrompt,
 } from './prompt-cache.ts';
-import {
-  chatPrompt,
-  checkFeatureFitPrompt,
-  draftBriefFromGrillingPrompt,
-  draftSpecFromAttachmentsPrompt,
-  draftSpecFromSuggestionPrompt,
-  draftSpecProposalPrompt,
-  generateChoicesPrompt,
-  grillingFollowUpPrompt,
-  grillingQuestionsPrompt,
-  suggestFeaturesPrompt,
-  summarizeAttachmentPrompt,
-  summarizeConversationPrompt,
-} from './prompts.ts';
+import { chatPrompt, type PromptOptions, TASK_PROMPTS } from './prompts.ts';
 import { generateStructured, type StructuredGenerate } from './structured.ts';
 import { estimateChatTokens, messagesAsText } from './token-count.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
@@ -75,11 +74,15 @@ const INSTRUCTIONS_TOKENS = estimateTokens(INSTRUCTIONS);
 export type { AiTask };
 
 /** Logs a call's usage and cache hits (ticket 0061); a missing usage never fails the call. */
-async function logUsage(task: string, usage: PromiseLike<unknown> | unknown): Promise<void> {
+async function logUsage(
+  task: string,
+  usage: PromiseLike<unknown> | unknown,
+): Promise<CacheUsage | null> {
   try {
-    logCacheUsage(task, await usage);
+    return logCacheUsage(task, await usage);
   } catch {
-    // Usage is for the log only.
+    // Usage is for the log (and the context meter) only.
+    return null;
   }
 }
 
@@ -96,34 +99,129 @@ const useChosenModel: ModelResolver = async (task, chosen) => {
 
 type AgentModel = ConstructorParameters<typeof Agent>[0]['model'];
 
-export function agentGenerate(task: string, model: MastraModel): StructuredGenerate {
-  const agent = new Agent({
-    id: task,
-    name: task,
-    instructions: INSTRUCTIONS,
-    model: model as AgentModel,
-  });
-  const anthropic = isAnthropicModel(model);
+/** The key a Mastra model carries, if any. */
+function keyOf(model: MastraModel): string | null {
+  return typeof model === 'string' ? null : model.apiKey || null;
+}
+
+/** A value as logged, with every occurrence of the secret masked. Errors keep their fields. */
+function redact(value: unknown, secret: string): unknown {
+  if (typeof value === 'string') return value.replaceAll(secret, '…');
+  try {
+    const json = JSON.stringify(value, (_key, v) =>
+      v instanceof Error ? { ...v, name: v.name, message: v.message } : v,
+    );
+    return json === undefined ? value : JSON.parse(json.replaceAll(secret, '…'));
+  } catch {
+    // Not JSON (a cycle, a BigInt): its text, masked.
+    return String(value).replaceAll(secret, '…');
+  }
+}
+
+/**
+ * Mastra's console logger with the call's key masked (ticket 0064): Mastra logs a
+ * provider's error with its response body, and a provider may echo the key there.
+ */
+class RedactingLogger extends ConsoleLogger {
+  constructor(
+    name: string,
+    private readonly secret: string,
+  ) {
+    super({ name });
+  }
+
+  /** Mastra logs through children of the Agent's logger: they mask too. */
+  override child(): ConsoleLogger {
+    return this;
+  }
+
+  override debug(message: string, ...args: unknown[]) {
+    super.debug(this.mask(message), ...this.maskAll(args));
+  }
+
+  override info(message: string, ...args: unknown[]) {
+    super.info(this.mask(message), ...this.maskAll(args));
+  }
+
+  override warn(message: string, ...args: unknown[]) {
+    super.warn(this.mask(message), ...this.maskAll(args));
+  }
+
+  override error(message: string, ...args: unknown[]) {
+    super.error(this.mask(message), ...this.maskAll(args));
+  }
+
+  private mask(message: string): string {
+    return String(redact(message, this.secret));
+  }
+
+  private maskAll(args: unknown[]): unknown[] {
+    return args.map((a) => redact(a, this.secret));
+  }
+}
+
+/** The Agent, its own log lines never carrying the model's key. */
+function redactLogs<A extends { name: string; __setLogger(logger: ConsoleLogger): void }>(
+  agent: A,
+  model: MastraModel,
+): A {
+  const key = keyOf(model);
+  // A very short key would mask ordinary words; providers' keys are far longer.
+  if (key && key.length >= 8) agent.__setLogger(new RedactingLogger(`AGENT - ${agent.name}`, key));
+  return agent;
+}
+
+/** `onUsage` is told each call's usage (ticket 0070), for its Receipt. */
+export function agentGenerate(
+  task: string,
+  model: MastraModel,
+  onUsage?: (usage: CacheUsage) => void,
+): StructuredGenerate {
+  const agent = redactLogs(
+    new Agent({ id: task, name: task, instructions: INSTRUCTIONS, model: model as AgentModel }),
+    model,
+  );
+  const mark = cacheMarkOf(model);
   // Always stream: some OpenAI-compatible routers (e.g. 9Router) answer with SSE even
   // for non-streaming requests, which breaks a plain generate() call. Streaming works
   // with every provider, and we only need the final validated object.
   return async (input, schema) => {
     const prompt = typeof input === 'string' ? wholePrompt(input) : input;
-    // Anthropic: the prompt's stable parts carry cache_control (ticket 0061). Every
-    // other provider gets the whole text, exactly as before.
-    const message = anthropic ? [anthropicUserMessage(prompt, INSTRUCTIONS_TOKENS)] : prompt.text;
+    // Anthropic, directly or through OpenRouter: the prompt's stable parts carry
+    // cache_control (tickets 0061, 0064). Every other model gets the whole text, as before.
+    const message = mark ? [markedUserMessage(prompt, mark, INSTRUCTIONS_TOKENS)] : prompt.text;
     const stream = await agent.stream(message as Parameters<typeof agent.stream>[0], {
       structuredOutput: { schema },
     });
     const object = await stream.object;
-    await logUsage(task, stream.usage);
+    const usage = await logUsage(task, stream.usage);
+    if (usage) onUsage?.(usage);
     return object;
   };
 }
 
 // Mastra used as a library (ADR 0003): no Mastra server, no storage needed yet.
 export class MastraAiPort implements AiPort {
-  constructor(private readonly resolveModel: ModelResolver = useChosenModel) {}
+  constructor(
+    private readonly resolveModel: ModelResolver = useChosenModel,
+    /**
+     * How prompts reach the reply language (ticket 0068). The product answers
+     * directly; the eval scripts pass `english-first` to compare (`--english-first`).
+     */
+    private readonly languageStrategy: LanguageStrategy = 'direct',
+  ) {}
+
+  /**
+   * How a prompt of this call is rendered: its language rules, and the Prompt Version
+   * chosen for it (ticket 0071; none, the built-in default).
+   */
+  private lang(options: AiCallOptions | undefined): PromptOptions {
+    return {
+      language: options?.language,
+      strategy: this.languageStrategy,
+      template: options?.prompt?.template ?? null,
+    };
+  }
 
   async generateChoices(
     input: {
@@ -134,15 +232,11 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await generateChoicesPrompt(
-      input.specMarkdown,
-      input.request,
-      input.context,
-      input.foundation,
-    );
+    const prompt = await TASK_PROMPTS.generateChoices(input, this.lang(options));
     const generate = agentGenerate(
       'generate-choices',
       await this.resolveModel('generateChoices', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'generate-choices', prompt, GeneratedChoices);
   }
@@ -157,25 +251,21 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await draftSpecProposalPrompt(
-      input.specMarkdown,
-      input.request,
-      input.decision,
-      input.context,
-      input.foundation,
-    );
+    const prompt = await TASK_PROMPTS.draftSpecProposal(input, this.lang(options));
     const generate = agentGenerate(
       'draft-spec-proposal',
       await this.resolveModel('draftSpecProposal', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'draft-spec-proposal', prompt, SpecProposalDraft);
   }
 
   async summarizeAttachment(input: { attachment: AttachmentForAi }, options?: AiCallOptions) {
-    const prompt = await summarizeAttachmentPrompt(input.attachment);
+    const prompt = await TASK_PROMPTS.summarizeAttachment(input, this.lang(options));
     const generate = agentGenerate(
       'summarize-attachment',
       await this.resolveModel('summarizeAttachment', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'summarize-attachment', prompt, AttachmentSummary);
   }
@@ -188,14 +278,11 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await draftSpecFromAttachmentsPrompt(
-      input.feature,
-      input.specMarkdown,
-      input.context,
-    );
+    const prompt = await TASK_PROMPTS.draftSpecFromAttachments(input, this.lang(options));
     const generate = agentGenerate(
       'draft-spec-from-attachments',
       await this.resolveModel('draftSpecFromAttachments', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'draft-spec-from-attachments', prompt, SpecProposalDraft);
   }
@@ -211,10 +298,11 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await grillingQuestionsPrompt(input);
+    const prompt = await TASK_PROMPTS.grillingQuestions(input, this.lang(options));
     const generate = agentGenerate(
       'grilling-questions',
       await this.resolveModel('grillingQuestions', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'grilling-questions', prompt, GrillingQuestionDrafts);
   }
@@ -231,10 +319,11 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await grillingFollowUpPrompt(input);
+    const prompt = await TASK_PROMPTS.grillingFollowUp(input, this.lang(options));
     const generate = agentGenerate(
       'grilling-follow-up',
       await this.resolveModel('grillingFollowUp', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'grilling-follow-up', prompt, GrillingFollowUpDecision);
   }
@@ -250,10 +339,11 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await draftBriefFromGrillingPrompt(input);
+    const prompt = await TASK_PROMPTS.draftBriefFromGrilling(input, this.lang(options));
     const generate = agentGenerate(
       'draft-brief-from-grilling',
       await this.resolveModel('draftBriefFromGrilling', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'draft-brief-from-grilling', prompt, BriefDraft);
   }
@@ -270,10 +360,11 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await suggestFeaturesPrompt(input);
+    const prompt = await TASK_PROMPTS.suggestFeatures(input, this.lang(options));
     const generate = agentGenerate(
       'suggest-features',
       await this.resolveModel('suggestFeatures', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'suggest-features', prompt, FeatureSuggestionDrafts);
   }
@@ -287,10 +378,11 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await draftSpecFromSuggestionPrompt(input);
+    const prompt = await TASK_PROMPTS.draftSpecFromSuggestion(input, this.lang(options));
     const generate = agentGenerate(
       'draft-spec-from-suggestion',
       await this.resolveModel('draftSpecFromSuggestion', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'draft-spec-from-suggestion', prompt, SpecProposalDraft);
   }
@@ -304,12 +396,111 @@ export class MastraAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await checkFeatureFitPrompt(input);
+    const prompt = await TASK_PROMPTS.checkFeatureFit(input, this.lang(options));
     const generate = agentGenerate(
       'check-feature-fit',
       await this.resolveModel('checkFeatureFit', options?.model),
+      options?.onUsage,
     );
     return generateStructured(generate, 'check-feature-fit', prompt, FeatureFitDraft);
+  }
+
+  async draftAcceptanceCriteria(
+    input: Parameters<AiPort['draftAcceptanceCriteria']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await TASK_PROMPTS.draftAcceptanceCriteria(input, this.lang(options));
+    const generate = agentGenerate(
+      'draft-acceptance-criteria',
+      await this.resolveModel('draftAcceptanceCriteria', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'draft-acceptance-criteria', prompt, SpecProposalDraft);
+  }
+
+  async redraftChoices(input: Parameters<AiPort['redraftChoices']>[0], options?: AiCallOptions) {
+    const prompt = await TASK_PROMPTS.redraftChoices(input, this.lang(options));
+    const generate = agentGenerate(
+      'redraft-choices',
+      await this.resolveModel('redraftChoices', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'redraft-choices', prompt, RedraftedChoices);
+  }
+
+  async redraftSpecProposal(
+    input: Parameters<AiPort['redraftSpecProposal']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await TASK_PROMPTS.redraftSpecProposal(input, this.lang(options));
+    const generate = agentGenerate(
+      'redraft-spec-proposal',
+      await this.resolveModel('redraftSpecProposal', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'redraft-spec-proposal', prompt, RedraftedMarkdown);
+  }
+
+  async redraftBriefProposal(
+    input: Parameters<AiPort['redraftBriefProposal']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await TASK_PROMPTS.redraftBriefProposal(input, this.lang(options));
+    const generate = agentGenerate(
+      'redraft-brief-proposal',
+      await this.resolveModel('redraftBriefProposal', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'redraft-brief-proposal', prompt, RedraftedMarkdown);
+  }
+
+  async redraftFeatureSuggestion(
+    input: Parameters<AiPort['redraftFeatureSuggestion']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await TASK_PROMPTS.redraftFeatureSuggestion(input, this.lang(options));
+    const generate = agentGenerate(
+      'redraft-feature-suggestion',
+      await this.resolveModel('redraftFeatureSuggestion', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'redraft-feature-suggestion', prompt, RedraftedSuggestion);
+  }
+
+  async analyzeFeedback(input: Parameters<AiPort['analyzeFeedback']>[0], options?: AiCallOptions) {
+    const prompt = await TASK_PROMPTS.analyzeFeedback(input, this.lang(options));
+    const generate = agentGenerate(
+      'analyze-feedback',
+      await this.resolveModel('analyzeFeedback', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'analyze-feedback', prompt, FeedbackAnalysis);
+  }
+
+  async proposePromptVersion(
+    input: Parameters<AiPort['proposePromptVersion']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await TASK_PROMPTS.proposePromptVersion(input, this.lang(options));
+    const generate = agentGenerate(
+      'propose-prompt-version',
+      await this.resolveModel('proposePromptVersion', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'propose-prompt-version', prompt, ProposedPromptVersion);
+  }
+
+  async redraftPromptVersion(
+    input: Parameters<AiPort['redraftPromptVersion']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await TASK_PROMPTS.redraftPromptVersion(input, this.lang(options));
+    const generate = agentGenerate(
+      'redraft-prompt-version',
+      await this.resolveModel('redraftPromptVersion', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'redraft-prompt-version', prompt, RedraftedPromptVersion);
   }
 
   async *chat(
@@ -320,14 +511,23 @@ export class MastraAiPort implements AiPort {
       summary: string;
       recentMessages: ChatMessageForAi[];
       tools: ChatTool[];
+      missingSections?: PlatformForAi[];
+      agentSkills?: AgentSkillForAi[];
       signal?: AbortSignal;
     },
     options?: AiCallOptions,
   ): AsyncIterable<ChatChunk> {
-    const instructions = await chatPrompt(input);
+    const instructions = await chatPrompt(input, this.lang(options));
     const model = await this.resolveModel('chat', options?.model);
     try {
-      yield* streamChat(model, instructions, input.recentMessages, input.tools, input.signal);
+      yield* streamChat(
+        model,
+        instructions,
+        input.recentMessages,
+        input.tools,
+        input.signal,
+        options?.onUsage,
+      );
     } catch (error) {
       // A request longer than the model's window: the Conversation compacts and retries once.
       if (isContextTooLong(error)) throw new ContextTooLongError(error);
@@ -337,7 +537,8 @@ export class MastraAiPort implements AiPort {
 
   /**
    * Anthropic's counting API (`messages.countTokens`) for an Anthropic model;
-   * the script-aware estimate for every other provider, and whenever counting
+   * the script-aware estimate for every other provider (OpenRouter has no counting
+   * call, even for an Anthropic model routed through it), and whenever counting
    * fails (it must never fail a turn). The messages are counted as one text.
    */
   async countTokens(
@@ -373,15 +574,18 @@ export class MastraAiPort implements AiPort {
       summary: string;
       messages: ChatMessageForAi[];
       actionCards: ActionCardForAi[];
+      focus?: string | null;
+      record?: RecordForAi | null;
     },
     options?: AiCallOptions,
   ) {
-    const prompt = await summarizeConversationPrompt(input);
+    const prompt = await TASK_PROMPTS.summarizeConversation(input, this.lang(options));
     const generate = agentGenerate(
       'summarize-conversation',
       await this.resolveModel('summarizeConversation', options?.model),
+      options?.onUsage,
     );
-    return generateStructured(generate, 'summarize-conversation', prompt, ConversationSummaryDraft);
+    return generateStructured(generate, 'summarize-conversation', prompt, ConversationFoldDraft);
   }
 }
 
@@ -489,15 +693,21 @@ async function* streamChat(
   messages: ChatMessageForAi[],
   tools: ChatTool[],
   signal: AbortSignal | undefined,
+  onUsage?: (usage: CacheUsage) => void,
 ): AsyncIterable<ChatChunk> {
-  // Anthropic: the system prompt's stable parts carry cache_control (ticket 0061).
-  // Every other provider gets the whole text as one system prompt, as before.
-  const agent = new Agent({
-    id: 'chat',
-    name: 'chat',
-    instructions: isAnthropicModel(model) ? anthropicSystem(instructions) : instructions.text,
-    model: model as AgentModel,
-  });
+  // Anthropic, directly or through OpenRouter: the system prompt's stable parts carry
+  // cache_control (tickets 0061, 0064). Every other model gets the whole text as one
+  // system prompt, as before.
+  const mark = cacheMarkOf(model);
+  const agent = redactLogs(
+    new Agent({
+      id: 'chat',
+      name: 'chat',
+      instructions: mark ? markedSystem(instructions, mark) : instructions.text,
+      model: model as AgentModel,
+    }),
+    model,
+  );
   const output = await agent.stream(toAgentMessages(messages, tools.length > 0), {
     maxSteps: 1,
     ...(tools.length ? { clientTools: toAgentTools(tools) } : {}),
@@ -523,7 +733,15 @@ async function* streamChat(
         : new Error(`The chat stream failed: ${String(chunk.payload.error)}`);
     }
   }
-  await logUsage('chat', output.usage);
+  const usage = await logUsage('chat', output.usage);
+  if (usage) onUsage?.(usage);
+  // The context meter shows the last turn's cache reads (ticket 0066).
+  if (usage && (usage.inputTokens !== null || usage.cacheReadTokens !== null)) {
+    yield {
+      type: 'usage',
+      usage: { inputTokens: usage.inputTokens, cacheReadTokens: usage.cacheReadTokens },
+    };
+  }
 }
 
 /** The Anthropic model and key to count with, when the call runs on Anthropic. */

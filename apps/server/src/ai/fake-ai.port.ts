@@ -1,31 +1,50 @@
-import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
+import {
+  ACCEPTANCE_HEADINGS,
+  type GrillingRoundKind,
+  headingKey,
+  specHeadings,
+  type TeamRole,
+} from '@vorasaan/shared';
 import type {
   ActionCardForAi,
+  AgentSkillForAi,
   AiCallOptions,
   AiPort,
   AttachmentForAi,
+  CallUsage,
   ChatChunk,
   ChatMessageForAi,
   ChatTool,
   ContextBlock,
+  ConversationFoldDraft,
   ConversationScopeForAi,
-  ConversationSummaryDraft,
   DecisionForAi,
   DismissedSuggestionForAi,
   FeatureFitDraft,
   FeatureForAi,
   FeatureSuggestionDrafts,
+  FeedbackAnalysis,
   GrillingAnswerForAi,
   GrillingFollowUpDecision,
   GrillingFollowUpForAi,
   GuidelineForAi,
   ModelChoice,
+  PlatformForAi,
   ProjectForAi,
   ProjectFoundationForAi,
+  PromptChoice,
+  ProposedPromptVersion,
+  RecordForAi,
+  RedraftedChoices,
+  RedraftedMarkdown,
+  RedraftedPromptVersion,
+  RedraftedSuggestion,
+  RedraftFeedbackForAi,
   RequestForAi,
   SuggestionForAi,
 } from './ai.port.ts';
 import { toolTokens } from './context-budget.ts';
+import type { ReplyLanguage } from './language.ts';
 import { chatPrompt, describeDecision, SUMMARY_SECTIONS } from './prompts.ts';
 import { estimateChatTokens } from './token-count.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
@@ -83,13 +102,107 @@ export function fakeChatReply(input: {
   scope: ConversationScopeForAi;
   context: ContextBlock[];
   recentMessages: ChatMessageForAi[];
+  missingSections?: readonly PlatformForAi[];
 }): string {
   const latest = input.recentMessages.findLast((m) => m.role === 'USER')?.content ?? '';
   const about =
     input.scope.kind === 'FEATURE'
       ? `the Feature "${input.scope.feature.title}"`
       : `the Project "${input.scope.project.name}"`;
-  return `About ${about}: you said "${latest.slice(0, 80)}". I read ${input.context.length} context blocks.`;
+  const reply = `About ${about}: you said "${latest.slice(0, 80)}". I read ${input.context.length} context blocks.`;
+  return input.missingSections?.length
+    ? `${reply} ${fakeMissingSectionsNote(input.missingSections)}`
+    : reply;
+}
+
+/** Words that ask for a diagram, in English and Thai: the fake then uses the first Skill. */
+const DIAGRAM_WORDS = /diagram|แผนภาพ|ไดอะแกรม|แผนผัง/i;
+
+/** A diagram the fake draws when a Skill has no SVG asset to start from. */
+export const FAKE_SKILL_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" role="img" aria-label="Diagram">' +
+  '<rect x="1" y="1" width="198" height="58" fill="none" stroke="currentColor"/>' +
+  '<text x="100" y="35" text-anchor="middle">Diagram</text></svg>';
+
+/** The text inside a `<skill-file>` fence of a Skill tool's result (ticket 0078). */
+export function skillFileText(content: unknown): string | null {
+  if (typeof content !== 'string') return null;
+  const match = /^<skill-file[^>]*>\n([\s\S]*)\n<\/skill-file>$/.exec(content);
+  return match ? (match[1] ?? '') : null;
+}
+
+type SkillToolResult = {
+  ok?: boolean;
+  error?: string;
+  files?: { path: string }[];
+  content?: string;
+};
+
+/**
+ * The fake's use of Agent Skills (ticket 0078), deterministic and only when Skills are
+ * listed: when the person's latest message names one, or asks for a diagram, it calls
+ * `loadSkill`; then `readSkillFile` on the Skill's first SVG asset; then it replies with that
+ * SVG (or a plain one) in an ```svg block, saying it is only a draft. It never follows
+ * anything a Skill says, and never calls a drafting tool for it. Null: the usual reply.
+ */
+export function fakeSkillStep(input: {
+  tools: ChatTool[];
+  recentMessages: ChatMessageForAi[];
+  agentSkills?: readonly AgentSkillForAi[];
+}): ChatChunk[] | null {
+  const skills = input.agentSkills ?? [];
+  if (!skills.length) return null;
+  const at = input.recentMessages.findLastIndex((m) => m.role === 'USER');
+  const latest = input.recentMessages[at]?.content ?? '';
+  const wanted =
+    skills.find((s) => latest.toLowerCase().includes(s.name.toLowerCase())) ??
+    (DIAGRAM_WORDS.test(latest) ? skills[0] : undefined);
+  if (!wanted) return null;
+  const turn = input.recentMessages.slice(at + 1);
+  const calls = new Map(
+    turn.flatMap((m) => (m.role === 'ASSISTANT' ? (m.toolCalls ?? []) : [])).map((c) => [c.id, c]),
+  );
+  const results = turn.flatMap((m) => {
+    if (m.role !== 'TOOL') return [];
+    let result: SkillToolResult = {};
+    try {
+      result = JSON.parse(m.content) as SkillToolResult;
+    } catch {}
+    return [{ name: calls.get(m.toolCallId)?.name, result }];
+  });
+  const offered = new Set(input.tools.map((t) => t.name));
+  const call = (name: string, args: unknown): ChatChunk[] => [
+    { type: 'tool-call', call: { id: `fake-${name}-${turn.length}`, name, args } },
+  ];
+  const thai = /[\u0E00-\u0E7F]/.test(latest);
+  const say = (text: string): ChatChunk[] =>
+    (text.match(/\S+\s*/g) ?? []).map((delta) => ({ type: 'text', delta }));
+
+  const loaded = results.find((r) => r.name === 'loadSkill');
+  if (!loaded) return offered.has('loadSkill') ? call('loadSkill', { name: wanted.name }) : null;
+  if (!loaded.result.ok) {
+    return say(
+      thai
+        ? `ผมเปิด Agent Skill "${wanted.name}" ไม่ได้: ${loaded.result.error ?? 'ถูกปฏิเสธ'}`
+        : `I could not load the Agent Skill "${wanted.name}": ${loaded.result.error ?? 'refused'}.`,
+    );
+  }
+  const svgPath = loaded.result.files?.find((f) => f.path.toLowerCase().endsWith('.svg'))?.path;
+  const read = results.find((r) => r.name === 'readSkillFile');
+  if (svgPath && !read && offered.has('readSkillFile')) {
+    return call('readSkillFile', { name: wanted.name, path: svgPath });
+  }
+  const svg = (read?.result.ok ? skillFileText(read.result.content) : null) ?? FAKE_SKILL_SVG;
+  const lead = thai
+    ? `ผมใช้ Agent Skill "${wanted.name}" วาดแผนภาพนี้ เป็นเพียงร่างเท่านั้น จะไม่มีอะไรเปลี่ยนจนกว่าคุณจะขอให้ผมเสนอเป็น Spec Proposal แล้วอนุมัติเอง`
+    : `I used the Agent Skill "${wanted.name}" for this diagram. It is only a draft: nothing changes until you ask me to propose it for the Spec and approve that Spec Proposal.`;
+  return say(`${lead}\n\n\`\`\`svg\n${svg}\n\`\`\``);
+}
+
+/** What the fake's chat reply adds when the Spec lacks target Platforms' sections (ticket 0052). */
+export function fakeMissingSectionsNote(missing: readonly PlatformForAi[]): string {
+  const names = missing.map((p) => p.name).join(', ');
+  return `The Spec has no section for ${names} yet; I can propose adding one.`;
 }
 
 /**
@@ -104,6 +217,8 @@ export async function chatPromptTokens(input: {
   summary: string;
   recentMessages: ChatMessageForAi[];
   tools: ChatTool[];
+  missingSections?: readonly PlatformForAi[];
+  agentSkills?: readonly AgentSkillForAi[];
 }): Promise<number> {
   return (
     estimateChatTokens({ system: (await chatPrompt(input)).text, messages: input.recentMessages }) +
@@ -128,6 +243,27 @@ function summarySection(summary: string, heading: string): string[] {
     .map((l) => l.slice(2));
 }
 
+/**
+ * What the fake takes as a stated preference in feedback (ticket 0065): clauses about the
+ * language, length or tone, in English and Thai. Anything else is a change to the content.
+ */
+const PREFERENCE =
+  /\b(in (thai|english)|shorter|longer|brief(er)?|concise|more detail(ed)?|formal|casual|bullet points?)\b|ภาษาไทย|ภาษาอังกฤษ|สั้น|กระชับ|ละเอียด/i;
+
+/** The clauses of feedback that state a preference, as the fake finds them. */
+export function fakePreferences(feedback: string): string[] {
+  return feedback
+    .split(/[,.;\n]+|\band\b/)
+    .map((c) => c.trim())
+    .filter((c) => c && PREFERENCE.test(c))
+    .map((c) => c.slice(0, 300));
+}
+
+/** The line the fake's Markdown Redraft adds: the feedback's first line. */
+export function fakeRedraftLine(feedback: string): string {
+  return `- Changed as asked: ${feedback.split('\n')[0]?.trim().slice(0, 200) ?? ''}`;
+}
+
 /** The fake asks a follow-up when the latest reply has fewer words than this. */
 export const FAKE_THIN_ANSWER_WORDS = 4;
 
@@ -136,10 +272,126 @@ export function fakeFollowUp(question: string, asked: number): string {
   return `Follow-up ${asked + 1}: can you say more about "${question}"?`;
 }
 
+/**
+ * The patterns the fake finds in a prompt's feedback (ticket 0072): a case shows one when its
+ * words match, in English or Thai. A pattern needs at least two cases.
+ */
+export const FAKE_FEEDBACK_PATTERNS = [
+  {
+    match: /\b(shorter|too long|concise|brief(er)?|less text)\b|สั้น|กระชับ|ยาวเกิน/i,
+    title: 'Often asked to be shorter',
+    description: 'People ask for shorter output, in fewer words.',
+  },
+  {
+    match: /error case|error handling|edge case|failure case|ข้อผิดพลาด|กรณีผิดพลาด|กรณีล้มเหลว/i,
+    title: 'Often missing error cases',
+    description: 'People decline or ask for changes because error and edge cases are missing.',
+  },
+  {
+    match: /\bin thai\b|\bthai\b|ภาษาไทย/i,
+    title: 'Often asked for Thai',
+    description: 'People ask for the output in Thai.',
+  },
+] as const;
+
+/** The line each pattern adds to the fake's proposed Prompt Version. */
+export function fakeGuidance(title: string): string {
+  return `- Learned from feedback: ${title}.`;
+}
+
+/**
+ * The sections the fake adds for missing Platforms (ticket 0051): each with one open question
+ * for the Team Roles who answer for it, since the fake knows nothing about the Platform.
+ */
+export function fakePlatformSections(missing: readonly PlatformForAi[] | undefined): string {
+  return (missing ?? []).map((p) => `\n## ${p.name}\n\n${fakePlatformQuestion(p)}\n`).join('');
+}
+
+/** The open question the fake puts in a missing Platform section. */
+export function fakePlatformQuestion(p: PlatformForAi): string {
+  return `- Open question for ${p.roles.join(' or ') || 'the Team'}: what must ${p.name} do for this Feature?`;
+}
+
+/** The question the fake's UX round asks about Platforms no Feature covers (ticket 0051). */
+export function fakeUncoveredQuestion(platforms: readonly PlatformForAi[]): string {
+  const names = platforms.map((p) => p.name).join(', ');
+  return `No Feature covers ${names} yet: what should ${names} do in this Project?`;
+}
+
+/**
+ * The fake's acceptance criteria for a Platform (ticket 0051): the Spec's general acceptance
+ * criteria and the Decisions in the context, each restated "On <Platform>: ...", put in the
+ * Platform's "Acceptance criteria" subsection (added, with its section, when missing).
+ */
+export function fakeAcceptanceCriteria(
+  specMarkdown: string,
+  platform: string,
+  context: readonly ContextBlock[],
+): string {
+  const { lines, headings } = specHeadings(specMarkdown);
+  const general = headings.find(
+    (h) => h.level === 2 && headingKey(h.text) === 'acceptance criteria',
+  );
+  const fromSpec = general
+    ? lines
+        .slice(general.line + 1, general.end)
+        .map((l) => l.match(/^\s*[-*]\s*\[[ xX]?\]\s*(.+)$/)?.[1]?.trim())
+        .filter((t): t is string => Boolean(t))
+        .slice(0, 3)
+    : [];
+  const fromDecisions = context
+    .filter((b) => b.source.kind === 'DECISION')
+    .slice(0, 3)
+    .map((b) => `follows the Decision "${b.source.title}"`);
+  const criteria = [...fromSpec, ...fromDecisions];
+  const items = (criteria.length ? criteria : ['works as the Spec describes']).map(
+    (c) => `- [ ] On ${platform}: ${c}`,
+  );
+
+  const key = headingKey(platform);
+  const section = headings.find((h) => h.level === 2 && headingKey(h.text) === key);
+  const out = [...lines];
+  if (section) {
+    const sub = headings.find(
+      (h) =>
+        h.level === 3 &&
+        h.line > section.line &&
+        h.line < section.end &&
+        (ACCEPTANCE_HEADINGS as readonly string[]).includes(headingKey(h.text)),
+    );
+    if (sub) out.splice(sub.line + 1, 0, '', ...items);
+    else out.splice(section.end, 0, '### Acceptance criteria', '', ...items, '');
+  } else {
+    const outOfScope = headings.find((h) => h.level === 2 && headingKey(h.text) === 'out of scope');
+    const at = outOfScope?.line ?? out.length;
+    out.splice(at, 0, `## ${platform}`, '', '### Acceptance criteria', '', ...items, '');
+  }
+  return `${out
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd()}\n`;
+}
+
+/** What the fake reports as one call's usage, unless a test changes `usage`. */
+export const FAKE_USAGE: CallUsage = {
+  inputTokens: 1200,
+  outputTokens: 300,
+  cacheReadTokens: 800,
+  cacheWriteTokens: 150,
+};
+
 /** Deterministic stand-in for tests. Records calls so tests can assert on them. */
 export class FakeAiPort implements AiPort {
   /** Every call, with the model it was asked to run on (null when none was chosen). */
-  readonly calls: { method: keyof AiPort; input: unknown; model: ModelChoice | null }[] = [];
+  readonly calls: {
+    method: keyof AiPort;
+    input: unknown;
+    model: ModelChoice | null;
+    /** The reply language the call was asked for (ticket 0068); null when none was given. */
+    language: ReplyLanguage | null;
+    /** The version of the prompt it would render (ticket 0071); null when none was chosen. */
+    prompt: PromptChoice | null;
+  }[] = [];
   /** Replies the next chat calls give, in order, instead of the default one. */
   readonly chatScript: ScriptedChatReply[] = [];
   /** Every countTokens call, with what it counted (kept apart from `calls`). */
@@ -149,6 +401,34 @@ export class FakeAiPort implements AiPort {
   }[] = [];
   /** The fake's counter is the estimate times this: above 1 plays a denser tokenizer. */
   tokenScale = 1;
+  /**
+   * What each chat step reports as read from the provider's cache (ticket 0066); its
+   * input is the prompt by the fake's counter. Null reports no usage at all.
+   */
+  cacheReadTokens: number | null = 0;
+
+  /**
+   * What every call but chat reports as its usage (ticket 0070), for its Receipt; null
+   * reports none. Chat reports its prompt by the fake's counter, as for the meter.
+   */
+  usage: CallUsage | null = { ...FAKE_USAGE };
+
+  /** Errors the next calls (of any method but chat) throw, in order, after being recorded. */
+  readonly failures: Error[] = [];
+
+  /** Records a call and reports its usage; throws the next queued failure, if any. */
+  private record(method: keyof AiPort, input: unknown, options: AiCallOptions | undefined) {
+    this.calls.push({
+      method,
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+      prompt: options?.prompt ?? null,
+    });
+    const failure = this.failures.shift();
+    if (failure) throw failure;
+    if (this.usage) options?.onUsage?.({ ...this.usage });
+  }
 
   /**
    * Decisions the next grillingFollowUp calls return, in order, instead of the
@@ -177,15 +457,25 @@ export class FakeAiPort implements AiPort {
       summary: string;
       recentMessages: ChatMessageForAi[];
       tools: ChatTool[];
+      missingSections?: PlatformForAi[];
+      agentSkills?: AgentSkillForAi[];
       signal?: AbortSignal;
     },
     options?: AiCallOptions,
   ): AsyncIterable<ChatChunk> {
-    this.calls.push({ method: 'chat', input, model: options?.model ?? null });
+    // Not `record`: a chat reply's usage is reported with its last chunk, below.
+    this.calls.push({
+      method: 'chat',
+      input,
+      model: options?.model ?? null,
+      language: options?.language ?? null,
+      prompt: options?.prompt ?? null,
+    });
     const scripted = this.chatScript.shift();
     const chunks: ChatChunk[] = scripted
       ? (scripted.chunks ?? [])
-      : (fakeChatReply(input).match(/\S+\s*/g) ?? []).map((delta) => ({ type: 'text', delta }));
+      : (fakeSkillStep(input) ??
+        (fakeChatReply(input).match(/\S+\s*/g) ?? []).map((delta) => ({ type: 'text', delta })));
     for (const chunk of chunks) {
       // A real stream yields between chunks; so does the fake, so listeners see each one.
       if (scripted?.chunkDelayMs) await pause(scripted.chunkDelayMs, input.signal);
@@ -195,6 +485,16 @@ export class FakeAiPort implements AiPort {
       yield chunk;
     }
     if (scripted?.error) throw scripted.error;
+    if (this.cacheReadTokens !== null) {
+      const inputTokens = Math.ceil((await chatPromptTokens(input)) * this.tokenScale);
+      const cacheReadTokens = Math.min(inputTokens, this.cacheReadTokens);
+      const outputTokens = chunks.filter((c) => c.type === 'text').length;
+      options?.onUsage?.({ inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens: 0 });
+      yield {
+        type: 'usage',
+        usage: { inputTokens, cacheReadTokens: Math.min(inputTokens, this.cacheReadTokens) },
+      };
+    }
   }
 
   /** The script-aware estimate (ticket 0059) times `tokenScale`: deterministic. */
@@ -216,10 +516,12 @@ export class FakeAiPort implements AiPort {
       summary: string;
       messages: ChatMessageForAi[];
       actionCards: ActionCardForAi[];
+      focus?: string | null;
+      record?: RecordForAi | null;
     },
     options?: AiCallOptions,
-  ): Promise<ConversationSummaryDraft> {
-    this.calls.push({ method: 'summarizeConversation', input, model: options?.model ?? null });
+  ): Promise<ConversationFoldDraft> {
+    this.record('summarizeConversation', input, options);
     const before = (key: (typeof SUMMARY_SECTIONS)[number][0]) =>
       summarySection(input.summary, SUMMARY_SECTIONS.find(([k]) => k === key)?.[1] ?? '');
     const lines = input.messages.flatMap((m) =>
@@ -229,12 +531,26 @@ export class FakeAiPort implements AiPort {
         .filter(Boolean),
     );
     const firstUser = input.messages.find((m) => m.role === 'USER')?.content ?? '';
+    const personLines = input.messages
+      .filter((m) => m.role === 'USER')
+      .flatMap((m) => m.content.split(/\n+|(?<=[.!?])\s+/).map((l) => l.trim()))
+      .filter(Boolean);
     const unique = (items: string[]) => [...new Set(items)];
+    const agreed = unique([...before('agreed'), ...lines.filter((l) => AGREED.test(l))]).map((l) =>
+      l.slice(0, 300),
+    );
+    // The focus is kept word for word, as the person asked (ticket 0066).
+    const focus = input.focus?.trim();
+    const recorded = input.record?.markdown.toLowerCase() ?? '';
     return {
       goal: before('goal')[0] ?? firstUser.slice(0, 120),
-      agreed: unique([...before('agreed'), ...lines.filter((l) => AGREED.test(l))]).map((l) =>
-        l.slice(0, 300),
-      ),
+      agreed,
+      // The person's own agreed lines, unless the Spec or Brief holds them word for word.
+      unrecorded: input.record
+        ? unique(personLines.filter((l) => AGREED.test(l)))
+            .map((l) => l.slice(0, 300))
+            .filter((l) => !recorded.includes(l.toLowerCase().replace(/[.!]+$/, '')))
+        : [],
       openQuestions: unique([
         ...before('openQuestions'),
         ...lines.filter((l) => l.endsWith('?')).map((l) => l.slice(0, 300)),
@@ -242,7 +558,7 @@ export class FakeAiPort implements AiPort {
       pendingActionCards: input.actionCards
         .filter((c) => c.status === 'PROPOSED')
         .map((c) => `${c.kind}: ${c.title}`),
-      preferences: before('preferences'),
+      preferences: unique([...before('preferences'), ...(focus ? [`Keep: ${focus}`] : [])]),
       keyFacts: unique([
         ...before('keyFacts'),
         ...input.messages.flatMap((m) => m.content.match(KEY_FACT) ?? []),
@@ -260,7 +576,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'generateChoices', input, model: options?.model ?? null });
+    this.record('generateChoices', input, options);
     return {
       suggestedRole: 'PO' as const,
       choices: ['A', 'B', 'C'].map((label, i) => ({
@@ -281,18 +597,19 @@ export class FakeAiPort implements AiPort {
       decision: DecisionForAi;
       context: ContextBlock[];
       foundation?: ProjectFoundationForAi;
+      missingSections?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'draftSpecProposal', input, model: options?.model ?? null });
+    this.record('draftSpecProposal', input, options);
     return {
-      proposedMarkdown: `${input.specMarkdown.trimEnd()}\n\n## Decisions\n- ${input.request.title}: ${describeDecision(input.decision).split('\n')[0]}\n`,
+      proposedMarkdown: `${input.specMarkdown.trimEnd()}\n${fakePlatformSections(input.missingSections)}\n## Decisions\n- ${input.request.title}: ${describeDecision(input.decision).split('\n')[0]}\n`,
       summary: `Recorded the decision on "${input.request.title}".`,
     };
   }
 
   async summarizeAttachment(input: { attachment: AttachmentForAi }, options?: AiCallOptions) {
-    this.calls.push({ method: 'summarizeAttachment', input, model: options?.model ?? null });
+    this.record('summarizeAttachment', input, options);
     const firstLine = input.attachment.text.trim().split('\n')[0] ?? '';
     return { summary: `Summary of "${input.attachment.title}": ${firstLine.slice(0, 80)}` };
   }
@@ -302,16 +619,17 @@ export class FakeAiPort implements AiPort {
       feature: FeatureForAi;
       specMarkdown: string;
       context: ContextBlock[];
+      missingSections?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'draftSpecFromAttachments', input, model: options?.model ?? null });
+    this.record('draftSpecFromAttachments', input, options);
     const titles = new Set(
       input.context.filter((b) => b.source.kind === 'ATTACHMENT').map((b) => b.source.title),
     );
     const sources = [...titles].map((title) => `- ${title}`).join('\n');
     return {
-      proposedMarkdown: `# ${input.feature.title}\n\n## Sources\n${sources}\n`,
+      proposedMarkdown: `# ${input.feature.title}\n\n## Sources\n${sources}\n${fakePlatformSections(input.missingSections)}`,
       summary: `Drafted from ${titles.size} Attachments.`,
     };
   }
@@ -324,16 +642,19 @@ export class FakeAiPort implements AiPort {
       projectContext: ContextBlock[];
       guidelines: GuidelineForAi[];
       memory: WorkflowMemory;
+      uncoveredPlatforms?: PlatformForAi[];
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'grillingQuestions', input, model: options?.model ?? null });
+    this.record('grillingQuestions', input, options);
     const known = input.projectContext.map((b) => b.text.toLowerCase()).join('\n');
-    return {
-      questions: FAKE_GRILLING_TOPICS[input.round]
-        .filter((t) => !known.includes(t.keyword))
-        .map((t) => t.question),
-    };
+    const questions = FAKE_GRILLING_TOPICS[input.round]
+      .filter((t) => !known.includes(t.keyword))
+      .map((t) => t.question);
+    // Platforms no Feature covers (ticket 0051): asked once, in the round about platforms.
+    const uncovered = input.uncoveredPlatforms ?? [];
+    if (input.round === 'UX' && uncovered.length) questions.push(fakeUncoveredQuestion(uncovered));
+    return { questions };
   }
 
   /**
@@ -352,7 +673,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): Promise<GrillingFollowUpDecision> {
-    this.calls.push({ method: 'grillingFollowUp', input, model: options?.model ?? null });
+    this.record('grillingFollowUp', input, options);
     if (this.followUpScript.length) {
       const scripted = this.followUpScript.shift() ?? null;
       if (scripted instanceof Error) throw scripted;
@@ -379,7 +700,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'draftBriefFromGrilling', input, model: options?.model ?? null });
+    this.record('draftBriefFromGrilling', input, options);
     const answers = input.answers
       .map((a) => {
         const by = a.answeredBy ? ` (${a.answeredBy.name}, ${a.answeredBy.role})` : '';
@@ -410,7 +731,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): Promise<FeatureSuggestionDrafts> {
-    this.calls.push({ method: 'suggestFeatures', input, model: options?.model ?? null });
+    this.record('suggestFeatures', input, options);
     const taken = new Set([...input.pending, ...input.dismissed.map((d) => d.title)]);
     const suggestions: FeatureSuggestionDrafts['suggestions'] = [];
     for (let n = 1; suggestions.length < input.count; n++) {
@@ -437,7 +758,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ) {
-    this.calls.push({ method: 'draftSpecFromSuggestion', input, model: options?.model ?? null });
+    this.record('draftSpecFromSuggestion', input, options);
     return {
       proposedMarkdown: `# ${input.suggestion.title}\n\n${input.suggestion.rationale}\n\n## Business value\n${input.suggestion.businessValue}\n`,
       summary: `First Spec of "${input.suggestion.title}".`,
@@ -457,7 +778,7 @@ export class FakeAiPort implements AiPort {
     },
     options?: AiCallOptions,
   ): Promise<FeatureFitDraft> {
-    this.calls.push({ method: 'checkFeatureFit', input, model: options?.model ?? null });
+    this.record('checkFeatureFit', input, options);
     const text = `${input.feature.title}\n${input.feature.description}`.toLowerCase();
     return {
       results: input.guidelines.slice(0, -1).map((g) => {
@@ -471,4 +792,157 @@ export class FakeAiPort implements AiPort {
       }),
     };
   }
+
+  async draftAcceptanceCriteria(
+    input: Parameters<AiPort['draftAcceptanceCriteria']>[0],
+    options?: AiCallOptions,
+  ) {
+    this.record('draftAcceptanceCriteria', input, options);
+    return {
+      proposedMarkdown: fakeAcceptanceCriteria(
+        input.specMarkdown,
+        input.platform.name,
+        input.context,
+      ),
+      summary: `Added acceptance criteria for ${input.platform.name}.`,
+    };
+  }
+
+  /**
+   * The patterns of FAKE_FEEDBACK_PATTERNS that at least two cases show, and "Often edited by
+   * hand" when two or more were MANUAL_EDITs; each cites its cases.
+   */
+  async analyzeFeedback(
+    input: Parameters<AiPort['analyzeFeedback']>[0],
+    options?: AiCallOptions,
+  ): Promise<FeedbackAnalysis> {
+    this.record('analyzeFeedback', input, options);
+    const patterns: FeedbackAnalysis['patterns'] = [];
+    for (const p of FAKE_FEEDBACK_PATTERNS) {
+      const cases = input.cases.filter((c) => c.text && p.match.test(c.text)).map((c) => c.index);
+      if (cases.length >= 2) patterns.push({ title: p.title, description: p.description, cases });
+    }
+    const edits = input.cases.filter((c) => c.outcome === 'MANUAL_EDIT').map((c) => c.index);
+    if (edits.length >= 2) {
+      patterns.push({
+        title: 'Often edited by hand after approval',
+        description: 'People approve, then fix the result themselves.',
+        cases: edits,
+      });
+    }
+    return { patterns: patterns.sort((a, b) => b.cases.length - a.cases.length) };
+  }
+
+  /** The template with one line per pattern added at its end (`fakeGuidance`). */
+  async proposePromptVersion(
+    input: Parameters<AiPort['proposePromptVersion']>[0],
+    options?: AiCallOptions,
+  ): Promise<ProposedPromptVersion> {
+    this.record('proposePromptVersion', input, options);
+    return {
+      template: `${input.template.trimEnd()}\n\n${input.patterns.map((p) => fakeGuidance(p.title)).join('\n')}\n`,
+      rationale: `Addresses ${input.patterns.map((p) => `"${p.title}" (${p.count} cases)`).join(', ')}.`,
+    };
+  }
+
+  /** The current Redraft's template with "- Changed as asked: <feedback>" added. */
+  async redraftPromptVersion(
+    input: Parameters<AiPort['redraftPromptVersion']>[0],
+    options?: AiCallOptions,
+  ): Promise<RedraftedPromptVersion> {
+    this.record('redraftPromptVersion', input, options);
+    await this.nextRedraft();
+    const n = input.current + 1;
+    const first = input.feedback.feedback.split('\n')[0]?.trim().slice(0, 200) ?? '';
+    return {
+      template: `${input.template.trimEnd()}\n${fakeRedraftLine(input.feedback.feedback)}\n`,
+      rationale: `${input.rationale} Changed as asked: ${first}`,
+      summary: `Redraft ${n}: ${first.slice(0, 80)}`,
+      preferences: fakePreferences(input.feedback.feedback),
+    };
+  }
+
+  /**
+   * Thrown by the next redraft calls, in order, instead of answering (ticket 0065), to
+   * test a failed Redraft. A Promise in the queue is awaited first (to hold one open).
+   */
+  readonly redraftScript: (Error | Promise<unknown>)[] = [];
+
+  private async nextRedraft(): Promise<void> {
+    const next = this.redraftScript.shift();
+    if (next instanceof Error) throw next;
+    if (next) await next;
+  }
+
+  /**
+   * The current Choices, with the pointed-at Choice (or else the first) retitled
+   * "<title> (redraft N)" and its description ending in the feedback.
+   */
+  async redraftChoices(
+    input: Parameters<AiPort['redraftChoices']>[0],
+    options?: AiCallOptions,
+  ): Promise<RedraftedChoices> {
+    this.record('redraftChoices', input, options);
+    await this.nextRedraft();
+    const n = input.current + 1;
+    const pointed = input.feedback.pointer?.match(/^Choice ([A-D])\b/)?.[1];
+    const target = pointed ?? input.choices[0]?.label;
+    return {
+      choices: input.choices.map((c) =>
+        c.label === target
+          ? {
+              ...c,
+              title: `${c.title.replace(/ \(redraft \d+\)$/, '')} (redraft ${n})`.slice(0, 200),
+              description: `${c.description} ${input.feedback.feedback.split('\n')[0]}`.trim(),
+            }
+          : c,
+      ),
+      summary: `Redraft ${n}: changed Choice ${target}.`,
+      preferences: fakePreferences(input.feedback.feedback),
+    };
+  }
+
+  /** The current Redraft with one line added: "- Changed as asked: <feedback>". */
+  async redraftSpecProposal(
+    input: Parameters<AiPort['redraftSpecProposal']>[0],
+    options?: AiCallOptions,
+  ): Promise<RedraftedMarkdown> {
+    this.record('redraftSpecProposal', input, options);
+    await this.nextRedraft();
+    return fakeMarkdownRedraft(input, input.proposedMarkdown);
+  }
+
+  async redraftBriefProposal(
+    input: Parameters<AiPort['redraftBriefProposal']>[0],
+    options?: AiCallOptions,
+  ): Promise<RedraftedMarkdown> {
+    this.record('redraftBriefProposal', input, options);
+    await this.nextRedraft();
+    return fakeMarkdownRedraft(input, input.proposedMarkdown);
+  }
+
+  /** The suggestion with its rationale ending in the feedback. */
+  async redraftFeatureSuggestion(
+    input: Parameters<AiPort['redraftFeatureSuggestion']>[0],
+    options?: AiCallOptions,
+  ): Promise<RedraftedSuggestion> {
+    this.record('redraftFeatureSuggestion', input, options);
+    await this.nextRedraft();
+    const n = input.current + 1;
+    return {
+      ...input.suggestion,
+      rationale: `${input.suggestion.rationale} ${input.feedback.feedback.split('\n')[0]}`.trim(),
+      summary: `Redraft ${n} of "${input.suggestion.title}".`,
+      preferences: fakePreferences(input.feedback.feedback),
+    };
+  }
+}
+
+function fakeMarkdownRedraft(input: RedraftFeedbackForAi, markdown: string): RedraftedMarkdown {
+  const n = input.current + 1;
+  return {
+    proposedMarkdown: `${markdown.trimEnd()}\n${fakeRedraftLine(input.feedback.feedback)}\n`,
+    summary: `Redraft ${n}: ${input.feedback.feedback.split('\n')[0]?.slice(0, 80) ?? ''}`,
+    preferences: fakePreferences(input.feedback.feedback),
+  };
 }

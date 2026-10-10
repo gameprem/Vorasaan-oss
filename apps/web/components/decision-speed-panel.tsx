@@ -106,7 +106,7 @@ function Stat({
       >
         {value}
       </dd>
-      {hint && <dd className="text-xs text-fg-faint">{hint}</dd>}
+      {hint && <dd className="text-xs text-fg-soft">{hint}</dd>}
     </div>
   );
 }

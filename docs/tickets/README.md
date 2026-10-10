@@ -177,12 +177,62 @@ No Decision Request waits silently: Response Windows with escalation, Decision L
 | 0057 | [Link a LINE, Slack or Teams account](./0057-chat-app-accounts.md) | none |
 | 0058 | [Decide from LINE, Slack and Teams](./0058-decide-from-chat-apps.md) | 0057 |
 
-## Platforms and Coverage (Post-MVP 4)
+## Next (Post-MVP 4–9)
 
-Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anything a team adds). Features target them, and Coverage shows which are covered or missing and why (ADR 0009).
+In this order: OpenRouter as a provider and Request changes on every AI proposal (ADR 0013), both done; then our own UI kit (ADR 0016), done; then a context meter with `/compact`, a readable chat history and cursor pagination, done; then the Decision Graph of a Feature, done; then language rules with Thai eval cases, done (its English-first comparison is run by hand).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0064 | [OpenRouter as an AI Provider](./0064-openrouter-provider.md) | 0053, 0060, 0061 |
+| 0065 | [Request changes: the AI redrafts from a person's explanation](./0065-request-changes.md) | 0043, 0058, 0060 |
+| 0077 | [UI kit, and replace browser-native controls](./0077-ui-kit.md) | 0045, 0046 |
+| 0066 | [Context meter, /compact, chat history and cursor pagination](./0066-context-meter-and-compact.md) | 0054, 0060, 0061, 0077 |
+| 0067 | [Decision Graph of a Feature](./0067-decision-graph.md) | 0020, 0055, 0058, 0065 |
+| 0068 | [Language: keep domain terms and quotes as written, and Thai eval cases](./0068-language.md) | 0063 |
+
+## Learning Loop (Post-MVP 10)
+
+Every AI call leaves a Receipt with what people did with its proposal; an Organization holds its own Prompt Versions and evaluates them in the app; the AI proposes better ones, and only an Admin's approval makes one active (ADR 0015, inspired by [Reef](https://github.com/Human-Agent-Society/reef)). Receipts and feedback, with their JSONL export ([format](../receipts-export.md)), are done; so are Prompt Versions with in-app evals (Settings → AI prompts), and the AI's own proposals of better Prompt Versions from that feedback, each decided by an Admin.
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0070 | [Receipts and feedback](./0070-receipts-and-feedback.md) | 0061, 0065 |
+| 0071 | [Prompt Versions and in-app evals](./0071-prompt-versions-and-evals.md) | 0070 |
+| 0072 | [The AI proposes better prompts](./0072-ai-proposes-prompt-versions.md) | 0065, 0071 |
+
+## Optimization (Post-MVP 11)
+
+Measure first on a large seeded Organization, then make the database faster and the AI cheaper without answering worse. The baseline is done: `bun run bench` seeds the large Organization and measures the hot paths ([guide](../performance.md)); the numbers are in 0073. The database optimization is done too: the escalation job, the Inbox and Decision Lead Time are faster, every measured path has a query budget checked in tests, and vector search ranks small scopes exactly (0074). The AI usage dashboard is done: Settings → AI usage shows tokens, an estimated cost from prices set on each Approved Model, cache hits and latency by task, Project and model, cost per decision and Redrafts before approval, with an optional monthly AI Budget (0075). Token optimization is done: retrieval deduplicates repeated text and returns a smaller top-k, prompts lost repeated lines and cache more, and Settings → AI usage suggests a cheaper Approved Model per task where its eval scores hold; `bun run tokens:tasks` and tests guard tokens per task and scores (0076).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0073 | [Performance baseline](./0073-performance-baseline.md) | none |
+| 0074 | [Database optimization](./0074-database-optimization.md) | 0073 |
+| 0075 | [AI usage dashboard](./0075-ai-usage-dashboard.md) | 0070, 0077 |
+| 0076 | [Token optimization with an eval guard](./0076-token-optimization.md) | 0068, 0071, 0075 |
+
+## Platforms and Coverage (Post-MVP 12)
+
+Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anything a team adds). Features target them, and Coverage shows which are covered or missing and why (ADR 0009). Platforms are done: each Project copies the Organization's default list (the built-in Back-End, Front-End and Mobile until an Admin changes it) and edits its own, Features target them, and a first Spec starts with a section per target Platform (0050). Coverage is done: each Feature's target Platforms, and a Project's Feature × Platform matrix, are covered or missing by the checks each Platform switches on; Spec drafts fill or ask about missing Platform sections, Grilling asks about Platforms no Feature covers, and the AI drafts a Platform's acceptance criteria as a Spec Proposal (0051). The web app and the CLI show it: Settings → Platforms edits the Platform template, a Project's Platforms tab edits its list, the Feature header has a Coverage chip per target Platform (with the reasons, a chat link to add a missing section and the "Draft acceptance criteria" button), a Project's Coverage tab is the matrix filterable to what is missing and why, in chat the AI offers to add a missing section as an Action Card, the CLI's Features tab shows the chips and `vorasaan raise` hints at the Platform from the changed files (0052).
 
 | # | Ticket | Depends on |
 | --- | --- | --- |
 | 0050 | [Platforms per Project, targeted by Features](./0050-platforms.md) | none |
 | 0051 | [Coverage per Platform, and the AI uses it](./0051-coverage.md) | 0050 |
 | 0052 | [Web and CLI: Platforms and Coverage](./0052-web-cli-platforms.md) | 0051, 0045 |
+
+## Agent Skills (Post-MVP 13)
+
+The AI can use Agent Skills in the open SKILL.md format, installed by an Admin from GitHub or a zip, pinned, approved and enabled per Project. They are text and templates only; nothing in them runs, and what the AI makes with them is only ever a proposal (ADR 0017). Done: Settings → Agent Skills installs a Skill from a GitHub URL (pinned to the commit, fetched only from GitHub's hosts) or a zip (pinned to its hash), lists the scripts and binaries left out, shows each new version's per-file diff and makes it active only on an Admin's approval, enables it per Project and uninstalls it; in Conversations the AI sees only the enabled Skills' names and descriptions and reads one with `loadSkill` and `readSkillFile`, fenced as untrusted data and within the context budget; a diagram it makes is shown in a sandboxed iframe and reaches the Spec only as a Spec Proposal; Receipts and the AI usage dashboard record which Skills each call read (0078).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0078 | [Agent Skills](./0078-agent-skills.md) | 0060, 0065, 0070 |
+
+## Design Docs (Post-MVP 14)
+
+Once a Feature's Spec is approved and a Platform is covered, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA), and the Platform's people approve it. The Spec stays the source of truth (ADR 0014).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0069 | [Design Docs per Platform](./0069-design-docs.md) | 0050, 0051, 0065 |

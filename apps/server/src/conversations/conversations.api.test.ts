@@ -204,7 +204,9 @@ describe('Conversations', () => {
     expect(deltas.every((d) => d.conversationId === conversation.id)).toBe(true);
     expect(deltas.every((d) => d.messageId === reply?.id)).toBe(true);
     expect(deltas.map((d) => d.delta).join('')).toBe(reply?.content ?? '');
-    expect(streamed.at(-1)).toEqual({
+    // The reply is done, then the context meter's numbers follow (ticket 0066).
+    expect(streamed.at(-1)?.event).toBe('conversation.usage');
+    expect(streamed.at(-2)).toEqual({
       event: 'conversation.done',
       data: { conversationId: conversation.id, message: reply as never },
     });

@@ -4,6 +4,7 @@ import {
   diffLines,
   type InboxItem,
   type NotificationView,
+  type PlatformCoverage,
   type ResponseWindowState,
   responseWindowLabels,
 } from '@vorasaan/shared';
@@ -102,6 +103,10 @@ export function notificationLine(n: NotificationView): string {
       return `${unread}Overdue: ${n.decisionRequest?.title ?? 'a Decision Request'}${feature}`;
     case 'DELEGATION_STARTED':
       return `${unread}You are now the Delegate of ${n.delegation?.delegator.name ?? 'someone'} (${n.delegation ? ROLE_LABEL[n.delegation.role] : ''})`;
+    case 'AI_BUDGET_WARNING':
+      return `${unread}The AI's estimated cost this month passed 80% of its budget`;
+    case 'AI_BUDGET_REACHED':
+      return `${unread}The AI's estimated cost this month reached its budget (nothing is blocked)`;
   }
 }
 
@@ -206,4 +211,14 @@ export function diffView(
     added: diff.filter((l) => l.kind === 'ADDED').length,
     removed: diff.filter((l) => l.kind === 'REMOVED').length,
   };
+}
+
+/**
+ * A target Platform as a Coverage chip (ADR 0009, ticket 0052): "✓ Back-End" when covered,
+ * "! Flutter" when missing. The mark, not only the colour, says which.
+ */
+export function coverageChip(p: PlatformCoverage): { text: string; color: string } {
+  return p.covered
+    ? { text: `✓ ${p.platform.name}`, color: 'green' }
+    : { text: `! ${p.platform.name}`, color: 'yellow' };
 }

@@ -1,6 +1,7 @@
 import * as p from '@clack/prompts';
 import type { DecisionRequestView, FeatureSummaryView, TeamRole } from '@vorasaan/shared';
 import type { VorasaanApi } from '../api.ts';
+import { platformHintFor } from './platform-hint.ts';
 import {
   type DeciderHints,
   deciderHints,
@@ -40,6 +41,9 @@ export async function runRaise(
   try {
     const picked = options.featureId ? undefined : await pickFeature(api, scope?.projectId);
     const featureId = picked?.id ?? (options.featureId as string);
+    // Which Platform the changed files point to (ticket 0052): only a hint, never filled in.
+    const hint = scope ? await platformHintFor(api, featureId, scope.root) : undefined;
+    if (hint) p.log.info(hint);
     // Loaded the first time the Raiser changes the decider role.
     let hints: DeciderHints | undefined;
     const loadHints = async () => {

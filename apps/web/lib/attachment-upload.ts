@@ -52,6 +52,15 @@ function capped(body: ReadableStream<Uint8Array>, limit: number) {
 /** Forwards one upload to the owner's Attachments; `owner.kind` is fixed by the calling route. */
 export async function forwardAttachmentUpload(request: Request, owner: AttachmentOwner) {
   if (!isOwner(owner)) return json(404, 'Not found');
+  return forwardUpload(request, `/${owner.kind}/${owner.id}/attachments`, maxBodyBytes());
+}
+
+/**
+ * Forwards a same-origin multipart upload, as a stream, to the API path `upstream` (fixed by
+ * the calling route) with the session's credentials, capped at `limit` bytes of body. Only
+ * the content type and the body are forwarded, and only the API's JSON comes back.
+ */
+export async function forwardUpload(request: Request, upstream: string, limit: number) {
   if (!sameOrigin(request)) return json(403, 'Uploads must come from this site');
 
   const auth = await authHeaders();
@@ -61,7 +70,6 @@ export async function forwardAttachmentUpload(request: Request, owner: Attachmen
   if (!contentType.toLowerCase().startsWith('multipart/form-data;') || !request.body) {
     return json(400, 'Send the file as multipart/form-data');
   }
-  const limit = maxBodyBytes();
   const declared = Number(request.headers.get('content-length'));
   const tooLarge = `The file is larger than ${Math.floor((limit - MULTIPART_OVERHEAD) / MiB)} MiB`;
   if (Number.isFinite(declared) && declared > limit) return json(413, tooLarge);
@@ -69,7 +77,7 @@ export async function forwardAttachmentUpload(request: Request, owner: Attachmen
   const upload = capped(request.body, limit);
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/${owner.kind}/${owner.id}/attachments`, {
+    res = await fetch(`${API_URL}${upstream}`, {
       method: 'POST',
       headers: { ...auth, 'content-type': contentType },
       body: upload.stream,
@@ -84,7 +92,7 @@ export async function forwardAttachmentUpload(request: Request, owner: Attachmen
       : json(502, "Can't reach the Vorasaan server");
   }
 
-  // Only the API's JSON (the AttachmentView or its error) goes back; nothing else is copied.
+  // Only the API's JSON (the view or its error) goes back; nothing else is copied.
   const text = await res.text();
   let body: unknown;
   try {
@@ -93,4 +101,13 @@ export async function forwardAttachmentUpload(request: Request, owner: Attachmen
     return json(502, 'The Vorasaan server sent an unexpected reply');
   }
   return Response.json(body, { status: res.status });
+}
+
+/**
+ * The same limit as the API's zip of an Agent Skill (VORASAAN_AGENT_SKILL_MAX_ARCHIVE_BYTES,
+ * default 20 MiB), plus the multipart framing.
+ */
+export function maxSkillZipBytes() {
+  const n = Number(process.env.VORASAAN_AGENT_SKILL_MAX_ARCHIVE_BYTES);
+  return (Number.isSafeInteger(n) && n > 0 ? n : 20 * MiB) + MULTIPART_OVERHEAD;
 }

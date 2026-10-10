@@ -31,6 +31,26 @@ export const CONTEXT_CEILINGS = {
 export type Workflow = keyof typeof CONTEXT_CEILINGS;
 
 /**
+ * How many chunks each search of a workflow's retrieval returns (ticket 0076); none
+ * fills the budget. Until then every search returned enough chunks to fill the context
+ * ceiling (its budget over 400-token chunks: 30 for a Decision Request, about 70 for a
+ * Project-level task), and since the ceilings doubled (0060) the second half was mostly
+ * chunks ranked far down. These are the sizes before 0060: the top chunks of each search,
+ * with the Feature's own Spec, requests and Decisions (or the Brief and the Feature
+ * overview) still first and whole. The ceiling stays the limit. Drafting a Spec from
+ * Attachments keeps filling its budget: the Attachments are its input.
+ */
+export const RETRIEVAL_TOP_K: Record<Workflow, number | undefined> = {
+  decisionRequest: 15,
+  specFromAttachments: undefined,
+  grilling: 30,
+  featureSuggestions: 30,
+  featureFit: 15,
+  conversationFeature: 15,
+  conversationProject: 30,
+};
+
+/**
  * The one config of every budget (ADR 0012, ticket 0060). A call's window is
  * split into four shares; each has a floor, so a small model still gets
  * something useful, and a ceiling, so a large one isn't filled for its own sake.
@@ -67,6 +87,8 @@ export const BUDGET_CONFIG = {
     keep: 0.35,
     /** The Conversation Summary is cut to this part of the share. */
     summary: 0.25,
+    /** The context meter (ticket 0066) warns from this part of the share: compaction is near. */
+    warn: 0.6,
   },
   /**
    * What filling a prompt in adds besides its data and its template: names,
@@ -75,6 +97,12 @@ export const BUDGET_CONFIG = {
   promptSlack: 150,
   /** One `searchContext` tool call in a Conversation (Action Cards, 0043): a focused extra read. */
   searchContext: { share: 0.05, floor: 500, ceiling: 6_000 },
+  /**
+   * One `loadSkill` or `readSkillFile` call (Agent Skills, ticket 0078): a Skill's text is
+   * cut to this; one turn reads at most `perTurn` times it in all. What a turn read stays in
+   * the Conversation as tool results, so later turns count it in the history.
+   */
+  agentSkillRead: { share: 0.08, floor: 800, ceiling: 8_000, perTurn: 2 },
 } as const;
 
 /** How one call's window is spent, in tokens. They add up to at most `window` when it can. */
@@ -89,6 +117,8 @@ export type Budget = {
   /** A Conversation's summary and messages; 0 for a one-shot task. */
   history: number;
   reply: number;
+  /** How many chunks each search returns (`RETRIEVAL_TOP_K`); none fills `context`. */
+  topK?: number;
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -131,7 +161,15 @@ export function planBudget(
   foundation = give(foundation, 0);
   context = give(context, 0);
   history = give(history, 0);
-  return { window: w, system, foundation, context, history, reply };
+  return {
+    window: w,
+    system,
+    foundation,
+    context,
+    history,
+    reply,
+    topK: RETRIEVAL_TOP_K[workflow],
+  };
 }
 
 /**
@@ -147,6 +185,13 @@ export function projectBudget(budget: Budget): number {
 export function searchContextBudget(window: number): number {
   const { share, floor, ceiling } = BUDGET_CONFIG.searchContext;
   return clamp(window * share, floor, ceiling);
+}
+
+/** What one Agent Skill read may hold, and what one turn may read in all, for this window. */
+export function agentSkillReadBudget(window: number): { read: number; turn: number } {
+  const { share, floor, ceiling, perTurn } = BUDGET_CONFIG.agentSkillRead;
+  const read = clamp(window * share, floor, ceiling);
+  return { read, turn: read * perTurn };
 }
 
 /** What the tools offered to the AI cost in its prompt: names, descriptions and schemas. */

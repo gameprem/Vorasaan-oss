@@ -18,6 +18,8 @@ import {
   type CreateAiProviderInput,
   type CreateApprovedModelInput,
   DEFAULT_PROVIDER_NAMES,
+  type ModelPrices,
+  type OpenRouterModelsView,
   type RecordedModel,
   type SetAiTaskModelsInput,
   type UpdateAiProviderInput,
@@ -35,6 +37,7 @@ import {
 import type { ModelChoice } from './ai.port.ts';
 import { envModelContextWindow, prefilledContextWindow } from './context-window.ts';
 import { type ResolvedProvider, toMastraModel } from './model-config.ts';
+import { listOpenRouterModels, openRouterContextWindow } from './openrouter.ts';
 
 export const AI_CONNECTION_TESTER = Symbol('AI_CONNECTION_TESTER');
 export type AiConnectionTester = (provider: ResolvedProvider) => Promise<void>;
@@ -45,7 +48,29 @@ const LLM_PROVIDERS: AiProvider[] = AiProvider.options;
 const ENV_PREFIXES: Partial<Record<string, AiProvider>> = {
   anthropic: 'ANTHROPIC',
   openai: 'OPENAI',
+  openrouter: 'OPENROUTER',
 };
+
+/** The `baseUrl` of a provider input, whatever its kind. */
+function baseUrlOf(input: object): unknown {
+  return 'baseUrl' in input ? input.baseUrl : undefined;
+}
+
+/** The base URL a provider of this kind stores: only a custom endpoint has one. */
+function storedBaseUrl(input: object, kind: AiProvider): string | null {
+  const baseUrl = baseUrlOf(input);
+  return kind === 'OPENAI_COMPATIBLE' && typeof baseUrl === 'string' ? baseUrl : null;
+}
+
+/**
+ * OpenRouter's URL is fixed (ticket 0064): a base URL given for it is refused,
+ * as for the other fixed providers, never stored or called.
+ */
+function refuseFixedUrl(input: object, kind: AiProvider): void {
+  if (kind === 'OPENROUTER' && baseUrlOf(input) !== undefined) {
+    throw new UnprocessableEntityException("OpenRouter's base URL is fixed: leave it out");
+  }
+}
 
 type ModelWithProvider = ApprovedModel & { integration: OrgIntegration };
 
@@ -204,13 +229,14 @@ export class AiSettingsService {
   }
 
   async createProvider(input: CreateAiProviderInput): Promise<AiProviderView> {
+    refuseFixedUrl(input, input.kind);
     const organizationId = await this.requireOrganizationId();
     const created = await this.db.orgIntegration.create({
       data: {
         organizationId,
         provider: input.kind,
         name: input.name,
-        baseUrl: input.kind === 'OPENAI_COMPATIBLE' ? input.baseUrl : null,
+        baseUrl: storedBaseUrl(input, input.kind),
         secretEncrypted: this.secrets().encrypt(input.apiKey),
       },
     });
@@ -233,6 +259,37 @@ export class AiSettingsService {
       include: { _count: { select: { approvedModels: true } } },
     });
     return this.providerView(updated, updated._count.approvedModels);
+  }
+
+  /**
+   * OpenRouter's model list for the picker (ticket 0064). Only an OpenRouter
+   * provider has one; when it can't be loaded, the view says why and the Admin
+   * types the model id.
+   */
+  async providerModels(id: string): Promise<OpenRouterModelsView> {
+    const organizationId = await this.requireOrganizationId();
+    const provider = await this.provider(organizationId, id);
+    if (provider.provider !== 'OPENROUTER') {
+      throw new UnprocessableEntityException('Only an OpenRouter provider has a model list');
+    }
+    return listOpenRouterModels();
+  }
+
+  /** The setup wizard's list, before any provider is saved. */
+  openRouterModels(): Promise<OpenRouterModelsView> {
+    return listOpenRouterModels();
+  }
+
+  /**
+   * The window a new model gets when the Admin gives none: for OpenRouter, its
+   * `context_length` from the list (ticket 0064); else the known model's, else the default.
+   */
+  private async windowFor(kind: AiProvider, modelId: string): Promise<number> {
+    if (kind === 'OPENROUTER') {
+      const listed = await openRouterContextWindow(modelId);
+      if (listed) return listed;
+    }
+    return prefilledContextWindow(modelId);
   }
 
   /** Refused while Approved Models run on it: remove or move them first. */
@@ -270,8 +327,10 @@ export class AiSettingsService {
   /** The first Approved Model is the default, whatever `isDefault` says. */
   async createModel(input: CreateApprovedModelInput): Promise<ApprovedModelSettingsView> {
     const organizationId = await this.requireOrganizationId();
-    await this.provider(organizationId, input.providerId);
+    const provider = await this.provider(organizationId, input.providerId);
     await this.assertNameFree(organizationId, input.displayName);
+    const contextWindow =
+      input.contextWindow ?? (await this.windowFor(provider.provider as AiProvider, input.modelId));
     const created = await conflictOnRace(() =>
       this.db.$transaction(async (tx) => {
         const last = await tx.approvedModel.findFirst({
@@ -293,7 +352,8 @@ export class AiSettingsService {
             modelId: input.modelId,
             displayName: input.displayName,
             note: input.note ?? null,
-            contextWindow: input.contextWindow ?? prefilledContextWindow(input.modelId),
+            contextWindow,
+            ...priceColumns(input.prices ?? null),
             position: last ? last.position + 1 : 0,
             isDefault,
           },
@@ -310,13 +370,15 @@ export class AiSettingsService {
   ): Promise<ApprovedModelSettingsView> {
     const organizationId = await this.requireOrganizationId();
     const existing = await this.model(organizationId, id);
+    const provider = input.providerId
+      ? await this.provider(organizationId, input.providerId)
+      : existing.integration;
     // A new model id without a window given takes the new model's prefilled window.
     const contextWindow =
       input.contextWindow ??
       (input.modelId && input.modelId !== existing.modelId
-        ? prefilledContextWindow(input.modelId)
+        ? await this.windowFor(provider.provider as AiProvider, input.modelId)
         : undefined);
-    if (input.providerId) await this.provider(organizationId, input.providerId);
     if (input.displayName) await this.assertNameFree(organizationId, input.displayName, id);
     const updated = await conflictOnRace(() =>
       this.db.$transaction(async (tx) => {
@@ -334,6 +396,7 @@ export class AiSettingsService {
             ...(input.displayName ? { displayName: input.displayName } : {}),
             ...(input.note !== undefined ? { note: input.note } : {}),
             ...(contextWindow !== undefined ? { contextWindow } : {}),
+            ...(input.prices !== undefined ? priceColumns(input.prices) : {}),
             ...(input.isDefault ? { isDefault: true } : {}),
           },
           include: { integration: true },
@@ -388,17 +451,24 @@ export class AiSettingsService {
 
   // ─── Setup ────────────────────────────────────────────────────────────────
 
+  /** What setup refuses before it writes anything (a base URL for OpenRouter). */
+  assertSetupInput(input: AiSettingsInput): void {
+    refuseFixedUrl(input, input.provider);
+  }
+
   /** First boot: the wizard's provider becomes the first provider, its model the default. */
   async setupFirst(input: AiSettingsInput, organizationId: string): Promise<void> {
+    refuseFixedUrl(input, input.provider);
     if (!input.apiKey) throw new UnprocessableEntityException('Enter an API key or token');
     const secretEncrypted = this.secrets().encrypt(input.apiKey);
+    const contextWindow = await this.windowFor(input.provider, input.model);
     await this.db.$transaction(async (tx) => {
       const provider = await tx.orgIntegration.create({
         data: {
           organizationId,
           provider: input.provider,
           name: DEFAULT_PROVIDER_NAMES[input.provider],
-          baseUrl: input.provider === 'OPENAI_COMPATIBLE' ? input.baseUrl : null,
+          baseUrl: storedBaseUrl(input, input.provider),
           secretEncrypted,
         },
       });
@@ -408,7 +478,7 @@ export class AiSettingsService {
           integrationId: provider.id,
           modelId: input.model,
           displayName: input.model,
-          contextWindow: prefilledContextWindow(input.model),
+          contextWindow,
           position: 0,
           isDefault: true,
         },
@@ -418,12 +488,13 @@ export class AiSettingsService {
 
   /** Checks a provider and model before setup saves them (the key is required). */
   async test(input: AiSettingsInput): Promise<AiTestResult> {
+    refuseFixedUrl(input, input.provider);
     if (!input.apiKey) return { ok: false, message: 'Enter an API key', latencyMs: null };
     return this.check({
       provider: input.provider,
       model: input.model,
       apiKey: input.apiKey,
-      baseUrl: input.provider === 'OPENAI_COMPATIBLE' ? input.baseUrl : null,
+      baseUrl: storedBaseUrl(input, input.provider),
     });
   }
 
@@ -551,8 +622,20 @@ function modelSettingsView(m: ModelWithProvider): ApprovedModelSettingsView {
     displayName: m.displayName,
     note: m.note,
     contextWindow: m.contextWindow,
+    prices:
+      m.inputPricePerMillion === null || m.outputPricePerMillion === null
+        ? null
+        : { inputPerMillion: m.inputPricePerMillion, outputPerMillion: m.outputPricePerMillion },
     position: m.position,
     isDefault: m.isDefault,
+  };
+}
+
+/** An Approved Model's price columns (ticket 0075): both set, or both null. */
+function priceColumns(prices: ModelPrices | null) {
+  return {
+    inputPricePerMillion: prices?.inputPerMillion ?? null,
+    outputPricePerMillion: prices?.outputPerMillion ?? null,
   };
 }
 

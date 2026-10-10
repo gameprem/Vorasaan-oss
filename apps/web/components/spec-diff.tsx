@@ -52,15 +52,20 @@ function DiffTable({ rows, caption }: { rows: Row[]; caption?: string }) {
             key={i}
             className={
               row.kind === 'add'
-                ? 'bg-jade-wash px-4 text-jade'
+                ? 'bg-jade-wash px-4 text-fg'
                 : row.kind === 'del'
-                  ? 'bg-lacquer-wash px-4 text-lacquer line-through decoration-lacquer/40'
+                  ? 'bg-lacquer-wash px-4 text-fg line-through decoration-lacquer/60'
                   : row.kind === 'fold'
                     ? 'px-4 text-fg-soft/70 italic'
                     : 'px-4 text-fg-soft'
             }
           >
-            <span aria-hidden className="mr-3 inline-block w-3 select-none">
+            <span
+              aria-hidden
+              className={`mr-3 inline-block w-3 select-none ${
+                row.kind === 'add' ? 'text-jade' : row.kind === 'del' ? 'text-lacquer' : ''
+              }`}
+            >
               {row.kind === 'add' ? '+' : row.kind === 'del' ? '−' : ''}
             </span>
             <span className="sr-only">
@@ -94,13 +99,22 @@ const KIND: Record<SpecDiffView['lines'][number]['kind'], Kind> = {
   UNCHANGED: 'same',
 };
 
-/** A diff between two Spec Versions as computed by the server (`GET /features/:id/spec-diff`). */
-export function VersionDiff({ diff }: { diff: SpecDiffView }) {
+/**
+ * A diff between two versions as computed by the server: Spec Versions
+ * (`GET /features/:id/spec-diff`), or Prompt Versions with their own `caption` (0071).
+ */
+export function VersionDiff({
+  diff,
+  caption,
+}: {
+  diff: Pick<SpecDiffView, 'from' | 'to' | 'lines'>;
+  caption?: string;
+}) {
   const rows = fold(diff.lines.map((l) => ({ kind: KIND[l.kind], text: l.text })));
   return (
     <DiffTable
       rows={rows}
-      caption={diff.from === 0 ? `v${diff.to}` : `v${diff.from} → v${diff.to}`}
+      caption={caption ?? (diff.from === 0 ? `v${diff.to}` : `v${diff.from} → v${diff.to}`)}
     />
   );
 }

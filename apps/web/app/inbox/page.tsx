@@ -1,5 +1,7 @@
 import type {
   DelegationView,
+  GettingStartedItemKey,
+  GettingStartedView,
   InboxItem,
   InboxItemKind,
   NotificationList,
@@ -10,10 +12,11 @@ import { unstable_rethrow } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { KindBadge, Notice, ResponseWindowLabels, relativeTime } from '@/components/bits';
 import { LocalDate } from '@/components/delegation-list';
+import { GettingStarted } from '@/components/getting-started';
 import { MarkAllReadButton, MarkReadButton } from '@/components/notification-actions';
 import { notificationHref, notificationText } from '@/components/notification-text';
 import { ROLE_LABEL, ROUND_LABEL } from '@/components/ui';
-import { ApiError, api } from '@/lib/api';
+import { ApiError, api, currentUser } from '@/lib/api';
 import { grillingConversationHref } from '@/lib/chat-data';
 
 export const metadata = { title: 'Inbox' };
@@ -123,17 +126,40 @@ function Tag({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The Getting started checklist (ticket 0063) and where each item is done, for an Admin
+ * who hasn't finished or dismissed it. Optional: if it fails to load, the Inbox goes on.
+ */
+async function loadGettingStarted() {
+  const me = await currentUser();
+  if (!me?.isAdmin) return undefined;
+  const checklist = await load<GettingStartedView>('/me/getting-started', 'checklist');
+  if (!checklist.ok || checklist.value.complete || checklist.value.dismissed) return undefined;
+  const projects = await load<ProjectView[]>('/projects', 'Projects');
+  // A Feature is created in a Team: the first one, once there is one.
+  const team = projects.ok ? projects.value.flatMap((p) => p.teams)[0] : undefined;
+  const hrefs: Record<GettingStartedItemKey, string> = {
+    PROJECT_AND_TEAM: '/projects',
+    FEATURE_WITH_SPEC: team ? `/teams/${team.id}` : '/projects',
+    INVITE_MEMBERS: '/settings/members',
+    LINK_CLI: '/settings/tokens',
+    CHAT_APP: '/settings/chat-apps',
+  };
+  return { view: checklist.value, hrefs };
+}
+
 export default async function InboxPage({
   searchParams,
 }: {
   searchParams: Promise<{ welcome?: string }>;
 }) {
   const { welcome } = await searchParams;
-  const [inbox, notifications, delegatedToMe] = await Promise.all([
+  const [inbox, notifications, delegatedToMe, gettingStarted] = await Promise.all([
     load<InboxItem[]>('/inbox', 'Inbox'),
     load<NotificationList>('/notifications?limit=50', 'Notifications'),
     // Who is delegating to me right now, for the banner. It is optional: no error shown.
     load<DelegationView[]>('/me/delegations?as=delegate&active=true', 'Delegations'),
+    loadGettingStarted(),
   ]);
   // Team names only matter when there is a banner to show.
   const projects =
@@ -150,20 +176,26 @@ export default async function InboxPage({
 
   return (
     <section className="max-w-3xl">
-      {welcome && (
+      {gettingStarted ? (
         <div className="mb-8">
-          <Notice>
-            Vorasaan is ready. Next,{' '}
-            <Link href="/projects" className="text-fg underline underline-offset-2">
-              create a Project
-            </Link>{' '}
-            and{' '}
-            <Link href="/settings/members" className="text-fg underline underline-offset-2">
-              invite your team
-            </Link>
-            .
-          </Notice>
+          <GettingStarted {...gettingStarted} welcome={Boolean(welcome)} />
         </div>
+      ) : (
+        welcome && (
+          <div className="mb-8">
+            <Notice>
+              Vorasaan is ready. Next,{' '}
+              <Link href="/projects" className="text-fg underline underline-offset-2">
+                create a Project
+              </Link>{' '}
+              and{' '}
+              <Link href="/settings/members" className="text-fg underline underline-offset-2">
+                invite your team
+              </Link>
+              .
+            </Notice>
+          </div>
+        )
       )}
       <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
 

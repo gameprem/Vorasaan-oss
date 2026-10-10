@@ -100,7 +100,10 @@ export type QuietHours = z.infer<typeof QuietHours>;
 export const ChatLanguage = z.enum(['en', 'th']);
 export type ChatLanguage = z.infer<typeof ChatLanguage>;
 
-/** Cards and bot replies are in English until a person picks Thai. */
+/**
+ * A new Organization's language, until setup or an Admin picks another (ticket 0063). Each
+ * person's cards and bot replies are in their own language, else the Organization's.
+ */
 export const DEFAULT_CHAT_LANGUAGE: ChatLanguage = 'en';
 
 export const CHAT_LANGUAGE_LABEL: Record<ChatLanguage, string> = {
@@ -117,7 +120,7 @@ export const ChatPreferencesInput = z.strictObject({
   quietHours: QuietHours.nullable(),
   /** null: the Organization's time zone. */
   timeZone: TimeZone.nullable(),
-  /** The language of cards and bot replies; null: English. Left out: unchanged. */
+  /** The person's language (cards, bot replies, Grilling texts, AI replies); null: the Organization's. Left out: unchanged. */
   language: ChatLanguage.nullable().optional(),
 });
 export type ChatPreferencesInput = z.infer<typeof ChatPreferencesInput>;
@@ -128,8 +131,10 @@ export const ChatPreferencesView = z.object({
   timeZone: z.string().nullable(),
   /** The time zone quiet hours are counted in: the person's own, or the Organization's. */
   effectiveTimeZone: z.string(),
-  /** The language of cards and bot replies; null: English. */
+  /** The language of cards and bot replies; null: the Organization's. */
   language: ChatLanguage.nullable(),
+  /** The language cards and bot replies are in: the person's own, or the Organization's. */
+  effectiveLanguage: ChatLanguage,
 });
 export type ChatPreferencesView = z.infer<typeof ChatPreferencesView>;
 

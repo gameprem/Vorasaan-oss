@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadGatewayException,
   ConflictException,
@@ -26,6 +27,7 @@ import {
   type GuidelineForAi,
 } from '../ai/ai.port.ts';
 import { ContextBudgets, projectBudget } from '../ai/context-budget.ts';
+import { projectLanguage } from '../ai/language.ts';
 import {
   emptyMemory,
   rememberRound,
@@ -34,6 +36,7 @@ import {
 } from '../ai/workflow-memory.ts';
 import { assertCanEditProject, type ProjectAccess, projectAccess } from '../brief/brief-access.ts';
 import { toConversationMessageView } from '../conversations/conversation.view.ts';
+import { CoverageService } from '../coverage/coverage.service.ts';
 import { FeatureGuidelinesService } from '../feature-guidelines/feature-guidelines.service.ts';
 import { EventBus } from '../inbox/event-bus.ts';
 import { NotificationsService, type Tx } from '../inbox/notifications.service.ts';
@@ -77,6 +80,8 @@ const MAX_SUMMARY_CHARS = 200;
 const MAX_ATTEMPTS = 3;
 
 type NewRound = {
+  /** Chosen before its questions are drafted, so their Receipt can point at it (0070). */
+  id: string;
   kind: GrillingRoundKind;
   role: TeamRole;
   status: 'ASKING' | 'SKIPPED';
@@ -93,7 +98,13 @@ type Plan = {
   memory: WorkflowMemory;
   rounds: NewRound[];
   asking: NewRound | null;
-  draft: { markdown: string; summary: string; baseVersionId: string | null } | null;
+  draft: {
+    /** The Brief Proposal's id, chosen before it is drafted (its Receipt points at it). */
+    proposalId: string;
+    markdown: string;
+    summary: string;
+    baseVersionId: string | null;
+  } | null;
 };
 
 /** Thrown inside a transaction when the Grilling changed since it was read. */
@@ -127,6 +138,7 @@ export class GrillingService {
     private readonly guidelines: FeatureGuidelinesService,
     private readonly notifications: NotificationsService,
     private readonly bus: EventBus,
+    private readonly coverage: CoverageService,
   ) {}
 
   /** The Project's POs and Admins start one; at most one runs per Project. */
@@ -363,7 +375,14 @@ export class GrillingService {
     answers: GrillingAnswerForAi[],
     from: number,
   ): Promise<Plan> {
-    const guidelines = await this.guidelinesFor(project.id);
+    const [guidelines, uncoveredPlatforms] = await Promise.all([
+      this.guidelinesFor(project.id),
+      // Coverage (ticket 0051): the Platforms no Feature covers, for the rounds to ask about.
+      this.coverage.uncoveredForGrilling(project.id),
+    ]);
+    // Written for a Team Role's holders and for the Project, not for whoever moved the
+    // Grilling on: in the Organization's language (ticket 0068).
+    const language = await projectLanguage(this.db, project.id);
     const rounds: NewRound[] = [];
     let known = memory;
     for (const { kind, role } of GRILLING_ROUNDS.slice(from)) {
@@ -373,6 +392,7 @@ export class GrillingService {
           `${LABEL[kind]} round skipped: nobody in the Project's Teams holds the ${role} Team Role.`,
         );
         rounds.push({
+          id: randomUUID(),
           kind,
           role,
           status: 'SKIPPED',
@@ -388,8 +408,10 @@ export class GrillingService {
         project.id,
         `${project.name}\n${ROUND_QUERY[kind]}`,
         projectBudget(budget),
+        { k: budget.topK },
       );
       const memoryNow = known;
+      const roundId = randomUUID();
       const drafted = await this.callAi(() =>
         this.ai.grillingQuestions(
           {
@@ -399,8 +421,13 @@ export class GrillingService {
             projectContext,
             guidelines,
             memory: memoryNow,
+            uncoveredPlatforms,
           },
-          { model },
+          {
+            model,
+            language,
+            receipt: { output: { kind: 'GRILLING_ROUND', id: roundId }, projectId: project.id },
+          },
         ),
       );
       const questions = distinct(drafted.questions).slice(0, MAX_GRILLING_QUESTIONS);
@@ -409,10 +436,24 @@ export class GrillingService {
           known,
           `${LABEL[kind]} round (${role}): what is already known answers it; nothing was asked.`,
         );
-        rounds.push({ kind, role, status: 'SKIPPED', skipReason: 'NOTHING_TO_ASK', questions: [] });
+        rounds.push({
+          id: roundId,
+          kind,
+          role,
+          status: 'SKIPPED',
+          skipReason: 'NOTHING_TO_ASK',
+          questions: [],
+        });
         continue;
       }
-      const round: NewRound = { kind, role, status: 'ASKING', skipReason: null, questions };
+      const round: NewRound = {
+        id: roundId,
+        kind,
+        role,
+        status: 'ASKING',
+        skipReason: null,
+        questions,
+      };
       rounds.push(round);
       return { memory: known, rounds, asking: round, draft: null };
     }
@@ -435,9 +476,11 @@ export class GrillingService {
         project.id,
         `${project.name}\n${DRAFT_QUERY}`,
         projectBudget(budget),
+        { k: budget.topK },
       ),
     );
     const memoryNow = known;
+    const proposalId = randomUUID();
     const draft = await this.callAi(() =>
       this.ai.draftBriefFromGrilling(
         {
@@ -449,7 +492,15 @@ export class GrillingService {
           memory: memoryNow,
           answers,
         },
-        { model },
+        {
+          model,
+          language,
+          receipt: {
+            output: { kind: 'BRIEF_PROPOSAL', id: proposalId },
+            proposal: { kind: 'BRIEF_PROPOSAL', id: proposalId, redraft: 1 },
+            projectId: project.id,
+          },
+        },
       ),
     );
     return {
@@ -457,6 +508,7 @@ export class GrillingService {
       rounds,
       asking: null,
       draft: {
+        proposalId,
         markdown: normalizeMarkdown(draft.proposedMarkdown),
         summary: oneLine(draft.summary),
         baseVersionId: base?.id ?? null,
@@ -476,6 +528,7 @@ export class GrillingService {
     for (const round of plan.rounds) {
       const created = await tx.grillingRound.create({
         data: {
+          id: round.id,
           grillingId: g.id,
           kind: round.kind,
           role: round.role,
@@ -500,6 +553,7 @@ export class GrillingService {
     }
     const proposal = await tx.briefProposal.create({
       data: {
+        id: plan.draft.proposalId,
         projectId: g.projectId,
         baseVersionId: plan.draft.baseVersionId,
         source: 'GRILLING',

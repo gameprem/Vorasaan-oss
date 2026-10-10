@@ -5,6 +5,7 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { saveSpec } from '@/lib/feature-actions';
+import { markdownComponents } from './chat/markdown';
 import { type SaveMarkdownInput, SpecEditor } from './spec-editor';
 import { secondaryButton } from './ui';
 
@@ -15,8 +16,11 @@ export function SpecPanel({
   version,
   meta,
   canEdit,
+  template,
 }: {
   featureId: string;
+  /** What a first Spec starts from: a section per target Platform (from the server). */
+  template?: string;
   markdown: string | null;
   version: number;
   meta: string | null;
@@ -39,7 +43,7 @@ export function SpecPanel({
           </Link>
           .
         </p>
-        <SpecEditor save={save} current={null} baseVersion={0} />
+        <SpecEditor key={template} save={save} current={null} baseVersion={0} template={template} />
       </div>
     ) : (
       <p className="text-fg-soft">This Feature has no Spec yet. Its PO writes the first version.</p>
@@ -68,7 +72,9 @@ export function SpecPanel({
         )}
       </div>
       <div className="spec rounded-sheet bg-rail p-6 sm:p-10">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+          {markdown}
+        </ReactMarkdown>
       </div>
     </>
   );

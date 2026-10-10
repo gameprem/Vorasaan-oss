@@ -1,9 +1,13 @@
 import type {
   AttachmentView,
+  DecisionGraphView,
   DecisionLogEntry,
+  FeatureCoverageView,
   FeatureView,
+  ProjectPlatformsView,
   RoleOwnerView,
   SpecDiff,
+  SpecTemplateView,
   SpecVersionView,
   TeamView,
 } from '@vorasaan/shared';
@@ -12,12 +16,16 @@ import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { AttachmentsPanel } from '@/components/attachments-panel';
 import { BlockedBadge, KindBadge, Notice, relativeTime } from '@/components/bits';
+import { CoverageChips } from '@/components/coverage-chips';
+import { DecisionGraph } from '@/components/decision-graph';
 import { DraftedWith } from '@/components/drafted-with';
+import { FeaturePlatformsEditor } from '@/components/feature-platforms-editor';
 import { RevertButton } from '@/components/revert-button';
 import { RoleOwnersEditor } from '@/components/role-owners-editor';
 import { VersionDiff } from '@/components/spec-diff';
 import { SpecPanel } from '@/components/spec-panel';
 import { ROLE_LABEL, secondaryButton } from '@/components/ui';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ApiError, api, currentUser } from '@/lib/api';
 import { revertSpec } from '@/lib/feature-actions';
 import { isId } from '@/lib/ids';
@@ -30,6 +38,7 @@ const TABS = [
   { id: 'team', label: 'Role Owners' },
   { id: 'history', label: 'Version history' },
   { id: 'decisions', label: 'Decision Log' },
+  { id: 'graph', label: 'Decision Graph' },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
@@ -39,6 +48,7 @@ const SOURCE_TEXT: Record<SpecVersionView['source'], string> = {
   DECISION: 'From a Decision',
   REVERT: 'Reverted',
   CONVERSATION: 'Drafted in a Conversation',
+  ACCEPTANCE_CRITERIA: "Drafted a Platform's acceptance criteria",
 };
 
 /** Loads what only one tab needs; an error there is shown in the tab, not as the whole page. */
@@ -84,14 +94,33 @@ export default async function FeaturePage({
     );
   }
   const latest = versions[0];
-  const me = await currentUser();
+  // Coverage per target Platform (ADR 0009): the header's chips. Without it, plain names.
+  const [me, coverage] = await Promise.all([
+    currentUser(),
+    feature.platforms.length > 0
+      ? load(() => api<FeatureCoverageView>(`/features/${id}/coverage`))
+      : null,
+  ]);
   const canEditSpec = Boolean(me?.isAdmin || feature.myRoles.includes('PO'));
   const canEditAttachments = Boolean(me?.isAdmin || feature.myRoles.length > 0);
 
   const team = tab === 'team' ? await api<TeamView>(`/teams/${feature.teamId}`) : null;
+  // Who writes the Spec also picks its target Platforms; a first Spec starts from a template
+  // with a section for each of them (ADR 0009).
+  const [projectPlatforms, specTemplate] =
+    tab === 'spec' && canEditSpec
+      ? await Promise.all([
+          load(() => api<ProjectPlatformsView>(`/projects/${feature.projectId}/platforms`)),
+          latest ? null : load(() => api<SpecTemplateView>(`/features/${id}/spec-template`)),
+        ])
+      : [null, null];
   const attachments =
     tab === 'attachments'
       ? await load(() => api<AttachmentView[]>(`/features/${id}/attachments`))
+      : null;
+  const graph =
+    tab === 'graph'
+      ? await load(() => api<DecisionGraphView>(`/features/${id}/decision-graph`))
       : null;
   // `?diff=N` compares vN with the version before it (v1 with an empty Spec).
   const diffTo = Number(rawDiff);
@@ -121,6 +150,26 @@ export default async function FeaturePage({
             <h1 className="text-3xl font-semibold tracking-tight">{feature.title}</h1>
             <BlockedBadge openBlockers={feature.openBlockers} />
           </div>
+          {coverage?.data ? (
+            <CoverageChips
+              featureId={id}
+              platforms={coverage.data.platforms}
+              canDraft={canEditSpec}
+            />
+          ) : (
+            feature.platforms.length > 0 && (
+              <ul aria-label="Target Platforms" className="mt-2 flex flex-wrap gap-2">
+                {feature.platforms.map((p) => (
+                  <li
+                    key={p.id}
+                    className="rounded-full bg-surface px-3 py-0.5 text-sm text-fg-soft"
+                  >
+                    {p.name}
+                  </li>
+                ))}
+              </ul>
+            )
+          )}
           {feature.jiraIssueKey && (
             <p className="mt-2 text-sm text-fg-soft">
               Jira Epic{' '}
@@ -167,8 +216,16 @@ export default async function FeaturePage({
       </nav>
 
       <div className="mt-8">
+        {tab === 'spec' && projectPlatforms?.data && projectPlatforms.data.platforms.length > 0 && (
+          <FeaturePlatformsEditor
+            featureId={id}
+            platforms={projectPlatforms.data.platforms}
+            targets={feature.platforms.map((p) => p.id)}
+          />
+        )}
         {tab === 'spec' && (
           <SpecPanel
+            template={specTemplate?.data?.markdown}
             featureId={id}
             markdown={latest?.markdown ?? null}
             version={latest?.version ?? 0}
@@ -323,6 +380,28 @@ export default async function FeaturePage({
                 </li>
               ))}
             </ol>
+          ))}
+
+        {tab === 'graph' &&
+          graph &&
+          (!graph.data ? (
+            <Notice tone="error">{graph.error}</Notice>
+          ) : graph.data.branches.length === 0 ? (
+            <EmptyState
+              title="No Decision Requests yet"
+              action={
+                feature.myRoles.length > 0 ? (
+                  <Link href={`/features/${id}/raise`} className={secondaryButton}>
+                    Raise a Decision Request
+                  </Link>
+                ) : undefined
+              }
+            >
+              When someone raises a Blocker or a Question on this Feature, it branches off the Spec
+              here and merges back at the Spec Version it produces.
+            </EmptyState>
+          ) : (
+            <DecisionGraph graph={graph.data} />
           ))}
       </div>
     </article>

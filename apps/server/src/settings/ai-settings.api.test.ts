@@ -113,6 +113,7 @@ describe('AI providers and Approved Models', () => {
       'FEATURE_SUGGESTIONS',
       'FIT_CHECK',
       'CHAT',
+      'PROMPT_PROPOSALS',
     ]);
     expect(res.body.tasks.every((t) => t.approvedModelId === null)).toBe(true);
     expect(await choose('chat')).toEqual({
@@ -161,8 +162,10 @@ describe('AI providers and Approved Models', () => {
       ],
       chatDefaultId: best.id,
     });
+    // The exact shape above already rules out a key hint; short fragments such as a
+    // key's last four characters are not checked here, since a random id can contain them.
     const raw = JSON.stringify(res.body);
-    for (const secret of [ANTHROPIC_KEY, LOCAL_KEY, LOCAL_URL, '9876', '5555', 'localhost']) {
+    for (const secret of [ANTHROPIC_KEY, LOCAL_KEY, LOCAL_URL, 'localhost']) {
       expect(raw).not.toContain(secret);
     }
   });

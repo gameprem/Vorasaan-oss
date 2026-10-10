@@ -1,11 +1,20 @@
-import { ApproveActionCardInput, DeclineActionCardInput } from '@vorasaan/shared';
+import {
+  ApproveActionCardInput,
+  DeclineActionCardInput,
+  RequestChangesInput,
+} from '@vorasaan/shared';
 import { forwardPost } from '@/lib/api-proxy';
 import { isId } from '@/lib/ids';
 
 // An Action Card in one of the visitor's Conversations:
 // - approve: the target's own service sends, approves or accepts it;
-// - decline: the draft is withdrawn, the proposal rejected, the suggestion dismissed.
-const ACTIONS = { approve: ApproveActionCardInput, decline: DeclineActionCardInput } as const;
+// - decline: the draft is withdrawn, the proposal rejected, the suggestion dismissed;
+// - request-changes: the AI writes the next Redraft of what it proposes (ticket 0065).
+const ACTIONS = {
+  approve: ApproveActionCardInput,
+  decline: DeclineActionCardInput,
+  'request-changes': RequestChangesInput,
+} as const;
 
 export async function POST(
   request: Request,

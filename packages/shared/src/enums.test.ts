@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import * as db from '@vorasaan/db';
+import * as skills from './agent-skill.ts';
 import * as shared from './enums.ts';
 
 const pairs = [
@@ -30,6 +31,17 @@ const pairs = [
   ['ChatEventKind', shared.ChatEventKind, db.ChatEventKind],
   ['DecisionSource', shared.DecisionSource, db.DecisionSource],
   ['ChatCardStatus', shared.ChatCardStatus, db.ChatCardStatus],
+  ['ProposalKind', shared.ProposalKind, db.ProposalKind],
+  ['RedraftStatus', shared.RedraftStatus, db.RedraftStatus],
+  ['ReceiptOutputKind', shared.ReceiptOutputKind, db.ReceiptOutputKind],
+  ['ReceiptOutcomeKind', shared.ReceiptOutcomeKind, db.ReceiptOutcomeKind],
+  ['PromptVersionStatus', shared.PromptVersionStatus, db.PromptVersionStatus],
+  ['PromptActivationKind', shared.PromptActivationKind, db.PromptActivationKind],
+  ['PromptEvalRunStatus', shared.PromptEvalRunStatus, db.PromptEvalRunStatus],
+  ['PromptAnalysisStatus', shared.PromptAnalysisStatus, db.PromptAnalysisStatus],
+  ['PromptAnalysisTrigger', shared.PromptAnalysisTrigger, db.PromptAnalysisTrigger],
+  ['AgentSkillSource', skills.AgentSkillSource, db.AgentSkillSource],
+  ['AgentSkillVersionStatus', skills.AgentSkillVersionStatus, db.AgentSkillVersionStatus],
 ] as const;
 
 describe('shared enums mirror Prisma', () => {

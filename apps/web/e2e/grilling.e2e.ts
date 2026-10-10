@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, fern, mint, oak, pim, SEED, test } from './fixtures';
+import { chooseOption, expect, fern, mint, oak, pim, SEED, test } from './fixtures';
 
 const grillingTab = `/projects/${SEED.projectId}?tab=grilling`;
 
@@ -202,7 +202,7 @@ test('Grilling in chat → approve the Brief from its card → accept a Feature 
   await expect(suggestion).toBeVisible();
   const title = (await suggestion.getByRole('heading').textContent()) ?? '';
   expect(title).toMatch(/^Suggested Feature \d+$/);
-  await suggestion.getByLabel('Team').selectOption({ label: 'Checkout' });
+  await chooseOption(suggestion, 'Team', 'Checkout');
   await suggestion.getByRole('button', { name: 'Accept' }).click();
 
   // Accepting creates the Feature with a first Spec Proposal, which Pim approves.

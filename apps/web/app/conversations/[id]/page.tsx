@@ -7,11 +7,15 @@ import { chipsFor, contextLabel, loadDoc, loadModels, placeholderFor } from '@/l
 import { isId } from '@/lib/ids';
 import { requestLanguage } from '@/lib/lang';
 
-async function load(id: string) {
+/** The Conversation with its latest messages, or those around `message` (a deep link, 0066). */
+async function load(id: string, message?: string | null) {
   if (!isId(id)) notFound();
   try {
-    return await api<ConversationView>(`/conversations/${id}`);
+    const around = message ? `?around=${message}` : '';
+    return await api<ConversationView>(`/conversations/${id}${around}`);
   } catch (error) {
+    // A link to a message that isn't there (any more) opens the Conversation as usual.
+    if (message && error instanceof ApiError && error.status === 404) return load(id);
     if (error instanceof ApiError && (error.status === 404 || error.status === 403)) notFound();
     throw error;
   }
@@ -27,9 +31,18 @@ export async function generateMetadata({
 }
 
 // A Conversation (ADR 0008): the chat, its Action Cards, and its Spec or Project Brief.
-export default async function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
+// `?message=<id>` opens it at that message (ticket 0066).
+export default async function ConversationPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ message?: string | string[] }>;
+}) {
   const { id } = await params;
-  const [conversation, me] = await Promise.all([load(id), currentUser()]);
+  const { message } = await searchParams;
+  const focus = typeof message === 'string' && isId(message) ? message : null;
+  const [conversation, me] = await Promise.all([load(id, focus), currentUser()]);
   if (!me) redirect('/login');
   const { scope, grilling } = conversation;
   const [doc, models, lang] = await Promise.all([loadDoc(scope), loadModels(), requestLanguage()]);
@@ -48,6 +61,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
       // A Grilling Conversation's questions come from the server: no model to pick.
       models={grilling ? null : models}
       lang={lang}
+      focusMessageId={focus}
     />
   );
 }

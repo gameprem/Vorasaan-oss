@@ -9,7 +9,13 @@ import {
   Query,
 } from '@nestjs/common';
 import type { User } from '@vorasaan/db';
-import { BriefDiffQuery, RevertBriefInput, WriteBriefInput } from '@vorasaan/shared';
+import {
+  ApproveProposalInput,
+  BriefDiffQuery,
+  RejectProposalInput,
+  RevertBriefInput,
+  WriteBriefInput,
+} from '@vorasaan/shared';
 import { CurrentUser } from '../auth/identity.guard.ts';
 import { BriefService } from './brief.service.ts';
 
@@ -76,12 +82,20 @@ export class BriefController {
   }
 
   @Post('brief-proposals/:id/approve')
-  approve(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
-    return this.brief.approve(user, id);
+  approve(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: ApproveProposalInput }) body: ApproveProposalInput,
+  ) {
+    return this.brief.approve(user, id, body?.redraft);
   }
 
   @Post('brief-proposals/:id/reject')
-  reject(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
-    return this.brief.reject(user, id);
+  reject(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body({ schema: RejectProposalInput }) body: RejectProposalInput,
+  ) {
+    return this.brief.reject(user, id, body?.reason);
   }
 }

@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { E2E } from './env';
-import { beam, expect, pim, SEED, test, unique } from './fixtures';
+import { beam, expect, pim, SEED, test, tick, unique } from './fixtures';
 
 /** Makes the request's window run out `minutes` ago, with escalation at `step`. */
 function age(requestId: string, minutes: number, step: number) {
@@ -39,7 +39,7 @@ test('the Inbox and My Requests show "due in", then "overdue" and "escalated"', 
   // Beam raises a Blocker; the draft review offers the Project's window, to shorten only.
   const raiser = await as(beam);
   await raiser.goto(`/features/${SEED.featureId}/raise`);
-  await raiser.getByLabel('Blocker').check();
+  await tick(raiser.getByLabel('Blocker'));
   await raiser.getByLabel('Title').fill(title);
   await raiser.getByLabel('Description').fill('Nobody has used it for a year.');
   await raiser.getByRole('button', { name: 'Continue to review' }).click();
@@ -47,7 +47,7 @@ test('the Inbox and My Requests show "due in", then "overdue" and "escalated"', 
   const requestId = raiser.url().split('/').at(-1) ?? '';
   await expect(raiser.getByRole('heading', { name: 'Response Window' })).toBeVisible();
   await expect(raiser.getByText('This Project gives a Blocker 4 working hours.')).toBeVisible();
-  await raiser.getByLabel('Only Pim').check();
+  await tick(raiser.getByLabel('Only Pim'));
   await raiser.getByRole('button', { name: 'Send now' }).click();
   await expect(raiser.getByText(/for Pim to decide\./)).toBeVisible();
 

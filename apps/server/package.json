@@ -14,7 +14,13 @@
     "eval:grilling": "bun scripts/eval-grilling.ts",
     "eval:feature-suggestions": "bun scripts/eval-feature-suggestions.ts",
     "eval:conversation": "bun scripts/eval-conversation.ts",
-    "tokens:fixture": "bun scripts/token-fixture.ts"
+    "eval:redrafts": "bun scripts/eval-redrafts.ts",
+    "eval:prompt-proposals": "bun scripts/eval-prompt-proposals.ts",
+    "eval:coverage": "bun scripts/eval-coverage.ts",
+    "eval:agent-skills": "bun scripts/eval-agent-skills.ts",
+    "tokens:fixture": "bun scripts/token-fixture.ts",
+    "tokens:tasks": "bun scripts/token-report.ts",
+    "bench": "bun scripts/bench.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

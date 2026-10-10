@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useId, useState } from 'react';
 import type { Lang } from '@/lib/lang';
 import { scopeKey } from '@/lib/scope-key';
+import { ComboBox } from '../ui/combo-box';
 import { Chat } from './chat';
 
 // A new Conversation (ADR 0008): a greeting in the person's language and starter cards from
@@ -85,32 +86,18 @@ export function NewConversation({
       ? scope.feature.title
       : scope.project.name
     : null;
-  const groups = [...new Set(options.map((o) => o.group))];
 
   const picker = (
-    <>
-      <label htmlFor={pickerId} className="sr-only">
-        Project or Feature
-      </label>
-      <select
-        id={pickerId}
-        value={key ?? ''}
-        onChange={(e) => setScope(options.find((o) => o.value === e.target.value)?.scope ?? null)}
-      >
-        <option value="">Pick a Project or Feature…</option>
-        {groups.map((group) => (
-          <optgroup key={group} label={group}>
-            {options
-              .filter((o) => o.group === group)
-              .map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-          </optgroup>
-        ))}
-      </select>
-    </>
+    <ComboBox
+      aria-label="Project or Feature"
+      className="scope-picker"
+      inputClassName="mt-0! rounded-full! bg-bg! py-1! ring-0! text-[13px] font-medium"
+      placeholder="Pick a Project or Feature…"
+      emptyText="No Project or Feature matches"
+      options={options.map((o) => ({ id: o.value, label: o.label, section: o.group }))}
+      value={key ?? ''}
+      onChange={(value) => setScope(options.find((o) => o.value === value)?.scope ?? null)}
+    />
   );
 
   return (

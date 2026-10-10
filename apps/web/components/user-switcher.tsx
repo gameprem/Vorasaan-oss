@@ -1,5 +1,6 @@
 import { switchUser } from '@/lib/actions';
 import type { DevUser } from '@/lib/api';
+import { LazyPersonPicker } from './ui/lazy';
 
 /** DEV ONLY: pick who you are until real sign-in exists. */
 export function UserSwitcher({ users, currentId }: { users: DevUser[]; currentId?: string }) {
@@ -9,9 +10,9 @@ export function UserSwitcher({ users, currentId }: { users: DevUser[]; currentId
   return (
     <form action={switchUser} className="grid gap-1 text-sm">
       <span className="flex items-center gap-2">
-        <label htmlFor="userId" className="text-fg-soft">
+        <span id="user-switcher-label" className="text-fg-soft">
           Viewing as
-        </label>
+        </span>
         <span
           className="rounded-full bg-lacquer-wash px-2 py-0.5 text-xs font-semibold text-lacquer"
           title="Development identity switcher, not real sign-in"
@@ -20,20 +21,16 @@ export function UserSwitcher({ users, currentId }: { users: DevUser[]; currentId
         </span>
       </span>
       <span className="flex items-center gap-1">
-        <select
+        <LazyPersonPicker
           key={currentId ?? 'nobody'}
-          id="userId"
+          aria-label="Viewing as"
           name="userId"
+          className="min-w-0 flex-1"
+          inputClassName="mt-0! rounded-full! py-1!"
+          extra={[{ id: '', label: 'Nobody' }]}
+          people={users.map((u) => ({ id: u.id, name: u.name }))}
           defaultValue={currentId ?? ''}
-          className="min-w-0 flex-1 rounded-full bg-surface px-3 py-1.5 text-fg"
-        >
-          <option value="">Nobody</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
-            </option>
-          ))}
-        </select>
+        />
         <button
           type="submit"
           className="rounded-full px-3 py-1.5 font-semibold text-ink hover:bg-ink-wash"

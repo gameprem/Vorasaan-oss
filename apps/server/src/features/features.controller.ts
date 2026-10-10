@@ -2,6 +2,7 @@ import { Controller, Get, NotFoundException, Param, ParseUUIDPipe } from '@nestj
 import type { PrismaClient, User } from '@vorasaan/db';
 import type { FeatureSummaryView, FeatureView } from '@vorasaan/shared';
 import { CurrentUser } from '../auth/identity.guard.ts';
+import { PlatformsService } from '../platforms/platforms.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { AtlassianSettingsService } from '../settings/atlassian-settings.service.ts';
 import { OPEN_BLOCKERS } from './open-blockers.ts';
@@ -11,6 +12,7 @@ export class FeaturesController {
   constructor(
     @InjectPrisma() private readonly db: PrismaClient,
     private readonly atlassian: AtlassianSettingsService,
+    private readonly platforms: PlatformsService,
   ) {}
 
   /** Features where the current user is a Role Owner (the CLI's Feature picker and TUI). */
@@ -40,14 +42,18 @@ export class FeaturesController {
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<FeatureView> {
-    const f = await this.db.feature.findUnique({
-      where: { id },
-      include: {
-        team: { select: { name: true, project: { select: { id: true, name: true } } } },
-        roleOwners: { where: { userId: user.id }, select: { role: true } },
-        _count: { select: { decisionRequests: OPEN_BLOCKERS } },
-      },
-    });
+    // Its target Platforms in one query of their own, alongside (ticket 0050).
+    const [f, platforms] = await Promise.all([
+      this.db.feature.findUnique({
+        where: { id },
+        include: {
+          team: { select: { name: true, project: { select: { id: true, name: true } } } },
+          roleOwners: { where: { userId: user.id }, select: { role: true } },
+          _count: { select: { decisionRequests: OPEN_BLOCKERS } },
+        },
+      }),
+      this.platforms.targets(this.db, id),
+    ]);
     if (!f) throw new NotFoundException('Feature not found');
     return {
       id: f.id,
@@ -60,6 +66,7 @@ export class FeaturesController {
       jiraIssueKey: f.jiraIssueKey,
       jiraIssueUrl: await this.atlassian.jiraIssueUrl(f.jiraIssueKey),
       openBlockers: f._count.decisionRequests,
+      platforms,
     };
   }
 }

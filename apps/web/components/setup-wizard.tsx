@@ -1,17 +1,40 @@
 'use client';
 
-import { DEFAULT_MODELS } from '@vorasaan/shared';
-import { useEffect, useState, useTransition } from 'react';
-import { completeSetup, testAiDuringSetup } from '@/lib/setup-actions';
+import {
+  CHAT_LANGUAGE_LABEL,
+  ChatLanguage,
+  DEFAULT_MODELS,
+  DEFAULT_RESPONSE_WINDOW_SETTINGS,
+  WorkingTimeInput,
+} from '@vorasaan/shared';
+import { useCallback, useEffect, useState, useTransition } from 'react';
+import {
+  completeSetup,
+  listOpenRouterModelsDuringSetup,
+  testAiDuringSetup,
+} from '@/lib/setup-actions';
+import { browserTimeZone } from '@/lib/time-zones';
 import { inputClass } from './login-form';
 import { type ProviderDraft, ProviderFields, toSettingsInput } from './provider-fields';
+import { WorkingTimeFields } from './response-windows-settings';
+import { Select } from './ui/select';
 
-const STEPS = ['Your organization', 'AI provider'] as const;
+const STEPS = ['Your organization', 'Calendar & language', 'AI provider'] as const;
+type Step = 0 | 1 | 2;
 
 export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
-  const [step, setStep] = useState<0 | 1>(0);
+  const [step, setStep] = useState<Step>(0);
   const [setupToken, setSetupToken] = useState(initialToken);
   const [org, setOrg] = useState({ organizationName: '', name: '', email: '', password: '' });
+  // Response Windows count in this calendar (ticket 0063). The defaults until the browser's
+  // time zone is known, after the first render, so server and browser render the same.
+  const [workingTime, setWorkingTime] = useState<WorkingTimeInput>({
+    timeZone: DEFAULT_RESPONSE_WINDOW_SETTINGS.timeZone,
+    workingDays: [...DEFAULT_RESPONSE_WINDOW_SETTINGS.workingDays],
+    workStart: DEFAULT_RESPONSE_WINDOW_SETTINGS.workStart,
+    workEnd: DEFAULT_RESPONSE_WINDOW_SETTINGS.workEnd,
+  });
+  const [language, setLanguage] = useState<ChatLanguage>('en');
   const [provider, setProvider] = useState<ProviderDraft>({
     provider: 'ANTHROPIC',
     model: DEFAULT_MODELS.ANTHROPIC,
@@ -20,11 +43,22 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
   });
   const [error, setError] = useState<string>();
   const [finishing, startFinish] = useTransition();
+  const loadOpenRouterModels = useCallback(
+    () => listOpenRouterModelsDuringSetup(setupToken),
+    [setupToken],
+  );
 
   // The token came in the link from the server log: keep it out of the address bar (and so
   // out of bookmarks and screenshots) once it's in the field.
   useEffect(() => {
     if (window.location.search.includes('token=')) window.history.replaceState(null, '', '/setup');
+  }, []);
+
+  // Prefill the calendar and language from the browser: its time zone, and Thai if the
+  // browser prefers it.
+  useEffect(() => {
+    setWorkingTime((w) => ({ ...w, timeZone: browserTimeZone() }));
+    if (navigator.language.toLowerCase().startsWith('th')) setLanguage('th');
   }, []);
 
   const stepOneError = !setupToken.trim()
@@ -38,6 +72,8 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
           : org.password.length < 10
             ? 'Use a password of at least 10 characters.'
             : undefined;
+  const calendar = WorkingTimeInput.safeParse(workingTime);
+  const stepTwoError = calendar.success ? undefined : calendar.error.issues[0]?.message;
 
   const finish = () =>
     startFinish(async () => {
@@ -46,6 +82,8 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
         {
           organizationName: org.organizationName,
           admin: { name: org.name, email: org.email, password: org.password },
+          workingTime,
+          language,
           ai: toSettingsInput(provider),
         },
         setupToken,
@@ -57,7 +95,7 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
   return (
     <div className="mx-auto max-w-xl">
       <h1 className="text-3xl font-semibold tracking-tight">Set up Vorasaan</h1>
-      <p className="mt-2 text-fg-soft">Two steps, then you're in.</p>
+      <p className="mt-2 text-fg-soft">Three steps, then you're in.</p>
 
       <ol className="mt-8 flex flex-wrap gap-2 text-sm" aria-label="Setup steps">
         {STEPS.map((label, i) => (
@@ -77,12 +115,11 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
         className="mt-8"
         onSubmit={(e) => {
           e.preventDefault();
-          if (step === 0) {
-            if (stepOneError) setError(stepOneError);
-            else {
-              setError(undefined);
-              setStep(1);
-            }
+          const stepError = step === 0 ? stepOneError : step === 1 ? stepTwoError : undefined;
+          if (stepError) setError(stepError);
+          else if (step < 2) {
+            setError(undefined);
+            setStep((step + 1) as Step);
           } else finish();
         }}
       >
@@ -145,6 +182,29 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
               />
             </label>
           </div>
+        ) : step === 1 ? (
+          <div className="space-y-5">
+            <p className="text-fg-soft">
+              Response Windows count only working time: a Decision Request sent on Friday evening
+              isn't overdue on Saturday. Admins can change this later in Settings → Response
+              Windows.
+            </p>
+            <WorkingTimeFields
+              value={workingTime}
+              onChange={(patch) => setWorkingTime((w) => ({ ...w, ...patch }))}
+            />
+            <Select
+              label="Language"
+              className="max-w-sm"
+              description="For chat app cards and bot replies, unless someone picks their own."
+              options={ChatLanguage.options.map((lang) => ({
+                id: lang,
+                label: CHAT_LANGUAGE_LABEL[lang],
+              }))}
+              value={language}
+              onChange={(lang) => setLanguage(lang as ChatLanguage)}
+            />
+          </div>
         ) : (
           <>
             <p className="mb-6 text-fg-soft">
@@ -156,6 +216,7 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
               value={provider}
               onChange={setProvider}
               test={(input) => testAiDuringSetup(input, setupToken)}
+              loadOpenRouterModels={loadOpenRouterModels}
             />
           </>
         )}
@@ -167,10 +228,13 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
         )}
 
         <div className="mt-8 flex gap-3">
-          {step === 1 && (
+          {step > 0 && (
             <button
               type="button"
-              onClick={() => setStep(0)}
+              onClick={() => {
+                setError(undefined);
+                setStep((step - 1) as Step);
+              }}
               className="rounded-full bg-surface px-5 py-2.5 font-semibold text-fg hover:bg-surface-hi"
             >
               Back
@@ -181,7 +245,7 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
             disabled={finishing}
             className="rounded-full bg-ink px-5 py-2.5 font-semibold text-on-ink hover:opacity-90 disabled:opacity-40"
           >
-            {step === 0 ? 'Continue' : finishing ? 'Setting up…' : 'Finish setup'}
+            {step < 2 ? 'Continue' : finishing ? 'Setting up…' : 'Finish setup'}
           </button>
         </div>
       </form>

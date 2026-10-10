@@ -4,6 +4,7 @@ import type { RoleOwnerView, TeamRole, TeamView } from '@vorasaan/shared';
 import { useState, useTransition } from 'react';
 import { setRoleOwners } from '@/lib/org-actions';
 import { primaryButton, ROLE_LABEL } from './ui';
+import { Checkbox } from './ui/checkbox';
 
 /**
  * For each Team Role someone in the Team holds, tick who owns it on this Feature.
@@ -57,22 +58,9 @@ export function RoleOwnersEditor({
                   const key = `${m.userId}:${role}`;
                   const on = selected.has(key);
                   return (
-                    <label
-                      key={key}
-                      className={`flex cursor-pointer items-center gap-2 rounded-full px-3 py-1 ${
-                        on
-                          ? 'bg-jade-wash text-jade'
-                          : 'bg-surface text-fg-soft hover:bg-surface-hi'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        onChange={() => toggle(key)}
-                        className="accent-jade"
-                      />
+                    <Checkbox key={key} variant="chip" isSelected={on} onChange={() => toggle(key)}>
                       {m.name}
-                    </label>
+                    </Checkbox>
                   );
                 })}
             </div>

@@ -8,21 +8,25 @@
     "build": "bun --bun next build",
     "start": "bun --bun next start --port 3000",
     "typecheck": "tsc -p tsconfig.json",
+    "test": "bun test lib components",
     "e2e": "playwright test"
   },
   "dependencies": {
     "@blocknote/ariakit": "^0.55.0",
     "@blocknote/core": "^0.55.0",
     "@blocknote/react": "^0.55.0",
+    "@internationalized/date": "^3.12.4",
     "@vorasaan/shared": "workspace:*",
     "diff": "^9.0.0",
     "next": "16.3.7",
     "react": "19.3.0",
+    "react-aria-components": "^1.21.1",
     "react-dom": "19.3.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.20.4",

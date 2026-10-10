@@ -20,6 +20,8 @@ const INBOX_CHANGED: ServerEventName = 'inbox.changed';
 const NOTIFICATION_CREATED: ServerEventName = 'notification.created';
 /** A chat account was linked or unlinked (Settings → Notifications shows it). */
 const CHAT_ACCOUNT_CHANGED: ServerEventName = 'chatAccount.changed';
+/** A Redraft of a proposal started or finished (ticket 0065): its page shows it. */
+const PROPOSAL_REDRAFTED: ServerEventName = 'proposal.redrafted';
 /** Backoff between reconnects: 1 s, 2 s, 4 s ... capped at 30 s; give up after 8 in a row. */
 const BASE_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 30_000;
@@ -59,6 +61,7 @@ export function LiveUpdates() {
       };
       es.addEventListener(INBOX_CHANGED, refresh);
       es.addEventListener(CHAT_ACCOUNT_CHANGED, refresh);
+      es.addEventListener(PROPOSAL_REDRAFTED, refresh);
       es.addEventListener(NOTIFICATION_CREATED, (e) => {
         refresh();
         let data: unknown;

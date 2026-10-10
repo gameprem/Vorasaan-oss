@@ -19,8 +19,16 @@ export type AiTask =
   | 'suggestFeatures'
   | 'draftSpecFromSuggestion'
   | 'checkFeatureFit'
+  | 'draftAcceptanceCriteria'
   | 'chat'
-  | 'summarizeConversation';
+  | 'summarizeConversation'
+  | 'redraftChoices'
+  | 'redraftSpecProposal'
+  | 'redraftBriefProposal'
+  | 'redraftFeatureSuggestion'
+  | 'analyzeFeedback'
+  | 'proposePromptVersion'
+  | 'redraftPromptVersion';
 
 /** The Settings task each call belongs to, and the env var that overrides its model. */
 export const AI_TASKS: Record<AiTask, { kind: AiTaskKind; env: string }> = {
@@ -40,8 +48,25 @@ export const AI_TASKS: Record<AiTask, { kind: AiTaskKind; env: string }> = {
     env: 'VORASAAN_MODEL_DRAFT_SPEC_FROM_SUGGESTION',
   },
   checkFeatureFit: { kind: 'FIT_CHECK', env: 'VORASAAN_MODEL_CHECK_FEATURE_FIT' },
+  // Coverage (ticket 0051): a Platform's acceptance criteria, drafted as a Spec Proposal.
+  draftAcceptanceCriteria: {
+    kind: 'SPEC_PROPOSAL',
+    env: 'VORASAAN_MODEL_DRAFT_ACCEPTANCE_CRITERIA',
+  },
   chat: { kind: 'CHAT', env: 'VORASAAN_MODEL_CHAT' },
   summarizeConversation: { kind: 'SUMMARIES', env: 'VORASAAN_MODEL_SUMMARIZE_CONVERSATION' },
+  // Request changes (ticket 0065): a Redraft runs on the model of the task that drafted it.
+  redraftChoices: { kind: 'CHOICES', env: 'VORASAAN_MODEL_REDRAFT_CHOICES' },
+  redraftSpecProposal: { kind: 'SPEC_PROPOSAL', env: 'VORASAAN_MODEL_REDRAFT_SPEC_PROPOSAL' },
+  redraftBriefProposal: { kind: 'GRILLING', env: 'VORASAAN_MODEL_REDRAFT_BRIEF_PROPOSAL' },
+  redraftFeatureSuggestion: {
+    kind: 'FEATURE_SUGGESTIONS',
+    env: 'VORASAAN_MODEL_REDRAFT_FEATURE_SUGGESTION',
+  },
+  // The Learning Loop (ticket 0072): reading a prompt's feedback and proposing a version of it.
+  analyzeFeedback: { kind: 'PROMPT_PROPOSALS', env: 'VORASAAN_MODEL_ANALYZE_FEEDBACK' },
+  proposePromptVersion: { kind: 'PROMPT_PROPOSALS', env: 'VORASAAN_MODEL_PROPOSE_PROMPT_VERSION' },
+  redraftPromptVersion: { kind: 'PROMPT_PROPOSALS', env: 'VORASAAN_MODEL_REDRAFT_PROMPT_VERSION' },
 };
 
 /** The per-task env override, or undefined when it isn't set. */

@@ -247,18 +247,43 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [x] Decision Lead Time (0056).
    - [x] Link a LINE, Slack or Teams account (0057).
    - [x] Decide from LINE, Slack and Teams (0058).
-4. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why (Spec section, someone to ask, open Blockers, QA ready), using the checks each Platform switches on. The AI fills or asks about the gaps.
-   - [ ] Platforms per Project, targeted by Features (0050).
-   - [ ] Coverage per Platform, used by the AI (0051).
-   - [ ] Web and CLI: Platform chips and the Coverage matrix (0052).
-5. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything.
-6. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec, as per-person Conversations (ADR 0008).
-7. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
-8. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.
-9. Browser-based `vorasaan login`.
-10. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.
+4. **OpenRouter** as an AI Provider: the Admin enters only the key, picks Approved Models from OpenRouter's model list with their Context Window prefilled, and Anthropic models routed through it get prompt caching.
+   - [x] OpenRouter provider (0064).
+5. **Request changes** ([ADR 0013](./docs/adr/0013-request-changes-redrafts-proposals.md)): every AI proposal (Choices, Spec Proposals, Brief Proposals, Feature Suggestions, later Design Docs) gets Request changes next to Approve and Decline. The person explains what to change, and the AI writes a Redraft of the same proposal. Earlier Redrafts stay, with their feedback and a diff. Nothing changes until Approve. It works from Chat Cards too.
+   - [x] Request changes and Redrafts (0065).
+6. **UI kit** ([ADR 0016](./docs/adr/0016-ui-kit-on-react-aria-components.md)): our own accessible components on React Aria, styled with the ADR 0008 tokens in light and dark, in `apps/web/components/ui/`. Searchable pickers for models, Team Roles, people, Features and time zones (in English and Thai), and date and time pickers with an optional Buddhist-era year. They replace every browser-native select, checkbox, radio, date and time input.
+   - [x] UI kit, and replace browser-native controls (0077).
+7. **Context meter, `/compact` and chat history:** a meter under the composer shows how full the Conversation is for its model's Context Window, and a person can compact it themselves, with a focus that steers the Conversation Summary. Older messages stay readable, with a thin divider where the AI switched to the summary. Long Conversations open at the latest messages and load older ones as you scroll up.
+   - [x] Context meter, /compact, chat history and cursor pagination (0066).
+8. **Decision Graph:** a graph like a git network graph on the Feature page. The Spec's versions are the main lane; each Decision Request branches off where it was raised and merges back at the Spec Version it produced, and open ones show their Response Window state.
+   - [x] Decision Graph of a Feature (0067).
+9. **Language:** prompts keep domain terms, ids, numbers, names and quoted words as written, and reply in the person's language, else the Organization's. Every eval set gets Thai and mixed Thai-English cases, and answering directly is measured against reasoning in English first.
+   - [x] Language rules and Thai eval cases (0068).
+10. **Learning Loop** ([ADR 0015](./docs/adr/0015-learning-loop-humans-change-the-ai.md), inspired by [Reef](https://github.com/Human-Agent-Society/reef)): every AI call leaves a Receipt, and what people did with its proposal is linked to it. An Organization can hold its own Prompt Versions and evaluate them in the app. The AI proposes better Prompt Versions from the feedback, with eval scores; only an Admin's approval makes one active. No automatic publishing, no training in the product, and a JSONL export for other tools.
+    - [x] Receipts and feedback (0070).
+    - [x] Prompt Versions and in-app evals (0071).
+    - [x] The AI proposes better prompts (0072).
+11. **Optimization:** measure first on a large seeded Organization, then make the database faster and the AI cheaper without answering worse.
+    - [x] Performance baseline (0073).
+    - [x] Database optimization (0074).
+    - [x] AI usage dashboard (0075).
+    - [x] Token optimization with an eval guard (0076).
+12. **Platforms and Coverage** ([ADR 0009](./docs/adr/0009-platforms-and-coverage.md)): each Project lists its Platforms (Back-End, Front-End, Mobile, and later Flutter or others), started from a template. Features target them, and each target Platform gets a Spec section. Coverage shows which Platforms are covered or missing and why (Spec section, someone to ask, open Blockers, QA ready), using the checks each Platform switches on. The AI fills or asks about the gaps. Design Docs wait for a Platform's Coverage.
+    - [x] Platforms per Project, targeted by Features (0050).
+    - [x] Coverage per Platform, used by the AI (0051).
+    - [x] Web and CLI: Platform chips and the Coverage matrix (0052).
+13. **Agent Skills** ([ADR 0017](./docs/adr/0017-agent-skills-installable-skill-md-packages.md)): the AI can use Agent Skills in the open SKILL.md format (the same folders coding assistants use, such as [diagram-design](https://github.com/cathrynlavery/diagram-design)). An Admin installs one from a GitHub URL or a zip, pinned to the version installed, approves it and enables it per Project; an update shows a diff first. Skills are text and templates only: no script in them ever runs. The AI sees only their names and descriptions and loads a Skill or one of its files when it needs it. What it makes with a Skill (a diagram, say) is shown sandboxed and reaches a Spec or Design Doc only as a proposal a person approves. Receipts record which Skills a call used.
+    - [x] Agent Skills (0078).
+14. **Design Docs per Platform** ([ADR 0014](./docs/adr/0014-design-docs-derived-from-the-spec-per-platform.md)): once a Feature's Spec is approved and a Platform's Coverage is complete, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA) from a template the Project can edit. The Platform's Tech Lead or Role Owners approve it. When the Spec changes, the Design Docs it affects go stale and the AI proposes an update.
+    - [ ] Design Docs per Platform (0069).
+15. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything. It also hands over the Feature's approved Design Doc for the developer's Platform.
+16. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec, as per-person Conversations (ADR 0008).
+17. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
+18. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.
+19. Browser-based `vorasaan login`.
+20. Open-source release: README, CONTRIBUTING, architecture diagrams, publish `@vorasaan/cli`.
     - [x] First-run setup requires a Setup Token from the server log (0062). Required before the first public release.
-    - [ ] Setup asks for the time zone, working days and hours, and language; a Getting started checklist follows (0063).
+    - [x] Setup asks for the time zone, working days and hours, and language; a Getting started checklist follows (0063).
 
 ### Later (recorded, not scheduled)
 - **Drift check:** a GitHub App reads a PR, compares it with the Feature's Spec and Decisions, and comments or opens a Question when they disagree. It builds on `vorasaan run`.

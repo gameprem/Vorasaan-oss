@@ -5,6 +5,7 @@ import type {
   InboxItem,
   MyTeamView,
   NotificationList,
+  ProjectCoverageView,
   RaiseDecisionRequestInput,
   SpecProposalView,
   SpecVersionView,
@@ -44,6 +45,42 @@ export const features: FeatureSummaryView[] = [
     myRoles: ['FRONTEND'],
   },
 ];
+
+/**
+ * GET /projects/:id/coverage: Async checkout (Mobile Banking) targets Back-End, covered, and
+ * Flutter, missing its Spec section; Web Shop's Features target nothing.
+ */
+export function projectCoverage(projectId: string): ProjectCoverageView {
+  const backEnd = { id: id(401), name: 'Back-End' };
+  const flutter = { id: id(402), name: 'Flutter' };
+  if (projectId !== PROJECT_A) {
+    return { projectId, platforms: [], features: [], uncovered: [] };
+  }
+  return {
+    projectId,
+    platforms: [backEnd, flutter],
+    uncovered: [flutter],
+    features: [
+      {
+        featureId: id(101),
+        title: 'Async checkout',
+        teamId: id(201),
+        teamName: 'Checkout',
+        specVersion: 2,
+        covered: false,
+        platforms: [
+          { platform: backEnd, covered: true, checks: ['SPEC_SECTION'], missing: [] },
+          {
+            platform: flutter,
+            covered: false,
+            checks: ['SPEC_SECTION'],
+            missing: [{ check: 'SPEC_SECTION' }],
+          },
+        ],
+      },
+    ],
+  };
+}
 
 export function request(overrides: Partial<DecisionRequestView> = {}): DecisionRequestView {
   return {
@@ -267,12 +304,14 @@ export function fakeApi(options: FakeOptions = {}): { api: TuiApi; calls: FakeCa
     notifications: () => guard('notifications', () => options.notifications ?? notifications),
     myRequests: () => guard('myRequests', () => options.myRequests ?? [request()]),
     listFeatures: () => guard('listFeatures', () => features),
+    projectCoverage: (projectId) => guard('projectCoverage', () => projectCoverage(projectId)),
     feature: (featureId) =>
       guard('feature', () => ({
         ...(features.find((f) => f.id === featureId) ?? (features[0] as FeatureSummaryView)),
         jiraIssueKey: null,
         jiraIssueUrl: null,
         openBlockers: 0,
+        platforms: [],
       })),
     team: () => guard('team', () => team),
     myTeams: () => guard('myTeams', () => myTeams),

@@ -13,6 +13,7 @@ import type { ChatChunk, ChatMessageForAi, ChatTool, ContextBlock } from '../ai/
 import type { FakeAiPort } from '../ai/fake-ai.port.ts';
 import { EventBus } from '../inbox/event-bus.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
+import { SpecService } from '../spec/spec.service.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
 import { as } from '../test/http.ts';
@@ -338,6 +339,31 @@ describe('Action Cards', () => {
     expect(res.status).toBe(409);
     expect((await decline(pim.id, card.id)).status).toBe(409);
     expect(await db.specVersion.count({ where: { featureId: SEED.featureId } })).toBe(2);
+  });
+
+  test('a reload while the card is being approved never turns it STALE', async () => {
+    const { conversation, card } = await draftSpec();
+    // The approval's Inbox event makes the web reload the Conversation: here, that read
+    // lands after the Spec Proposal is approved and before the card is marked.
+    const spec = app.get(SpecService);
+    const approveSpec = spec.approve.bind(spec);
+    let read: ConversationView | undefined;
+    spec.approve = async (...args: Parameters<SpecService['approve']>) => {
+      const version = await approveSpec(...args);
+      read = await getConversation(pim.id, conversation.id);
+      return version;
+    };
+    try {
+      const res = await approve(pim.id, card.id);
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('APPROVED');
+    } finally {
+      spec.approve = approveSpec;
+    }
+    expect(read?.actionCards[0]?.status).toBe('PROPOSED');
+    expect((await getConversation(pim.id, conversation.id)).actionCards[0]?.status).toBe(
+      'APPROVED',
+    );
   });
 
   test('a Spec Proposal card goes STALE when the Spec moves on before it is approved', async () => {

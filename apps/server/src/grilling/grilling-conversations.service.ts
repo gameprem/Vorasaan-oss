@@ -19,6 +19,7 @@ import {
   type ServerEvent,
 } from '@vorasaan/shared';
 import { AI_PORT, type AiPort } from '../ai/ai.port.ts';
+import { personLanguage } from '../ai/language.ts';
 import { projectAccess } from '../brief/brief-access.ts';
 import {
   type ConversationWithScope,
@@ -185,16 +186,24 @@ export class GrillingConversationsService {
     let state = stateOf(conv.grillingState);
     const lines: GrillingNote[] = [];
 
-    if (!isOpen(round, round.grilling)) {
-      return this.finish(user, conv, message, closed(state), [closedText(round, round.grilling)]);
-    }
-
     const wasIdle = !state.questionId;
     const question = round.questions.find((q) => q.id === state.questionId);
+    // This message is a reply to the asked question, so if someone else answered it
+    // meanwhile, the reply wasn't recorded either.
+    const hadReply = state.answer !== null || text.length > 0;
+    if (!isOpen(round, round.grilling)) {
+      // Someone else may have answered the asked question and closed the round meanwhile.
+      if (question?.answeredAt && question.answeredById !== user.id) {
+        lines.push(answeredElsewhere(question, nameOf(question), hadReply));
+      }
+      lines.push(closedText(round, round.grilling));
+      return this.finish(user, conv, message, closed(state), lines);
+    }
+
     if (question?.answeredAt) {
       // Answered elsewhere since this Conversation asked it (or by the owner, before a crash).
       if (question.answeredById !== user.id) {
-        lines.push(answeredElsewhere(question, nameOf(question), state.answer !== null));
+        lines.push(answeredElsewhere(question, nameOf(question), hadReply));
       }
       state = asking(null, state.skipped);
     } else if (question) {
@@ -319,6 +328,11 @@ export class GrillingConversationsService {
     const lines: GrillingNote[] = [];
     if (!isOpen(round, round.grilling)) {
       if (state.closed) return;
+      // The round may have closed because someone else answered the question asked here.
+      const asked = round.questions.find((q) => q.id === state.questionId);
+      if (asked?.answeredAt && asked.answeredById !== conv.ownerId) {
+        lines.push(answeredElsewhere(asked, nameOf(asked), state.answer !== null));
+      }
       lines.push(closedText(round, round.grilling));
       state = closed(state);
     } else {
@@ -335,7 +349,7 @@ export class GrillingConversationsService {
           : waiting(round.role, round.questions.filter((q) => !q.answeredAt).length),
       );
     }
-    const saved = await this.save(conversationId, state, lines);
+    const saved = await this.save(conversationId, conv.ownerId, state, lines);
     this.emit(conv.ownerId, {
       event: 'conversation.appended',
       data: { conversationId, messages: [toConversationMessageView(saved.reply)] },
@@ -350,15 +364,25 @@ export class GrillingConversationsService {
     state: GrillingConversationState,
   ): Promise<string | null> {
     try {
-      const decision = await this.ai.grillingFollowUp({
-        project: { name: round.grilling.project.name },
-        round: round.kind,
-        role: round.role,
-        question: question.text,
-        answer: state.answer ?? '',
-        followUps: answered(state),
-        remaining: MAX_GRILLING_FOLLOW_UPS - state.followUps.length,
-      });
+      const decision = await this.ai.grillingFollowUp(
+        {
+          project: { name: round.grilling.project.name },
+          round: round.kind,
+          role: round.role,
+          question: question.text,
+          answer: state.answer ?? '',
+          followUps: answered(state),
+          remaining: MAX_GRILLING_FOLLOW_UPS - state.followUps.length,
+        },
+        {
+          language: await personLanguage(this.db, conv.ownerId),
+          receipt: {
+            requestedById: conv.ownerId,
+            output: { kind: 'GRILLING_QUESTION', id: question.id },
+            projectId: round.grilling.projectId,
+          },
+        },
+      );
       return decision.followUp?.trim() || null;
     } catch (error) {
       this.logger.error('A Grilling follow-up failed', error as Error);
@@ -417,7 +441,7 @@ export class GrillingConversationsService {
     state: GrillingConversationState,
     notes: GrillingNote[],
   ): Promise<GrillingTurn> {
-    const saved = await this.save(conv.id, state, notes);
+    const saved = await this.save(conv.id, conv.ownerId, state, notes);
     this.emit(user.id, {
       event: 'conversation.done',
       data: { conversationId: conv.id, message: toConversationMessageView(saved.reply) },
@@ -425,7 +449,14 @@ export class GrillingConversationsService {
     return { conversation: saved.conversation, message, reply: saved.reply };
   }
 
-  private save(conversationId: string, state: GrillingConversationState, notes: GrillingNote[]) {
+  /** Saves the state and the server's reply, written in the owner's language (0068). */
+  private async save(
+    conversationId: string,
+    ownerId: string,
+    state: GrillingConversationState,
+    notes: GrillingNote[],
+  ) {
+    const language = await personLanguage(this.db, ownerId);
     return this.db.$transaction(async (tx) => {
       const conversation = await tx.conversation.update({
         where: { id: conversationId },
@@ -441,7 +472,7 @@ export class GrillingConversationsService {
           conversationId,
           position: (_max.position ?? -1) + 1,
           role: 'ASSISTANT',
-          ...noteMessage(notes),
+          ...noteMessage(notes, language),
         },
       });
       return { conversation, reply };

@@ -42,6 +42,7 @@ enum IntegrationProvider {
   ANTHROPIC // Claude API
   OPENAI // OpenAI API (GPT and Codex models)
   OPENAI_COMPATIBLE // any OpenAI-compatible URL + token, e.g. 9Router
+  OPENROUTER // OpenRouter: a key only, its base URL is fixed (ticket 0064)
   ATLASSIAN
   EMBEDDINGS // OpenAI-compatible embeddings endpoint for retrieval (ADR 0007)
   LINE // LINE Messaging API channel (ADR 0011): channel access token + channel secret
@@ -78,6 +79,7 @@ enum SpecVersionSource {
   DECISION // AI draft after a Decision, approved by the Decider
   REVERT // rolled back to an earlier version
   CONVERSATION // AI draft from a Conversation's Action Card, approved by a human
+  ACCEPTANCE_CRITERIA // AI draft of a Platform's acceptance criteria (Coverage), approved by a human
 }
 
 enum BriefVersionSource {
@@ -167,6 +169,8 @@ enum NotificationType {
   REQUEST_REMINDER // escalation step 1: to the Decider, or the Recipients while nobody has Claimed it
   REQUEST_ESCALATED // escalation step 2: to each active Delegate added as a Recipient
   REQUEST_OVERDUE // escalation step 3: to the Raiser and the Team's Tech Leads
+  AI_BUDGET_WARNING // the AI's estimated cost this month passed 80% of the budget: to the Admins (ticket 0075)
+  AI_BUDGET_REACHED // ... and 100%; nothing is blocked
 }
 
 // How a Response Window is counted (ADR 0011): in working hours or working days of the
@@ -250,7 +254,25 @@ model User {
   featureSuggestionsGenerated FeatureSuggestion[] @relation("FeatureSuggestionGeneratedBy")
   featureSuggestionsDecided   FeatureSuggestion[] @relation("FeatureSuggestionDecidedBy")
 
-  conversations Conversation[] @relation("ConversationOwner")
+  conversations Conversation[]           @relation("ConversationOwner")
+  compactions   ConversationCompaction[] @relation("ConversationCompactedBy")
+
+  redraftsRequested Redraft[] @relation("RedraftRequestedBy")
+
+  receipts        Receipt[]        @relation("ReceiptRequestedBy")
+  receiptOutcomes ReceiptOutcome[] @relation("ReceiptOutcomeBy")
+
+  promptVersionsProposed PromptVersion[]    @relation("PromptVersionProposedBy")
+  promptVersionsApproved PromptVersion[]    @relation("PromptVersionApprovedBy")
+  promptVersionsDeclined PromptVersion[]    @relation("PromptVersionDeclinedBy")
+  promptActivations      PromptActivation[] @relation("PromptActivationBy")
+  promptEvalRuns         PromptEvalRun[]    @relation("PromptEvalRunStartedBy")
+  promptAnalyses         PromptAnalysis[]   @relation("PromptAnalysisRequestedBy")
+
+  agentSkillsInstalled      AgentSkill[]        @relation("AgentSkillInstalledBy")
+  agentSkillVersionsFetched AgentSkillVersion[] @relation("AgentSkillVersionFetchedBy")
+  agentSkillVersionsDecided AgentSkillVersion[] @relation("AgentSkillVersionDecidedBy")
+  agentSkillsEnabled        ProjectAgentSkill[] @relation("ProjectAgentSkillEnabledBy")
 
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
@@ -287,22 +309,55 @@ model PersonalAccessToken {
 
 // One per self-hosted instance for now; kept as a model so SaaS stays possible.
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
+  id                   String   @id @default(uuid())
+  name                 String
+  // "en" or "th" (tickets 0063, 0068): the language of chat app cards, bot replies, Grilling
+  // texts and AI replies for anyone who hasn't picked their own, and of Project-wide AI output.
+  language             String   @default("en")
+  // Receipts (ADR 0015, ticket 0070): whether every AI call leaves one, and for how many
+  // days they are kept. Turning collection off stops new ones; old ones follow retention.
+  receiptsEnabled      Boolean  @default(true)
+  receiptRetentionDays Int      @default(90)
+  // The AI analyses a prompt's feedback once this many new outcomes are linked to its
+  // Receipts (ticket 0072); 0 never analyses on its own (an Admin still can).
+  promptAnalysisAfter  Int      @default(20)
+  // A monthly budget for the AI's estimated cost, in US dollars (ticket 0075); null: none.
+  // The Admins get a Notification at 80% and at 100% of it. Nothing is ever blocked.
+  aiMonthlyBudget      Float?
+  createdAt            DateTime @default(now())
 
-  memberships    OrgMembership[]
-  invitations    Invitation[]
-  integrations   OrgIntegration[]
-  approvedModels ApprovedModel[]
-  aiTaskModels   AiTaskModel[]
-  projects       Project[]
-  chunks         ContentChunk[]
-  guidelines     GuidelineCriterion[]
-  chatAccounts   ChatAccount[]
-  chatLinkCodes  ChatLinkCode[]
-  responseWindow ResponseWindowSettings?
-  holidays       OrgHoliday[]
+  memberships       OrgMembership[]
+  invitations       Invitation[]
+  integrations      OrgIntegration[]
+  approvedModels    ApprovedModel[]
+  aiTaskModels      AiTaskModel[]
+  projects          Project[]
+  chunks            ContentChunk[]
+  guidelines        GuidelineCriterion[]
+  chatAccounts      ChatAccount[]
+  chatLinkCodes     ChatLinkCode[]
+  responseWindow    ResponseWindowSettings?
+  holidays          OrgHoliday[]
+  promptVersions    PromptVersion[]
+  promptActivations PromptActivation[]
+  promptEvalRuns    PromptEvalRun[]
+  promptAnalyses    PromptAnalysis[]
+  aiBudgetAlerts    AiBudgetAlert[]
+  platformTemplate  OrgPlatformTemplate[]
+  agentSkills       AgentSkill[]
+}
+
+// One AI budget threshold (80 or 100 percent) crossed in one month of the Organization's
+// time zone (ticket 0075): its Notification went to the Admins. The key keeps it to one
+// each, however many Receipts cross it at once. Changing the budget clears the month's.
+model AiBudgetAlert {
+  organizationId String
+  month          String // "2026-10", in the Organization's Working Time zone
+  threshold      Int // 80 or 100
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, month, threshold])
 }
 
 // The Organization's working calendar and default Response Windows (ADR 0011).
@@ -334,13 +389,15 @@ model OrgHoliday {
 }
 
 model OrgMembership {
-  id             String       @id @default(uuid())
-  organizationId String
-  userId         String
-  role           OrgRole      @default(MEMBER)
-  createdAt      DateTime     @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                        String       @id @default(uuid())
+  organizationId            String
+  userId                    String
+  role                      OrgRole      @default(MEMBER)
+  // When this Admin dismissed the Getting started checklist (ticket 0063); null: not yet.
+  gettingStartedDismissedAt DateTime?
+  createdAt                 DateTime     @default(now())
+  organization              Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
 }
@@ -397,6 +454,10 @@ model ApprovedModel {
   // How many tokens one call to it may hold, prompt and reply together (ticket 0060):
   // prefilled for known models, else VORASAAN_CONTEXT_WINDOW; an Admin can edit it.
   contextWindow  Int
+  // What a million tokens cost on it, in US dollars, as the Admin set them (ticket 0075):
+  // the AI usage dashboard's estimated cost. Both null: no cost is shown, only tokens.
+  inputPricePerMillion  Float?
+  outputPricePerMillion Float?
   position       Int
   isDefault      Boolean        @default(false)
   createdAt      DateTime       @default(now())
@@ -420,6 +481,7 @@ enum AiTaskKind {
   FEATURE_SUGGESTIONS
   FIT_CHECK // a new Feature against the Feature Guidelines
   CHAT // Conversation replies
+  PROMPT_PROPOSALS // the AI reading feedback and proposing Prompt Versions (ticket 0072)
 }
 
 // The Approved Model an AI task uses. No row: the default Approved Model.
@@ -460,6 +522,8 @@ model Project {
   grillings          Grilling[]
   suggestions        FeatureSuggestion[]
   conversations      Conversation[]
+  platforms          Platform[]
+  agentSkills        ProjectAgentSkill[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -533,9 +597,67 @@ model Feature {
   chunks           ContentChunk[]
   suggestion       FeatureSuggestion? // the Feature Suggestion it was accepted from, if any
   conversations    Conversation[]
+  platforms        FeaturePlatform[] // the Platforms it targets (ADR 0009)
 
   @@index([teamId])
   @@index([jiraIssueKey])
+}
+
+// ─── Platforms (ADR 0009, ticket 0050) ──────────────────────────────────────
+
+// A part of the product a Feature can ship on, in its Project's own ordered list (copied
+// from the Organization's default when the Project is created). `roles` are the Team
+// Roles who can answer for it; the four booleans are the Coverage checks it switches on.
+// Names are unique per Project ignoring case (a unique index on lower(name) in the
+// migration), since a Spec section matches its name case-insensitively.
+model Platform {
+  id             String            @id @default(uuid())
+  projectId      String
+  name           String
+  position       Int
+  roles          TeamRole[]
+  specSection    Boolean           @default(true)
+  someoneToAsk   Boolean           @default(true)
+  noOpenBlockers Boolean           @default(true)
+  qaReady        Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  features       FeaturePlatform[]
+
+  @@index([projectId, position])
+}
+
+// A Feature targets a Platform of its own Project (checked by the service). Removing a
+// Platform that Features target is refused by the service, which names them; the cascade
+// is only for deleting a whole Project (a NO ACTION key would trip on its cascade order).
+model FeaturePlatform {
+  featureId  String
+  platformId String
+  createdAt  DateTime @default(now())
+  feature    Feature  @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  platform   Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+
+  @@id([featureId, platformId])
+  @@index([platformId])
+}
+
+// One entry of the Organization's default Platform list, copied into each new Project.
+// No rows: the built-in template (Back-End, Front-End, Mobile) is the default. Changing
+// it never rewrites existing Projects.
+model OrgPlatformTemplate {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  position       Int
+  roles          TeamRole[]
+  specSection    Boolean      @default(true)
+  someoneToAsk   Boolean      @default(true)
+  noOpenBlockers Boolean      @default(true)
+  qaReady        Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, position])
 }
 
 // A Feature may have several Role Owners for the same Team Role.
@@ -606,7 +728,7 @@ model SpecProposal {
   id               String            @id @default(uuid())
   featureId        String
   baseVersionId    String? // null when drafting the first version
-  source           SpecVersionSource // AI_SUMMARY or DECISION
+  source           SpecVersionSource // AI_SUMMARY, DECISION, CONVERSATION or ACCEPTANCE_CRITERIA
   proposedMarkdown String
   status           ProposalStatus    @default(PENDING)
   approverId       String // the Decider for DECISION, the requesting PO for AI_SUMMARY
@@ -624,6 +746,7 @@ model SpecProposal {
   decision         Decision?         @relation(fields: [decisionId], references: [id])
   approver         User              @relation("ProposalApprover", fields: [approverId], references: [id])
   resultVersion    SpecVersion?
+  redrafts         Redraft[]
 
   @@index([approverId, status])
   @@index([featureId, status])
@@ -677,6 +800,7 @@ model BriefProposal {
   approver         User               @relation("BriefProposalApprover", fields: [approverId], references: [id])
   resultVersion    BriefVersion?      @relation("BriefProposalResult")
   grilling         Grilling?
+  redrafts         Redraft[]
 
   @@index([approverId, status])
   @@index([projectId, status])
@@ -730,6 +854,7 @@ model DecisionRequest {
   history        RequestHistoryEntry[]
   deciderChanges DeciderChange[]
   chatCards      ChatCard[]
+  redrafts       Redraft[] // of its Choices (ticket 0065)
 
   @@index([featureId, kind, status])
   @@index([status, dueAt])
@@ -1032,6 +1157,7 @@ model FeatureSuggestion {
   feature            Feature?                @relation(fields: [featureId], references: [id], onDelete: SetNull)
   generatedBy        User                    @relation("FeatureSuggestionGeneratedBy", fields: [generatedById], references: [id])
   decidedBy          User?                   @relation("FeatureSuggestionDecidedBy", fields: [decidedById], references: [id])
+  redrafts           Redraft[]
 
   @@index([projectId, status, createdAt])
 }
@@ -1049,31 +1175,36 @@ enum ConversationMessageRole {
 // it. Each turn the AI gets `summary` (the messages before `summarizedThrough`,
 // folded together) plus the messages from it on, never the whole history (ADR 0007).
 model Conversation {
-  id                String                @id @default(uuid())
-  ownerId           String
-  projectId         String
-  featureId         String?
-  title             String
-  summary           String                @default("")
-  summarizedThrough Int                   @default(0) // messages with a lower position are in `summary`
+  id                  String                   @id @default(uuid())
+  ownerId             String
+  projectId           String
+  featureId           String?
+  title               String
+  summary             String                   @default("")
+  summarizedThrough   Int                      @default(0) // messages with a lower position are in `summary`
   // Set on a Grilling Conversation (ticket 0044): the round its owner answers here.
   // One per person and round; always a Project Conversation.
-  grillingRoundId   String?
+  grillingRoundId     String?
   // Where a Grilling Conversation stands: the question being asked, the answer
   // and follow-ups so far, the questions its owner skipped (GrillingThreadState).
-  grillingState     Json?
+  grillingState       Json?
   // The Approved Model picked in it (ticket 0054), kept for its next messages.
   // Null until someone picks one, or once it is removed: then the chat default.
-  modelId           String?
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt // bumped by every message
-  owner             User                  @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  project           Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  feature           Feature?              @relation(fields: [featureId], references: [id], onDelete: Cascade)
-  grillingRound     GrillingRound?        @relation(fields: [grillingRoundId], references: [id], onDelete: Cascade)
-  model             ApprovedModel?        @relation(fields: [modelId], references: [id], onDelete: SetNull)
-  messages          ConversationMessage[]
-  actionCards       ActionCard[]
+  modelId             String?
+  // The last reply's input tokens and the part read from the provider's cache
+  // (tickets 0061, 0066), summed over the turn's steps; null until a provider reports them.
+  lastInputTokens     Int?
+  lastCacheReadTokens Int?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt // bumped by every message
+  owner               User                     @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  project             Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  feature             Feature?                 @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  grillingRound       GrillingRound?           @relation(fields: [grillingRoundId], references: [id], onDelete: Cascade)
+  model               ApprovedModel?           @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  messages            ConversationMessage[]
+  actionCards         ActionCard[]
+  compactions         ConversationCompaction[]
 
   @@unique([grillingRoundId, ownerId])
   @@index([ownerId, updatedAt])
@@ -1110,6 +1241,33 @@ model ConversationMessage {
   actionCards      ActionCard[] // made by this ASSISTANT message's tool calls
 
   @@unique([conversationId, position])
+}
+
+enum ConversationCompactionTrigger {
+  AUTO // a turn found the history past its threshold
+  MANUAL // a person: "Compact now" or /compact
+  TOO_LONG // the provider rejected a request as too long
+}
+
+// One fold of a Conversation's history into its Conversation Summary (tickets
+// 0060, 0066). The messages stay stored; the web draws a divider above the
+// message at `summarizedThrough`. `summary` is the Conversation Summary as this
+// fold left it, so each divider shows its own.
+model ConversationCompaction {
+  id                String                        @id @default(uuid())
+  conversationId    String
+  number            Int // 1, 2, 3… per Conversation
+  trigger           ConversationCompactionTrigger
+  focus             String? // MANUAL: what the person asked the summary to keep
+  summarizedThrough Int // messages with a lower position are in `summary`
+  summary           String
+  createdById       String? // MANUAL: who compacted
+  createdAt         DateTime                      @default(now())
+  conversation      Conversation                  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdBy         User?                         @relation("ConversationCompactedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([conversationId, number])
+  @@index([createdById])
 }
 
 // ─── Action Cards (ADR 0008, ticket 0043) ───────────────────────────────────
@@ -1195,7 +1353,7 @@ model ChatPreference {
   quietStartMinute Int? // minutes after local midnight; both set or both null
   quietEndMinute   Int? // may be before the start: quiet hours across midnight
   timeZone         String? // IANA; null: the Organization's time zone
-  language         String? // "en" or "th": the language of cards and bot replies; null: English
+  language         String? // "en" or "th": the person's language (cards, bot replies, Grilling texts, AI replies, 0068); null: the Organization's
   updatedAt        DateTime        @updatedAt
   user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -1223,4 +1381,462 @@ model ChatCard {
 
   @@index([status, createdAt])
   @@index([requestId])
+}
+
+// ─── Request changes and Redrafts (ADR 0013, ticket 0065) ───────────────────
+
+// The AI proposals a person can Request changes on.
+enum ProposalKind {
+  CHOICES // a Decision Request's Choices (the request's id)
+  SPEC_PROPOSAL
+  BRIEF_PROPOSAL
+  FEATURE_SUGGESTION
+  PROMPT_VERSION // a Prompt Version the AI proposed (ticket 0072)
+}
+
+enum RedraftStatus {
+  WRITING // the AI is writing it: Approve and another Request changes wait for it
+  READY // written; the proposal now holds it, and Approve applies it
+}
+
+// One Redraft of an AI proposal, numbered from 1 (the proposal as first drafted, kept
+// when the first Request changes is made). The proposal itself always holds its latest
+// READY Redraft, so Approve applies only that one. `content` is the Redraft as the
+// proposal held it (`RedraftContent` in @vorasaan/shared); `feedback` and `pointer` are
+// what caused it, kept for eval cases. Exactly one of the four proposal ids is set, and
+// matches `proposalKind` and `proposalId`.
+model Redraft {
+  id                  String             @id @default(uuid())
+  proposalKind        ProposalKind
+  proposalId          String
+  number              Int
+  status              RedraftStatus      @default(READY)
+  content             Json? // null while WRITING
+  // What the person asked to change (null for Redraft 1), and the part they pointed at:
+  // { kind: "CHOICE", label } or { kind: "LINES", from, to } or { kind: "SECTION", heading }.
+  feedback            String?
+  pointer             Json?
+  requestedById       String?
+  // What the AI says it changed, and the preferences it found in the feedback.
+  summary             String?
+  preferences         String[]
+  // The model that wrote it (ticket 0054), as it was then (see SpecProposal).
+  approvedModelId     String?
+  modelDisplayName    String?
+  modelName           String?
+  createdAt           DateTime           @default(now())
+  readyAt             DateTime?
+  requestId           String?
+  specProposalId      String?
+  briefProposalId     String?
+  featureSuggestionId String?
+  promptVersionId     String?
+  requestedBy         User?              @relation("RedraftRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  request             DecisionRequest?   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  specProposal        SpecProposal?      @relation(fields: [specProposalId], references: [id], onDelete: Cascade)
+  briefProposal       BriefProposal?     @relation(fields: [briefProposalId], references: [id], onDelete: Cascade)
+  featureSuggestion   FeatureSuggestion? @relation(fields: [featureSuggestionId], references: [id], onDelete: Cascade)
+  promptVersion       PromptVersion?     @relation(fields: [promptVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalKind, proposalId, number])
+  @@index([requestId])
+  @@index([specProposalId])
+  @@index([briefProposalId])
+  @@index([featureSuggestionId])
+  @@index([promptVersionId])
+  @@index([requestedById])
+}
+
+// ─── Receipts (ADR 0015, ticket 0070) ───────────────────────────────────────
+
+// What an AI call produced, referenced by id (never copied).
+enum ReceiptOutputKind {
+  CHOICES // a Decision Request's Choices (the request's id)
+  SPEC_PROPOSAL
+  BRIEF_PROPOSAL
+  FEATURE_SUGGESTION_BATCH // the Feature Suggestions generated together (their batchId)
+  REDRAFT // a Redraft of a proposal (the Redraft's id)
+  CONVERSATION_MESSAGE // a reply in a Conversation
+  CONVERSATION // a Conversation Summary (the Conversation's id)
+  ATTACHMENT // an Attachment's summary
+  GRILLING_ROUND // a Grilling round's questions
+  GRILLING_QUESTION // a follow-up on a Grilling question
+  PROMPT_ANALYSIS // the patterns the AI found in a prompt's feedback (ticket 0072)
+  PROMPT_VERSION // a Prompt Version the AI proposed
+}
+
+enum ReceiptOutcomeKind {
+  APPROVE
+  DECLINE // with its reason, when one was given
+  REQUEST_CHANGES // with its feedback (ADR 0013)
+  MANUAL_EDIT // edited by hand: the Choices before sending, or the next Spec or Brief Version
+}
+
+// The record of one AI call (a Receipt). Never the prompt or the reply: the task, the prompt
+// and its Prompt Version, the model, tokens, cache use, latency and a reference to what it
+// produced. Kept for the Organization's retention (receiptRetentionDays), then deleted with
+// its outcomes.
+model Receipt {
+  id               String             @id @default(uuid())
+  task             String // the AI task, e.g. generateChoices
+  taskKind         String // its Settings task (AiTaskKind), e.g. CHOICES
+  promptName       String // the prompt it rendered (a packages/skills name)
+  promptVersion    String // "default@<hash>" for the built-in default
+  modelSource      String? // APPROVED_MODEL or ENV
+  approvedModelId  String? // a plain id, so the Receipt outlives the model
+  modelName        String? // the provider's model id, or the env "provider/model"
+  providerKind     String? // ANTHROPIC, OPENAI, OPENROUTER...
+  language         String? // the Reply Language asked for
+  inputTokens      Int?
+  outputTokens     Int?
+  cacheReadTokens  Int?
+  cacheWriteTokens Int?
+  latencyMs        Int
+  success          Boolean
+  error            String? // a short, redacted message when it failed
+  outputKind       ReceiptOutputKind?
+  outputId         String?
+  // The proposal it drafted or redrafted, and which Redraft (1 for the first draft).
+  proposalKind     ProposalKind?
+  proposalId       String?
+  redraft          Int?
+  requestedById    String?
+  // The eval run (ticket 0071) the call was made for; null for the product's own calls.
+  // A replay never picks these.
+  evalRunId        String?
+  // The Project the call worked for (ticket 0075), a plain id so the Receipt outlives it;
+  // null for Organization-wide work (Prompt proposals, Eval Runs).
+  projectId        String?
+  createdAt        DateTime           @default(now())
+  requestedBy      User?              @relation("ReceiptRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  outcomes         ReceiptOutcome[]   @relation("ReceiptOutcomes")
+  redraftOutcomes  ReceiptOutcome[]   @relation("ReceiptRedraftOutcomes")
+  // The Agent Skills (ticket 0078) whose text the call read: loaded in its turn before it.
+  agentSkills      ReceiptAgentSkill[]
+
+  @@index([createdAt])
+  @@index([proposalKind, proposalId, redraft])
+  @@index([outputKind, outputId])
+  @@index([requestedById])
+  @@index([evalRunId])
+}
+
+// What people did with a proposal, linked to the Receipt that drafted it (`receiptId`)
+// and, for a Redraft after the first, to the Receipt that wrote it (`redraftReceiptId`).
+model ReceiptOutcome {
+  id                     String             @id @default(uuid())
+  receiptId              String
+  redraftReceiptId       String?
+  kind                   ReceiptOutcomeKind
+  proposalKind           ProposalKind
+  proposalId             String
+  redraft                Int // the Redraft it was given on
+  reason                 String? // DECLINE: the reason; REQUEST_CHANGES: the feedback
+  redraftsBeforeApproval Int? // APPROVE: how many Redrafts were written before it
+  choiceLabel            String? // APPROVE of Choices: the Choice decided
+  editSize               Int? // MANUAL_EDIT: lines added plus lines removed
+  actorId                String?
+  createdAt              DateTime           @default(now())
+  receipt                Receipt            @relation("ReceiptOutcomes", fields: [receiptId], references: [id], onDelete: Cascade)
+  redraftReceipt         Receipt?           @relation("ReceiptRedraftOutcomes", fields: [redraftReceiptId], references: [id], onDelete: SetNull)
+  actor                  User?              @relation("ReceiptOutcomeBy", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([receiptId])
+  @@index([redraftReceiptId])
+  @@index([proposalKind, proposalId])
+  @@index([createdAt])
+  @@index([actorId])
+}
+
+// ─── Prompt Versions and evals (ADR 0015, ticket 0071) ──────────────────────
+
+enum PromptVersionStatus {
+  PROPOSED // written by an Admin or proposed by the AI, waiting for an Admin's approval
+  APPROVED // may be active; the active one is the latest PromptActivation of its prompt
+  DECLINED
+}
+
+// An Organization's own version of one of the built-in prompts (a packages/skills name),
+// on top of the default. Numbered per prompt when written, and immutable once decided: only
+// its status moves, PROPOSED to APPROVED or DECLINED. One the AI proposed (ticket 0072) holds
+// its latest Redraft while PROPOSED, like every AI proposal (ADR 0013).
+model PromptVersion {
+  id             String              @id @default(uuid())
+  organizationId String
+  promptName     String // a packages/skills name, e.g. generate-choices
+  number         Int // 1, 2, ... per prompt; the built-in default is 0
+  template       String // the prompt's Markdown, placeholders and partials as written
+  note           String? // what it changes and why
+  status         PromptVersionStatus @default(PROPOSED)
+  proposedById   String?
+  approvedById   String?
+  approvedAt     DateTime?
+  declinedById   String?
+  declinedAt     DateTime?
+  declineReason  String?
+  // Proposed by the AI (ticket 0072): the analysis it came from, and why it changes what it does.
+  analysisId     String?             @unique
+  rationale      String?
+  // The evals run on it automatically, and on the version active then, for its current Redraft.
+  evalRunId      String?
+  baselineRunId  String?
+  createdAt      DateTime            @default(now())
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  proposedBy     User?               @relation("PromptVersionProposedBy", fields: [proposedById], references: [id], onDelete: SetNull)
+  approvedBy     User?               @relation("PromptVersionApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  declinedBy     User?               @relation("PromptVersionDeclinedBy", fields: [declinedById], references: [id], onDelete: SetNull)
+  activations    PromptActivation[]
+  evalRuns       PromptEvalRun[]
+  analysis       PromptAnalysis?     @relation(fields: [analysisId], references: [id], onDelete: SetNull)
+  evalRun        PromptEvalRun?      @relation("PromptVersionEvalRun", fields: [evalRunId], references: [id], onDelete: SetNull)
+  baselineRun    PromptEvalRun?      @relation("PromptVersionBaselineRun", fields: [baselineRunId], references: [id], onDelete: SetNull)
+  redrafts       Redraft[]
+
+  @@unique([organizationId, promptName, number])
+  @@index([proposedById])
+  @@index([approvedById])
+  @@index([declinedById])
+  @@index([evalRunId])
+  @@index([baselineRunId])
+}
+
+enum PromptActivationKind {
+  APPROVE // a Prompt Version approved, and so made active
+  ROLLBACK // an earlier Prompt Version, or the default, made active again
+}
+
+// Which version of a prompt is active, as a log: the latest row of a prompt wins, and no
+// row means the built-in default. Rollbacks are rows too, so the history keeps them.
+model PromptActivation {
+  id             String               @id @default(uuid())
+  seq            Int                  @default(autoincrement()) // the order they happened in
+  organizationId String
+  promptName     String
+  versionId      String? // null: the built-in default
+  kind           PromptActivationKind
+  actorId        String?
+  createdAt      DateTime             @default(now())
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  version        PromptVersion?       @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  actor          User?                @relation("PromptActivationBy", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, promptName, seq])
+  @@index([versionId])
+  @@index([actorId])
+}
+
+enum PromptEvalRunStatus {
+  RUNNING
+  DONE
+  FAILED
+}
+
+// One eval run of a prompt's version (the default or a Prompt Version) on an Approved
+// Model: the checked-in eval cases and/or a replay of approved Receipts, run in the
+// background. Its calls leave Receipts marked with its id; their tokens are summed here
+// when it ends.
+model PromptEvalRun {
+  id               String              @id @default(uuid())
+  organizationId   String
+  promptName       String
+  versionId        String? // null: the built-in default
+  promptVersion    String // as Receipts name it: default@<hash> or v<n>@<hash>
+  approvedModelId  String? // a plain id, so the run outlives the model
+  modelDisplayName String
+  modelName        String
+  sources          String[] // CHECKED_IN, REPLAY
+  status           PromptEvalRunStatus @default(RUNNING)
+  total            Int                 @default(0)
+  done             Int                 @default(0)
+  score            Float? // the mean of its cases' scores, once done
+  error            String?
+  inputTokens      Int?
+  outputTokens     Int?
+  cacheReadTokens  Int?
+  cacheWriteTokens Int?
+  startedById      String?
+  createdAt        DateTime            @default(now())
+  finishedAt       DateTime?
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  version          PromptVersion?      @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  startedBy        User?               @relation("PromptEvalRunStartedBy", fields: [startedById], references: [id], onDelete: SetNull)
+  cases            PromptEvalCase[]
+  proposalsAfter   PromptVersion[]     @relation("PromptVersionEvalRun")
+  proposalsBefore  PromptVersion[]     @relation("PromptVersionBaselineRun")
+
+  @@index([organizationId, promptName, createdAt])
+  @@index([versionId])
+  @@index([startedById])
+}
+
+// One case of an eval run: its score (0 to 1, the share of its checks passed), each
+// check, and the output as a sample. A replay case names the Receipt it replayed.
+model PromptEvalCase {
+  id        String        @id @default(uuid())
+  runId     String
+  position  Int
+  set       String // the eval set (choices, grilling...) or "replay"
+  caseKey   String // stable across runs, so two runs compare case by case
+  name      String
+  score     Float
+  checks    Json // [{ name, passed, detail }]
+  output    Json? // the output as a sample; null when the call failed
+  error     String?
+  receiptId String? // replay: the approved Receipt replayed (a plain id)
+  latencyMs Int
+  createdAt DateTime      @default(now())
+  run       PromptEvalRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, caseKey])
+}
+
+// ─── The AI proposes Prompt Versions (ADR 0015, ticket 0072) ────────────────
+
+enum PromptAnalysisStatus {
+  RUNNING
+  DONE // patterns named, and a Prompt Version proposed when any were found
+  FAILED
+}
+
+enum PromptAnalysisTrigger {
+  MANUAL // an Admin asked, from Settings
+  FEEDBACK // enough new outcomes were linked to the prompt's Receipts
+}
+
+// One reading of a prompt's feedback by the AI: the outcomes linked to its Receipts, and the
+// patterns it named in them, each with the cases it cites ([{ title, description, count,
+// cases: [{ outcomeId, receiptId, kind, proposalKind, proposalId, redraft, text }] }]).
+// When it found any, the AI proposed a Prompt Version from them (PromptVersion.analysisId).
+model PromptAnalysis {
+  id             String                @id @default(uuid())
+  organizationId String
+  promptName     String
+  trigger        PromptAnalysisTrigger
+  status         PromptAnalysisStatus  @default(RUNNING)
+  outcomes       Int                   @default(0) // how many outcomes it read
+  patterns       Json? // null until done
+  error          String?
+  requestedById  String?
+  createdAt      DateTime              @default(now())
+  finishedAt     DateTime?
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy    User?                 @relation("PromptAnalysisRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  version        PromptVersion?
+
+  @@index([organizationId, promptName, createdAt])
+  @@index([requestedById])
+}
+
+// ─── Agent Skills (ADR 0017, ticket 0078) ───────────────────────────────────
+
+enum AgentSkillSource {
+  GITHUB // fetched from a GitHub repository (optionally a folder of it), pinned to a commit
+  ZIP // uploaded as a zip, pinned to the zip's SHA-256
+}
+
+enum AgentSkillVersionStatus {
+  PENDING // fetched (installed or updated), waiting for an Admin's approval: invisible to the AI
+  APPROVED // approved: the Skill's active version, until a newer one is approved
+  DECLINED // an Admin discarded it; its files are deleted
+  REPLACED // was active until a newer version was approved; its files are deleted
+}
+
+// An Agent Skill an Admin installed: a SKILL.md package (a folder with SKILL.md, references/
+// and assets/), text and templates only. The AI sees it only through its active version, and
+// only in the Projects it is enabled in. Not one of Vorasaan's own prompts (packages/skills).
+model AgentSkill {
+  id              String             @id @default(uuid())
+  organizationId  String
+  // The SKILL.md `name` of the active version (of the first one until it is approved).
+  name            String
+  source          AgentSkillSource
+  // GITHUB: "owner/repo", the branch, tag or commit asked for (null: the default branch),
+  // and the folder within the repository ("" for its root). ZIP: the folder within the zip.
+  repository      String?
+  ref             String?
+  subpath         String             @default("")
+  // The approved version the AI uses; null until one is approved.
+  activeVersionId String?            @unique
+  installedById   String?
+  createdAt       DateTime           @default(now())
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  installedBy     User?              @relation("AgentSkillInstalledBy", fields: [installedById], references: [id], onDelete: SetNull)
+  activeVersion   AgentSkillVersion? @relation("AgentSkillActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  versions        AgentSkillVersion[] @relation("AgentSkillVersions")
+  projects        ProjectAgentSkill[]
+
+  @@unique([organizationId, name])
+  @@index([installedById])
+}
+
+// One fetched version of an Agent Skill, pinned to the commit or the zip's hash it came from.
+// Numbered per Skill. Its files are in FileStorage (`AgentSkillFile.storageKey`).
+model AgentSkillVersion {
+  id           String                  @id @default(uuid())
+  skillId      String
+  number       Int
+  status       AgentSkillVersionStatus @default(PENDING)
+  // The commit SHA (GITHUB) or "sha256:<hex>" of the zip (ZIP).
+  pinned       String
+  name         String
+  description  String
+  license      String?
+  // Files left out, never stored or run: [{ path, reason }] (scripts, binaries, links...).
+  skippedFiles Json
+  totalBytes   Int
+  fetchedById  String?
+  decidedById  String?
+  decidedAt    DateTime?
+  createdAt    DateTime                @default(now())
+  skill        AgentSkill              @relation("AgentSkillVersions", fields: [skillId], references: [id], onDelete: Cascade)
+  activeOf     AgentSkill?             @relation("AgentSkillActiveVersion")
+  fetchedBy    User?                   @relation("AgentSkillVersionFetchedBy", fields: [fetchedById], references: [id], onDelete: SetNull)
+  decidedBy    User?                   @relation("AgentSkillVersionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  files        AgentSkillFile[]
+
+  @@unique([skillId, number])
+  @@index([fetchedById])
+  @@index([decidedById])
+}
+
+// One kept text file of a version: SKILL.md, a reference or an asset, by its path in the Skill.
+model AgentSkillFile {
+  id         String            @id @default(uuid())
+  versionId  String
+  path       String
+  bytes      Int
+  sha256     String
+  storageKey String
+  version    AgentSkillVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, path])
+}
+
+// An Agent Skill enabled in a Project: with an approved version, the AI there sees it.
+model ProjectAgentSkill {
+  projectId   String
+  skillId     String
+  enabledById String?
+  enabledAt   DateTime   @default(now())
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  skill       AgentSkill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  enabledBy   User?      @relation("ProjectAgentSkillEnabledBy", fields: [enabledById], references: [id], onDelete: SetNull)
+
+  @@id([projectId, skillId])
+  @@index([skillId])
+  @@index([enabledById])
+}
+
+// A Skill a call read (ticket 0078). Plain ids and the name, so the Receipt outlives an
+// uninstall, as it outlives an Approved Model.
+model ReceiptAgentSkill {
+  receiptId String
+  skillId   String
+  versionId String
+  name      String
+  pinned    String
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@id([receiptId, skillId])
+  @@index([skillId])
 }

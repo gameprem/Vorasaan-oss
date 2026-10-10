@@ -4,11 +4,13 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { ChatProvider, PrismaClient } from '@vorasaan/db';
 import { SEED, seed } from '@vorasaan/db/seed';
 import type {
+  ChatPreferencesView,
   CreatedAccessToken,
   DecideResult,
   DecisionLogEntry,
   DecisionRequestView,
 } from '@vorasaan/shared';
+import { RedraftsService } from '../redrafts/redrafts.service.ts';
 import type { EscalationJob } from '../response-windows/escalation.job.ts';
 import { createTestApp } from '../test/app.ts';
 import { createTestPrisma, truncateAll } from '../test/database.ts';
@@ -265,6 +267,7 @@ describe('Deciding from LINE, Slack and Teams (ticket 0058)', () => {
         'Choose C',
         'Ask for more info',
         'Write your own answer',
+        'Request changes',
         'Open in Vorasaan',
       ]);
       expect(buttons.get('Open in Vorasaan')).toBe(`http://localhost:3000/requests/${sent.id}`);
@@ -381,6 +384,61 @@ describe('Deciding from LINE, Slack and Teams (ticket 0058)', () => {
       await settle();
       expect(lastText()).toBe('Withdrawn by Beam. Nothing to decide.');
       expect((await request(sent.id)).decision).toBeNull();
+    });
+
+    test('Request changes opens a modal; its text redrafts the Choices as the linked person, and the card shows them (0065)', async () => {
+      await link(pim.id, 'SLACK', 'UPIM');
+      await link(beam.id, 'SLACK', 'UBEAM');
+      const sent = await sendBlocker();
+      const token = slackButtons(slackPosts()[0] as SlackPost).get('Request changes') as string;
+      expect(token).toBeTruthy();
+
+      // A press from another person's account changes nothing.
+      fake.hits.length = 0;
+      await fromSlackForm(app, slackAction('UBEAM', token));
+      await settle();
+      expect(lastText()).toContain('sent to someone else');
+      await fromSlackForm(app, slackViewSubmission('UBEAM', token, 'Make B cheaper'));
+      await settle();
+      expect(await db.redraft.count()).toBe(0);
+
+      // Pim's press opens the text input, as Ask for more info does.
+      fake.hits.length = 0;
+      await fromSlackForm(app, slackAction('UPIM', token));
+      await settle();
+      const [modal] = fake.sentTo<{ trigger_id: string; view: Json }>('/api/views.open');
+      expect(JSON.stringify(modal?.view)).toContain('Request changes');
+      await fromSlackForm(
+        app,
+        slackViewSubmission(
+          'UPIM',
+          modal?.view.private_metadata as string,
+          'Choice B: keep the old flow',
+        ),
+      );
+      await settle();
+      await app.get(RedraftsService).drain();
+      await settle();
+
+      const redrafts = await db.redraft.findMany({ orderBy: { number: 'asc' } });
+      expect(redrafts.map((r) => [r.number, r.status, r.requestedById])).toEqual([
+        [1, 'READY', null],
+        [2, 'READY', pim.id],
+      ]);
+      expect(redrafts[1]?.feedback).toBe('Choice B: keep the old flow');
+      const after = await request(sent.id);
+      expect(after.status).toBe('OPEN');
+      expect(after.decision).toBeNull();
+      const texts = fake.texts();
+      expect(texts.some((t) => t.startsWith('Writing Redraft 2'))).toBe(true);
+      expect(lastText()).toMatch(
+        new RegExp(
+          `Redraft 2 is ready\\. Nothing changes until it is approved: http://localhost:3000/requests/${sent.id}`,
+        ),
+      );
+      // The card already sent shows the new Choices.
+      const updates = fake.sentTo<SlackPost>('/api/chat.update');
+      expect(JSON.stringify(updates.at(-1))).toContain('(redraft 2)');
     });
 
     test('a forged or edited button payload is refused; a replayed press does nothing twice', async () => {
@@ -504,6 +562,7 @@ describe('Deciding from LINE, Slack and Teams (ticket 0058)', () => {
         'Choose C',
         'Ask for more info',
         'Own answer',
+        'Request changes',
         'Open in Vorasaan',
       ]);
       for (const data of buttons.values()) expect(data.length).toBeLessThanOrEqual(300);
@@ -612,6 +671,7 @@ describe('Deciding from LINE, Slack and Teams (ticket 0058)', () => {
         'Choose C',
         'Ask for more info',
         'Write your own answer',
+        'Request changes',
         'Open in Vorasaan',
       ]);
       const card = await db.chatCard.findFirstOrThrow({ where: { userId: pim.id } });
@@ -760,7 +820,7 @@ describe('Deciding from LINE, Slack and Teams (ticket 0058)', () => {
       expect(overdue?.text).toContain(sent.title);
     });
 
-    test('a Spec Proposal is only a "Review in Vorasaan" link, when chosen', async () => {
+    test('a Spec Proposal is a "Review in Vorasaan" link and Request changes, when chosen', async () => {
       await link(pim.id, 'SLACK', 'UPIM');
       await asPim('PUT', '/me/chat-preferences', {
         events: ['DECISION_REQUEST', 'SPEC_PROPOSAL'],
@@ -776,7 +836,7 @@ describe('Deciding from LINE, Slack and Teams (ticket 0058)', () => {
         JSON.stringify(p).includes('Spec Proposal to review'),
       );
       const buttons = slackButtons(proposalCard as SlackPost);
-      expect([...buttons.keys()]).toEqual(['Review in Vorasaan']);
+      expect([...buttons.keys()]).toEqual(['Request changes', 'Review in Vorasaan']);
       const proposal = await db.specProposal.findFirstOrThrow({
         where: { decision: { requestId: sent.id } },
       });
@@ -803,6 +863,7 @@ describe('Deciding from LINE, Slack and Teams (ticket 0058)', () => {
         'เลือก C',
         'ขอข้อมูลเพิ่ม',
         'ตอบด้วยคำของตัวเอง',
+        'ขอให้แก้',
         'เปิดใน Vorasaan',
       ]);
       expect(JSON.stringify(slackPosts()[0])).toContain('ขอบเขต: Scope A');
@@ -810,6 +871,26 @@ describe('Deciding from LINE, Slack and Teams (ticket 0058)', () => {
       await settle();
       expect((await request(sent.id)).status).toBe('DECIDED');
       expect(fake.texts().some((t) => t.startsWith('ตัดสินใจแล้ว: Choice B'))).toBe(true);
+    });
+
+    test('without a language of their own, a person gets the Organization’s (ticket 0063)', async () => {
+      await link(pim.id, 'SLACK', 'UPIM');
+      expect((await asPim('PUT', '/settings/organization', { language: 'th' })).status).toBe(200);
+      const prefs = await asPim<ChatPreferencesView>('GET', '/me/chat-preferences');
+      expect(prefs.body).toMatchObject({ language: null, effectiveLanguage: 'th' });
+      await sendBlocker();
+      const buttons = slackButtons(slackPosts()[0] as SlackPost);
+      expect([...buttons.keys()][0]).toBe('เลือก A');
+
+      // Their own choice wins over the Organization's.
+      await asPim('PUT', '/me/chat-preferences', {
+        events: ['DECISION_REQUEST', 'NEEDS_INFO'],
+        quietHours: null,
+        timeZone: null,
+        language: 'en',
+      });
+      await sendBlocker();
+      expect([...slackButtons(slackPosts().at(-1) as SlackPost).keys()][0]).toBe('Choose A');
     });
 
     test('a failing chat app never fails or holds up the web action; the card is FAILED and nothing secret is logged', async () => {

@@ -3,6 +3,8 @@ dist/
 .next/
 .turbo/
 coverage/
+# The server's Coverage module (ticket 0051) is source, not a test coverage report.
+!apps/server/src/coverage/
 **/generated/
 
 # Playwright end-to-end output (apps/web)
@@ -20,3 +22,6 @@ data/
 .DS_Store
 *.log
 *.tsbuildinfo
+
+# Benchmark results (bun run bench); the baseline is kept in docs/performance-baseline.json
+bench-results/

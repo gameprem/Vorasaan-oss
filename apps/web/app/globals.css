@@ -150,6 +150,11 @@ body {
   border-radius: 10px;
 }
 
+/* Kit parts whose focus shows as a fill or a ring instead (components/ui, ticket 0077). */
+.kit-quiet-focus:focus-visible {
+  outline: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -630,6 +635,26 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* The UI kit's popovers, menus and dialogs (components/ui, ticket 0077). */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* The one orchestrated moment: the decision stamp settling in. */

@@ -19,7 +19,8 @@
     "db:generate": "turbo run db:generate",
     "db:migrate": "bun run --filter @vorasaan/db db:migrate",
     "db:seed": "bun run --filter @vorasaan/db db:seed",
-    "screenshots": "bun apps/web/scripts/screenshots/run.ts"
+    "screenshots": "bun apps/web/scripts/screenshots/run.ts",
+    "bench": "bun run --cwd apps/server bench"
   },
   "trustedDependencies": [
     "prisma",

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadGatewayException,
   ConflictException,
@@ -11,6 +12,7 @@ import type { PrismaClient, User } from '@vorasaan/db';
 import {
   type DecisionLogEntry,
   diffLines,
+  hasAcceptanceCriteria,
   type RecordedModel,
   type RevertSpecInput,
   type SpecDiff,
@@ -19,10 +21,14 @@ import {
 } from '@vorasaan/shared';
 import { AI_PORT, AiOutputError, type AiPort } from '../ai/ai.port.ts';
 import { ContextBudgets } from '../ai/context-budget.ts';
+import { personLanguage } from '../ai/language.ts';
 import { fromRecordedModelColumns, toRecordedModelColumns } from '../ai/recorded-model.ts';
+import { CoverageService } from '../coverage/coverage.service.ts';
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { ReceiptsService } from '../receipts/receipts.service.ts';
+import { assertNotRedrafting, currentRedraft } from '../redrafts/redraft-guard.ts';
 import { ContextRetriever, splitFeatureSpec } from '../retrieval/context-retriever.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import { estimateTokens } from '../retrieval/token-estimate.ts';
@@ -51,6 +57,8 @@ export class SpecService {
     private readonly indexing: IndexingService,
     private readonly retriever: ContextRetriever,
     private readonly budgets: ContextBudgets,
+    private readonly receipts: ReceiptsService,
+    private readonly coverage: CoverageService,
   ) {}
 
   /**
@@ -86,14 +94,19 @@ export class SpecService {
       'specFromAttachments',
       { fixed: estimateTokens(base?.markdown ?? '') },
     );
-    const { context } = splitFeatureSpec(
-      await this.retriever.forFeature(
+    const [retrieved, missingSections] = await Promise.all([
+      this.retriever.forFeature(
         featureId,
         `${feature.title}\n\n${feature.description ?? ''}`,
         budget.context,
       ),
-    );
+      // Coverage (ticket 0051): the target Platforms the Spec has no section for yet.
+      this.coverage.missingSections(featureId, base?.markdown ?? ''),
+    ]);
+    const { context } = splitFeatureSpec(retrieved);
 
+    // Chosen now, so the draft's Receipt can point at the Spec Proposal (ticket 0070).
+    const proposalId = randomUUID();
     let draft: Awaited<ReturnType<AiPort['draftSpecFromAttachments']>>;
     try {
       draft = await this.ai.draftSpecFromAttachments(
@@ -102,8 +115,18 @@ export class SpecService {
           // The whole current Spec: it is the base the draft edits, never shortened.
           specMarkdown: base?.markdown ?? '',
           context,
+          missingSections,
         },
-        { model },
+        {
+          model,
+          language: await personLanguage(this.db, user.id),
+          receipt: {
+            requestedById: user.id,
+            output: { kind: 'SPEC_PROPOSAL', id: proposalId },
+            proposal: { kind: 'SPEC_PROPOSAL', id: proposalId, redraft: 1 },
+            featureId,
+          },
+        },
       );
     } catch (error) {
       if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
@@ -112,10 +135,115 @@ export class SpecService {
 
     const proposal = await this.db.specProposal.create({
       data: {
+        id: proposalId,
         featureId,
         baseVersionId: base?.id ?? null,
         source: 'AI_SUMMARY',
         proposedMarkdown: normalizeMarkdown(draft.proposedMarkdown),
+        approverId: user.id,
+      },
+      include: specProposalInclude,
+    });
+    await this.notifications.publish(this.notifications.outbox().inboxChanged(user.id));
+    return toSpecProposalView(proposal);
+  }
+
+  /**
+   * Asks the AI to draft acceptance criteria for a target Platform that isn't QA ready
+   * (Coverage, ticket 0051), from the latest Spec and the Feature's Decisions, as a PENDING
+   * Spec Proposal the requesting PO or Admin approves. Refused when the Feature has no Spec
+   * yet, doesn't target the Platform, or the Platform's section already has acceptance
+   * criteria or test cases (a missing QA holder is not something a draft can fix). The AI
+   * runs first, so a failed draft writes nothing.
+   */
+  async proposeAcceptanceCriteria(
+    user: User,
+    featureId: string,
+    platformId: string,
+  ): Promise<SpecProposalView> {
+    const [feature, platform, base] = await Promise.all([
+      this.db.feature.findUnique({
+        where: { id: featureId },
+        select: { title: true, description: true },
+      }),
+      this.db.platform.findFirst({
+        where: { id: platformId, features: { some: { featureId } } },
+        select: { name: true, roles: true },
+      }),
+      this.db.specVersion.findFirst({
+        where: { featureId },
+        orderBy: { version: 'desc' },
+        select: { id: true, markdown: true },
+      }),
+    ]);
+    if (!feature) throw new NotFoundException('Feature not found');
+    await assertCanEditSpec(this.db, user, featureId);
+    if (!platform) {
+      throw new UnprocessableEntityException('This Feature does not target that Platform');
+    }
+    if (!base) {
+      throw new UnprocessableEntityException(
+        'This Feature has no Spec yet to draft acceptance criteria from',
+      );
+    }
+    if (hasAcceptanceCriteria(base.markdown, platform.name)) {
+      throw new UnprocessableEntityException(
+        `${platform.name} already has acceptance criteria or test cases in the Spec`,
+      );
+    }
+
+    // The whole Spec is sent besides the context, like a Spec Proposal after a Decision.
+    const { model, budget } = await this.budgets.forTask(
+      'draftAcceptanceCriteria',
+      'decisionRequest',
+      { fixed: estimateTokens(base.markdown) },
+    );
+    const { context } = splitFeatureSpec(
+      await this.retriever.forFeature(
+        featureId,
+        `${platform.name} acceptance criteria and test cases\n\n${feature.title}`,
+        budget.context,
+        { k: budget.topK },
+      ),
+    );
+
+    const proposalId = randomUUID();
+    let draft: Awaited<ReturnType<AiPort['draftAcceptanceCriteria']>>;
+    try {
+      draft = await this.ai.draftAcceptanceCriteria(
+        {
+          feature: { title: feature.title, description: feature.description ?? '' },
+          platform: { name: platform.name, roles: platform.roles },
+          specMarkdown: base.markdown,
+          context,
+        },
+        {
+          model,
+          language: await personLanguage(this.db, user.id),
+          receipt: {
+            requestedById: user.id,
+            output: { kind: 'SPEC_PROPOSAL', id: proposalId },
+            proposal: { kind: 'SPEC_PROPOSAL', id: proposalId, redraft: 1 },
+            featureId,
+          },
+        },
+      );
+    } catch (error) {
+      if (error instanceof AiOutputError) throw new BadGatewayException(error.message);
+      throw error;
+    }
+    const proposedMarkdown = normalizeMarkdown(draft.proposedMarkdown);
+    if (proposedMarkdown === base.markdown) {
+      throw new BadGatewayException('The AI returned the Spec unchanged; try again');
+    }
+
+    const proposal = await this.db.specProposal.create({
+      data: {
+        id: proposalId,
+        featureId,
+        baseVersionId: base.id,
+        source: 'ACCEPTANCE_CRITERIA',
+        proposedMarkdown,
         approverId: user.id,
       },
       include: specProposalInclude,
@@ -170,13 +298,30 @@ export class SpecService {
   /**
    * Turns a PENDING Spec Proposal into the next Spec Version, atomically:
    * new version + proposal APPROVED + Decision Request SPEC_UPDATED, or nothing.
+   * It applies the Redraft the proposal holds (0065); `redraft`, when given, must be it.
    */
-  async approve(user: User, id: string): Promise<SpecVersionView> {
-    const proposal = await this.findPendingForApprover(user, id);
+  async approve(user: User, id: string, redraft?: number): Promise<SpecVersionView> {
+    const found = await this.findPendingForApprover(user, id);
+    // A Redraft being written is about to change it: Approve waits for it (0065).
+    await assertNotRedrafting(this.db, 'SPEC_PROPOSAL', id);
     const outbox = this.notifications.outbox().inboxChanged(user.id);
 
+    let approvedRedraft = 1;
     try {
       const version = await this.db.$transaction(async (tx) => {
+        // Read again inside: what is approved is the Redraft the proposal holds now.
+        await assertNotRedrafting(tx, 'SPEC_PROPOSAL', id);
+        const current = await currentRedraft(tx, 'SPEC_PROPOSAL', id);
+        approvedRedraft = current;
+        if (redraft !== undefined && redraft !== current) {
+          throw new StaleStateError(
+            `Redraft ${current} is the current one now; review it before approving`,
+          );
+        }
+        const proposal = await tx.specProposal.findUniqueOrThrow({
+          where: { id: found.id },
+          include: specProposalInclude,
+        });
         const latest = await tx.specVersion.findFirst({
           where: { featureId: proposal.featureId },
           orderBy: { version: 'desc' },
@@ -223,6 +368,12 @@ export class SpecService {
       });
       await this.notifications.publish(outbox);
       this.indexing.schedule({ source: 'SPEC_VERSION', id: version.id });
+      this.receipts.outcome({
+        kind: 'APPROVE',
+        proposal: { kind: 'SPEC_PROPOSAL', id },
+        actorId: user.id,
+        redraft: approvedRedraft,
+      });
       return toSpecVersionView(version);
     } catch (error) {
       if (error instanceof StaleStateError) throw new ConflictException(error.message);
@@ -230,15 +381,26 @@ export class SpecService {
     }
   }
 
-  /** Rejecting keeps the Decision; the Decision Request stays DECIDED. */
-  async reject(user: User, id: string): Promise<SpecProposalView> {
+  /**
+   * Rejecting keeps the Decision; the Decision Request stays DECIDED. `reason`, when
+   * given, goes to the proposal's Receipt (ticket 0070).
+   */
+  async reject(user: User, id: string, reason?: string): Promise<SpecProposalView> {
     await this.findPendingForApprover(user, id);
+    const redraft = await currentRedraft(this.db, 'SPEC_PROPOSAL', id);
     const updated = await this.db.specProposal.update({
       where: { id, status: 'PENDING' },
       data: { status: 'REJECTED', reviewedAt: new Date() },
       include: specProposalInclude,
     });
     await this.notifications.publish(this.notifications.outbox().inboxChanged(user.id));
+    this.receipts.outcome({
+      kind: 'DECLINE',
+      proposal: { kind: 'SPEC_PROPOSAL', id },
+      actorId: user.id,
+      redraft,
+      reason: reason ?? null,
+    });
     return toSpecProposalView(updated);
   }
 

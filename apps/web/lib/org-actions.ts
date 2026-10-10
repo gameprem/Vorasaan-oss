@@ -3,12 +3,14 @@
 import type {
   CreatedInvitation,
   LoginResult,
+  SetFeaturePlatformsInput,
   SetRoleOwnersInput,
   TeamRole,
 } from '@vorasaan/shared';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { ApiError, api } from './api';
+import { isId } from './ids';
 import { setSession } from './session';
 
 export type FormState = { error?: string; ok?: boolean };
@@ -112,6 +114,18 @@ export async function acceptInvitation(token: string, _prev: FormState, formData
 export async function setRoleOwners(featureId: string, input: SetRoleOwnersInput) {
   return attempt(
     () => api(`/features/${featureId}/role-owners`, { method: 'PUT', body: input }),
+    `/features/${featureId}`,
+  );
+}
+
+/** The Platforms of its Project a Feature targets (ADR 0009). */
+export async function setFeaturePlatforms(
+  featureId: string,
+  input: SetFeaturePlatformsInput,
+): Promise<FormState> {
+  if (!isId(featureId)) return { error: 'That link is not valid. Reload the page.' };
+  return attempt(
+    () => api(`/features/${featureId}/platforms`, { method: 'PUT', body: input }),
     `/features/${featureId}`,
   );
 }

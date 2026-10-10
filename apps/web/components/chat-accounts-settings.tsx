@@ -8,14 +8,17 @@ import {
   ChatLanguage,
   type ChatLinkCodeView,
   type ChatPreferencesView,
-  DEFAULT_CHAT_LANGUAGE,
   type MyChatAppsView,
 } from '@vorasaan/shared';
 import { useRouter } from 'next/navigation';
-import { useEffect, useId, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { createChatLinkCode, saveChatPreferences, unlinkChatAccount } from '@/lib/chat-app-actions';
 import { relativeTime } from './bits';
-import { field, primaryButton, secondaryButton } from './ui';
+import { primaryButton, secondaryButton } from './ui';
+import { Checkbox } from './ui/checkbox';
+import { TimeField } from './ui/date-picker';
+import { Select } from './ui/select';
+import { TimeZoneComboBox } from './ui/time-zone-combo-box';
 
 // Settings → Notifications (ticket 0057): link a LINE, Slack or Teams account with a
 // one-time code, unlink it, and choose what goes there, when not, and in which language
@@ -119,31 +122,22 @@ function ChatAppRow({ app }: { app: MyChatAppsView['apps'][number] }) {
   );
 }
 
-function timeZones(current: string): string[] {
-  try {
-    const all = Intl.supportedValuesOf('timeZone');
-    return all.includes(current) ? all : [current, ...all];
-  } catch {
-    return [current];
-  }
-}
-
 function PreferencesForm({
   preferences,
   organizationTimeZone,
+  organizationLanguage,
 }: {
   preferences: ChatPreferencesView;
   organizationTimeZone: string;
+  organizationLanguage: ChatLanguage;
 }) {
-  const id = useId();
   const [events, setEvents] = useState(preferences.events);
   const [quiet, setQuiet] = useState(preferences.quietHours !== null);
   const [start, setStart] = useState(preferences.quietHours?.start ?? '22:00');
   const [end, setEnd] = useState(preferences.quietHours?.end ?? '07:00');
   const [timeZone, setTimeZone] = useState(preferences.timeZone ?? '');
-  const [language, setLanguage] = useState<ChatLanguage>(
-    preferences.language ?? DEFAULT_CHAT_LANGUAGE,
-  );
+  // '': the Organization's language (ticket 0063).
+  const [language, setLanguage] = useState<ChatLanguage | ''>(preferences.language ?? '');
   const [message, setMessage] = useState<{ ok: boolean; text: string }>();
   const [pending, run] = useTransition();
   const touched = () => setMessage(undefined);
@@ -154,7 +148,7 @@ function PreferencesForm({
         events,
         quietHours: quiet ? { start, end } : null,
         timeZone: timeZone || null,
-        language,
+        language: language || null,
       });
       setMessage(result.error ? { ok: false, text: result.error } : { ok: true, text: 'Saved' });
     });
@@ -165,104 +159,78 @@ function PreferencesForm({
         <legend className="font-medium">Send to my chat apps</legend>
         <div className="mt-2 space-y-2">
           {ChatEventKind.options.map((kind) => (
-            <label key={kind} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                className="size-4"
-                checked={events.includes(kind)}
-                onChange={(e) => {
-                  touched();
-                  setEvents((list) =>
-                    e.target.checked ? [...list, kind] : list.filter((k) => k !== kind),
-                  );
-                }}
-              />
+            <Checkbox
+              key={kind}
+              isSelected={events.includes(kind)}
+              onChange={(on) => {
+                touched();
+                setEvents((list) => (on ? [...list, kind] : list.filter((k) => k !== kind)));
+              }}
+            >
               {CHAT_EVENT_LABEL[kind]}
-            </label>
+            </Checkbox>
           ))}
         </div>
       </fieldset>
       <fieldset>
         <legend className="font-medium">Quiet hours</legend>
-        <label className="mt-2 flex items-center gap-2">
-          <input
-            type="checkbox"
-            className="size-4"
-            checked={quiet}
-            onChange={(e) => {
-              touched();
-              setQuiet(e.target.checked);
-            }}
-          />
+        <Checkbox
+          className="mt-2"
+          isSelected={quiet}
+          onChange={(on) => {
+            touched();
+            setQuiet(on);
+          }}
+        >
           Hold cards during quiet hours: they arrive when quiet hours end, and your Inbox has them
           meanwhile
-        </label>
+        </Checkbox>
         {quiet && (
           <div className="mt-2 flex flex-wrap gap-4">
-            <label className="block">
-              <span className="text-sm">From</span>
-              <input
-                type="time"
-                value={start}
-                onChange={(e) => {
-                  touched();
-                  setStart(e.target.value);
-                }}
-                className={field}
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm">Until</span>
-              <input
-                type="time"
-                value={end}
-                onChange={(e) => {
-                  touched();
-                  setEnd(e.target.value);
-                }}
-                className={field}
-              />
-            </label>
+            <TimeField
+              label="From"
+              value={start}
+              onChange={(next) => {
+                touched();
+                setStart(next);
+              }}
+            />
+            <TimeField
+              label="Until"
+              value={end}
+              onChange={(next) => {
+                touched();
+                setEnd(next);
+              }}
+            />
           </div>
         )}
-        <label className="mt-3 block max-w-sm" htmlFor={`${id}-tz`}>
-          <span className="text-sm">Time zone</span>
-          <select
-            id={`${id}-tz`}
-            value={timeZone}
-            onChange={(e) => {
-              touched();
-              setTimeZone(e.target.value);
-            }}
-            className={field}
-          >
-            <option value="">The Organization's ({organizationTimeZone})</option>
-            {timeZones(timeZone || organizationTimeZone).map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
-          </select>
-        </label>
-      </fieldset>
-      <label className="block max-w-sm" htmlFor={`${id}-lang`}>
-        <span className="font-medium">Language of cards and bot replies</span>
-        <select
-          id={`${id}-lang`}
-          value={language}
-          onChange={(e) => {
+        <TimeZoneComboBox
+          label="Time zone"
+          className="mt-3 max-w-sm"
+          emptyLabel={`The Organization's (${organizationTimeZone})`}
+          value={timeZone}
+          onChange={(next) => {
             touched();
-            setLanguage(e.target.value as ChatLanguage);
+            setTimeZone(next);
           }}
-          className={field}
-        >
-          {ChatLanguage.options.map((lang) => (
-            <option key={lang} value={lang}>
-              {CHAT_LANGUAGE_LABEL[lang]}
-            </option>
-          ))}
-        </select>
-      </label>
+        />
+      </fieldset>
+      <Select
+        label="My language"
+        description="Chat cards, bot replies, your Grilling Conversations and the AI's replies to you use it."
+        labelClassName="font-medium"
+        className="max-w-sm"
+        options={[
+          { id: '', label: `The Organization's (${CHAT_LANGUAGE_LABEL[organizationLanguage]})` },
+          ...ChatLanguage.options.map((lang) => ({ id: lang, label: CHAT_LANGUAGE_LABEL[lang] })),
+        ]}
+        value={language}
+        onChange={(lang) => {
+          touched();
+          setLanguage(lang as ChatLanguage | '');
+        }}
+      />
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending} className={primaryButton}>
           Save chat preferences
@@ -283,9 +251,11 @@ function PreferencesForm({
 export function ChatAccountsSettings({
   view,
   organizationTimeZone,
+  organizationLanguage,
 }: {
   view: MyChatAppsView;
   organizationTimeZone: string;
+  organizationLanguage: ChatLanguage;
 }) {
   const enabled = view.apps.filter((a) => a.enabled || a.account);
   return (
@@ -318,6 +288,7 @@ export function ChatAccountsSettings({
           <PreferencesForm
             preferences={view.preferences}
             organizationTimeZone={organizationTimeZone}
+            organizationLanguage={organizationLanguage}
           />
         </div>
       </section>

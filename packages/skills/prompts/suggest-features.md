@@ -21,7 +21,9 @@ These instructions come first; the material to work from follows them.
 - Don't suggest again anything dismissed, nor anything the reasons given rule out (e.g. "no budget for native apps" rules out every native-app suggestion).
 - Fewer, stronger suggestions beat many weak ones. Return fewer than {{count}}, or none, when the Project gives no good reason for more.
 - Don't invent facts about the business or its systems; base every rationale on the material below.
-- Write in the language the Project's people use (the Brief and the Specs); if unclear, in the language of the Project's name, else English.
+- Write in the language the Project's people use (the Brief and the Specs); if unclear, in the reply language.
+
+{{>language}}
 
 ## The Feature Guidelines
 

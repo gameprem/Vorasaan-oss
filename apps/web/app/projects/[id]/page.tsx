@@ -12,7 +12,9 @@ import {
   MAX_FEATURE_SUGGESTIONS,
   type OrgFeatureGuidelinesView,
   type ProjectBriefView,
+  type ProjectCoverageView,
   type ProjectFeatureGuidelinesView,
+  type ProjectPlatformsView,
   type ProjectView,
   type SuggestionLevel,
   type TeamView,
@@ -23,14 +25,18 @@ import { ActionForm } from '@/components/action-form';
 import { AttachmentsPanel } from '@/components/attachments-panel';
 import { Notice, relativeTime } from '@/components/bits';
 import { BriefPanel } from '@/components/brief-panel';
+import { CoverageMatrix } from '@/components/coverage-matrix';
 import { DecisionSpeedPanel } from '@/components/decision-speed-panel';
 import { DraftedWith } from '@/components/drafted-with';
 import { GrillingSection } from '@/components/grilling-section';
 import { ProjectGuidelinesEditor } from '@/components/guidelines-editor';
 import { EffectiveGuidelinesList, Tag } from '@/components/guidelines-list';
+import { PlatformsList, ProjectPlatformsEditor } from '@/components/platforms-editor';
+import { RedraftsSection } from '@/components/redrafts-section';
 import { RevertButton } from '@/components/revert-button';
 import { VersionDiff } from '@/components/spec-diff';
 import { field, secondaryButton } from '@/components/ui';
+import { Select } from '@/components/ui/select';
 import { ApiError, api, currentUser } from '@/lib/api';
 import { isId } from '@/lib/ids';
 import {
@@ -49,6 +55,8 @@ const TABS = [
   { id: 'grilling', label: 'Grilling' },
   { id: 'guidelines', label: 'Guidelines' },
   { id: 'suggestions', label: 'Suggestions' },
+  { id: 'platforms', label: 'Platforms' },
+  { id: 'coverage', label: 'Coverage' },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
@@ -80,11 +88,17 @@ export default async function ProjectPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; approved?: string; diff?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    approved?: string;
+    diff?: string;
+    missing?: string;
+    reason?: string;
+  }>;
 }) {
   const { id } = await params;
   if (!isId(id)) notFound();
-  const { tab: rawTab, approved, diff: rawDiff } = await searchParams;
+  const { tab: rawTab, approved, diff: rawDiff, missing, reason } = await searchParams;
   const tab: Tab = TABS.some((t) => t.id === rawTab) ? (rawTab as Tab) : 'brief';
 
   let project: ProjectView | undefined;
@@ -178,6 +192,10 @@ export default async function ProjectPage({
         {tab === 'guidelines' && <GuidelinesTab projectId={id} canEdit={canEdit} />}
         {tab === 'suggestions' && (
           <SuggestionsTab projectId={id} project={project} canEdit={canEdit} />
+        )}
+        {tab === 'platforms' && <PlatformsTab projectId={id} />}
+        {tab === 'coverage' && (
+          <CoverageTab projectId={id} missingOnly={missing === '1'} reason={reason} />
         )}
       </div>
     </article>
@@ -408,6 +426,56 @@ async function GuidelinesTab({ projectId, canEdit }: { projectId: string; canEdi
   );
 }
 
+async function PlatformsTab({ projectId }: { projectId: string }) {
+  const platforms = await load(() => api<ProjectPlatformsView>(`/projects/${projectId}/platforms`));
+  if (!platforms.data) return <Notice tone="error">{platforms.error}</Notice>;
+  return (
+    <div className="max-w-3xl">
+      <p className="text-fg-soft">
+        The parts of the product this Project’s Features ship on. A Feature targets some of them,
+        its Spec gets a section for each, and Coverage checks each one with the checks it switches
+        on. The list started as a copy of the Organization’s Platform template (
+        <Link href="/settings/platforms" className="underline underline-offset-2">
+          Settings → Platforms
+        </Link>
+        ).
+      </p>
+      <div className="mt-8">
+        {platforms.data.canEdit ? (
+          <ProjectPlatformsEditor projectId={projectId} platforms={platforms.data.platforms} />
+        ) : (
+          <>
+            <p className="mb-4 text-sm text-fg-soft">
+              The Project’s POs and Admins change this list.
+            </p>
+            <PlatformsList platforms={platforms.data.platforms} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+async function CoverageTab({
+  projectId,
+  missingOnly,
+  reason,
+}: {
+  projectId: string;
+  missingOnly: boolean;
+  reason?: string;
+}) {
+  const coverage = await load(() => api<ProjectCoverageView>(`/projects/${projectId}/coverage`));
+  if (!coverage.data) return <Notice tone="error">{coverage.error}</Notice>;
+  return (
+    <CoverageMatrix
+      coverage={coverage.data}
+      initialMissingOnly={missingOnly}
+      initialReason={reason}
+    />
+  );
+}
+
 const SUGGESTION_GROUPS: { status: FeatureSuggestionStatus; heading: string }[] = [
   { status: 'PENDING', heading: 'Waiting for a decision' },
   { status: 'ACCEPTED', heading: 'Accepted' },
@@ -534,6 +602,11 @@ async function SuggestionsTab({
                     )}
 
                     {s.status === 'PENDING' && canEdit && (
+                      <div className="mt-4">
+                        <RedraftsSection kind="FEATURE_SUGGESTION" id={s.id} />
+                      </div>
+                    )}
+                    {s.status === 'PENDING' && canEdit && (
                       <div className="mt-5 grid gap-6 pt-4 md:grid-cols-2">
                         {acceptTeams.length > 0 ? (
                           <ActionForm
@@ -541,16 +614,14 @@ async function SuggestionsTab({
                             submitLabel="Accept"
                             pendingLabel="Accepting… (the AI drafts the first Spec)"
                           >
-                            <label className="min-w-48 flex-1">
-                              <span className="text-sm">Team</span>
-                              <select name="teamId" required className={field}>
-                                {acceptTeams.map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                            <Select
+                              label="Team"
+                              name="teamId"
+                              className="min-w-48 flex-1"
+                              options={acceptTeams.map((t) => ({ id: t.id, label: t.name }))}
+                              defaultValue={acceptTeams[0]?.id}
+                              isRequired
+                            />
                           </ActionForm>
                         ) : (
                           <p className="text-sm text-fg-soft">

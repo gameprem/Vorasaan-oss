@@ -82,8 +82,16 @@ describe('loadAiConfig', () => {
       suggestFeaturesModel: 'anthropic/claude-opus-5-5',
       draftSpecFromSuggestionModel: 'anthropic/claude-opus-5-5',
       checkFeatureFitModel: 'anthropic/claude-opus-5-5',
+      draftAcceptanceCriteriaModel: DEFAULT_MODEL,
       chatModel: DEFAULT_MODEL,
       summarizeConversationModel: DEFAULT_MODEL,
+      redraftChoicesModel: DEFAULT_MODEL,
+      redraftSpecProposalModel: DEFAULT_MODEL,
+      redraftBriefProposalModel: DEFAULT_MODEL,
+      redraftFeatureSuggestionModel: DEFAULT_MODEL,
+      analyzeFeedbackModel: DEFAULT_MODEL,
+      proposePromptVersionModel: DEFAULT_MODEL,
+      redraftPromptVersionModel: DEFAULT_MODEL,
     });
   });
 
@@ -105,8 +113,16 @@ describe('loadAiConfig', () => {
       suggestFeaturesModel: 'openai/some-model',
       draftSpecFromSuggestionModel: 'openai/some-model',
       checkFeatureFitModel: 'openai/some-model',
+      draftAcceptanceCriteriaModel: 'openai/some-model',
       chatModel: 'openai/some-model',
       summarizeConversationModel: 'openai/some-model',
+      redraftChoicesModel: 'openai/some-model',
+      redraftSpecProposalModel: 'openai/some-model',
+      redraftBriefProposalModel: 'openai/some-model',
+      redraftFeatureSuggestionModel: 'openai/some-model',
+      analyzeFeedbackModel: 'openai/some-model',
+      proposePromptVersionModel: 'openai/some-model',
+      redraftPromptVersionModel: 'openai/some-model',
     });
   });
 });
@@ -280,6 +296,8 @@ describe('FakeAiPort', () => {
     expect(await collect(ai.chat(chatInput))).toEqual([
       { type: 'text', delta: 'Drafting.' },
       { type: 'tool-call', call },
+      // Last, the step's usage as the fake counts it (ticket 0066).
+      { type: 'usage', usage: { inputTokens: expect.any(Number), cacheReadTokens: 0 } },
     ]);
     const seen: ChatChunk[] = [];
     await expect(

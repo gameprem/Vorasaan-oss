@@ -1,13 +1,15 @@
 import { z } from 'zod';
 
 /** The kinds of LLM provider an Admin can connect. */
-export const AiProvider = z.enum(['ANTHROPIC', 'OPENAI', 'OPENAI_COMPATIBLE']);
+export const AiProvider = z.enum(['ANTHROPIC', 'OPENAI', 'OPENAI_COMPATIBLE', 'OPENROUTER']);
 export type AiProvider = z.infer<typeof AiProvider>;
 
 export const DEFAULT_MODELS: Record<AiProvider, string> = {
   ANTHROPIC: 'claude-opus-5-5',
   OPENAI: 'gpt-5.6-sol',
   OPENAI_COMPATIBLE: '',
+  // Picked from OpenRouter's model list (ticket 0064).
+  OPENROUTER: '',
 };
 
 /** The name a provider gets when none is given (setup, and the migrated provider). */
@@ -15,6 +17,7 @@ export const DEFAULT_PROVIDER_NAMES: Record<AiProvider, string> = {
   ANTHROPIC: 'Anthropic',
   OPENAI: 'OpenAI',
   OPENAI_COMPATIBLE: 'Custom endpoint',
+  OPENROUTER: 'OpenRouter',
 };
 
 /**
@@ -64,6 +67,11 @@ const ApiKey = z.string().trim().min(1, 'Enter an API key').max(4_000);
 const BaseUrl = z.url({ message: 'Enter the full URL, e.g. http://localhost:20128/v1' });
 const ProviderName = z.string().trim().min(1, 'Name the provider').max(100);
 const Id = z.uuid();
+/**
+ * OpenRouter's base URL is fixed (ticket 0064). The field is accepted only so the
+ * server can refuse it with a 422, as it refuses a base URL on the other fixed providers.
+ */
+const FixedUrl = z.unknown().optional();
 
 /**
  * One provider and its model, as the setup wizard asks for them: it becomes the
@@ -78,6 +86,12 @@ export const AiSettingsInput = z.discriminatedUnion('provider', [
     model: Model,
     baseUrl: BaseUrl,
     apiKey: ApiKey.optional(),
+  }),
+  z.object({
+    provider: z.literal('OPENROUTER'),
+    model: Model,
+    apiKey: ApiKey.optional(),
+    baseUrl: FixedUrl,
   }),
 ]);
 export type AiSettingsInput = z.infer<typeof AiSettingsInput>;
@@ -100,6 +114,13 @@ export const CreateAiProviderInput = z.discriminatedUnion('kind', [
     name: ProviderName,
     baseUrl: BaseUrl,
     apiKey: ApiKey,
+  }),
+  /** A key only: the base URL is OpenRouter's own (https://openrouter.ai/api/v1). */
+  z.object({
+    kind: z.literal('OPENROUTER'),
+    name: ProviderName,
+    apiKey: ApiKey,
+    baseUrl: FixedUrl,
   }),
 ]);
 export type CreateAiProviderInput = z.infer<typeof CreateAiProviderInput>;
@@ -124,7 +145,45 @@ export const AiProviderView = z.object({
 });
 export type AiProviderView = z.infer<typeof AiProviderView>;
 
+/**
+ * One model of OpenRouter's list (`GET /models`), for the picker (ticket 0064).
+ * `contextWindow` is its `context_length`, or null when it is missing or out of range.
+ */
+export const OpenRouterModelView = z.object({
+  id: z.string(),
+  name: z.string(),
+  contextWindow: z.number().int().nullable(),
+});
+export type OpenRouterModelView = z.infer<typeof OpenRouterModelView>;
+
+/**
+ * OpenRouter's model list. When it can't be loaded, `models` is empty and `error`
+ * says why: the Admin types the model id instead.
+ */
+export const OpenRouterModelsView = z.object({
+  models: z.array(OpenRouterModelView),
+  error: z.string().nullable(),
+});
+export type OpenRouterModelsView = z.infer<typeof OpenRouterModelsView>;
+
 // ─── Approved Models (Admin) ────────────────────────────────────────────────
+
+/** The most a million tokens may cost (US dollars): a typo guard, far above any real price. */
+export const MAX_PRICE_PER_MILLION = 10_000;
+const Price = z
+  .number('Enter a price')
+  .min(0, 'A price can’t be negative')
+  .max(MAX_PRICE_PER_MILLION, `At most $${MAX_PRICE_PER_MILLION.toLocaleString('en')}`);
+
+/**
+ * What a million tokens cost on an Approved Model, in US dollars (ticket 0075), for the AI
+ * usage dashboard's estimated cost. Input tokens include those read from the cache.
+ */
+export const ModelPrices = z.object({
+  inputPerMillion: Price,
+  outputPerMillion: Price,
+});
+export type ModelPrices = z.infer<typeof ModelPrices>;
 
 const DisplayName = z.string().trim().min(1, 'Name the model, e.g. "Fast"').max(60);
 const Note = z.string().trim().max(300).nullable();
@@ -137,6 +196,8 @@ export const CreateApprovedModelInput = z.object({
   note: Note.optional(),
   /** Tokens; left out, it is prefilled for a known model, else the server's default. */
   contextWindow: ContextWindow.optional(),
+  /** Null or left out: no price, so no cost is shown for it (only tokens). */
+  prices: ModelPrices.nullable().optional(),
   isDefault: z.boolean().optional(),
 });
 export type CreateApprovedModelInput = z.infer<typeof CreateApprovedModelInput>;
@@ -151,6 +212,8 @@ export const UpdateApprovedModelInput = z.object({
   displayName: DisplayName.optional(),
   note: Note.optional(),
   contextWindow: ContextWindow.optional(),
+  /** Null clears the price. */
+  prices: ModelPrices.nullable().optional(),
   isDefault: z.literal(true).optional(),
 });
 export type UpdateApprovedModelInput = z.infer<typeof UpdateApprovedModelInput>;
@@ -165,6 +228,8 @@ export const ApprovedModelSettingsView = z.object({
   note: z.string().nullable(),
   /** Tokens one call may hold, prompt and reply together: every AI task's budget is a share of it. */
   contextWindow: z.number().int(),
+  /** Null: no price set, so the AI usage dashboard shows its tokens but no cost. */
+  prices: ModelPrices.nullable(),
   position: z.number().int(),
   isDefault: z.boolean(),
 });
@@ -181,6 +246,7 @@ export const AiTask = z.enum([
   'FEATURE_SUGGESTIONS',
   'FIT_CHECK',
   'CHAT',
+  'PROMPT_PROPOSALS',
 ]);
 export type AiTask = z.infer<typeof AiTask>;
 

@@ -20,11 +20,12 @@ These instructions come first; the material to work from follows them.
 
 - If the current Brief has content, keep it as the base: keep its wording and add or change only what the answers and the known material support, so the diff stays reviewable. When an answer contradicts the current Brief, follow the answer and mention the change in `summary`.
 - Use only facts from the current Brief, the known material and the answers. Don't invent goals, numbers, users or systems; put gaps under "Open questions".
-- Keep exact numbers, names and terms.
 - Use the follow-up replies as part of their answer: they usually hold the specific numbers and scope.
 - When people's answers disagree, don't pick one silently: write what each said, naming them and their Team Role, under "Open questions".
 - Describe the Project as a whole; don't turn it into a list of Features.
-- Write in the language the people answered in; if mixed, in the language of the current Brief; if unclear, English.
+- Write in the language the people answered in; if mixed, in the language of the current Brief; if unclear, in the reply language.
+
+{{>language}}
 
 ## The current Project Brief
 

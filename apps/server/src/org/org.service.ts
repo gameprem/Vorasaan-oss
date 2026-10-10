@@ -33,7 +33,9 @@ import { AuthService, hashPassword } from '../auth/auth.service.ts';
 import { hashToken, newToken } from '../auth/tokens.ts';
 import { OPEN_BLOCKERS } from '../features/open-blockers.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
+import { PlatformsService } from '../platforms/platforms.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
+import { ReceiptsService } from '../receipts/receipts.service.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import { normalizeMarkdown } from '../spec/markdown.ts';
 import { specVersionInclude, toSpecVersionView } from '../spec/spec.view.ts';
@@ -76,6 +78,8 @@ export class OrgService {
     private readonly auth: AuthService,
     private readonly notifications: NotificationsService,
     private readonly indexing: IndexingService,
+    private readonly receipts: ReceiptsService,
+    private readonly platforms: PlatformsService,
   ) {}
 
   // ─── Permissions ──────────────────────────────────────────────────────────
@@ -130,11 +134,16 @@ export class OrgService {
     }));
   }
 
+  /** A new Project starts with a copy of the Organization's default Platforms (ADR 0009). */
   async createProject(input: CreateProjectInput) {
     const organizationId = await this.organizationId();
     try {
-      return await this.db.project.create({
-        data: { organizationId, name: input.name, jiraKey: input.jiraKey ?? null },
+      return await this.db.$transaction(async (tx) => {
+        const project = await tx.project.create({
+          data: { organizationId, name: input.name, jiraKey: input.jiraKey ?? null },
+        });
+        await this.platforms.copyTemplate(tx, organizationId, project.id);
+        return project;
       });
     } catch (error) {
       throw uniqueConflict(error, 'A Project with that name or Jira key already exists');
@@ -322,20 +331,28 @@ export class OrgService {
 
   // ─── Features, Role Owners, Spec ──────────────────────────────────────────
 
+  /** A new Feature may name the Platforms of its Project it targets (ADR 0009). */
   async createFeature(user: User, teamId: string, input: CreateFeatureInput) {
-    if (!(await this.db.team.count({ where: { id: teamId } }))) {
-      throw new NotFoundException('Team not found');
-    }
+    const team = await this.db.team.findUnique({
+      where: { id: teamId },
+      select: { projectId: true },
+    });
+    if (!team) throw new NotFoundException('Team not found');
     await this.assertCanManageTeam(user, teamId);
-    return this.db.feature.create({
-      data: {
-        teamId,
-        title: input.title,
-        description: input.description || null,
-        jiraIssueKey: input.jiraIssueKey ?? null,
-        status: 'IN_PROGRESS',
-      },
-      select: { id: true, title: true },
+    const platformIds = input.platformIds ?? [];
+    return this.db.$transaction(async (tx) => {
+      await this.platforms.assertTargetable(tx, team.projectId, platformIds);
+      return tx.feature.create({
+        data: {
+          teamId,
+          title: input.title,
+          description: input.description || null,
+          jiraIssueKey: input.jiraIssueKey ?? null,
+          status: 'IN_PROGRESS',
+          platforms: { create: platformIds.map((platformId) => ({ platformId })) },
+        },
+        select: { id: true, title: true },
+      });
     });
   }
 
@@ -421,6 +438,8 @@ export class OrgService {
       });
       await this.notifications.publish(outbox);
       this.indexing.schedule({ source: 'SPEC_VERSION', id: version.id });
+      // A hand edit right after an approved Spec Proposal is feedback on it (ticket 0070).
+      this.receipts.editedByHand('SPEC_PROPOSAL', version.id, user.id);
       return toSpecVersionView(version);
     } catch (error) {
       throw uniqueConflict(error, 'Someone saved the Spec at the same time. Reload and try again.');

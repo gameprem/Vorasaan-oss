@@ -5,7 +5,7 @@ import { expect, pim, SEED, test, unique } from './fixtures';
 
 // Auto-compaction (ticket 0060) in the chat view: once a Conversation's history passes its
 // share of the model's window, its older messages are folded into the Conversation Summary.
-// They stay stored, behind a quiet "Earlier messages were summarized" marker that opens them.
+// They stay stored and shown as usual, above a thin divider (ticket 0066).
 // The Conversation runs on a small Approved Model (an 8,000-token window), against the
 // server's fake AI, so a few long Thai messages are enough.
 
@@ -45,7 +45,7 @@ async function smallModel(request: APIRequestContext): Promise<ApprovedModelSett
   return (await model.json()) as ApprovedModelSettingsView;
 }
 
-test('older messages fold behind "Earlier messages were summarized", which opens the originals', async ({
+test('after an automatic compaction the older messages stay readable above a divider', async ({
   as,
   request,
 }) => {
@@ -72,29 +72,35 @@ test('older messages fold behind "Earlier messages were summarized", which opens
   const conversation = (await stored.json()) as ConversationView;
   expect(conversation.summarizedThrough).toBeGreaterThan(0);
   expect(conversation.messages).toHaveLength(6);
+  expect(conversation.compactions.length).toBeGreaterThan(0);
+  expect(conversation.compactions[0]?.trigger).toBe('AUTO');
 
   const page = await as(pim);
   await page.goto(`/conversations/${id}`);
   const log = page.getByRole('log', { name: 'Messages' });
-  const marker = log.getByRole('button', { name: 'Earlier messages were summarized' });
-  await expect(marker).toBeVisible();
-  await expect(marker).toHaveAttribute('aria-expanded', 'false');
-  // The summarized messages are folded away; the newest turn is shown as usual.
+  // Nothing is folded away any more: the person's first message is there, word for word.
   const firstLine = first.split('\n')[0] ?? '';
-  // The person's first message (the AI's replies quote it too).
   const original = log.locator('.msg.user').filter({ hasText: firstLine });
-  await expect(original).toHaveCount(0);
-  await expect(log.getByText('Message 3', { exact: false }).first()).toBeVisible();
-
-  // Opening it shows the original messages, word for word, above where the summary ends.
-  await marker.click();
-  await expect(marker).toHaveAttribute('aria-expanded', 'true');
   await expect(original).toBeVisible();
   await expect(original).toContainText(first.split('\n')[1] ?? '');
-  await expect(log.getByText('The AI reads the messages above as a summary')).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath('summarized-open.png') });
+  await expect(log.getByRole('button', { name: 'Earlier messages were summarized' })).toHaveCount(
+    0,
+  );
+  await expect(log.getByText('Message 3', { exact: false }).first()).toBeVisible();
+  // One divider per compaction, above the first message the AI still reads word for word.
+  const dividers = log.locator('.compaction-divider');
+  await expect(dividers).toHaveCount(conversation.compactions.length);
+  await expect(dividers.first()).toContainText('The AI reads the messages above as a summary');
+  await page.screenshot({ path: test.info().outputPath('compaction-divider.png') });
 
-  // And it closes again.
-  await marker.click();
-  await expect(original).toHaveCount(0);
+  // View summary opens the Conversation Summary as that compaction left it.
+  await expect(async () => {
+    await dividers.last().getByRole('button', { name: 'View summary' }).click();
+    await expect(page.getByRole('dialog', { name: 'Conversation Summary' })).toBeVisible({
+      timeout: 1000,
+    });
+  }).toPass();
+  const dialog = page.getByRole('dialog', { name: 'Conversation Summary' });
+  await expect(dialog).toContainText('Compacted automatically');
+  await expect(dialog.getByRole('heading', { name: 'Names, numbers and ids' })).toBeVisible();
 });

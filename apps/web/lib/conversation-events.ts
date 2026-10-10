@@ -12,6 +12,8 @@ export const CONVERSATION_EVENT_NAMES = [
   'conversation.failed',
   'conversation.step',
   'conversation.appended',
+  'conversation.usage',
+  'conversation.compacted',
   'conversation.actionCard.created',
   'conversation.actionCard.updated',
 ] as const satisfies readonly ConversationEvent['event'][] & readonly ServerEventName[];

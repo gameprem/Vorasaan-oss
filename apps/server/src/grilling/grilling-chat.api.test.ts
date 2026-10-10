@@ -234,9 +234,10 @@ describe('Grilling in the chat view (0047)', () => {
     const danas = await conversationOf(dana);
     expect(danas.grilling).toEqual({ id: g.id, round: 'UX', role: 'DESIGNER' });
     expect(danas.grillingProgress?.rounds[1]?.status).toBe('ASKING');
-    // Olga's own Conversation was closed with a notice.
+    // Olga's own Conversation was told who answered the question it asked, then closed.
     const closing = (await read(olga, olgas.id)).messages.at(-1);
     expect(closing?.grillingNotes).toEqual([
+      { kind: 'ANSWERED_ELSEWHERE', position: 3, by: 'Paul', answer: FULL(4), hadReply: false },
       { kind: 'CLOSED', round: 'BUSINESS', reason: 'COMPLETE' },
     ]);
   });

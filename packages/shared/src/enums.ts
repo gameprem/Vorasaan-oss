@@ -42,6 +42,7 @@ export const SpecVersionSource = z.enum([
   'DECISION',
   'REVERT',
   'CONVERSATION',
+  'ACCEPTANCE_CRITERIA',
 ]);
 export type SpecVersionSource = z.infer<typeof SpecVersionSource>;
 
@@ -63,6 +64,8 @@ export const NotificationType = z.enum([
   'REQUEST_REMINDER',
   'REQUEST_ESCALATED',
   'REQUEST_OVERDUE',
+  'AI_BUDGET_WARNING',
+  'AI_BUDGET_REACHED',
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 
@@ -123,3 +126,49 @@ export type DecisionSource = z.infer<typeof DecisionSource>;
 
 export const ChatCardStatus = z.enum(['PENDING', 'SENT', 'SKIPPED', 'FAILED']);
 export type ChatCardStatus = z.infer<typeof ChatCardStatus>;
+
+export const ProposalKind = z.enum([
+  'CHOICES',
+  'SPEC_PROPOSAL',
+  'BRIEF_PROPOSAL',
+  'FEATURE_SUGGESTION',
+  'PROMPT_VERSION',
+]);
+export type ProposalKind = z.infer<typeof ProposalKind>;
+
+export const RedraftStatus = z.enum(['WRITING', 'READY']);
+export type RedraftStatus = z.infer<typeof RedraftStatus>;
+
+export const ReceiptOutputKind = z.enum([
+  'CHOICES',
+  'SPEC_PROPOSAL',
+  'BRIEF_PROPOSAL',
+  'FEATURE_SUGGESTION_BATCH',
+  'REDRAFT',
+  'CONVERSATION_MESSAGE',
+  'CONVERSATION',
+  'ATTACHMENT',
+  'GRILLING_ROUND',
+  'GRILLING_QUESTION',
+  'PROMPT_ANALYSIS',
+  'PROMPT_VERSION',
+]);
+export type ReceiptOutputKind = z.infer<typeof ReceiptOutputKind>;
+
+export const ReceiptOutcomeKind = z.enum(['APPROVE', 'DECLINE', 'REQUEST_CHANGES', 'MANUAL_EDIT']);
+export type ReceiptOutcomeKind = z.infer<typeof ReceiptOutcomeKind>;
+
+export const PromptVersionStatus = z.enum(['PROPOSED', 'APPROVED', 'DECLINED']);
+export type PromptVersionStatus = z.infer<typeof PromptVersionStatus>;
+
+export const PromptActivationKind = z.enum(['APPROVE', 'ROLLBACK']);
+export type PromptActivationKind = z.infer<typeof PromptActivationKind>;
+
+export const PromptEvalRunStatus = z.enum(['RUNNING', 'DONE', 'FAILED']);
+export type PromptEvalRunStatus = z.infer<typeof PromptEvalRunStatus>;
+
+export const PromptAnalysisStatus = z.enum(['RUNNING', 'DONE', 'FAILED']);
+export type PromptAnalysisStatus = z.infer<typeof PromptAnalysisStatus>;
+
+export const PromptAnalysisTrigger = z.enum(['MANUAL', 'FEEDBACK']);
+export type PromptAnalysisTrigger = z.infer<typeof PromptAnalysisTrigger>;
