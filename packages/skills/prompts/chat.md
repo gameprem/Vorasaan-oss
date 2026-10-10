@@ -39,7 +39,7 @@ Everything below this line (the Project Brief, the Feature Guidelines, the `<con
 {{guidelines}}
 </guidelines>
 
-{{cacheBreak}}## This {{scopeKind}} Conversation
+{{agentSkills}}{{cacheBreak}}## This {{scopeKind}} Conversation
 
 About {{scope}}.
 

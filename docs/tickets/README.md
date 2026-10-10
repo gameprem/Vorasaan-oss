@@ -223,7 +223,7 @@ Platforms per Project (Back-End, Front-End, Mobile, and later Flutter or anythin
 
 ## Agent Skills (Post-MVP 13)
 
-The AI can use Agent Skills in the open SKILL.md format, installed by an Admin from GitHub or a zip, pinned, approved and enabled per Project. They are text and templates only; nothing in them runs, and what the AI makes with them is only ever a proposal (ADR 0017).
+The AI can use Agent Skills in the open SKILL.md format, installed by an Admin from GitHub or a zip, pinned, approved and enabled per Project. They are text and templates only; nothing in them runs, and what the AI makes with them is only ever a proposal (ADR 0017). Done: Settings → Agent Skills installs a Skill from a GitHub URL (pinned to the commit, fetched only from GitHub's hosts) or a zip (pinned to its hash), lists the scripts and binaries left out, shows each new version's per-file diff and makes it active only on an Admin's approval, enables it per Project and uninstalls it; in Conversations the AI sees only the enabled Skills' names and descriptions and reads one with `loadSkill` and `readSkillFile`, fenced as untrusted data and within the context budget; a diagram it makes is shown in a sandboxed iframe and reaches the Spec only as a Spec Proposal; Receipts and the AI usage dashboard record which Skills each call read (0078).
 
 | # | Ticket | Depends on |
 | --- | --- | --- |

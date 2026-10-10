@@ -97,6 +97,12 @@ export const BUDGET_CONFIG = {
   promptSlack: 150,
   /** One `searchContext` tool call in a Conversation (Action Cards, 0043): a focused extra read. */
   searchContext: { share: 0.05, floor: 500, ceiling: 6_000 },
+  /**
+   * One `loadSkill` or `readSkillFile` call (Agent Skills, ticket 0078): a Skill's text is
+   * cut to this; one turn reads at most `perTurn` times it in all. What a turn read stays in
+   * the Conversation as tool results, so later turns count it in the history.
+   */
+  agentSkillRead: { share: 0.08, floor: 800, ceiling: 8_000, perTurn: 2 },
 } as const;
 
 /** How one call's window is spent, in tokens. They add up to at most `window` when it can. */
@@ -179,6 +185,13 @@ export function projectBudget(budget: Budget): number {
 export function searchContextBudget(window: number): number {
   const { share, floor, ceiling } = BUDGET_CONFIG.searchContext;
   return clamp(window * share, floor, ceiling);
+}
+
+/** What one Agent Skill read may hold, and what one turn may read in all, for this window. */
+export function agentSkillReadBudget(window: number): { read: number; turn: number } {
+  const { share, floor, ceiling, perTurn } = BUDGET_CONFIG.agentSkillRead;
+  const read = clamp(window * share, floor, ceiling);
+  return { read, turn: read * perTurn };
 }
 
 /** What the tools offered to the AI cost in its prompt: names, descriptions and schemas. */

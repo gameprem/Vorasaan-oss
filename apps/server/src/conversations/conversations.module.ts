@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ActionCardsController } from '../action-cards/action-cards.controller.ts';
 import { ActionCardsService } from '../action-cards/action-cards.service.ts';
+import { AgentSkillsModule } from '../agent-skills/agent-skills.module.ts';
 import { BriefModule } from '../brief/brief.module.ts';
 import { CoverageModule } from '../coverage/coverage.module.ts';
 import { DecisionRequestsModule } from '../decision-requests/decision-requests.module.ts';
@@ -35,6 +36,7 @@ import { ConversationsService } from './conversations.service.ts';
     ConversationLocksModule,
     RedraftsModule,
     CoverageModule,
+    AgentSkillsModule,
   ],
   controllers: [ConversationsController, GrillingConversationsController, ActionCardsController],
   providers: [ConversationsService, ActionCardsService],

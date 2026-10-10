@@ -51,10 +51,12 @@ export const QUERY_BUDGETS = {
   decisionStats: 12,
   // Its context includes the same retrieval. Two more since ticket 0052: a Feature
   // Conversation reads its target Platforms and latest Spec for the missing sections, run
-  // alongside the foundation.
-  chatTurn: 83,
-  // Identity, Admin check, the Organization, then four aggregates at once (ticket 0075).
-  aiUsage: 8,
+  // alongside the foundation. One more since ticket 0078: the Agent Skills enabled in the
+  // Project, one statement run alongside the model choice.
+  chatTurn: 84,
+  // Identity, Admin check, the Organization, then four aggregates at once (ticket 0075), and
+  // since ticket 0078 a fifth with them: the Agent Skills read in the range.
+  aiUsage: 9,
   // Coverage (ticket 0051), each a fixed few queries run together however many Features,
   // Platforms and Blockers there are. A Feature's: identity, then the Feature, its targets,
   // its latest Spec Version, its Team's roles and its open Blockers (their Choices are one

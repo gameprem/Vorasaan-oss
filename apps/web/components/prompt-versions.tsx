@@ -63,6 +63,8 @@ const SET_LABEL: Record<string, string> = {
   conversation: 'Conversation',
   redrafts: 'Redrafts',
   'prompt-proposals': 'Prompt proposals',
+  coverage: 'Coverage',
+  'agent-skills': 'Agent Skills',
   replay: 'Replay of approved Receipts',
 };
 export const setLabel = (set: string) => SET_LABEL[set] ?? set;

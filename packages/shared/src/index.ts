@@ -1,4 +1,5 @@
 export * from './action-card.ts';
+export * from './agent-skill.ts';
 export * from './ai-settings.ts';
 export * from './ai-usage.ts';
 export * from './atlassian.ts';

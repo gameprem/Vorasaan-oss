@@ -9,6 +9,7 @@ import { estimateTokens } from '../retrieval/token-estimate.ts';
 import type { AiTask } from './ai.config.ts';
 import {
   type ActionCardForAi,
+  type AgentSkillForAi,
   type AiCallOptions,
   type AiPort,
   type AttachmentForAi,
@@ -511,6 +512,7 @@ export class MastraAiPort implements AiPort {
       recentMessages: ChatMessageForAi[];
       tools: ChatTool[];
       missingSections?: PlatformForAi[];
+      agentSkills?: AgentSkillForAi[];
       signal?: AbortSignal;
     },
     options?: AiCallOptions,

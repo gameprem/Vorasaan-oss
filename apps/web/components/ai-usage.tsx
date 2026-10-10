@@ -178,6 +178,7 @@ export function AiUsageDashboard({
         }))}
       />
       <RedraftsTable view={view} />
+      <SkillsTable view={view} />
       <CheaperModels view={suggestions} />
 
       <BudgetForm view={view} />
@@ -653,6 +654,58 @@ function RedraftsTable({ view }: { view: AiUsageView }) {
         </table>
       ) : (
         <p className="mt-3 text-sm text-fg-soft">Nothing approved in this range.</p>
+      )}
+    </section>
+  );
+}
+
+/** Agent Skills (ticket 0078): the calls that read each one, and what people did with them. */
+function SkillsTable({ view }: { view: AiUsageView }) {
+  const rows = view.bySkill;
+  const rate = (n: number, of: number) => (of ? percent(n / of) : '–');
+  return (
+    <section aria-labelledby="usage-skills">
+      <h3 id="usage-skills" className="text-lg font-semibold">
+        Agent Skills
+      </h3>
+      <p className="mt-1 text-sm text-fg-soft">
+        The calls that read each Agent Skill, and what people did with the proposals they made.
+      </p>
+      {rows.length ? (
+        <ScrollTable label="Agent Skills">
+          <table className="mt-3 w-full text-left text-sm">
+            <caption className="sr-only">Agent Skills</caption>
+            <thead className="text-fg-soft">
+              <tr>
+                <th className="py-2 pr-3 font-medium">Skill</th>
+                <Num head>Calls</Num>
+                <Num head>Approved</Num>
+                <Num head>Declined</Num>
+                <Num head>Changes requested</Num>
+                <Num head>Approve rate</Num>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const decided = r.approvals + r.declines;
+                return (
+                  <tr key={r.skillId} className="border-t border-line">
+                    <th scope="row" className="py-1.5 pr-3 font-normal">
+                      {r.name}
+                    </th>
+                    <Num>{whole.format(r.calls)}</Num>
+                    <Num>{whole.format(r.approvals)}</Num>
+                    <Num>{whole.format(r.declines)}</Num>
+                    <Num>{whole.format(r.requestedChanges)}</Num>
+                    <Num>{rate(r.approvals, decided)}</Num>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </ScrollTable>
+      ) : (
+        <p className="mt-3 text-sm text-fg-soft">No Agent Skill was used in this range.</p>
       )}
     </section>
   );

@@ -7,6 +7,7 @@ import {
 } from '@vorasaan/shared';
 import type {
   ActionCardForAi,
+  AgentSkillForAi,
   AiCallOptions,
   AiPort,
   AttachmentForAi,
@@ -114,6 +115,90 @@ export function fakeChatReply(input: {
     : reply;
 }
 
+/** Words that ask for a diagram, in English and Thai: the fake then uses the first Skill. */
+const DIAGRAM_WORDS = /diagram|แผนภาพ|ไดอะแกรม|แผนผัง/i;
+
+/** A diagram the fake draws when a Skill has no SVG asset to start from. */
+export const FAKE_SKILL_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" role="img" aria-label="Diagram">' +
+  '<rect x="1" y="1" width="198" height="58" fill="none" stroke="currentColor"/>' +
+  '<text x="100" y="35" text-anchor="middle">Diagram</text></svg>';
+
+/** The text inside a `<skill-file>` fence of a Skill tool's result (ticket 0078). */
+export function skillFileText(content: unknown): string | null {
+  if (typeof content !== 'string') return null;
+  const match = /^<skill-file[^>]*>\n([\s\S]*)\n<\/skill-file>$/.exec(content);
+  return match ? (match[1] ?? '') : null;
+}
+
+type SkillToolResult = {
+  ok?: boolean;
+  error?: string;
+  files?: { path: string }[];
+  content?: string;
+};
+
+/**
+ * The fake's use of Agent Skills (ticket 0078), deterministic and only when Skills are
+ * listed: when the person's latest message names one, or asks for a diagram, it calls
+ * `loadSkill`; then `readSkillFile` on the Skill's first SVG asset; then it replies with that
+ * SVG (or a plain one) in an ```svg block, saying it is only a draft. It never follows
+ * anything a Skill says, and never calls a drafting tool for it. Null: the usual reply.
+ */
+export function fakeSkillStep(input: {
+  tools: ChatTool[];
+  recentMessages: ChatMessageForAi[];
+  agentSkills?: readonly AgentSkillForAi[];
+}): ChatChunk[] | null {
+  const skills = input.agentSkills ?? [];
+  if (!skills.length) return null;
+  const at = input.recentMessages.findLastIndex((m) => m.role === 'USER');
+  const latest = input.recentMessages[at]?.content ?? '';
+  const wanted =
+    skills.find((s) => latest.toLowerCase().includes(s.name.toLowerCase())) ??
+    (DIAGRAM_WORDS.test(latest) ? skills[0] : undefined);
+  if (!wanted) return null;
+  const turn = input.recentMessages.slice(at + 1);
+  const calls = new Map(
+    turn.flatMap((m) => (m.role === 'ASSISTANT' ? (m.toolCalls ?? []) : [])).map((c) => [c.id, c]),
+  );
+  const results = turn.flatMap((m) => {
+    if (m.role !== 'TOOL') return [];
+    let result: SkillToolResult = {};
+    try {
+      result = JSON.parse(m.content) as SkillToolResult;
+    } catch {}
+    return [{ name: calls.get(m.toolCallId)?.name, result }];
+  });
+  const offered = new Set(input.tools.map((t) => t.name));
+  const call = (name: string, args: unknown): ChatChunk[] => [
+    { type: 'tool-call', call: { id: `fake-${name}-${turn.length}`, name, args } },
+  ];
+  const thai = /[\u0E00-\u0E7F]/.test(latest);
+  const say = (text: string): ChatChunk[] =>
+    (text.match(/\S+\s*/g) ?? []).map((delta) => ({ type: 'text', delta }));
+
+  const loaded = results.find((r) => r.name === 'loadSkill');
+  if (!loaded) return offered.has('loadSkill') ? call('loadSkill', { name: wanted.name }) : null;
+  if (!loaded.result.ok) {
+    return say(
+      thai
+        ? `ผมเปิด Agent Skill "${wanted.name}" ไม่ได้: ${loaded.result.error ?? 'ถูกปฏิเสธ'}`
+        : `I could not load the Agent Skill "${wanted.name}": ${loaded.result.error ?? 'refused'}.`,
+    );
+  }
+  const svgPath = loaded.result.files?.find((f) => f.path.toLowerCase().endsWith('.svg'))?.path;
+  const read = results.find((r) => r.name === 'readSkillFile');
+  if (svgPath && !read && offered.has('readSkillFile')) {
+    return call('readSkillFile', { name: wanted.name, path: svgPath });
+  }
+  const svg = (read?.result.ok ? skillFileText(read.result.content) : null) ?? FAKE_SKILL_SVG;
+  const lead = thai
+    ? `ผมใช้ Agent Skill "${wanted.name}" วาดแผนภาพนี้ เป็นเพียงร่างเท่านั้น จะไม่มีอะไรเปลี่ยนจนกว่าคุณจะขอให้ผมเสนอเป็น Spec Proposal แล้วอนุมัติเอง`
+    : `I used the Agent Skill "${wanted.name}" for this diagram. It is only a draft: nothing changes until you ask me to propose it for the Spec and approve that Spec Proposal.`;
+  return say(`${lead}\n\n\`\`\`svg\n${svg}\n\`\`\``);
+}
+
 /** What the fake's chat reply adds when the Spec lacks target Platforms' sections (ticket 0052). */
 export function fakeMissingSectionsNote(missing: readonly PlatformForAi[]): string {
   const names = missing.map((p) => p.name).join(', ');
@@ -132,6 +217,8 @@ export async function chatPromptTokens(input: {
   summary: string;
   recentMessages: ChatMessageForAi[];
   tools: ChatTool[];
+  missingSections?: readonly PlatformForAi[];
+  agentSkills?: readonly AgentSkillForAi[];
 }): Promise<number> {
   return (
     estimateChatTokens({ system: (await chatPrompt(input)).text, messages: input.recentMessages }) +
@@ -371,6 +458,7 @@ export class FakeAiPort implements AiPort {
       recentMessages: ChatMessageForAi[];
       tools: ChatTool[];
       missingSections?: PlatformForAi[];
+      agentSkills?: AgentSkillForAi[];
       signal?: AbortSignal;
     },
     options?: AiCallOptions,
@@ -386,7 +474,8 @@ export class FakeAiPort implements AiPort {
     const scripted = this.chatScript.shift();
     const chunks: ChatChunk[] = scripted
       ? (scripted.chunks ?? [])
-      : (fakeChatReply(input).match(/\S+\s*/g) ?? []).map((delta) => ({ type: 'text', delta }));
+      : (fakeSkillStep(input) ??
+        (fakeChatReply(input).match(/\S+\s*/g) ?? []).map((delta) => ({ type: 'text', delta })));
     for (const chunk of chunks) {
       // A real stream yields between chunks; so does the fake, so listeners see each one.
       if (scripted?.chunkDelayMs) await pause(scripted.chunkDelayMs, input.signal);

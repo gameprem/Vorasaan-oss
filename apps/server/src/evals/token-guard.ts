@@ -15,6 +15,12 @@ import type { AiTask } from '../ai/ai.config.ts';
  * grillingQuestions (1235 before) gained a rule and a <platforms> block, about 60 tokens a
  * call on the earlier cases, and both sets gained Coverage cases (cases/coverage.ts), which
  * also gave draftSpecProposal checked-in cases (and a guard) for the first time.
+ *
+ * Ticket 0078 gave chat five Agent Skills cases (cases/agent-skills.ts): their prompts list two
+ * Skills and offer two more tools, and four of them carry a loaded SKILL.md (and an SVG) as tool
+ * results, about 2,900 tokens each. The five earlier chat cases are unchanged (1616, scores
+ * 0.82 and Thai 0.55): a Project without Skills renders nothing for them. With the new cases
+ * chat's mean is 2261, its score 0.91 and Thai 0.775.
  */
 export const EVAL_CASE_GUARD: Record<AiTask, { tokens: number; score: number; thai?: number }> = {
   generateChoices: { tokens: 1602, score: 0.7, thai: 0.399 },
@@ -28,7 +34,7 @@ export const EVAL_CASE_GUARD: Record<AiTask, { tokens: number; score: number; th
   draftSpecFromSuggestion: { tokens: 1254, score: 1, thai: 1 },
   checkFeatureFit: { tokens: 1315, score: 0.708, thai: 0.333 },
   draftAcceptanceCriteria: { tokens: 1345, score: 1, thai: 1 },
-  chat: { tokens: 1616, score: 0.82, thai: 0.55 },
+  chat: { tokens: 2261, score: 0.909, thai: 0.775 },
   summarizeConversation: { tokens: 1533, score: 0.916, thai: 0.916 },
   redraftChoices: { tokens: 1840, score: 0.833, thai: 0.666 },
   redraftSpecProposal: { tokens: 1853, score: 0.8, thai: 0.833 },

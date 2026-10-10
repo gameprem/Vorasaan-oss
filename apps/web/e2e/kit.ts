@@ -74,9 +74,12 @@ export const POPOVER = '[data-trigger]';
 /** axe's WCAG 2.1 A and AA rules over `include` (the page but the Sidebar by default). */
 export async function expectNoViolations(page: Page, include?: string) {
   // The Sidebar is the shell's, not a form's; its own contrast is outside the kit.
+  // A sandboxed iframe runs no script, axe's included: axe would wait 30 s for each one
+  // to answer, so they are left out (the iframe's own title is checked by its spec).
   let axe = new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .exclude('aside.side');
+    .exclude('aside.side')
+    .exclude('iframe[sandbox]');
   if (include) axe = axe.include(include);
   const { violations } = await axe.analyze();
   expect(

@@ -26,6 +26,7 @@ export const SETTINGS_SECTIONS = [
   { href: '/settings/ai', label: 'AI models' },
   { href: '/settings/ai/prompts', label: 'AI prompts' },
   { href: '/settings/ai/usage', label: 'AI usage' },
+  { href: '/settings/agent-skills', label: 'Agent Skills' },
   { href: '/settings/tokens', label: 'Access tokens' },
 ] as const;
 

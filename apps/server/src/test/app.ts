@@ -1,6 +1,7 @@
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
 import { createPrismaClient } from '@vorasaan/db';
+import { AGENT_SKILL_FETCH } from '../agent-skills/github-source.ts';
 import type { AiPort } from '../ai/ai.port.ts';
 import { AI_CONNECTION_TESTER, type AiConnectionTester } from '../ai/ai-settings.service.ts';
 import { FakeAiPort } from '../ai/fake-ai.port.ts';
@@ -21,6 +22,7 @@ import { FakeEmbeddings } from '../retrieval/fake-embedding.port.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
 import { beforeTruncate, prepareDatabase, testDatabaseUrl } from './database.ts';
 import { FakeClock } from './fake-clock.ts';
+import { FakeGitHub } from './fake-github.ts';
 
 export type TestApp = {
   app: NestFastifyApplication;
@@ -42,6 +44,8 @@ export type TestApp = {
    * start, and the Receipts and outcomes all of it leaves.
    */
   proposals: PromptProposalsService;
+  /** The fake GitHub that Agent Skills are fetched from (ticket 0078); nothing leaves the process. */
+  github: FakeGitHub;
   /** The escalation job, which tests run by hand (its every-minute timer is off). */
   escalation: EscalationJob;
   /**
@@ -79,6 +83,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
   const clock = new FakeClock();
   const ai = new FakeAiPort();
   const embeddings = new FakeEmbeddings();
+  const github = new FakeGitHub();
   const connection: TestApp['connection'] = { tester: async () => {}, calls: 0 };
   let recording: RecordedQuery[] | null = null;
   const prisma = createPrismaClient(databaseUrl, {
@@ -91,6 +96,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     .useValue(clock)
     .overrideProvider(AI_ENGINE)
     .useValue(options.engine ? options.engine(ai) : ai)
+    .overrideProvider(AGENT_SKILL_FETCH)
+    .useValue(github.fetch)
     .overrideProvider(EMBEDDING_PORT_FACTORY)
     .useValue(embeddings.factory)
     .overrideProvider(AI_CONNECTION_TESTER)
@@ -134,6 +141,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     receipts,
     evals,
     proposals,
+    github,
     escalation: app.get(EscalationJob),
     drainIndexing: () => indexing.drain(),
     recordQueries: async (run) => {

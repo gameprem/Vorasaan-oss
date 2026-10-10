@@ -17,6 +17,7 @@ import {
   AiTask,
   type AiUsageByModel,
   type AiUsageByProject,
+  type AiUsageBySkill,
   type AiUsageByTask,
   type AiUsageDay,
   type AiUsageQuery,
@@ -105,10 +106,11 @@ export class AiUsageService implements OnModuleInit {
     const start = startOfLocalDate(from, timeZone);
     const end = startOfLocalDate(addDays(to, 1), timeZone);
 
-    const [rows, costPerDecision, redrafts, budget] = await Promise.all([
+    const [rows, costPerDecision, redrafts, bySkill, budget] = await Promise.all([
       this.aggregate(start, end, timeZone),
       this.costPerDecision(start, end),
       this.redraftsBeforeApproval(start, end),
+      this.bySkill(start, end),
       this.budget(context),
     ]);
 
@@ -163,6 +165,7 @@ export class AiUsageService implements OnModuleInit {
       daily,
       costPerDecision,
       redraftsBeforeApproval: redrafts,
+      bySkill,
       budget: budget.view,
       anyPrices: budget.anyPrices,
     };
@@ -316,6 +319,30 @@ export class AiUsageService implements OnModuleInit {
       GROUP BY "proposalKind"
       ORDER BY "proposalKind"`;
     return rows;
+  }
+
+  /**
+   * Agent Skills read in the range (ticket 0078): the calls whose Receipt names the Skill,
+   * and the outcomes linked to those Receipts (the proposal they drafted, or the Redraft they
+   * wrote), each counted once. Eval Runs never count.
+   */
+  private async bySkill(start: Date, end: Date): Promise<AiUsageBySkill[]> {
+    return this.db.$queryRaw<AiUsageBySkill[]>`
+      SELECT
+        s."skillId",
+        max(s."name") AS name,
+        count(DISTINCT r.id)::int AS calls,
+        (count(DISTINCT o.id) FILTER (WHERE o.kind = 'APPROVE'))::int AS approvals,
+        (count(DISTINCT o.id) FILTER (WHERE o.kind = 'DECLINE'))::int AS declines,
+        (count(DISTINCT o.id) FILTER (WHERE o.kind = 'REQUEST_CHANGES'))::int AS "requestedChanges"
+      FROM "ReceiptAgentSkill" s
+      JOIN "Receipt" r ON r.id = s."receiptId"
+      LEFT JOIN "ReceiptOutcome" o ON o."receiptId" = r.id OR o."redraftReceiptId" = r.id
+      WHERE r."evalRunId" IS NULL
+        AND r."createdAt" >= (${utc(start)}::timestamptz AT TIME ZONE 'UTC')
+        AND r."createdAt" < (${utc(end)}::timestamptz AT TIME ZONE 'UTC')
+      GROUP BY s."skillId"
+      ORDER BY calls DESC, s."skillId"`;
   }
 
   // ─── The budget ────────────────────────────────────────────────────────────

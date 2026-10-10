@@ -45,6 +45,7 @@ Free text people wrote themselves (feedback, reasons) is kept, apart from names 
   "output": { "kind": "SPEC_PROPOSAL", "id": "c7a4f1d2-6e0b-4c55-8b7e-1f2a3b4c5d6e" },
   "proposal": { "kind": "SPEC_PROPOSAL", "id": "c7a4f1d2-6e0b-4c55-8b7e-1f2a3b4c5d6e", "redraft": 1 },
   "requestedBy": "person-1",
+  "agentSkills": [],
   "outcomes": [
     {
       "kind": "REQUEST_CHANGES",
@@ -99,6 +100,7 @@ Free text people wrote themselves (feedback, reasons) is kept, apart from names 
 | `output` | What it produced, by reference: `CHOICES` (a Decision Request's id), `SPEC_PROPOSAL`, `BRIEF_PROPOSAL`, `FEATURE_SUGGESTION_BATCH` (the batch of Feature Suggestions generated together), `REDRAFT` (a Redraft's id), `CONVERSATION_MESSAGE` (a reply), `CONVERSATION` (a Conversation Summary), `ATTACHMENT` (a summary), `GRILLING_ROUND` (its questions), `GRILLING_QUESTION` (a follow-up), `PROMPT_ANALYSIS` (the patterns the AI found in a prompt's feedback) and `PROMPT_VERSION` (a Prompt Version it proposed). `null` for the fit check, which stores nothing. The id may point at nothing if writing the output failed after the call. |
 | `proposal` | The proposal it drafted (`redraft` 1) or redrafted (2, 3…): `CHOICES`, `SPEC_PROPOSAL`, `BRIEF_PROPOSAL`, `FEATURE_SUGGESTION` or `PROMPT_VERSION` (one the AI proposed, ticket 0072). |
 | `requestedBy` | Whose action made the call; `null` for what runs on its own (a Grilling moving on, a Feedback Analysis started by new feedback). |
+| `agentSkills` | The Agent Skills (0078) whose text the call read, each `{ name, pinned }`: the Skill's name and the commit SHA or `sha256:<hex>` of the zip it is pinned to. Empty for most calls. |
 | `outcomes` | What people did with the proposal, oldest first (below). |
 
 ### Outcomes

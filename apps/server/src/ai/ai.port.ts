@@ -215,6 +215,13 @@ export type ConversationScopeForAi =
   | { kind: 'PROJECT'; project: ProjectForAi }
   | { kind: 'FEATURE'; project: ProjectForAi; feature: FeatureForAi };
 
+/**
+ * An Agent Skill (ADR 0017, ticket 0078) enabled in the Project and approved, as the prompt
+ * lists it: only its name and description (progressive disclosure). Both come from a
+ * third-party SKILL.md: untrusted, fenced as data.
+ */
+export type AgentSkillForAi = { name: string; description: string };
+
 /** A tool the AI called, as stored on its message. `args` came from the AI: untrusted. */
 export type ChatToolCall = { id: string; name: string; args: unknown };
 
@@ -486,6 +493,19 @@ export type ReceiptLink = {
    */
   projectId?: string | null;
   featureId?: string | null;
+  /**
+   * The Agent Skills whose text the call reads (ticket 0078): those loaded with `loadSkill`
+   * or `readSkillFile` earlier in its Conversation turn.
+   */
+  agentSkills?: ReceiptAgentSkillLink[];
+};
+
+/** An Agent Skill a call read, as its Receipt records it (by version, and pinned commit or hash). */
+export type ReceiptAgentSkillLink = {
+  skillId: string;
+  versionId: string;
+  name: string;
+  pinned: string;
 };
 
 // Every method takes an optional last `options?: AiCallOptions`.
@@ -515,6 +535,11 @@ export interface AiPort {
        * None when left out.
        */
       missingSections?: PlatformForAi[];
+      /**
+       * The Agent Skills enabled in the Project and approved (ticket 0078): names and
+       * descriptions only; the AI reads one with the `loadSkill` tool. None when left out.
+       */
+      agentSkills?: AgentSkillForAi[];
       signal?: AbortSignal;
     },
     options?: AiCallOptions,

@@ -269,7 +269,7 @@ How Vorasaan learns from what people do with the AI's proposals: every AI call l
 _Avoid_: Self-improvement, auto-tuning, training, fine-tuning
 
 **Receipt**:
-The record of one AI call: its task, prompt and Prompt Version, Approved Model, tokens, cache use, latency, what it produced, and what people then did with it (approved, declined, requested changes, edited by hand). Its export leaves out people's names and Attachment contents.
+The record of one AI call: its task, prompt and Prompt Version, Approved Model, tokens, cache use, latency, the Agent Skills it read, what it produced, and what people then did with it (approved, declined, requested changes, edited by hand). Its export leaves out people's names and Attachment contents.
 _Avoid_: Log, trace, usage record, telemetry
 
 **AI Budget**:
