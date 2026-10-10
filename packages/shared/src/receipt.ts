@@ -97,6 +97,8 @@ export const ReceiptExportLine = z.object({
   /** The proposal it drafted or redrafted, and which Redraft. */
   proposal: z.object({ kind: ProposalKind, id: z.string(), redraft: z.int().min(1) }).nullable(),
   requestedBy: ExportPerson.nullable(),
+  /** The Agent Skills the call read (ticket 0078), by name and pinned commit or zip hash. */
+  agentSkills: z.array(z.object({ name: z.string(), pinned: z.string() })),
   /**
    * What people did with it: on the Receipt that drafted a proposal, every outcome of the
    * proposal; on a Redraft's Receipt, the outcomes given on that Redraft.

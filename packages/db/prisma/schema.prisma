@@ -269,6 +269,11 @@ model User {
   promptEvalRuns         PromptEvalRun[]    @relation("PromptEvalRunStartedBy")
   promptAnalyses         PromptAnalysis[]   @relation("PromptAnalysisRequestedBy")
 
+  agentSkillsInstalled      AgentSkill[]        @relation("AgentSkillInstalledBy")
+  agentSkillVersionsFetched AgentSkillVersion[] @relation("AgentSkillVersionFetchedBy")
+  agentSkillVersionsDecided AgentSkillVersion[] @relation("AgentSkillVersionDecidedBy")
+  agentSkillsEnabled        ProjectAgentSkill[] @relation("ProjectAgentSkillEnabledBy")
+
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
   delegationsCreated  Delegation[] @relation("DelegationCreatedBy")
@@ -339,6 +344,7 @@ model Organization {
   promptAnalyses    PromptAnalysis[]
   aiBudgetAlerts    AiBudgetAlert[]
   platformTemplate  OrgPlatformTemplate[]
+  agentSkills       AgentSkill[]
 }
 
 // One AI budget threshold (80 or 100 percent) crossed in one month of the Organization's
@@ -517,6 +523,7 @@ model Project {
   suggestions        FeatureSuggestion[]
   conversations      Conversation[]
   platforms          Platform[]
+  agentSkills        ProjectAgentSkill[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -1504,6 +1511,8 @@ model Receipt {
   requestedBy      User?              @relation("ReceiptRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   outcomes         ReceiptOutcome[]   @relation("ReceiptOutcomes")
   redraftOutcomes  ReceiptOutcome[]   @relation("ReceiptRedraftOutcomes")
+  // The Agent Skills (ticket 0078) whose text the call read: loaded in its turn before it.
+  agentSkills      ReceiptAgentSkill[]
 
   @@index([createdAt])
   @@index([proposalKind, proposalId, redraft])
@@ -1716,4 +1725,118 @@ model PromptAnalysis {
 
   @@index([organizationId, promptName, createdAt])
   @@index([requestedById])
+}
+
+// ─── Agent Skills (ADR 0017, ticket 0078) ───────────────────────────────────
+
+enum AgentSkillSource {
+  GITHUB // fetched from a GitHub repository (optionally a folder of it), pinned to a commit
+  ZIP // uploaded as a zip, pinned to the zip's SHA-256
+}
+
+enum AgentSkillVersionStatus {
+  PENDING // fetched (installed or updated), waiting for an Admin's approval: invisible to the AI
+  APPROVED // approved: the Skill's active version, until a newer one is approved
+  DECLINED // an Admin discarded it; its files are deleted
+  REPLACED // was active until a newer version was approved; its files are deleted
+}
+
+// An Agent Skill an Admin installed: a SKILL.md package (a folder with SKILL.md, references/
+// and assets/), text and templates only. The AI sees it only through its active version, and
+// only in the Projects it is enabled in. Not one of Vorasaan's own prompts (packages/skills).
+model AgentSkill {
+  id              String             @id @default(uuid())
+  organizationId  String
+  // The SKILL.md `name` of the active version (of the first one until it is approved).
+  name            String
+  source          AgentSkillSource
+  // GITHUB: "owner/repo", the branch, tag or commit asked for (null: the default branch),
+  // and the folder within the repository ("" for its root). ZIP: the folder within the zip.
+  repository      String?
+  ref             String?
+  subpath         String             @default("")
+  // The approved version the AI uses; null until one is approved.
+  activeVersionId String?            @unique
+  installedById   String?
+  createdAt       DateTime           @default(now())
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  installedBy     User?              @relation("AgentSkillInstalledBy", fields: [installedById], references: [id], onDelete: SetNull)
+  activeVersion   AgentSkillVersion? @relation("AgentSkillActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  versions        AgentSkillVersion[] @relation("AgentSkillVersions")
+  projects        ProjectAgentSkill[]
+
+  @@unique([organizationId, name])
+  @@index([installedById])
+}
+
+// One fetched version of an Agent Skill, pinned to the commit or the zip's hash it came from.
+// Numbered per Skill. Its files are in FileStorage (`AgentSkillFile.storageKey`).
+model AgentSkillVersion {
+  id           String                  @id @default(uuid())
+  skillId      String
+  number       Int
+  status       AgentSkillVersionStatus @default(PENDING)
+  // The commit SHA (GITHUB) or "sha256:<hex>" of the zip (ZIP).
+  pinned       String
+  name         String
+  description  String
+  license      String?
+  // Files left out, never stored or run: [{ path, reason }] (scripts, binaries, links...).
+  skippedFiles Json
+  totalBytes   Int
+  fetchedById  String?
+  decidedById  String?
+  decidedAt    DateTime?
+  createdAt    DateTime                @default(now())
+  skill        AgentSkill              @relation("AgentSkillVersions", fields: [skillId], references: [id], onDelete: Cascade)
+  activeOf     AgentSkill?             @relation("AgentSkillActiveVersion")
+  fetchedBy    User?                   @relation("AgentSkillVersionFetchedBy", fields: [fetchedById], references: [id], onDelete: SetNull)
+  decidedBy    User?                   @relation("AgentSkillVersionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  files        AgentSkillFile[]
+
+  @@unique([skillId, number])
+  @@index([fetchedById])
+  @@index([decidedById])
+}
+
+// One kept text file of a version: SKILL.md, a reference or an asset, by its path in the Skill.
+model AgentSkillFile {
+  id         String            @id @default(uuid())
+  versionId  String
+  path       String
+  bytes      Int
+  sha256     String
+  storageKey String
+  version    AgentSkillVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, path])
+}
+
+// An Agent Skill enabled in a Project: with an approved version, the AI there sees it.
+model ProjectAgentSkill {
+  projectId   String
+  skillId     String
+  enabledById String?
+  enabledAt   DateTime   @default(now())
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  skill       AgentSkill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  enabledBy   User?      @relation("ProjectAgentSkillEnabledBy", fields: [enabledById], references: [id], onDelete: SetNull)
+
+  @@id([projectId, skillId])
+  @@index([skillId])
+  @@index([enabledById])
+}
+
+// A Skill a call read (ticket 0078). Plain ids and the name, so the Receipt outlives an
+// uninstall, as it outlives an Approved Model.
+model ReceiptAgentSkill {
+  receiptId String
+  skillId   String
+  versionId String
+  name      String
+  pinned    String
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@id([receiptId, skillId])
+  @@index([skillId])
 }

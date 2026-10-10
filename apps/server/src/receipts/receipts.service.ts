@@ -92,7 +92,7 @@ const ENV_PROVIDER: Record<string, string> = {
 };
 
 type ExportRow = Prisma.ReceiptGetPayload<{
-  include: { outcomes: true; redraftOutcomes: true };
+  include: { outcomes: true; redraftOutcomes: true; agentSkills: true };
 }>;
 
 /**
@@ -446,7 +446,7 @@ export class ReceiptsService {
           : {},
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: EXPORT_PAGE,
-        include: { outcomes: true, redraftOutcomes: true },
+        include: { outcomes: true, redraftOutcomes: true, agentSkills: true },
       });
       for (const row of rows) yield `${JSON.stringify(exportLine(row, people))}\n`;
       const last = rows.at(-1);
@@ -485,6 +485,19 @@ async function receiptData(entry: ReceiptEntry): Promise<Prisma.ReceiptUnchecked
     requestedById: link?.requestedById ?? null,
     evalRunId: link?.evalRunId ?? null,
     createdAt: entry.at,
+    // The Agent Skills the call read (ticket 0078), each once.
+    ...(link?.agentSkills?.length
+      ? {
+          agentSkills: {
+            create: [...new Map(link.agentSkills.map((s) => [s.skillId, s])).values()].map((s) => ({
+              skillId: s.skillId,
+              versionId: s.versionId,
+              name: s.name,
+              pinned: s.pinned,
+            })),
+          },
+        }
+      : {}),
   };
 }
 
@@ -539,6 +552,7 @@ function exportLine(row: ExportRow, people: PeopleRedactor): ReceiptExportLine {
         ? { kind: row.proposalKind, id: row.proposalId, redraft: row.redraft }
         : null,
     requestedBy: people.idOf(row.requestedById),
+    agentSkills: row.agentSkills.map((s) => ({ name: s.name, pinned: s.pinned })),
     outcomes,
   };
 }

@@ -21,6 +21,7 @@ export const EVAL_SETS = [
   'redrafts',
   'prompt-proposals',
   'coverage',
+  'agent-skills',
 ] as const;
 export type EvalSetName = (typeof EVAL_SETS)[number];
 

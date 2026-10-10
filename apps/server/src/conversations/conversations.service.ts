@@ -32,6 +32,12 @@ import {
   type StopConversationResult,
 } from '@vorasaan/shared';
 import { ActionCardsService } from '../action-cards/action-cards.service.ts';
+import { AGENT_SKILL_TOOLS, isAgentSkillTool } from '../agent-skills/agent-skill-tools.ts';
+import {
+  AgentSkillsService,
+  type EnabledAgentSkill,
+  type SkillReadBudget,
+} from '../agent-skills/agent-skills.service.ts';
 import {
   AI_PORT,
   type AiPort,
@@ -43,13 +49,21 @@ import {
   type ModelChoice,
   type PlatformForAi,
   type ProjectFoundationForAi,
+  type ReceiptAgentSkillLink,
   type RecordForAi,
 } from '../ai/ai.port.ts';
 import { AiSettingsService } from '../ai/ai-settings.service.ts';
-import { BUDGET_CONFIG, type Budget, ContextBudgets, projectBudget } from '../ai/context-budget.ts';
+import {
+  agentSkillReadBudget,
+  BUDGET_CONFIG,
+  type Budget,
+  ContextBudgets,
+  projectBudget,
+} from '../ai/context-budget.ts';
 import { personLanguage } from '../ai/language.ts';
 import {
   parseConversationSummary,
+  renderAgentSkills,
   renderConversationSummary,
   SUMMARY_SECTIONS,
 } from '../ai/prompts.ts';
@@ -184,6 +198,7 @@ export class ConversationsService {
     private readonly models: AiSettingsService,
     private readonly budgets: ContextBudgets,
     private readonly coverage: CoverageService,
+    private readonly agentSkills: AgentSkillsService,
   ) {}
 
   /** Anyone in the scope's Organization starts one; the AI replies to the first message. */
@@ -536,15 +551,27 @@ export class ConversationsService {
       orderBy: { position: 'desc' },
     });
     const scope = scopeForAi(conversation);
-    const model = await this.modelFor(conversation);
+    // The Agent Skills the AI may use here (0078): enabled in the Project and approved.
+    const [model, skills] = await Promise.all([
+      this.modelFor(conversation),
+      this.agentSkills.enabledFor(conversation.projectId),
+    ]);
     const recordedModel = toRecordedModelColumns(model.record);
-    const tools = this.cards.toolsFor(conversation);
-    // Every share of this turn comes from its model's window (0060).
+    const agentSkills = this.agentSkills.forAi(skills);
+    const tools = [
+      ...this.cards.toolsFor(conversation),
+      ...(skills.length ? AGENT_SKILL_TOOLS : []),
+    ];
+    // Every share of this turn comes from its model's window (0060); the Skills' list is fixed.
     const { budget } = await this.budgets.forTask(
       'chat',
       conversation.featureId ? 'conversationFeature' : 'conversationProject',
-      { model: model.choice, tools },
+      { model: model.choice, tools, fixed: estimateTokens(renderAgentSkills(agentSkills)) },
     );
+    // What the turn may read of Skills, and which it read: the Receipts of later steps name them.
+    const skillReads = agentSkillReadBudget(model.choice.contextWindow);
+    const reading: SkillReadBudget = { read: skillReads.read, left: skillReads.turn };
+    const skillsRead = new Map<string, ReceiptAgentSkillLink>();
     const compacting = { user, scope, budget, model: model.choice };
     let { summary, recent, scale } = await this.compact(conversation, rows, compacting);
     const { context, foundation, missingSections } = await this.contextFor(
@@ -579,6 +606,7 @@ export class ConversationsService {
             recentMessages: [...recentMessages],
             tools: offered,
             ...(missingSections?.length ? { missingSections } : {}),
+            ...(agentSkills.length ? { agentSkills } : {}),
             signal: stopped,
           },
           {
@@ -588,6 +616,7 @@ export class ConversationsService {
               requestedById: user.id,
               output: { kind: 'CONVERSATION_MESSAGE', id: replyId },
               projectId: conversation.projectId,
+              ...(skillsRead.size ? { agentSkills: [...skillsRead.values()] } : {}),
             },
           },
         );
@@ -654,7 +683,9 @@ export class ConversationsService {
       const results: MessageRow[] = [];
       const made: ActionCardView[] = [];
       for (const call of toolCalls) {
-        const run = await this.cards.run(user, conversation, step.message.id, call, model);
+        const run = isAgentSkillTool(call.name)
+          ? await this.readSkill(conversation.projectId, skills, call, reading, skillsRead)
+          : await this.cards.run(user, conversation, step.message.id, call, model);
         const result = await this.store(id, {
           role: 'TOOL',
           content: run.content,
@@ -678,6 +709,23 @@ export class ConversationsService {
       // The turn's own tool rounds come out of the reply's room, as they are written.
       recentMessages = [...recentMessages, ...[step.message, ...results].map(toChatMessage)];
     }
+  }
+
+  /**
+   * Runs an Agent Skill tool (`loadSkill`, `readSkillFile`, ticket 0078): it only reads, inside
+   * the Project's enabled and approved Skills, within the turn's budget, and remembers the
+   * Skill it read for the Receipts of the turn's later calls.
+   */
+  private async readSkill(
+    projectId: string,
+    skills: EnabledAgentSkill[],
+    call: ChatToolCall,
+    reading: SkillReadBudget,
+    skillsRead: Map<string, ReceiptAgentSkillLink>,
+  ): Promise<{ content: string; cards: ActionCardView[] }> {
+    const run = await this.agentSkills.runTool(projectId, skills, call, reading);
+    if (run.read) skillsRead.set(run.read.skillId, run.read);
+    return { content: run.content, cards: [] };
   }
 
   /**

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import * as db from '@vorasaan/db';
+import * as skills from './agent-skill.ts';
 import * as shared from './enums.ts';
 
 const pairs = [
@@ -39,6 +40,8 @@ const pairs = [
   ['PromptEvalRunStatus', shared.PromptEvalRunStatus, db.PromptEvalRunStatus],
   ['PromptAnalysisStatus', shared.PromptAnalysisStatus, db.PromptAnalysisStatus],
   ['PromptAnalysisTrigger', shared.PromptAnalysisTrigger, db.PromptAnalysisTrigger],
+  ['AgentSkillSource', skills.AgentSkillSource, db.AgentSkillSource],
+  ['AgentSkillVersionStatus', skills.AgentSkillVersionStatus, db.AgentSkillVersionStatus],
 ] as const;
 
 describe('shared enums mirror Prisma', () => {

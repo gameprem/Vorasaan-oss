@@ -138,6 +138,21 @@ export const AiBudgetView = z.object({
 export type AiBudgetView = z.infer<typeof AiBudgetView>;
 
 /** `GET /settings/ai/usage`. */
+/**
+ * One Agent Skill's use in the range (ticket 0078): the calls that read it (Eval Runs apart),
+ * and what people did with the proposals those calls drafted or redrafted.
+ */
+export const AiUsageBySkill = z.object({
+  /** A plain id: the Skill may have been uninstalled since. */
+  skillId: z.string(),
+  name: z.string(),
+  calls: z.int().min(0),
+  approvals: z.int().min(0),
+  declines: z.int().min(0),
+  requestedChanges: z.int().min(0),
+});
+export type AiUsageBySkill = z.infer<typeof AiUsageBySkill>;
+
 export const AiUsageView = z.object({
   from: IsoDate,
   to: IsoDate,
@@ -150,6 +165,8 @@ export const AiUsageView = z.object({
   daily: z.array(AiUsageDay),
   costPerDecision: AiCostPerDecision,
   redraftsBeforeApproval: z.array(AiRedraftsBeforeApproval),
+  /** Agent Skills read in the range, most used first (ticket 0078). */
+  bySkill: z.array(AiUsageBySkill),
   budget: AiBudgetView,
   /** Whether any Approved Model has a price; without one no cost is shown. */
   anyPrices: z.boolean(),

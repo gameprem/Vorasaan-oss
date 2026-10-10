@@ -1,5 +1,6 @@
 import { Module, StandardSchemaValidationPipe } from '@nestjs/common';
 import { APP_GUARD, APP_PIPE } from '@nestjs/core';
+import { AgentSkillsModule } from './agent-skills/agent-skills.module.ts';
 import { AiModelsController } from './ai/ai-models.controller.ts';
 import { DevFakeAiController } from './ai/dev-fake-ai.controller.ts';
 import { MastraModule } from './ai/mastra.module.ts';
@@ -69,6 +70,7 @@ import { SpecModule } from './spec/spec.module.ts';
     ReceiptsModule,
     AiUsageModule,
     PromptVersionsModule,
+    AgentSkillsModule,
     ConversationsModule,
     ChatAppsModule,
     GettingStartedModule,
