@@ -29,6 +29,9 @@ export type HotPaths = {
 
 const PIM = SEED.users.pim.id;
 
+/** Measured on the small large Organization: 2 + 9 (the Choices one more) + 4. */
+const DESIGN_DOCS_BUDGET = 15;
+
 /**
  * The most SQL statements each hot path may send (ticket 0074), checked by
  * `query-budgets.api.test.ts` and flagged by the benchmark. They are the counts after
@@ -36,7 +39,9 @@ const PIM = SEED.users.pim.id;
  * row (an N+1) or another round trip on a hot path. Raise one only on purpose.
  */
 export const QUERY_BUDGETS = {
-  inbox: 15,
+  // One more than 0074's 15 since ticket 0069: the Design Doc proposals the person approves,
+  // one statement run alongside the others.
+  inbox: 16,
   featurePage: 32,
   // One more than 0074's 5 since ticket 0050: the Feature's target Platforms, one query
   // run alongside the Feature's own (Prisma would load the link table and the Platforms
@@ -65,6 +70,13 @@ export const QUERY_BUDGETS = {
   // open Blockers with their Choices.
   featureCoverage: 7,
   projectCoverage: 11,
+  // Design Docs (ticket 0069): identity, the Organization check, then the Feature, its
+  // targets with their checks, its latest Spec Version, its pending Spec Proposals, its
+  // Design Docs, Role Owners, Team members and open Blockers (their Choices are one more)
+  // together; then each Design Doc's latest version, pending and declined proposals and
+  // questions together (one statement each), however many Design Docs, versions and
+  // questions there are.
+  designDocs: DESIGN_DOCS_BUDGET,
 } as const;
 
 /**
@@ -129,6 +141,8 @@ export async function hotPaths(
 
   // The AI usage dashboard (ticket 0075) reads Receipts: a few per Decision Request.
   await seedUsageReceipts(db);
+  // The Feature's Design Docs (ticket 0069): versions, pending updates and questions to read.
+  await seedBenchDesignDocs(db);
 
   const chatCards = app.get(ChatCardsService);
   // What the escalation job finds due, as seeded (its budget depends on the batches).
@@ -217,6 +231,16 @@ export async function hotPaths(
       queryBudget: QUERY_BUDGETS.projectCoverage,
     },
     {
+      name: 'GET /features/:id/design-docs',
+      description:
+        "A Feature's Design Docs: one per target Platform and QA's, each with its latest " +
+        'version and the Spec it follows, its pending proposal, its questions and who approves it',
+      run: get(`/features/${FEATURE}/design-docs`),
+      iterations,
+      warmup: 3,
+      queryBudget: QUERY_BUDGETS.designDocs,
+    },
+    {
       name: 'Escalation job (every open request)',
       description:
         'EscalationJob.run() over every OPEN Decision Request due at "now", from the same state ' +
@@ -301,6 +325,66 @@ export async function restoreBenchState(db: PrismaClient): Promise<void> {
          AND (d."escalationStep" <> b."escalationStep" OR d."updatedAt" <> b."updatedAt")`,
     ),
   ]);
+}
+
+/**
+ * The benchmark Feature's Design Docs (ticket 0069), written directly: for each target
+ * Platform and QA, three approved versions following the latest Spec Version, a pending
+ * update, and two questions raised as DRAFT Decision Requests. A rerun replaces them.
+ */
+export async function seedBenchDesignDocs(db: PrismaClient): Promise<void> {
+  await db.designDoc.deleteMany({ where: { featureId: FEATURE } });
+  const [targets, latest] = await Promise.all([
+    db.platform.findMany({
+      where: { features: { some: { featureId: FEATURE } } },
+      select: { id: true },
+    }),
+    db.specVersion.findFirst({
+      where: { featureId: FEATURE },
+      orderBy: { version: 'desc' },
+      select: { id: true },
+    }),
+  ]);
+  if (!latest) return;
+  for (const platformId of [...targets.map((t) => t.id), null]) {
+    const doc = await db.designDoc.create({
+      data: { featureId: FEATURE, platformId, template: platformId ? 'BACK_END' : 'QA' },
+    });
+    for (const version of [1, 2, 3]) {
+      await db.designDocVersion.create({
+        data: {
+          designDocId: doc.id,
+          version,
+          markdown: `## API contract\n\n- Version ${version}.\n`,
+          source: 'AI_DRAFT',
+          specVersionId: latest.id,
+          approvedById: PIM,
+        },
+      });
+    }
+    await db.designDocProposal.create({
+      data: {
+        designDocId: doc.id,
+        reason: 'SPEC_CHANGED',
+        specVersionId: latest.id,
+        proposedMarkdown: '## API contract\n\n- Version 4.\n',
+      },
+    });
+    for (const n of [1, 2]) {
+      await db.decisionRequest.create({
+        data: {
+          featureId: FEATURE,
+          kind: 'QUESTION',
+          withChoices: false,
+          raiserId: PIM,
+          title: `Design question ${n}`,
+          description: 'Found while drafting.',
+          deciderRole: 'PO',
+          designDocId: doc.id,
+        },
+      });
+    }
+  }
 }
 
 /** Marks the Receipts `seedUsageReceipts` writes, so a rerun replaces them. */

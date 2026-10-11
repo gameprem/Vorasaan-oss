@@ -27,6 +27,8 @@ export const SKILLS = [
   'analyze-feedback',
   'propose-prompt-version',
   'redraft-prompt-version',
+  'draft-design-doc',
+  'redraft-design-doc',
 ] as const;
 export type SkillName = (typeof SKILLS)[number];
 

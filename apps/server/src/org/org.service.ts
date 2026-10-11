@@ -31,6 +31,7 @@ import type {
 } from '@vorasaan/shared';
 import { AuthService, hashPassword } from '../auth/auth.service.ts';
 import { hashToken, newToken } from '../auth/tokens.ts';
+import { SpecChanges } from '../design-docs/spec-changes.ts';
 import { OPEN_BLOCKERS } from '../features/open-blockers.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { PlatformsService } from '../platforms/platforms.service.ts';
@@ -80,6 +81,7 @@ export class OrgService {
     private readonly indexing: IndexingService,
     private readonly receipts: ReceiptsService,
     private readonly platforms: PlatformsService,
+    private readonly specChanges: SpecChanges,
   ) {}
 
   // ─── Permissions ──────────────────────────────────────────────────────────
@@ -438,6 +440,8 @@ export class OrgService {
       });
       await this.notifications.publish(outbox);
       this.indexing.schedule({ source: 'SPEC_VERSION', id: version.id });
+      // Design Docs may be due, or stale (ticket 0069).
+      this.specChanges.changed(featureId);
       // A hand edit right after an approved Spec Proposal is feedback on it (ticket 0070).
       this.receipts.editedByHand('SPEC_PROPOSAL', version.id, user.id);
       return toSpecVersionView(version);

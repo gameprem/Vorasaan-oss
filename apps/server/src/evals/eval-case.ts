@@ -22,6 +22,7 @@ export const EVAL_SETS = [
   'prompt-proposals',
   'coverage',
   'agent-skills',
+  'design-docs',
 ] as const;
 export type EvalSetName = (typeof EVAL_SETS)[number];
 

@@ -40,6 +40,10 @@ const pairs = [
   ['PromptEvalRunStatus', shared.PromptEvalRunStatus, db.PromptEvalRunStatus],
   ['PromptAnalysisStatus', shared.PromptAnalysisStatus, db.PromptAnalysisStatus],
   ['PromptAnalysisTrigger', shared.PromptAnalysisTrigger, db.PromptAnalysisTrigger],
+  ['DesignTemplateKind', shared.DesignTemplateKind, db.DesignTemplateKind],
+  ['DesignDocVersionSource', shared.DesignDocVersionSource, db.DesignDocVersionSource],
+  ['DesignDocProposalReason', shared.DesignDocProposalReason, db.DesignDocProposalReason],
+  ['DesignDocProposalStatus', shared.DesignDocProposalStatus, db.DesignDocProposalStatus],
   ['AgentSkillSource', skills.AgentSkillSource, db.AgentSkillSource],
   ['AgentSkillVersionStatus', skills.AgentSkillVersionStatus, db.AgentSkillVersionStatus],
 ] as const;

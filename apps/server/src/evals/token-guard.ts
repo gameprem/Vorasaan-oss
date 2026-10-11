@@ -43,6 +43,9 @@ export const EVAL_CASE_GUARD: Record<AiTask, { tokens: number; score: number; th
   analyzeFeedback: { tokens: 2112, score: 0.888, thai: 0.666 },
   proposePromptVersion: { tokens: 2018, score: 1 },
   redraftPromptVersion: { tokens: 3087, score: 0.666 },
+  // Ticket 0069: new, with their cases (cases/design-docs.ts).
+  draftDesignDoc: { tokens: 1897, score: 1, thai: 1 },
+  redraftDesignDoc: { tokens: 1873, score: 1, thai: 1 },
 };
 
 /**
@@ -75,6 +78,10 @@ export const PRODUCT_TOKEN_GUARD: Partial<Record<AiTask, number>> = {
   redraftChoices: 9127,
   redraftSpecProposal: 9377,
   redraftFeatureSuggestion: 8078,
+  // Ticket 0069: new. The scenarios end with the Back-End Design Doc drafted from the Spec
+  // (and QA's) and one Redraft of it.
+  draftDesignDoc: 10478,
+  redraftDesignDoc: 11197,
 };
 
 /** The replay of the approved Receipts in those calls (ticket 0071): its score on the fake. */

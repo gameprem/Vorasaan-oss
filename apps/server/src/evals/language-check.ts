@@ -43,6 +43,7 @@ const DOMAIN_TERMS = [
   'Action Card',
   'Attachment',
   'Redraft',
+  'Design Doc',
   'PO',
   'Designer',
   'Tech Lead',

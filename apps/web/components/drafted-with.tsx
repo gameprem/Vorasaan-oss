@@ -7,7 +7,7 @@ import type { RecordedModel } from '@vorasaan/shared';
 export function DraftedWith({ model, what }: { model: RecordedModel | null; what?: string }) {
   if (!model) return null;
   return (
-    <span className="block text-xs text-fg-faint">
+    <span className="block text-xs text-fg-soft">
       {what ? `${what} drafted` : 'Drafted'} with {model.displayName ?? model.modelId}
     </span>
   );
