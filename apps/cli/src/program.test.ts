@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { InitOptions } from './commands/init.ts';
 import type { RaiseOptions } from './commands/raise-options.ts';
+import type { RunOptions } from './commands/run.ts';
 import type { ScanOptions } from './commands/scan.ts';
 import { ConfigError } from './config.ts';
 import { buildProgram } from './program.ts';
@@ -14,12 +15,14 @@ const env = {
 
 let scanned: ScanOptions | undefined;
 let initialized: InitOptions | undefined;
+let ran: (RunOptions & { dir: string }) | undefined;
 let tuiOpened = false;
 
 async function run(args: string[], runEnv: Record<string, string | undefined> = env) {
   let received: RaiseOptions | undefined;
   scanned = undefined;
   initialized = undefined;
+  ran = undefined;
   tuiOpened = false;
   const program = buildProgram(
     {
@@ -34,6 +37,9 @@ async function run(args: string[], runEnv: Record<string, string | undefined> = 
       },
       init: async (options) => {
         initialized = options;
+      },
+      run: async (_api, options) => {
+        ran = options;
       },
       tui: async () => {
         tuiOpened = true;
@@ -148,5 +154,50 @@ describe('vorasaan (no subcommand) and vorasaan init', () => {
   test('init rejects a bad Project id and --dry-run without --scan', async () => {
     await expect(run(['init', '-p', 'nope'])).rejects.toThrow('--project');
     await expect(run(['init', '--dry-run'])).rejects.toThrow('--scan');
+  });
+});
+
+describe('vorasaan run argument parsing (ticket 0079)', () => {
+  test('passes the Feature, the assistant, the Platform and the budget through', async () => {
+    await run([
+      'run',
+      '--feature',
+      'Async checkout',
+      '--ai',
+      'Claude',
+      '--platform',
+      'Back-End',
+      '--budget',
+      '8000',
+      '--dir',
+      '/tmp/repo',
+    ]);
+    expect(ran).toEqual({
+      dir: '/tmp/repo',
+      launch: true,
+      feature: 'Async checkout',
+      ai: 'claude',
+      platform: 'Back-End',
+      budget: 8000,
+    });
+  });
+
+  test('with no flags it launches nothing named and asks the server to pick', async () => {
+    await run(['run']);
+    expect(ran?.launch).toBe(true);
+    expect(ran?.ai).toBeUndefined();
+    expect(ran?.feature).toBeUndefined();
+    await run(['run', '--ai', 'codex', '--no-launch']);
+    expect(ran).toMatchObject({ ai: 'codex', launch: false });
+  });
+
+  test('refuses an unknown assistant and a budget out of range', async () => {
+    await expect(run(['run', '--ai', 'clippy'])).rejects.toThrow(
+      '--ai must be one of claude, codex, gemini',
+    );
+    for (const budget of ['100', '1000000', '1.5', 'lots']) {
+      await expect(run(['run', '--budget', budget])).rejects.toThrow('--budget must be');
+    }
+    expect(ran).toBeUndefined();
   });
 });

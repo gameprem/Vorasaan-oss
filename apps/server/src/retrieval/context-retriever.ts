@@ -58,6 +58,8 @@ export type RetrieveOptions = {
   k?: number;
   /** A Decision Request the prompt already shows in full (e.g. the one being decided). */
   excludeRequestId?: string;
+  /** How many of the Feature's newest Decisions come first (RECENT_DECISIONS by default). */
+  recentDecisions?: number;
 };
 
 /** A block on its way to the prompt: `key` for de-duplication, `clippable` if it may be shortened. */
@@ -123,7 +125,11 @@ export class ContextRetriever {
     const k = searchK(budget, options.k);
 
     const [own, ranked, unindexed] = await Promise.all([
-      this.featureMaterial(feature, options.excludeRequestId),
+      this.featureMaterial(
+        feature,
+        options.excludeRequestId,
+        options.recentDecisions ?? RECENT_DECISIONS,
+      ),
       this.rank(scope, feature.id, query, k),
       this.unindexedAttachments(scope, { featureId: feature.id }, 'FEATURE'),
     ]);
@@ -260,6 +266,7 @@ export class ContextRetriever {
   private async featureMaterial(
     feature: { id: string; title: string },
     excludeRequestId: string | undefined,
+    recentDecisions: number,
   ): Promise<Candidate[]> {
     const notExcluded = excludeRequestId ? { not: excludeRequestId } : undefined;
     const [spec, requests, decisions] = await Promise.all([
@@ -277,7 +284,7 @@ export class ContextRetriever {
       this.db.decision.findMany({
         where: { request: { featureId: feature.id, id: notExcluded } },
         orderBy: { createdAt: 'desc' },
-        take: RECENT_DECISIONS,
+        take: recentDecisions,
         select: {
           id: true,
           customAnswer: true,

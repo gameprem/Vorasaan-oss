@@ -1,5 +1,7 @@
+import { HAND_OFF_BUDGET } from '@vorasaan/shared';
 import { Command } from 'commander';
 import { VorasaanApi } from './api.ts';
+import { ASSISTANT_NAMES, isAssistantName } from './assistants.ts';
 import type { InitOptions } from './commands/init.ts';
 import type { LoginOptions } from './commands/login.ts';
 import {
@@ -8,6 +10,7 @@ import {
   type RaiseOptions,
   UsageError,
 } from './commands/raise-options.ts';
+import type { RunOptions } from './commands/run.ts';
 import type { ScanOptions } from './commands/scan.ts';
 import { loadConfig } from './config.ts';
 
@@ -18,6 +21,7 @@ export type Actions = {
   whoami: () => Promise<unknown>;
   scan: (options: ScanOptions, api: () => Promise<VorasaanApi>) => Promise<unknown>;
   init: (options: InitOptions, api: () => Promise<VorasaanApi>) => Promise<unknown>;
+  run: (api: VorasaanApi, options: RunOptions & { dir: string }) => Promise<unknown>;
   /** `vorasaan` with no subcommand: the long-lived TUI. */
   tui: (api: VorasaanApi, options: { notify: boolean }) => Promise<void>;
 };
@@ -144,6 +148,59 @@ export function buildProgram(actions: Actions, env = process.env): Command {
           },
           () => signedInApi(env),
         );
+      },
+    );
+
+  program
+    .command('run')
+    .description(
+      "Write a Feature's Hand-off (Spec, Decisions, Design Doc, Project rules) to .vorasaan/specs/ and start your coding assistant with it",
+    )
+    .option('-f, --feature <feature>', 'Feature id or title (skips the picker)')
+    .option('--ai <assistant>', `coding assistant to start: ${ASSISTANT_NAMES.join(', ')}`)
+    .option('-p, --platform <platform>', 'Design Doc to hand over: a target Platform, qa or none')
+    .option(
+      '--budget <tokens>',
+      `size of the Hand-off in tokens (${HAND_OFF_BUDGET.min}-${HAND_OFF_BUDGET.max}, default ${HAND_OFF_BUDGET.default})`,
+    )
+    .option('--no-launch', 'only write the file and print the command to start the assistant')
+    .option('--dir <path>', 'a directory inside the repository', process.cwd())
+    .action(
+      async (flags: {
+        feature?: string;
+        ai?: string;
+        platform?: string;
+        budget?: string;
+        launch?: boolean;
+        dir: string;
+      }) => {
+        const ai = flags.ai?.trim().toLowerCase();
+        if (ai !== undefined && !isAssistantName(ai)) {
+          throw new UsageError(
+            `--ai must be one of ${ASSISTANT_NAMES.join(', ')}, got "${flags.ai}"`,
+          );
+        }
+        let budget: number | undefined;
+        if (flags.budget !== undefined) {
+          budget = Number(flags.budget);
+          if (
+            !Number.isInteger(budget) ||
+            budget < HAND_OFF_BUDGET.min ||
+            budget > HAND_OFF_BUDGET.max
+          ) {
+            throw new UsageError(
+              `--budget must be a whole number of tokens from ${HAND_OFF_BUDGET.min} to ${HAND_OFF_BUDGET.max}`,
+            );
+          }
+        }
+        await actions.run(await signedInApi(env), {
+          dir: flags.dir,
+          launch: flags.launch !== false,
+          ...(flags.feature ? { feature: flags.feature } : {}),
+          ...(ai ? { ai } : {}),
+          ...(flags.platform ? { platform: flags.platform } : {}),
+          ...(budget !== undefined ? { budget } : {}),
+        });
       },
     );
 

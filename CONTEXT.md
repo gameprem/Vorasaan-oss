@@ -100,6 +100,10 @@ _Avoid_: SDD, tech spec, design spec, requirements doc
 The sections a Design Doc starts from: one for each kind of Platform (Back-End, Front-End, Mobile) and one for QA. Each is built in until a Project's POs or Admins edit it, and each Platform names the one its Design Docs start from.
 _Avoid_: Design template, doc skeleton, blueprint
 
+**Hand-off**:
+One Feature's distilled context for a developer's coding assistant, as one Markdown file that `vorasaan run` writes in the repository: the latest Spec Version, the Feature's Decisions and open Decision Requests, the approved Design Doc of the developer's Platform, the Project's Feature Guidelines and Project Brief, and the most relevant retrieved context, within a token budget. It is a snapshot: running `vorasaan run` again replaces it. Everything people wrote is marked as data for the assistant, never instructions.
+_Avoid_: Context file, prompt, SPEC.md, export
+
 ### Project context
 
 **Project Brief**:
