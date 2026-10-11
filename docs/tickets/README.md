@@ -236,3 +236,11 @@ Once a Feature's Spec is approved and a Platform is covered, the AI drafts that 
 | # | Ticket | Depends on |
 | --- | --- | --- |
 | 0069 | [Design Docs per Platform](./0069-design-docs.md) | 0050, 0051, 0065 |
+
+## `vorasaan run` (Post-MVP 15)
+
+A developer hands one Feature's approved context to their coding assistant: `vorasaan run --ai claude` writes the Feature's Hand-off (the latest Spec, its Decisions, the Project rules, the most relevant retrieved context, the Jira Epic key and the approved Design Doc of their Platform) to `.vorasaan/specs/<feature>.md` and starts the assistant on it (0079).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0079 | [`vorasaan run`: hand a Feature's context to the coding assistant](./0079-vorasaan-run.md) | 0052, 0060, 0068, 0069, 0076 |
