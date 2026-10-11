@@ -23,6 +23,7 @@ export * from './feature-suggestion.ts';
 export * from './getting-started.ts';
 export * from './grilling.ts';
 export * from './grilling-notes.ts';
+export * from './hand-off.ts';
 export * from './inbox.ts';
 export * from './org.ts';
 export * from './platform.ts';

@@ -77,6 +77,13 @@ export const QUERY_BUDGETS = {
   // questions together (one statement each), however many Design Docs, versions and
   // questions there are.
   designDocs: DESIGN_DOCS_BUDGET,
+  // The Hand-off of `vorasaan run` (ticket 0079): identity, the Feature with its Organization
+  // check, then its targets, the reader's Role Owner and Team rows, the latest Spec Version,
+  // the reader's language and the Jira site together; the Design Doc's newest version with the
+  // Spec it follows; the Project rules (the Feature's Project, the Brief and the effective
+  // Guidelines); and the same retrieval as `retrieval` (its 27 at most), on the Hand-off's
+  // own budget. A fixed few however many Decisions, chunks and versions there are.
+  handOff: 46,
 } as const;
 
 /**
@@ -239,6 +246,16 @@ export async function hotPaths(
       iterations,
       warmup: 3,
       queryBudget: QUERY_BUDGETS.designDocs,
+    },
+    {
+      name: 'GET /features/:id/hand-off',
+      description:
+        "`vorasaan run`'s Hand-off of the QA Design Doc: the Feature, the reader's Team Roles, " +
+        'its latest Spec, the Design Doc, the Project rules and retrieval on the default budget',
+      run: get(`/features/${FEATURE}/hand-off?platform=qa`),
+      iterations,
+      warmup: 3,
+      queryBudget: QUERY_BUDGETS.handOff,
     },
     {
       name: 'Escalation job (every open request)',

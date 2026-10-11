@@ -32,6 +32,7 @@ import { DecisionGraphService } from './features/decision-graph.service.ts';
 import { FeaturesController } from './features/features.controller.ts';
 import { GettingStartedModule } from './getting-started/getting-started.module.ts';
 import { GrillingModule } from './grilling/grilling.module.ts';
+import { HandOffModule } from './hand-off/hand-off.module.ts';
 import { HealthController } from './health/health.controller.ts';
 import { InboxModule } from './inbox/inbox.module.ts';
 import { OrgController } from './org/org.controller.ts';
@@ -69,6 +70,7 @@ import { SpecModule } from './spec/spec.module.ts';
     DecisionStatsModule,
     SpecModule,
     DesignDocsModule,
+    HandOffModule,
     BriefModule,
     RedraftsModule,
     ReceiptsModule,
