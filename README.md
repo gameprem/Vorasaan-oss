@@ -73,7 +73,7 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 | 🗂️ **Decision Log** | Every decision is traceable: who decided, what the alternatives were, and which Spec version it produced. |
 | 📎 **One place for context** | Attach Confluence pages, Jira epics, files and URLs so the AI reasons over real context *(planned)*. |
 | 💻 **Terminal-native** | Raise from the `vorasaan` CLI with AI-drafted Choices you review first, and keep your Inbox, requests and Specs open in the `vorasaan` TUI: it updates live, pops OS notifications, and lets you decide, Claim, ask for info, withdraw and approve Spec Proposals without leaving the terminal. |
-| 🤝 **Agent handoff** | `vorasaan run --ai claude` hands your coding agent the approved Spec, not a guess *(planned)*. |
+| 🤝 **Agent handoff** | `vorasaan run --ai claude` hands your coding agent one Feature's approved Spec, its Decisions and your Platform's Design Doc, not a guess. |
 | 🏠 **Self-hosted** | One `docker compose up`. Your data stays on your infrastructure. Bring your own model: Claude API, OpenAI API, OpenRouter, or any OpenAI-compatible URL + token. |
 
 | | |
@@ -140,6 +140,7 @@ Then a **Getting started** checklist on your Inbox leads you on, and ticks each 
 $ vorasaan login --url https://vorasaan.example.com   # paste an access token from Settings → Access tokens
 $ vorasaan init                                       # bind this repository to a Project
 $ vorasaan raise                                      # pick a Feature, describe it, review the AI's Choices, send
+$ vorasaan run --ai claude                            # write the Feature's Hand-off to .vorasaan/specs/ and start Claude Code on it
 ```
 
 <img src="docs/images/cli-raise.svg" alt="vorasaan raise: picking the Feature, a Question with its title and description, three AI-drafted Choices, then Send to PO" />
@@ -238,7 +239,7 @@ The domain language (Feature, Spec, Decision Request, Decider, and so on) is def
 - [x] **Tracer bullet:** raise → AI Choices → decide → approved Spec version
 - [x] **Install & onboarding:** Docker install, setup wizard, provider choice, sign-in, invites, Projects/Teams/Features, CLI login
 - [x] **MVP:** attachments, recipient choice + Claim, delegation, notifications, TUI
-- [ ] `vorasaan run --ai claude`: hand the approved Spec to your coding agent
+- [x] `vorasaan run --ai claude`: hand the approved Spec to your coding agent
 - [ ] **Grilling workflow:** structured PO → Designer → Dev questioning that produces the first Spec
 - [ ] **Design flow revisions** with cascade impact analysis
 - [ ] Jira / Confluence write-back, and Figma and Google Docs connectors

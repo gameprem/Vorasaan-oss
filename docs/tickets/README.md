@@ -239,7 +239,7 @@ Once a Feature's Spec is approved and a Platform is covered, the AI drafts that 
 
 ## `vorasaan run` (Post-MVP 15)
 
-A developer hands one Feature's approved context to their coding assistant: `vorasaan run --ai claude` writes the Feature's Hand-off (the latest Spec, its Decisions, the Project rules, the most relevant retrieved context, the Jira Epic key and the approved Design Doc of their Platform) to `.vorasaan/specs/<feature>.md` and starts the assistant on it (0079).
+A developer hands one Feature's approved context to their coding assistant: `vorasaan run --ai claude` writes the Feature's Hand-off (the latest Spec, its Decisions, the Project rules, the most relevant retrieved context, the Jira Epic key and the approved Design Doc of their Platform) to `.vorasaan/specs/<feature>.md` and starts the assistant on it. Done: `vorasaan run [--feature] [--ai claude|codex|gemini] [--platform] [--budget] [--no-launch]` writes the Hand-off the server assembles within a token budget (`GET /features/:id/hand-off`: the Spec first, the Feature's Decisions and open Decision Requests, the approved Design Doc of the Platform picked from `--platform`, the Team Roles or the changed files' hint, with whether the Spec changed it since, the Feature Guidelines and the Project Brief, retrieved context, everything fenced as data and credentials redacted) only inside `.vorasaan/specs/`, never through a symlink, suggests the .gitignore line, and starts the assistant in the repository with the path only and without the Vorasaan credentials, or prints the command (0079).
 
 | # | Ticket | Depends on |
 | --- | --- | --- |
