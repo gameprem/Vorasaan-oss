@@ -74,7 +74,7 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 | 📎 **One place for context** | Attach Confluence pages, Jira epics, files and URLs so the AI reasons over real context *(planned)*. |
 | 💻 **Terminal-native** | Raise from the `vorasaan` CLI with AI-drafted Choices you review first, and keep your Inbox, requests and Specs open in the `vorasaan` TUI: it updates live, pops OS notifications, and lets you decide, Claim, ask for info, withdraw and approve Spec Proposals without leaving the terminal. |
 | 🤝 **Agent handoff** | `vorasaan run --ai claude` hands your coding agent one Feature's approved Spec, its Decisions and your Platform's Design Doc, not a guess. |
-| 🏠 **Self-hosted** | One `docker compose up`. Your data stays on your infrastructure. Bring your own model: Claude API, OpenAI API, OpenRouter, or any OpenAI-compatible URL + token. |
+| 🏠 **Self-hosted** | One `docker compose up`. Your data stays on your infrastructure. Bring your own model: Claude API, OpenAI API, Gemini API, OpenRouter, or any OpenAI-compatible URL + token. |
 
 | | |
 | --- | --- |
@@ -92,7 +92,7 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 
 ### Install with Docker
 
-You need [Docker](https://www.docker.com/) and an LLM provider: a **Claude API** key, an **OpenAI API** key, an **[OpenRouter](https://openrouter.ai)** key, or any **OpenAI-compatible URL + token** (for example [9Router](https://github.com/decolua/9router)).
+You need [Docker](https://www.docker.com/) and an LLM provider: a **Claude API** key, an **OpenAI API** key, a **Gemini API** key from [Google AI Studio](https://aistudio.google.com), an **[OpenRouter](https://openrouter.ai)** key, or any **OpenAI-compatible URL + token** (for example [9Router](https://github.com/decolua/9router)).
 
 ```bash
 git clone https://github.com/gameprem/Vorasaan.git
@@ -113,7 +113,7 @@ Open that link (or **http://localhost:3000** and paste the token). The token wor
 
 1. **Your organization**: the setup token, the organization's name, and your account as the first Admin.
 2. **Calendar & language**: the time zone (your browser's, to start with), working days and hours (Monday to Friday, 09:00 to 18:00 by default), which Response Windows count in, and the language of chat app cards (English or Thai). Change them later in **Settings → Response Windows** and **Settings → Organization**.
-3. **AI provider**: Claude API, OpenAI API, OpenRouter, or Custom URL + token. **Test connection** checks it before you continue. It becomes your first provider, and its model the default Approved Model; **Settings → AI models** adds more providers and models, and sets the model of each AI task.
+3. **AI provider**: Claude API, OpenAI API, Gemini API, OpenRouter, or Custom URL + token. **Test connection** checks it before you continue. It becomes your first provider, and its model the default Approved Model; **Settings → AI models** adds more providers and models, and sets the model of each AI task.
 
 Then a **Getting started** checklist on your Inbox leads you on, and ticks each step itself once it's done: create a **Project** and a **Team**, create a **Feature** and write **Spec v1**, **invite your team** with a link, and link the CLI (`vorasaan login`); optionally, connect a chat app. Dismiss it whenever you like.
 
@@ -122,6 +122,9 @@ Then a **Getting started** checklist on your Inbox leads you on, and ticks each 
 
 > [!NOTE]
 > **OpenRouter** needs only its key: its URL is fixed. When you add an Approved Model, pick it from OpenRouter's model list (searchable by name and id), and its Context Window is filled in from the list; if the list can't be loaded, type the model id. Anthropic models routed through OpenRouter (`anthropic/…`) get prompt caching, like the Claude API. Calls tell OpenRouter they come from Vorasaan at `VORASAAN_WEB_URL`. An OpenRouter set up earlier as a Custom URL keeps working as it is.
+
+> [!NOTE]
+> **Gemini API** needs only a key from Google AI Studio: its URL is fixed. When you add an Approved Model, Gemini's model list loads with the saved key (in setup, press **Load Gemini models** after typing the key), searchable by name and id, and a picked model's Context Window is its input token limit; if the list can't be loaded, type the model id (for example `gemini-2.5-pro`). Gemini caches a repeated prompt prefix by itself, and its cache hits show in Settings → AI usage. For retrieval embeddings with the same key, set the embeddings endpoint (`PUT /settings/embeddings`, below) to Gemini's OpenAI-compatible URL `https://generativelanguage.googleapis.com/v1beta/openai` with an embedding model such as `gemini-embedding-001`.
 
 | Setting (`.env`) | Default | What it does |
 | --- | --- | --- |
