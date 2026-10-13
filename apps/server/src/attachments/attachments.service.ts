@@ -19,6 +19,11 @@ import {
 } from '@vorasaan/shared';
 import { AI_PORT, type AiPort } from '../ai/ai.port.ts';
 import { personLanguage } from '../ai/language.ts';
+import {
+  assertFeatureInOrganization,
+  featureInOrganizationOf,
+  projectInOrganizationOf,
+} from '../auth/organization-scope.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { IndexingService } from '../retrieval/indexing.service.ts';
@@ -232,7 +237,7 @@ export class AttachmentsService {
 
   /** Re-fetches a URL, Confluence page or Jira issue (or re-reads a file) and replaces the Snapshot. */
   async refresh(user: User, id: string): Promise<AttachmentView> {
-    const attachment = await this.findOrThrow(id);
+    const attachment = await this.findOrThrow(user, id);
     await this.assertCanEdit(user, ownerOf(attachment));
     if (attachment.source === 'REPO_SCAN') {
       throw new UnprocessableEntityException(
@@ -264,7 +269,7 @@ export class AttachmentsService {
   }
 
   async download(user: User, id: string): Promise<AttachmentDownload> {
-    const attachment = await this.findOrThrow(id);
+    const attachment = await this.findOrThrow(user, id);
     await this.assertCanRead(user, ownerOf(attachment));
     if (!attachment.storageKey || !attachment.mimeType) {
       throw new NotFoundException('This Attachment has no file');
@@ -285,7 +290,7 @@ export class AttachmentsService {
   }
 
   async remove(user: User, id: string): Promise<void> {
-    const attachment = await this.findOrThrow(id);
+    const attachment = await this.findOrThrow(user, id);
     await this.assertCanEdit(user, ownerOf(attachment));
     await this.db.attachment.delete({ where: { id } });
     this.indexing.schedule({ source: 'ATTACHMENT', id }); // gone: its chunks are removed
@@ -336,31 +341,31 @@ export class AttachmentsService {
     return readable(() => snapshotter.capture(target));
   }
 
-  private async findOrThrow(id: string) {
-    const attachment = await this.db.attachment.findUnique({ where: { id } });
+  /** The Attachment, if its Feature or Project is in the user's Organization; 404 otherwise. */
+  private async findOrThrow(user: User, id: string) {
+    const attachment = await this.db.attachment.findFirst({
+      where: {
+        id,
+        OR: [
+          { feature: featureInOrganizationOf(user.id) },
+          { project: projectInOrganizationOf(user.id) },
+        ],
+      },
+    });
     if (!attachment) throw new NotFoundException('Attachment not found');
     return attachment;
   }
 
   /**
-   * Everyone in the Organization can read a Feature's or a Project's Attachments.
-   * Project Attachments follow the Project Brief's permissions.
+   * Everyone in the Organization can read a Feature's or a Project's Attachments; anyone
+   * else gets a 404. Project Attachments follow the Project Brief's permissions.
    */
   private async assertCanRead(user: User, owner: AttachmentOwner) {
     if ('projectId' in owner) {
       await projectAccess(this.db, user, owner.projectId);
       return;
     }
-    const { featureId } = owner;
-    const feature = await this.db.feature.findUnique({
-      where: { id: featureId },
-      select: { team: { select: { project: { select: { organizationId: true } } } } },
-    });
-    if (!feature) throw new NotFoundException('Feature not found');
-    const member = await this.db.orgMembership.count({
-      where: { userId: user.id, organizationId: feature.team.project.organizationId },
-    });
-    if (!member) throw new ForbiddenException('You are not in this Organization');
+    await assertFeatureInOrganization(this.db, user.id, owner.featureId);
   }
 
   /** The Project's editors (see `projectAccess`), or a Role Owner of any Feature in the Project. */
@@ -388,8 +393,8 @@ export class AttachmentsService {
       return;
     }
     const { featureId } = owner;
-    const feature = await this.db.feature.findUnique({
-      where: { id: featureId },
+    const feature = await this.db.feature.findFirst({
+      where: { id: featureId, ...featureInOrganizationOf(user.id) },
       select: {
         roleOwners: { where: { userId: user.id }, select: { role: true }, take: 1 },
         team: { select: { project: { select: { organizationId: true } } } },

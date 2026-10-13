@@ -2,6 +2,7 @@ import { Controller, Get, NotFoundException, Param, ParseUUIDPipe } from '@nestj
 import type { PrismaClient, User } from '@vorasaan/db';
 import type { FeatureSummaryView, FeatureView } from '@vorasaan/shared';
 import { CurrentUser } from '../auth/identity.guard.ts';
+import { featureInOrganizationOf } from '../auth/organization-scope.ts';
 import { PlatformsService } from '../platforms/platforms.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { AtlassianSettingsService } from '../settings/atlassian-settings.service.ts';
@@ -42,10 +43,11 @@ export class FeaturesController {
     @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<FeatureView> {
-    // Its target Platforms in one query of their own, alongside (ticket 0050).
+    // Its target Platforms in one query of their own, alongside (ticket 0050). Only a Feature
+    // of the caller's Organization is found; the targets are dropped with it otherwise.
     const [f, platforms] = await Promise.all([
-      this.db.feature.findUnique({
-        where: { id },
+      this.db.feature.findFirst({
+        where: { id, ...featureInOrganizationOf(user.id) },
         include: {
           team: { select: { name: true, project: { select: { id: true, name: true } } } },
           roleOwners: { where: { userId: user.id }, select: { role: true } },

@@ -168,18 +168,18 @@ describe('Project Attachments', () => {
         .status,
     ).toBe(201);
 
-    // Someone outside the Organization cannot even read.
+    // Someone outside the Organization cannot even read, nor learn that it exists.
     const outsider = await db.user.create({
       data: { email: 'out@else.test', name: 'Out', passwordHash: 'x' },
     });
     const asOutsider = as(app, outsider.id);
-    expect((await asOutsider('GET', projectUrl)).status).toBe(403);
+    expect((await asOutsider('GET', projectUrl)).status).toBe(404);
     const download = await app.inject({
       method: 'GET',
       url: `/attachments/${id}/file`,
       headers: { [DEV_USER_HEADER]: outsider.id },
     });
-    expect(download.statusCode).toBe(403);
+    expect(download.statusCode).toBe(404);
     const unknown = '00000000-0000-4000-8000-0000000000ff';
     expect((await asPim('GET', `/projects/${unknown}/attachments`)).status).toBe(404);
 

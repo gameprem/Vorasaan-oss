@@ -241,7 +241,7 @@ describe('Decision Lead Time (ticket 0056)', () => {
       data: { email: 'stranger@other.test', name: 'Stranger', passwordHash: 'x' },
     });
     await db.orgMembership.create({ data: { organizationId: other.id, userId: stranger.id } });
-    expect((await as(app, stranger.id)('GET', STATS)).status).toBe(403);
+    expect((await as(app, stranger.id)('GET', STATS)).status).toBe(404);
     expect((await asBeam('GET', `/projects/${SEED.featureId}/decision-stats`)).status).toBe(404);
     expect((await asBeam('GET', `${STATS}?from=yesterday`)).status).toBe(400);
     expect(

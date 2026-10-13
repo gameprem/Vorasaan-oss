@@ -143,6 +143,10 @@ describe('Decision Requests API: raise and submit', () => {
     const outsider = await db.user.create({
       data: { email: 'x@acme.test', name: 'Outsider', passwordHash: 'x' },
     });
+    // In the Organization, but no Role Owner of the Feature.
+    await db.orgMembership.create({
+      data: { organizationId: SEED.organizationId, userId: outsider.id },
+    });
     const res = await as(app, outsider.id)('POST', '/decision-requests', {
       featureId: SEED.featureId,
       kind: 'BLOCKER',
@@ -217,6 +221,9 @@ describe('Decision Requests API: raise and submit', () => {
     // Several Role Owners no longer fail: the request waits for a Claim.
     const secondPo = await db.user.create({
       data: { email: 'po2@acme.test', name: 'Second PO', passwordHash: 'x' },
+    });
+    await db.orgMembership.create({
+      data: { organizationId: SEED.organizationId, userId: secondPo.id },
     });
     await db.teamMembership.create({
       data: { teamId: SEED.teamId, userId: secondPo.id, role: 'PO' },

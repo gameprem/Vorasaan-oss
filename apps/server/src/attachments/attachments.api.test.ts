@@ -387,8 +387,8 @@ describe('Attachments API', () => {
     expect((await asMember('GET', featureUrl)).status).toBe(200);
     expect((await download(member.id, id)).statusCode).toBe(200);
     // Someone outside the Organization does not.
-    expect((await as(app, stranger.id)('GET', featureUrl)).status).toBe(403);
-    expect((await download(stranger.id, id)).statusCode).toBe(403);
+    expect((await as(app, stranger.id)('GET', featureUrl)).status).toBe(404);
+    expect((await download(stranger.id, id)).statusCode).toBe(404);
 
     // A member who is not a Role Owner can't add, refresh or remove.
     expect(

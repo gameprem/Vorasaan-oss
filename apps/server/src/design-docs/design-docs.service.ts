@@ -36,6 +36,10 @@ import { AiSettingsService } from '../ai/ai-settings.service.ts';
 import { ContextBudgets } from '../ai/context-budget.ts';
 import { projectLanguage } from '../ai/language.ts';
 import { fromRecordedModelColumns, toRecordedModelColumns } from '../ai/recorded-model.ts';
+import {
+  assertFeatureInOrganization,
+  featureInOrganizationOf,
+} from '../auth/organization-scope.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import { OPEN_BLOCKERS } from '../features/open-blockers.ts';
@@ -241,8 +245,7 @@ export class DesignDocsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getProposal(user: User, id: string): Promise<DesignDocProposalView> {
-    const featureId = await this.featureOfProposal(id);
-    await this.assertReadable(user, featureId);
+    await this.featureOfProposal(user, id);
     return this.proposalView(user, id);
   }
 
@@ -1143,8 +1146,8 @@ export class DesignDocsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async findPendingForReviewer(user: User, id: string, what: 'approve' | 'decline') {
-    const p = await this.db.designDocProposal.findUnique({
-      where: { id },
+    const p = await this.db.designDocProposal.findFirst({
+      where: { id, designDoc: { feature: featureInOrganizationOf(user.id) } },
       select: {
         status: true,
         designDoc: {
@@ -1167,9 +1170,10 @@ export class DesignDocsService implements OnModuleInit, OnModuleDestroy {
     return { featureId: p.designDoc.featureId, roles };
   }
 
-  private async featureOfProposal(id: string): Promise<string> {
-    const p = await this.db.designDocProposal.findUnique({
-      where: { id },
+  /** The proposal's Feature, if it is in the user's Organization; 404 otherwise. */
+  private async featureOfProposal(user: User, id: string): Promise<string> {
+    const p = await this.db.designDocProposal.findFirst({
+      where: { id, designDoc: { feature: featureInOrganizationOf(user.id) } },
       select: { designDoc: { select: { featureId: true } } },
     });
     if (!p) throw new NotFoundException('Design Doc proposal not found');
@@ -1196,14 +1200,8 @@ export class DesignDocsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Everyone in the Feature's Organization reads its Design Docs; anyone else gets a 404. */
-  private async assertReadable(user: User, featureId: string) {
-    const feature = await this.db.feature.count({
-      where: {
-        id: featureId,
-        team: { project: { organization: { memberships: { some: { userId: user.id } } } } },
-      },
-    });
-    if (!feature) throw new NotFoundException('Feature not found');
+  private assertReadable(user: User, featureId: string) {
+    return assertFeatureInOrganization(this.db, user.id, featureId);
   }
 
   /** Whoever approves the Design Doc sees it change (their Inbox and the Feature page refresh). */

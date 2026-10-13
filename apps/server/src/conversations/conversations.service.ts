@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -1193,7 +1194,13 @@ export class ConversationsService {
    */
   private async ownedWithAccess(user: User, id: string): Promise<ConversationWithScope> {
     const conversation = await this.owned(user, id);
-    await projectAccess(this.db, user, conversation.projectId);
+    // Their own Conversation: saying why is no leak, so 403 rather than projectAccess's 404.
+    await projectAccess(this.db, user, conversation.projectId).catch((error: unknown) => {
+      if (error instanceof NotFoundException) {
+        throw new ForbiddenException('You are no longer in this Organization');
+      }
+      throw error;
+    });
     return conversation;
   }
 
@@ -1211,7 +1218,7 @@ export class ConversationsService {
       select: { id: true, team: { select: { projectId: true } } },
     });
     if (!feature) throw new NotFoundException('Feature not found');
-    await projectAccess(this.db, user, feature.team.projectId);
+    await projectAccess(this.db, user, feature.team.projectId, 'Feature not found');
     return { projectId: feature.team.projectId, featureId: feature.id };
   }
 

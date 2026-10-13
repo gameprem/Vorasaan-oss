@@ -13,6 +13,7 @@ import {
   uncoveredPlatforms,
 } from '@vorasaan/shared';
 import type { PlatformForAi } from '../ai/ai.port.ts';
+import { featureInOrganizationOf } from '../auth/organization-scope.ts';
 import { projectAccess } from '../brief/brief-access.ts';
 import { OPEN_BLOCKERS } from '../features/open-blockers.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
@@ -68,10 +69,13 @@ function asBlocker(b: BlockerRow): CoverageBlocker {
 export class CoverageService {
   constructor(@InjectPrisma() private readonly db: PrismaClient) {}
 
-  /** One Feature's target Platforms, each covered or missing. Everyone reads it. */
-  async forFeature(featureId: string): Promise<FeatureCoverageView> {
+  /** One Feature's target Platforms, each covered or missing. Everyone in its Organization reads it. */
+  async forFeature(user: User, featureId: string): Promise<FeatureCoverageView> {
     const [feature, platforms, latest, members, blockers] = await Promise.all([
-      this.db.feature.findUnique({ where: { id: featureId }, select: { id: true } }),
+      this.db.feature.findFirst({
+        where: { id: featureId, ...featureInOrganizationOf(user.id) },
+        select: { id: true },
+      }),
       this.db.platform.findMany({
         where: { features: { some: { featureId } } },
         orderBy: ordered,

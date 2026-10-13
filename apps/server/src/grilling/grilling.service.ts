@@ -213,7 +213,7 @@ export class GrillingService {
   ): Promise<GrillingView> {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const g = await this.findOrThrow(id);
-      await projectAccess(this.db, user, g.projectId);
+      await projectAccess(this.db, user, g.projectId, 'Grilling not found');
       const question = g.rounds.flatMap((r) => r.questions).find((q) => q.id === questionId);
       if (!question) throw new NotFoundException('Question not found in this Grilling');
       const round = asking(g);
@@ -662,7 +662,7 @@ export class GrillingService {
   }
 
   private async assertCanManage(user: User, g: GrillingWithRelations): Promise<void> {
-    const access = await projectAccess(this.db, user, g.projectId);
+    const access = await projectAccess(this.db, user, g.projectId, 'Grilling not found');
     if (!this.canManage(user, g, access)) {
       throw new ForbiddenException('Only whoever started this Grilling, or an Admin, can do this');
     }
@@ -721,7 +721,7 @@ export class GrillingService {
   }
 
   private async view(user: User, g: GrillingWithRelations): Promise<GrillingView> {
-    const access = await projectAccess(this.db, user, g.projectId);
+    const access = await projectAccess(this.db, user, g.projectId, 'Grilling not found');
     const round = g.status === 'RUNNING' ? g.rounds.find((r) => r.status === 'ASKING') : undefined;
     const canAnswer = round ? await this.holdsRole(user, g.projectId, round.role) : false;
     return toGrillingView(g, { canAnswer, canManage: this.canManage(user, g, access) });

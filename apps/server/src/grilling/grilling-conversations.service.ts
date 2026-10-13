@@ -121,7 +121,7 @@ export class GrillingConversationsService {
       },
     });
     if (!g) throw new NotFoundException('Grilling not found');
-    await projectAccess(this.db, user, g.projectId);
+    await projectAccess(this.db, user, g.projectId, 'Grilling not found');
     const round = g.status === 'RUNNING' ? g.rounds[0] : undefined;
     if (!round) throw new ConflictException(`This Grilling is ${g.status}, not running`);
     await this.assertHoldsRole(user, g.projectId, round.role);

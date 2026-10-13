@@ -30,6 +30,14 @@ import type {
   WriteSpecInput,
 } from '@vorasaan/shared';
 import { AuthService, hashPassword } from '../auth/auth.service.ts';
+import {
+  assertTeamInOrganization,
+  featureInOrganizationOf,
+  organizationAdministeredBy,
+  organizationOf,
+  projectInOrganizationOf,
+  teamInOrganizationOf,
+} from '../auth/organization-scope.ts';
 import { hashToken, newToken } from '../auth/tokens.ts';
 import { SpecChanges } from '../design-docs/spec-changes.ts';
 import { OPEN_BLOCKERS } from '../features/open-blockers.ts';
@@ -107,9 +115,10 @@ export class OrgService {
     }
   }
 
-  private async teamOfFeature(featureId: string) {
-    const feature = await this.db.feature.findUnique({
-      where: { id: featureId },
+  /** The Feature's Team, if the Feature is in the user's Organization; 404 otherwise. */
+  private async teamOfFeature(user: User, featureId: string) {
+    const feature = await this.db.feature.findFirst({
+      where: { id: featureId, ...featureInOrganizationOf(user.id) },
       select: { teamId: true },
     });
     if (!feature) throw new NotFoundException('Feature not found');
@@ -118,8 +127,9 @@ export class OrgService {
 
   // ─── Projects & Teams ─────────────────────────────────────────────────────
 
-  async listProjects(): Promise<ProjectView[]> {
+  async listProjects(user: User): Promise<ProjectView[]> {
     const projects = await this.db.project.findMany({
+      where: projectInOrganizationOf(user.id),
       orderBy: { name: 'asc' },
       include: {
         teams: {
@@ -152,8 +162,12 @@ export class OrgService {
     }
   }
 
-  async createTeam(projectId: string, name: string) {
-    if (!(await this.db.project.count({ where: { id: projectId } }))) {
+  async createTeam(user: User, projectId: string, name: string) {
+    if (
+      !(await this.db.project.count({
+        where: { id: projectId, organization: organizationAdministeredBy(user.id) },
+      }))
+    ) {
       throw new NotFoundException('Project not found');
     }
     try {
@@ -164,8 +178,8 @@ export class OrgService {
   }
 
   async getTeam(user: User, teamId: string): Promise<TeamView> {
-    const team = await this.db.team.findUnique({
-      where: { id: teamId },
+    const team = await this.db.team.findFirst({
+      where: { id: teamId, ...teamInOrganizationOf(user.id) },
       include: {
         project: { select: { id: true, name: true } },
         members: {
@@ -226,8 +240,13 @@ export class OrgService {
   }
 
   async setTeamRoles(user: User, teamId: string, userId: string, input: SetTeamRolesInput) {
+    await assertTeamInOrganization(this.db, user.id, teamId);
     await this.assertCanManageTeam(user, teamId);
-    if (!(await this.db.orgMembership.count({ where: { userId } }))) {
+    // The person must be in the Team's own Organization, not just in some Organization.
+    const inTeamsOrganization = await this.db.orgMembership.count({
+      where: { userId, organization: { projects: { some: { teams: { some: { id: teamId } } } } } },
+    });
+    if (!inTeamsOrganization) {
       throw new NotFoundException('That person is not a member of this Organization');
     }
     const roles = [...new Set(input.roles)];
@@ -246,8 +265,9 @@ export class OrgService {
 
   // ─── Members & invitations ────────────────────────────────────────────────
 
-  async listMembers(): Promise<OrgMemberView[]> {
+  async listMembers(user: User): Promise<OrgMemberView[]> {
     const members = await this.db.orgMembership.findMany({
+      where: { organization: organizationOf(user.id) },
       include: { user: { select: { id: true, name: true, email: true } } },
       orderBy: { user: { name: 'asc' } },
     });
@@ -279,16 +299,22 @@ export class OrgService {
     return { ...toInvitationView(invitation), token };
   }
 
-  async listInvitations(): Promise<InvitationView[]> {
+  async listInvitations(user: User): Promise<InvitationView[]> {
     const invitations = await this.db.invitation.findMany({
-      where: { acceptedAt: null, expiresAt: { gt: new Date() } },
+      where: {
+        organization: organizationAdministeredBy(user.id),
+        acceptedAt: null,
+        expiresAt: { gt: new Date() },
+      },
       orderBy: { createdAt: 'desc' },
     });
     return invitations.map(toInvitationView);
   }
 
-  async revokeInvitation(id: string) {
-    const { count } = await this.db.invitation.deleteMany({ where: { id, acceptedAt: null } });
+  async revokeInvitation(user: User, id: string) {
+    const { count } = await this.db.invitation.deleteMany({
+      where: { id, acceptedAt: null, organization: organizationAdministeredBy(user.id) },
+    });
     if (!count) throw new NotFoundException('Invitation not found');
   }
 
@@ -335,8 +361,8 @@ export class OrgService {
 
   /** A new Feature may name the Platforms of its Project it targets (ADR 0009). */
   async createFeature(user: User, teamId: string, input: CreateFeatureInput) {
-    const team = await this.db.team.findUnique({
-      where: { id: teamId },
+    const team = await this.db.team.findFirst({
+      where: { id: teamId, ...teamInOrganizationOf(user.id) },
       select: { projectId: true },
     });
     if (!team) throw new NotFoundException('Team not found');
@@ -360,7 +386,7 @@ export class OrgService {
 
   /** Links or unlinks the Feature's Jira Epic (Admins and the Team's PO). */
   async updateFeature(user: User, featureId: string, input: UpdateFeatureInput) {
-    await this.assertCanManageTeam(user, await this.teamOfFeature(featureId));
+    await this.assertCanManageTeam(user, await this.teamOfFeature(user, featureId));
     return this.db.feature.update({
       where: { id: featureId },
       data: { jiraIssueKey: input.jiraIssueKey },
@@ -368,8 +394,8 @@ export class OrgService {
     });
   }
 
-  async listRoleOwners(featureId: string): Promise<RoleOwnerView[]> {
-    await this.teamOfFeature(featureId);
+  async listRoleOwners(user: User, featureId: string): Promise<RoleOwnerView[]> {
+    await this.teamOfFeature(user, featureId);
     const owners = await this.db.roleOwner.findMany({
       where: { featureId },
       include: { user: { select: { name: true } } },
@@ -380,7 +406,7 @@ export class OrgService {
 
   /** Role Owners must hold that Team Role in the Feature's Team. */
   async setRoleOwners(user: User, featureId: string, input: SetRoleOwnersInput) {
-    const teamId = await this.teamOfFeature(featureId);
+    const teamId = await this.teamOfFeature(user, featureId);
     await this.assertCanManageTeam(user, teamId);
 
     const unique = [...new Map(input.owners.map((o) => [`${o.userId}:${o.role}`, o])).values()];
@@ -402,12 +428,12 @@ export class OrgService {
         data: unique.map((o) => ({ featureId, userId: o.userId, role: o.role as TeamRole })),
       }),
     ]);
-    return this.listRoleOwners(featureId);
+    return this.listRoleOwners(user, featureId);
   }
 
   /** Admins and the Feature's PO Role Owners write the Spec by hand. */
   async writeSpec(user: User, featureId: string, input: WriteSpecInput): Promise<SpecVersionView> {
-    await this.teamOfFeature(featureId);
+    await this.teamOfFeature(user, featureId);
     await assertCanEditSpec(this.db, user, featureId);
     const outbox = this.notifications.outbox();
 

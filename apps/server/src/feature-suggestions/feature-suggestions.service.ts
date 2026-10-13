@@ -227,7 +227,12 @@ export class FeatureSuggestionsService {
     input: AcceptFeatureSuggestionInput,
   ): Promise<AcceptFeatureSuggestionResult> {
     const suggestion = await this.findOrThrow(id);
-    const access = await projectAccess(this.db, user, suggestion.projectId);
+    const access = await projectAccess(
+      this.db,
+      user,
+      suggestion.projectId,
+      'Feature Suggestion not found',
+    );
     const team = await this.db.team.findUnique({
       where: { id: input.teamId },
       select: { id: true, projectId: true },
@@ -346,7 +351,7 @@ export class FeatureSuggestionsService {
     input: DismissFeatureSuggestionInput,
   ): Promise<FeatureSuggestionView> {
     const suggestion = await this.findOrThrow(id);
-    await assertCanEditProject(this.db, user, suggestion.projectId);
+    await assertCanEditProject(this.db, user, suggestion.projectId, 'Feature Suggestion not found');
     const redraft = await currentRedraft(this.db, 'FEATURE_SUGGESTION', id);
     const decided = await this.db.featureSuggestion.updateMany({
       where: { id, status: 'PENDING' },

@@ -22,6 +22,10 @@ describe('Decision Requests API: recipients, Claim and reassign', () => {
     const user = await db.user.create({
       data: { email: `${name.toLowerCase()}@acme.test`, name, passwordHash: 'x' },
     });
+    // A Team member is a member of its Organization, as the app makes them.
+    await db.orgMembership.create({
+      data: { organizationId: SEED.organizationId, userId: user.id },
+    });
     for (const role of teamRoles) {
       await db.teamMembership.create({ data: { teamId: SEED.teamId, userId: user.id, role } });
     }

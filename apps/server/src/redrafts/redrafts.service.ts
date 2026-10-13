@@ -44,6 +44,7 @@ import {
   type RecordedModelColumns,
   toRecordedModelColumns,
 } from '../ai/recorded-model.ts';
+import { featureInOrganizationOf, organizationOf } from '../auth/organization-scope.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import {
@@ -792,7 +793,9 @@ export class RedraftsService {
   private async authorize(user: User, ref: ProposalRef): Promise<Target> {
     switch (ref.kind) {
       case 'SPEC_PROPOSAL': {
-        const p = await this.db.specProposal.findUnique({ where: { id: ref.id } });
+        const p = await this.db.specProposal.findFirst({
+          where: { id: ref.id, feature: featureInOrganizationOf(user.id) },
+        });
         if (!p) throw new NotFoundException('Spec Proposal not found');
         if (p.approverId !== user.id) {
           throw new ForbiddenException(
@@ -829,7 +832,7 @@ export class RedraftsService {
       case 'BRIEF_PROPOSAL': {
         const p = await this.db.briefProposal.findUnique({ where: { id: ref.id } });
         if (!p) throw new NotFoundException('Brief Proposal not found');
-        await projectAccess(this.db, user, p.projectId);
+        await projectAccess(this.db, user, p.projectId, 'Brief Proposal not found');
         if (p.approverId !== user.id) {
           throw new ForbiddenException(
             'Only the approver can request changes to this Brief Proposal',
@@ -861,7 +864,7 @@ export class RedraftsService {
         const s = await this.db.featureSuggestion.findUnique({ where: { id: ref.id } });
         if (!s) throw new NotFoundException('Feature Suggestion not found');
         // Whoever may accept or dismiss it: the Project's POs and Admins.
-        await assertCanEditProject(this.db, user, s.projectId);
+        await assertCanEditProject(this.db, user, s.projectId, 'Feature Suggestion not found');
         if (s.status !== 'PENDING') {
           throw new ConflictException(
             `This Feature Suggestion is already ${s.status.toLowerCase()}`,
@@ -884,7 +887,9 @@ export class RedraftsService {
         };
       }
       case 'PROMPT_VERSION': {
-        const v = await this.db.promptVersion.findUnique({ where: { id: ref.id } });
+        const v = await this.db.promptVersion.findFirst({
+          where: { id: ref.id, organization: organizationOf(user.id) },
+        });
         if (!v) throw new NotFoundException('Prompt Version not found');
         await this.assertAdmin(
           user,
@@ -912,8 +917,8 @@ export class RedraftsService {
         };
       }
       case 'DESIGN_DOC_PROPOSAL': {
-        const p = await this.db.designDocProposal.findUnique({
-          where: { id: ref.id },
+        const p = await this.db.designDocProposal.findFirst({
+          where: { id: ref.id, designDoc: { feature: featureInOrganizationOf(user.id) } },
           include: {
             designDoc: {
               select: { featureId: true, platform: { select: { roles: true } } },
@@ -960,8 +965,8 @@ export class RedraftsService {
         };
       }
       case 'CHOICES': {
-        const r = await this.db.decisionRequest.findUnique({
-          where: { id: ref.id },
+        const r = await this.db.decisionRequest.findFirst({
+          where: { id: ref.id, feature: featureInOrganizationOf(user.id) },
           include: {
             choices: { orderBy: { position: 'asc' } },
             recipients: { select: { userId: true } },
@@ -1036,7 +1041,9 @@ export class RedraftsService {
   private async assertVisible(user: User, ref: ProposalRef) {
     switch (ref.kind) {
       case 'SPEC_PROPOSAL': {
-        const exists = await this.db.specProposal.count({ where: { id: ref.id } });
+        const exists = await this.db.specProposal.count({
+          where: { id: ref.id, feature: featureInOrganizationOf(user.id) },
+        });
         if (!exists) throw new NotFoundException('Spec Proposal not found');
         return;
       }
@@ -1046,7 +1053,7 @@ export class RedraftsService {
           select: { projectId: true },
         });
         if (!p) throw new NotFoundException('Brief Proposal not found');
-        await projectAccess(this.db, user, p.projectId);
+        await projectAccess(this.db, user, p.projectId, 'Brief Proposal not found');
         return;
       }
       case 'FEATURE_SUGGESTION': {
@@ -1055,32 +1062,27 @@ export class RedraftsService {
           select: { projectId: true },
         });
         if (!s) throw new NotFoundException('Feature Suggestion not found');
-        await projectAccess(this.db, user, s.projectId);
+        await projectAccess(this.db, user, s.projectId, 'Feature Suggestion not found');
         return;
       }
       case 'CHOICES': {
-        const exists = await this.db.decisionRequest.count({ where: { id: ref.id } });
+        const exists = await this.db.decisionRequest.count({
+          where: { id: ref.id, feature: featureInOrganizationOf(user.id) },
+        });
         if (!exists) throw new NotFoundException('Decision Request not found');
         return;
       }
       case 'DESIGN_DOC_PROPOSAL': {
         const exists = await this.db.designDocProposal.count({
-          where: {
-            id: ref.id,
-            designDoc: {
-              feature: {
-                team: {
-                  project: { organization: { memberships: { some: { userId: user.id } } } },
-                },
-              },
-            },
-          },
+          where: { id: ref.id, designDoc: { feature: featureInOrganizationOf(user.id) } },
         });
         if (!exists) throw new NotFoundException('Design Doc proposal not found');
         return;
       }
       case 'PROMPT_VERSION': {
-        const exists = await this.db.promptVersion.count({ where: { id: ref.id } });
+        const exists = await this.db.promptVersion.count({
+          where: { id: ref.id, organization: organizationOf(user.id) },
+        });
         if (!exists) throw new NotFoundException('Prompt Version not found');
         await this.assertAdmin(
           user,

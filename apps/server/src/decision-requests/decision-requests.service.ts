@@ -35,6 +35,10 @@ import {
 import { ContextBudgets } from '../ai/context-budget.ts';
 import { personLanguage } from '../ai/language.ts';
 import { describeDecision } from '../ai/prompts.ts';
+import {
+  assertFeatureInOrganization,
+  featureInOrganizationOf,
+} from '../auth/organization-scope.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import { CoverageService } from '../coverage/coverage.service.ts';
 import { activeDelegates } from '../delegations/active-delegations.ts';
@@ -95,12 +99,15 @@ export class DecisionRequestsService {
     drafting?: { choice: ModelChoice; record: RecordedModel },
   ): Promise<DecisionRequestView> {
     const raiserRole = await this.db.roleOwner.findFirst({
-      where: { featureId: input.featureId, userId: user.id },
+      where: {
+        featureId: input.featureId,
+        userId: user.id,
+        feature: featureInOrganizationOf(user.id),
+      },
       orderBy: { role: 'asc' },
     });
     if (!raiserRole) {
-      const exists = await this.db.feature.count({ where: { id: input.featureId } });
-      if (!exists) throw new NotFoundException('Feature not found');
+      await assertFeatureInOrganization(this.db, user.id, input.featureId);
       throw new ForbiddenException(
         'Only a Role Owner of this Feature can raise a Decision Request',
       );
@@ -190,7 +197,7 @@ export class DecisionRequestsService {
     id: string,
     input: SubmitDecisionRequestInput,
   ): Promise<DecisionRequestView> {
-    const request = await this.findOrThrow(id);
+    const request = await this.findOrThrow(user, id);
     this.assertRaiser(user, request);
     const status = this.transition(request, 'submit');
 
@@ -277,7 +284,7 @@ export class DecisionRequestsService {
    * was routed to someone else: the Claim replaces them.
    */
   async claim(user: User, id: string): Promise<DecisionRequestView> {
-    const request = await this.findOrThrow(id);
+    const request = await this.findOrThrow(user, id);
     const viewer = await this.viewer(user);
     if (!isClaimant(request, viewer)) {
       throw new ForbiddenException(
@@ -297,12 +304,12 @@ export class DecisionRequestsService {
       await this.claimed(tx, outbox, user, request);
     });
     await this.notifications.publish(outbox);
-    return toDecisionRequestView(await this.findOrThrow(id), viewer);
+    return toDecisionRequestView(await this.findOrThrow(user, id), viewer);
   }
 
   /** The Decider hands the request to someone else holding the decider role in the Team. */
   async reassign(user: User, id: string, input: ReassignInput): Promise<DecisionRequestView> {
-    const request = await this.findOrThrow(id);
+    const request = await this.findOrThrow(user, id);
     if (request.deciderId !== user.id) {
       throw new ForbiddenException('Only the Decider can reassign this Decision Request');
     }
@@ -341,7 +348,7 @@ export class DecisionRequestsService {
     await this.notifications.publish(
       this.notifications.outbox().inboxChanged(user.id, input.userId),
     );
-    return toDecisionRequestView(await this.findOrThrow(id), await this.viewer(user));
+    return toDecisionRequestView(await this.findOrThrow(user, id), await this.viewer(user));
   }
 
   /**
@@ -354,7 +361,7 @@ export class DecisionRequestsService {
     id: string,
     input: PostRequestMessageInput,
   ): Promise<DecisionRequestView> {
-    const request = await this.findOrThrow(id);
+    const request = await this.findOrThrow(user, id);
     const isRaiser = request.raiserId === user.id;
     // While nobody has Claimed it, every recipient counts as the Decider here; asking a
     // QUESTION Claims it implicitly, as deciding would.
@@ -441,7 +448,7 @@ export class DecisionRequestsService {
    * Receipt keeps it (ticket 0070).
    */
   async withdraw(user: User, id: string, reason?: string): Promise<DecisionRequestView> {
-    const request = await this.findOrThrow(id);
+    const request = await this.findOrThrow(user, id);
     this.assertRaiser(user, request);
     const status = this.transition(request, 'withdraw');
     // The Decider, or while nobody has Claimed it everyone it was sent to.
@@ -487,7 +494,7 @@ export class DecisionRequestsService {
     input: DecideInput,
     source: DecisionSource = 'WEB',
   ): Promise<DecideResult> {
-    const request = await this.findOrThrow(id);
+    const request = await this.findOrThrow(user, id);
     // A recipient deciding a request nobody has Claimed yet Claims it implicitly.
     const impliedClaim = this.isImpliedClaim(user, request);
     if (request.deciderId !== user.id && !impliedClaim) {
@@ -670,12 +677,13 @@ export class DecisionRequestsService {
   }
 
   async get(user: User, id: string): Promise<DecisionRequestView> {
-    return toDecisionRequestView(await this.findOrThrow(id), await this.viewer(user));
+    return toDecisionRequestView(await this.findOrThrow(user, id), await this.viewer(user));
   }
 
   async list(user: User, query: ListDecisionRequestsQuery): Promise<DecisionRequestView[]> {
     const requests = await this.db.decisionRequest.findMany({
       where: {
+        feature: featureInOrganizationOf(user.id),
         deciderId: query.decider === 'me' ? user.id : undefined,
         raiserId: query.raiser === 'me' ? user.id : undefined,
         status: query.status,
@@ -784,9 +792,10 @@ export class DecisionRequestsService {
     };
   }
 
-  private async findOrThrow(id: string): Promise<DecisionRequestWithRelations> {
-    const request = await this.db.decisionRequest.findUnique({
-      where: { id },
+  /** The request, if it is about a Feature of the user's Organization; 404 otherwise. */
+  private async findOrThrow(user: User, id: string): Promise<DecisionRequestWithRelations> {
+    const request = await this.db.decisionRequest.findFirst({
+      where: { id, feature: featureInOrganizationOf(user.id) },
       include: decisionRequestInclude,
     });
     if (!request) throw new NotFoundException('Decision Request not found');

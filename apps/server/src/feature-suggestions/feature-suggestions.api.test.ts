@@ -298,7 +298,7 @@ describe('Feature Suggestions', () => {
     // Members read; only the Project's POs and Admins generate and dismiss.
     expect((await generate(beam.id)).status).toBe(403);
     expect((await generate(wes)).status).toBe(403);
-    expect((await generate(outsider)).status).toBe(403);
+    expect((await generate(outsider)).status).toBe(404);
     expect((await generate(pim.id, {}, crypto.randomUUID())).status).toBe(404);
     const made = await generate(olga, { count: 3 });
     expect(made.status).toBe(201);
@@ -306,7 +306,7 @@ describe('Feature Suggestions', () => {
     if (!a || !b || !c) throw new Error('expected suggestions');
     const list = `/projects/${SEED.projectId}/feature-suggestions`;
     expect((await asUser(beam.id)('GET', list)).status).toBe(200);
-    expect((await asUser(outsider)('GET', list)).status).toBe(403);
+    expect((await asUser(outsider)('GET', list)).status).toBe(404);
     expect((await asUser(beam.id)('GET', `${list}?status=NOPE`)).status).toBe(400);
 
     expect((await dismiss(beam.id, a.id, 'No.')).status).toBe(403);
@@ -321,7 +321,7 @@ describe('Feature Suggestions', () => {
     expect((await accept(wes, a.id, wealth.teamId)).status).toBe(422); // another Project's Team
     expect((await accept(pim.id, a.id, wealth.teamId)).status).toBe(422);
     expect((await accept(pim.id, a.id, crypto.randomUUID())).status).toBe(422);
-    expect((await accept(outsider, a.id, SEED.teamId)).status).toBe(403);
+    expect((await accept(outsider, a.id, SEED.teamId)).status).toBe(404);
     expect(await db.feature.count({ where: { title: a.title } })).toBe(0);
 
     // Pim is an Admin: he accepts into Growth, where he isn't a member.
@@ -479,7 +479,7 @@ describe('Feature Suggestions', () => {
       expect(ai.calls.some((c) => c.method === 'checkFeatureFit')).toBe(false);
 
       await setGuidelines(['Serves a KPI']);
-      expect((await fit(outsider, { title: 'Anything' })).status).toBe(403);
+      expect((await fit(outsider, { title: 'Anything' })).status).toBe(404);
       expect((await fit(beam.id, { title: '' })).status).toBe(400);
       expect((await fit(beam.id, { title: 'x' }, crypto.randomUUID())).status).toBe(404);
       const original = ai.checkFeatureFit.bind(ai);
