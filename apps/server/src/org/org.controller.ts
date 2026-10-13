@@ -33,8 +33,8 @@ export class OrgController {
   // Projects & Teams
 
   @Get('projects')
-  projects() {
-    return this.org.listProjects();
+  projects(@CurrentUser() user: User) {
+    return this.org.listProjects(user);
   }
 
   @AdminOnly()
@@ -46,10 +46,11 @@ export class OrgController {
   @AdminOnly()
   @Post('projects/:id/teams')
   createTeam(
+    @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) projectId: string,
     @Body({ schema: CreateTeamInput }) body: CreateTeamInput,
   ) {
-    return this.org.createTeam(projectId, body.name);
+    return this.org.createTeam(user, projectId, body.name);
   }
 
   @Get('me/teams')
@@ -84,14 +85,14 @@ export class OrgController {
   // Members & invitations
 
   @Get('members')
-  members() {
-    return this.org.listMembers();
+  members(@CurrentUser() user: User) {
+    return this.org.listMembers(user);
   }
 
   @AdminOnly()
   @Get('invitations')
-  invitations() {
-    return this.org.listInvitations();
+  invitations(@CurrentUser() user: User) {
+    return this.org.listInvitations(user);
   }
 
   @AdminOnly()
@@ -106,8 +107,8 @@ export class OrgController {
   @AdminOnly()
   @Delete('invitations/:id')
   @HttpCode(204)
-  async revokeInvitation(@Param('id', ParseUUIDPipe) id: string) {
-    await this.org.revokeInvitation(id);
+  async revokeInvitation(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    await this.org.revokeInvitation(user, id);
   }
 
   @Public()
@@ -137,8 +138,8 @@ export class OrgController {
   }
 
   @Get('features/:id/role-owners')
-  roleOwners(@Param('id', ParseUUIDPipe) id: string) {
-    return this.org.listRoleOwners(id);
+  roleOwners(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.org.listRoleOwners(user, id);
   }
 
   @Put('features/:id/role-owners')

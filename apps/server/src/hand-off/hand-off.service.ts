@@ -11,6 +11,7 @@ import {
 } from '@vorasaan/shared';
 import { RETRIEVAL_TOP_K } from '../ai/context-budget.ts';
 import { personLanguage } from '../ai/language.ts';
+import { featureInOrganizationOf } from '../auth/organization-scope.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
@@ -61,7 +62,7 @@ export class HandOffService {
     const feature = await this.db.feature.findFirst({
       where: {
         id: featureId,
-        team: { project: { organization: { memberships: { some: { userId: user.id } } } } },
+        ...featureInOrganizationOf(user.id),
       },
       select: {
         id: true,

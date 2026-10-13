@@ -12,6 +12,7 @@ import {
   type ProposalStatus,
   responseWindowLabels,
 } from '@vorasaan/shared';
+import { featureInOrganizationOf } from '../auth/organization-scope.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import { responseWindowState } from '../decision-requests/decision-request.view.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
@@ -53,10 +54,7 @@ export class DecisionGraphService {
     // Everyone in the Feature's Organization reads it; anyone else learns nothing, not even
     // that it exists.
     const feature = await this.db.feature.findFirst({
-      where: {
-        id: featureId,
-        team: { project: { organization: { memberships: { some: { userId: user.id } } } } },
-      },
+      where: { id: featureId, ...featureInOrganizationOf(user.id) },
       select: { id: true },
     });
     if (!feature) throw new NotFoundException('Feature not found');

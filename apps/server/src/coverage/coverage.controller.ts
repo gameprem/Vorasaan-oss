@@ -9,8 +9,8 @@ export class CoverageController {
 
   /** A Feature's target Platforms, each covered or missing and why (ADR 0009). */
   @Get('features/:id/coverage')
-  forFeature(@Param('id', ParseUUIDPipe) id: string) {
-    return this.coverage.forFeature(id);
+  forFeature(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.coverage.forFeature(user, id);
   }
 
   /** The Project's Feature × Platform matrix, and the Platforms no Feature covers. */

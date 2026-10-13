@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma, PrismaClient, User } from '@vorasaan/db';
 import type { CreateDelegationInput, DelegationView, MyDelegationsQuery } from '@vorasaan/shared';
+import { assertTeamInOrganization, teamInOrganizationOf } from '../auth/organization-scope.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 
@@ -33,7 +34,7 @@ export class DelegationsService {
 
   /** Current and upcoming Delegations; ended ones are left out. */
   async list(user: User, teamId: string): Promise<DelegationView[]> {
-    await this.assertTeamExists(teamId);
+    await assertTeamInOrganization(this.db, user.id, teamId);
     const now = new Date();
     const rows = await this.db.delegation.findMany({
       where: { teamId, endsAt: { gt: now } },
@@ -61,7 +62,7 @@ export class DelegationsService {
   }
 
   async create(user: User, teamId: string, input: CreateDelegationInput): Promise<DelegationView> {
-    await this.assertTeamExists(teamId);
+    await assertTeamInOrganization(this.db, user.id, teamId);
     const admin = await this.isAdmin(user.id);
     const delegatorId = input.delegatorId ?? user.id;
     if (delegatorId !== user.id && !admin) {
@@ -140,18 +141,14 @@ export class DelegationsService {
   }
 
   async delete(user: User, teamId: string, id: string): Promise<void> {
-    const delegation = await this.db.delegation.findFirst({ where: { id, teamId } });
+    const delegation = await this.db.delegation.findFirst({
+      where: { id, teamId, team: teamInOrganizationOf(user.id) },
+    });
     if (!delegation) throw new NotFoundException('Delegation not found');
     if (delegation.delegatorId !== user.id && !(await this.isAdmin(user.id))) {
       throw new ForbiddenException('Only the delegator or an Organization Admin can delete it');
     }
     await this.db.delegation.deleteMany({ where: { id } });
-  }
-
-  private async assertTeamExists(teamId: string) {
-    if (!(await this.db.team.count({ where: { id: teamId } }))) {
-      throw new NotFoundException('Team not found');
-    }
   }
 
   private async isAdmin(userId: string) {

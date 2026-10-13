@@ -21,6 +21,7 @@ import {
   type SpecTemplateView,
   specTemplate,
 } from '@vorasaan/shared';
+import { featureInOrganizationOf } from '../auth/organization-scope.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
 import { SpecChanges } from '../design-docs/spec-changes.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
@@ -185,8 +186,8 @@ export class PlatformsService {
     featureId: string,
     { platformIds }: SetFeaturePlatformsInput,
   ): Promise<PlatformRef[]> {
-    const feature = await this.db.feature.findUnique({
-      where: { id: featureId },
+    const feature = await this.db.feature.findFirst({
+      where: { id: featureId, ...featureInOrganizationOf(user.id) },
       select: { teamId: true, team: { select: { projectId: true } } },
     });
     if (!feature) throw new NotFoundException('Feature not found');
@@ -239,9 +240,9 @@ export class PlatformsService {
   }
 
   /** What the Feature's first Spec starts from: one section per target Platform. */
-  async specTemplate(featureId: string): Promise<SpecTemplateView> {
-    const feature = await this.db.feature.findUnique({
-      where: { id: featureId },
+  async specTemplate(user: User, featureId: string): Promise<SpecTemplateView> {
+    const feature = await this.db.feature.findFirst({
+      where: { id: featureId, ...featureInOrganizationOf(user.id) },
       select: { title: true },
     });
     if (!feature) throw new NotFoundException('Feature not found');

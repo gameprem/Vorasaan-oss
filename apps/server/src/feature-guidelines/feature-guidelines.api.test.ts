@@ -291,7 +291,7 @@ describe('Feature Guidelines', () => {
     const outsider = await db.user.create({
       data: { email: 'out@else.test', name: 'Out', passwordHash: 'x' },
     });
-    expect((await as(app, outsider.id)('GET', effective)).status).toBe(403);
+    expect((await as(app, outsider.id)('GET', effective)).status).toBe(404);
     expect((await as(app, outsider.id)('GET', settings)).status).toBe(403);
     expect((await asPim('GET', `/projects/${UNKNOWN}/feature-guidelines/effective`)).status).toBe(
       404,
