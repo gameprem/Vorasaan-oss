@@ -19,15 +19,15 @@ import {
   createApprovedModel,
   deleteAiProvider,
   deleteApprovedModel,
-  listOpenRouterModels,
+  listProviderModels,
   setAiTaskModels,
   testApprovedModel,
   updateAiProvider,
   updateApprovedModel,
 } from '@/lib/ai-settings-actions';
 import { TASK_LABEL } from './ai-task-labels';
-import { OpenRouterModelPicker } from './openrouter-model-picker';
-import { PROVIDERS, ProviderKindPicker } from './provider-fields';
+import { MODEL_LISTS, PROVIDERS, ProviderKindPicker } from './provider-fields';
+import { ProviderModelPicker } from './provider-model-picker';
 import { field, primaryButton, secondaryButton } from './ui';
 import { Checkbox } from './ui/checkbox';
 import { Select } from './ui/select';
@@ -552,7 +552,8 @@ function ModelForm({
   /** Until the Admin types a window, it follows the model id (a known model's window). */
   const [windowTyped, setWindowTyped] = useState(false);
   const kind = providers.find((p) => p.id === draft.providerId)?.kind;
-  const loadModels = useCallback(() => listOpenRouterModels(draft.providerId), [draft.providerId]);
+  const loadModels = useCallback(() => listProviderModels(draft.providerId), [draft.providerId]);
+  const modelList = kind ? MODEL_LISTS[kind] : undefined;
   return (
     <form
       aria-label={submitLabel}
@@ -581,11 +582,13 @@ function ModelForm({
         value={draft.providerId}
         onChange={(providerId) => setDraft({ ...draft, providerId })}
       />
-      {kind === 'OPENROUTER' && (
+      {modelList && (
         <div className="sm:col-span-2">
-          {/* OpenRouter's list (ticket 0064): a pick fills the id and its window. */}
-          <OpenRouterModelPicker
+          {/* OpenRouter's or Gemini's list (tickets 0064, 0080): a pick fills the id and its window. */}
+          <ProviderModelPicker
             key={draft.providerId}
+            providerName={modelList.providerName}
+            exampleId={modelList.exampleId}
             load={loadModels}
             selectedId={draft.modelId}
             inputClass={field}

@@ -918,9 +918,12 @@ export class ContextTooLongError extends Error {
   }
 }
 
-/** How providers word a too-long request: Anthropic, OpenAI, and OpenAI-compatible servers. */
+/**
+ * How providers word a too-long request: Anthropic, OpenAI, OpenAI-compatible servers,
+ * and Gemini ("The input token count (…) exceeds the maximum number of tokens allowed").
+ */
 const TOO_LONG =
-  /prompt is too long|context[_ ]length|context window|maximum context|too many (input )?tokens|input is too long|exceeds? the (model'?s? )?(maximum|max) (input|context)/i;
+  /prompt is too long|context[_ ]length|context window|maximum context|too many (input )?tokens|input is too long|exceeds? the (model'?s? )?(maximum|max) (input|context)|exceeds the maximum number of tokens/i;
 
 /** Whether `error` (or one of its causes) says the request was too long for the model. */
 export function isContextTooLong(error: unknown): boolean {

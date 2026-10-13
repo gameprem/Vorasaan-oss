@@ -6,6 +6,8 @@ const webPort = Number(process.env.E2E_WEB_PORT ?? 3010);
 const fakeChatPort = Number(process.env.E2E_FAKE_CHAT_PORT ?? 4019);
 /** A fake OpenRouter API the server lists models from (openrouter-settings.e2e.ts listens on it). */
 const fakeOpenRouterPort = Number(process.env.E2E_FAKE_OPENROUTER_PORT ?? 4018);
+/** A fake Gemini API the server lists models from (gemini-settings.e2e.ts listens on it). */
+const fakeGeminiPort = Number(process.env.E2E_FAKE_GEMINI_PORT ?? 4017);
 
 /** The first-run setup spec's own server and web app, on an empty database (ticket 0063). */
 const setupApiPort = Number(process.env.E2E_SETUP_API_PORT ?? apiPort + 5);
@@ -29,6 +31,8 @@ export const E2E = {
   fakeChatUrl: `http://127.0.0.1:${fakeChatPort}`,
   fakeOpenRouterPort,
   fakeOpenRouterUrl: `http://127.0.0.1:${fakeOpenRouterPort}/api/v1`,
+  fakeGeminiPort,
+  fakeGeminiUrl: `http://127.0.0.1:${fakeGeminiPort}/v1beta`,
   /** The server's Setup Token (ticket 0062), for a run that starts on an empty database. */
   setupToken: process.env.E2E_SETUP_TOKEN ?? 'e2e-setup-token-not-a-secret',
   /** Truncated and re-seeded before every run; its name must end in _e2e. */

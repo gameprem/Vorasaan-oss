@@ -4,7 +4,7 @@ import type {
   AiTestResult,
   CreateAiProviderInput,
   CreateApprovedModelInput,
-  OpenRouterModelsView,
+  ProviderModelsView,
   ReceiptSettingsInput,
   SetAiTaskModelsInput,
   UpdateAiProviderInput,
@@ -67,10 +67,13 @@ export async function setAiTaskModels(input: SetAiTaskModelsInput) {
   return attempt(() => api('/settings/ai/tasks', { method: 'PUT', body: input }));
 }
 
-/** OpenRouter's model list for an OpenRouter provider (ticket 0064); an error to show otherwise. */
-export async function listOpenRouterModels(providerId: string): Promise<OpenRouterModelsView> {
+/**
+ * The model list of an OpenRouter or Gemini provider (tickets 0064, 0080); an error to
+ * show otherwise.
+ */
+export async function listProviderModels(providerId: string): Promise<ProviderModelsView> {
   try {
-    return await api<OpenRouterModelsView>(`/settings/ai/providers/${providerId}/models`);
+    return await api<ProviderModelsView>(`/settings/ai/providers/${providerId}/models`);
   } catch (error) {
     if (error instanceof ApiError) return { models: [], error: error.message };
     throw error;

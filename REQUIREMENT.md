@@ -247,8 +247,9 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [x] Decision Lead Time (0056).
    - [x] Link a LINE, Slack or Teams account (0057).
    - [x] Decide from LINE, Slack and Teams (0058).
-4. **OpenRouter** as an AI Provider: the Admin enters only the key, picks Approved Models from OpenRouter's model list with their Context Window prefilled, and Anthropic models routed through it get prompt caching.
+4. **OpenRouter** and **Gemini** as AI Providers: the Admin enters only the key, picks Approved Models from the provider's model list with their Context Window prefilled, and Anthropic models routed through OpenRouter get prompt caching (Gemini caches a repeated prefix by itself).
    - [x] OpenRouter provider (0064).
+   - [x] Gemini provider (0080).
 5. **Request changes** ([ADR 0013](./docs/adr/0013-request-changes-redrafts-proposals.md)): every AI proposal (Choices, Spec Proposals, Brief Proposals, Feature Suggestions, later Design Docs) gets Request changes next to Approve and Decline. The person explains what to change, and the AI writes a Redraft of the same proposal. Earlier Redrafts stay, with their feedback and a diff. Nothing changes until Approve. It works from Chat Cards too.
    - [x] Request changes and Redrafts (0065).
 6. **UI kit** ([ADR 0016](./docs/adr/0016-ui-kit-on-react-aria-components.md)): our own accessible components on React Aria, styled with the ADR 0008 tokens in light and dark, in `apps/web/components/ui/`. Searchable pickers for models, Team Roles, people, Features and time zones (in English and Thai), and date and time pickers with an optional Buddhist-era year. They replace every browser-native select, checkbox, radio, date and time input.
