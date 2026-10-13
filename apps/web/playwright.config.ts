@@ -64,6 +64,8 @@ export default defineConfig({
         VORASAAN_LINE_API_URL: E2E.fakeChatUrl,
         // OpenRouter's model list comes from the fake in openrouter-settings.e2e.ts (ticket 0064).
         OPENROUTER_BASE_URL: E2E.fakeOpenRouterUrl,
+        // The Gemini API's model list comes from the fake in gemini-settings.e2e.ts (ticket 0080).
+        GOOGLE_BASE_URL: E2E.fakeGeminiUrl,
       },
       reuseExistingServer: !CI,
       timeout: 60_000,
