@@ -8,7 +8,7 @@ import {
   type AiSettingsView,
   type AiTestResult,
   type ApprovedModelSettingsView,
-  type OpenRouterModelsView,
+  type ProviderModelsView,
   SETUP_TOKEN_HEADER,
 } from '@vorasaan/shared';
 import { AiSettingsService } from '../ai/ai-settings.service.ts';
@@ -116,7 +116,7 @@ describe('OpenRouter as an AI provider', () => {
 
   test('the model list loads from OpenRouter, and a picked model gets its context_length as its window', async () => {
     const provider = await connectOpenRouter();
-    const list = await asAdmin<OpenRouterModelsView>(
+    const list = await asAdmin<ProviderModelsView>(
       'GET',
       `/settings/ai/providers/${provider.id}/models`,
     );
@@ -163,7 +163,7 @@ describe('OpenRouter as an AI provider', () => {
   test("when the list can't be loaded, the Admin types the model id", async () => {
     const provider = await connectOpenRouter();
     fake.modelsStatus = 503;
-    const list = await asAdmin<OpenRouterModelsView>(
+    const list = await asAdmin<ProviderModelsView>(
       'GET',
       `/settings/ai/providers/${provider.id}/models`,
     );
@@ -333,7 +333,7 @@ describe('OpenRouter in the setup wizard', () => {
 
   test('the provider step lists OpenRouter models, with the Setup Token only', async () => {
     expect((await post('/setup/openrouter-models', {}, null)).status).toBe(401);
-    const list = await post<OpenRouterModelsView>('/setup/openrouter-models', {});
+    const list = await post<ProviderModelsView>('/setup/openrouter-models', {});
     expect(list.status).toBe(200);
     expect(list.body.models.map((m) => m.id)).toEqual([
       'anthropic/example-model',

@@ -34,6 +34,11 @@ export function toMastraModel(p: ResolvedProvider): MastraModel {
       // would fall back to its generic OpenAI-compatible provider, which can't mark
       // system blocks for caching.
       return { id: `openrouter/${p.model}`, apiKey: p.apiKey, headers: openRouterHeaders() };
+    case 'GEMINI':
+      // Mastra's Google provider (ticket 0080): the Gemini API's fixed URL (or the
+      // operator's GOOGLE_BASE_URL), never a stored one. No `url` here, or Mastra would
+      // send it through its generic OpenAI-compatible provider instead.
+      return { id: `google/${p.model}`, apiKey: p.apiKey };
   }
 }
 

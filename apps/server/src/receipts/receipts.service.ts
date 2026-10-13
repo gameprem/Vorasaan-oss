@@ -89,6 +89,7 @@ const ENV_PROVIDER: Record<string, string> = {
   anthropic: 'ANTHROPIC',
   openai: 'OPENAI',
   openrouter: 'OPENROUTER',
+  google: 'GEMINI',
 };
 
 type ExportRow = Prisma.ReceiptGetPayload<{

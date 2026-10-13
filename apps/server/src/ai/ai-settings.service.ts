@@ -19,7 +19,7 @@ import {
   type CreateApprovedModelInput,
   DEFAULT_PROVIDER_NAMES,
   type ModelPrices,
-  type OpenRouterModelsView,
+  type ProviderModelsView,
   type RecordedModel,
   type SetAiTaskModelsInput,
   type UpdateAiProviderInput,
@@ -36,6 +36,7 @@ import {
 } from './ai.config.ts';
 import type { ModelChoice } from './ai.port.ts';
 import { envModelContextWindow, prefilledContextWindow } from './context-window.ts';
+import { geminiContextWindow, listGeminiModels } from './gemini.ts';
 import { type ResolvedProvider, toMastraModel } from './model-config.ts';
 import { listOpenRouterModels, openRouterContextWindow } from './openrouter.ts';
 
@@ -49,6 +50,7 @@ const ENV_PREFIXES: Partial<Record<string, AiProvider>> = {
   anthropic: 'ANTHROPIC',
   openai: 'OPENAI',
   openrouter: 'OPENROUTER',
+  google: 'GEMINI',
 };
 
 /** The `baseUrl` of a provider input, whatever its kind. */
@@ -63,12 +65,14 @@ function storedBaseUrl(input: object, kind: AiProvider): string | null {
 }
 
 /**
- * OpenRouter's URL is fixed (ticket 0064): a base URL given for it is refused,
- * as for the other fixed providers, never stored or called.
+ * OpenRouter's and Gemini's URLs are fixed (tickets 0064, 0080): a base URL given
+ * for them is refused, as for the other fixed providers, never stored or called.
  */
 function refuseFixedUrl(input: object, kind: AiProvider): void {
-  if (kind === 'OPENROUTER' && baseUrlOf(input) !== undefined) {
-    throw new UnprocessableEntityException("OpenRouter's base URL is fixed: leave it out");
+  if ((kind === 'OPENROUTER' || kind === 'GEMINI') && baseUrlOf(input) !== undefined) {
+    throw new UnprocessableEntityException(
+      `${DEFAULT_PROVIDER_NAMES[kind]}'s base URL is fixed: leave it out`,
+    );
   }
 }
 
@@ -262,31 +266,45 @@ export class AiSettingsService {
   }
 
   /**
-   * OpenRouter's model list for the picker (ticket 0064). Only an OpenRouter
-   * provider has one; when it can't be loaded, the view says why and the Admin
-   * types the model id.
+   * A provider's model list for the picker: OpenRouter's (ticket 0064, public) or the
+   * Gemini API's (ticket 0080, listed with the provider's stored key). Other kinds have
+   * none; when it can't be loaded, the view says why and the Admin types the model id.
    */
-  async providerModels(id: string): Promise<OpenRouterModelsView> {
+  async providerModels(id: string): Promise<ProviderModelsView> {
     const organizationId = await this.requireOrganizationId();
     const provider = await this.provider(organizationId, id);
-    if (provider.provider !== 'OPENROUTER') {
-      throw new UnprocessableEntityException('Only an OpenRouter provider has a model list');
+    if (provider.provider === 'OPENROUTER') return listOpenRouterModels();
+    if (provider.provider === 'GEMINI') {
+      return listGeminiModels(this.secrets().decrypt(provider.secretEncrypted));
     }
+    throw new UnprocessableEntityException(
+      'Only an OpenRouter or Gemini provider has a model list',
+    );
+  }
+
+  /** The setup wizard's OpenRouter list, before any provider is saved. */
+  openRouterModels(): Promise<ProviderModelsView> {
     return listOpenRouterModels();
   }
 
-  /** The setup wizard's list, before any provider is saved. */
-  openRouterModels(): Promise<OpenRouterModelsView> {
-    return listOpenRouterModels();
+  /** The setup wizard's Gemini list (ticket 0080), with the key typed in the wizard. */
+  geminiModels(apiKey: string): Promise<ProviderModelsView> {
+    return listGeminiModels(apiKey);
   }
 
   /**
    * The window a new model gets when the Admin gives none: for OpenRouter, its
-   * `context_length` from the list (ticket 0064); else the known model's, else the default.
+   * `context_length` from the list (ticket 0064); for Gemini, its `inputTokenLimit`
+   * from the list, read with the provider's key (ticket 0080); else the known
+   * model's, else the default.
    */
-  private async windowFor(kind: AiProvider, modelId: string): Promise<number> {
+  private async windowFor(kind: AiProvider, modelId: string, apiKey: string): Promise<number> {
     if (kind === 'OPENROUTER') {
       const listed = await openRouterContextWindow(modelId);
+      if (listed) return listed;
+    }
+    if (kind === 'GEMINI') {
+      const listed = await geminiContextWindow(modelId, apiKey);
       if (listed) return listed;
     }
     return prefilledContextWindow(modelId);
@@ -330,7 +348,8 @@ export class AiSettingsService {
     const provider = await this.provider(organizationId, input.providerId);
     await this.assertNameFree(organizationId, input.displayName);
     const contextWindow =
-      input.contextWindow ?? (await this.windowFor(provider.provider as AiProvider, input.modelId));
+      input.contextWindow ??
+      (await this.windowFor(provider.provider as AiProvider, input.modelId, this.keyOf(provider)));
     const created = await conflictOnRace(() =>
       this.db.$transaction(async (tx) => {
         const last = await tx.approvedModel.findFirst({
@@ -377,7 +396,7 @@ export class AiSettingsService {
     const contextWindow =
       input.contextWindow ??
       (input.modelId && input.modelId !== existing.modelId
-        ? await this.windowFor(provider.provider as AiProvider, input.modelId)
+        ? await this.windowFor(provider.provider as AiProvider, input.modelId, this.keyOf(provider))
         : undefined);
     if (input.displayName) await this.assertNameFree(organizationId, input.displayName, id);
     const updated = await conflictOnRace(() =>
@@ -461,7 +480,7 @@ export class AiSettingsService {
     refuseFixedUrl(input, input.provider);
     if (!input.apiKey) throw new UnprocessableEntityException('Enter an API key or token');
     const secretEncrypted = this.secrets().encrypt(input.apiKey);
-    const contextWindow = await this.windowFor(input.provider, input.model);
+    const contextWindow = await this.windowFor(input.provider, input.model, input.apiKey);
     await this.db.$transaction(async (tx) => {
       const provider = await tx.orgIntegration.create({
         data: {
@@ -516,6 +535,11 @@ export class AiSettingsService {
 
   // ─── Choosing the model of a call ─────────────────────────────────────────
 
+  /** A provider's key, decrypted: only Gemini's model list needs it to prefill a window. */
+  private keyOf(provider: OrgIntegration): string {
+    return provider.provider === 'GEMINI' ? this.secrets().decrypt(provider.secretEncrypted) : '';
+  }
+
   private resolve(model: ModelWithProvider): ResolvedProvider {
     return {
       provider: model.integration.provider as AiProvider,
@@ -543,7 +567,7 @@ export class AiSettingsService {
    * 3. the Approved Model set for the task in Settings;
    * 4. the default Approved Model;
    * 5. with no Approved Model at all, `VORASAAN_MODEL` (or the built-in default).
-   * An env model ("anthropic/…", "openai/…") uses the key of a connected provider
+   * An env model ("anthropic/…", "openai/…", "openrouter/…", "google/…") uses the key of a connected provider
    * of that kind when there is one, else the provider's env key, as before.
    */
   async chooseModel(task: AiTask, approvedModelId?: string): Promise<ModelChoice> {

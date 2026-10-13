@@ -1,7 +1,13 @@
 import { z } from 'zod';
 
 /** The kinds of LLM provider an Admin can connect. */
-export const AiProvider = z.enum(['ANTHROPIC', 'OPENAI', 'OPENAI_COMPATIBLE', 'OPENROUTER']);
+export const AiProvider = z.enum([
+  'ANTHROPIC',
+  'OPENAI',
+  'OPENAI_COMPATIBLE',
+  'OPENROUTER',
+  'GEMINI',
+]);
 export type AiProvider = z.infer<typeof AiProvider>;
 
 export const DEFAULT_MODELS: Record<AiProvider, string> = {
@@ -10,6 +16,8 @@ export const DEFAULT_MODELS: Record<AiProvider, string> = {
   OPENAI_COMPATIBLE: '',
   // Picked from OpenRouter's model list (ticket 0064).
   OPENROUTER: '',
+  // Picked from the Gemini API's model list (ticket 0080).
+  GEMINI: '',
 };
 
 /** The name a provider gets when none is given (setup, and the migrated provider). */
@@ -18,6 +26,7 @@ export const DEFAULT_PROVIDER_NAMES: Record<AiProvider, string> = {
   OPENAI: 'OpenAI',
   OPENAI_COMPATIBLE: 'Custom endpoint',
   OPENROUTER: 'OpenRouter',
+  GEMINI: 'Gemini',
 };
 
 /**
@@ -40,6 +49,9 @@ export const KNOWN_CONTEXT_WINDOWS: readonly (readonly [RegExp, number])[] = [
   [/^o[134](-|$)/, 200_000],
   [/^gpt-3\.5-turbo/, 16_385],
   [/^gpt-4(-|$)/, 8_192],
+  // Gemini's input token limit (ticket 0080); the model list gives the exact one.
+  [/^gemini-1\.5-pro/, 2_097_152],
+  [/^gemini-/, 1_048_576],
 ];
 
 /** The context window of a known model id (a "provider/" prefix is allowed), or null. */
@@ -68,8 +80,9 @@ const BaseUrl = z.url({ message: 'Enter the full URL, e.g. http://localhost:2012
 const ProviderName = z.string().trim().min(1, 'Name the provider').max(100);
 const Id = z.uuid();
 /**
- * OpenRouter's base URL is fixed (ticket 0064). The field is accepted only so the
- * server can refuse it with a 422, as it refuses a base URL on the other fixed providers.
+ * OpenRouter's and Gemini's base URLs are fixed (tickets 0064, 0080). The field is
+ * accepted only so the server can refuse it with a 422, as it refuses a base URL on
+ * the other fixed providers.
  */
 const FixedUrl = z.unknown().optional();
 
@@ -89,6 +102,12 @@ export const AiSettingsInput = z.discriminatedUnion('provider', [
   }),
   z.object({
     provider: z.literal('OPENROUTER'),
+    model: Model,
+    apiKey: ApiKey.optional(),
+    baseUrl: FixedUrl,
+  }),
+  z.object({
+    provider: z.literal('GEMINI'),
     model: Model,
     apiKey: ApiKey.optional(),
     baseUrl: FixedUrl,
@@ -122,6 +141,13 @@ export const CreateAiProviderInput = z.discriminatedUnion('kind', [
     apiKey: ApiKey,
     baseUrl: FixedUrl,
   }),
+  /** A key only: the base URL is the Gemini API's own (https://generativelanguage.googleapis.com/v1beta). */
+  z.object({
+    kind: z.literal('GEMINI'),
+    name: ProviderName,
+    apiKey: ApiKey,
+    baseUrl: FixedUrl,
+  }),
 ]);
 export type CreateAiProviderInput = z.infer<typeof CreateAiProviderInput>;
 
@@ -146,25 +172,34 @@ export const AiProviderView = z.object({
 export type AiProviderView = z.infer<typeof AiProviderView>;
 
 /**
- * One model of OpenRouter's list (`GET /models`), for the picker (ticket 0064).
- * `contextWindow` is its `context_length`, or null when it is missing or out of range.
+ * One model of a provider's list, for the picker: OpenRouter's `GET /models`
+ * (ticket 0064) or the Gemini API's (ticket 0080). `contextWindow` is its
+ * `context_length` (OpenRouter) or `inputTokenLimit` (Gemini), or null when it is
+ * missing or out of range.
  */
-export const OpenRouterModelView = z.object({
+export const ProviderModelView = z.object({
   id: z.string(),
   name: z.string(),
   contextWindow: z.number().int().nullable(),
 });
-export type OpenRouterModelView = z.infer<typeof OpenRouterModelView>;
+export type ProviderModelView = z.infer<typeof ProviderModelView>;
 
 /**
- * OpenRouter's model list. When it can't be loaded, `models` is empty and `error`
+ * A provider's model list. When it can't be loaded, `models` is empty and `error`
  * says why: the Admin types the model id instead.
  */
-export const OpenRouterModelsView = z.object({
-  models: z.array(OpenRouterModelView),
+export const ProviderModelsView = z.object({
+  models: z.array(ProviderModelView),
   error: z.string().nullable(),
 });
-export type OpenRouterModelsView = z.infer<typeof OpenRouterModelsView>;
+export type ProviderModelsView = z.infer<typeof ProviderModelsView>;
+
+/**
+ * The setup wizard's Gemini model list (ticket 0080): unlike OpenRouter's, the Gemini
+ * API lists models only for a key, so the wizard sends the key it was given.
+ */
+export const GeminiModelsInput = z.object({ apiKey: ApiKey });
+export type GeminiModelsInput = z.infer<typeof GeminiModelsInput>;
 
 // ─── Approved Models (Admin) ────────────────────────────────────────────────
 

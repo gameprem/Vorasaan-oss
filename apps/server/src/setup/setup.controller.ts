@@ -13,6 +13,7 @@ import {
   AiSettingsInput,
   DEFAULT_CHAT_LANGUAGE,
   DEFAULT_RESPONSE_WINDOW_SETTINGS,
+  GeminiModelsInput,
   type LoginResult,
   minutesOfDay,
   SetupInput,
@@ -60,6 +61,17 @@ export class SetupController {
   @UseGuards(SetupTokenGuard)
   async openRouterModels() {
     return this.ai.openRouterModels();
+  }
+
+  /**
+   * The Gemini API's model list, for the provider step (ticket 0080). The Gemini API
+   * lists models only for a key, so the wizard sends the one typed; it is not stored.
+   */
+  @Post('gemini-models')
+  @HttpCode(200)
+  @UseGuards(SetupTokenGuard)
+  async geminiModels(@Body({ schema: GeminiModelsInput }) body: GeminiModelsInput) {
+    return this.ai.geminiModels(body.apiKey);
   }
 
   @Post()

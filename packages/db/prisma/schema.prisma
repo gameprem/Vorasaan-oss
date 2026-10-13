@@ -43,6 +43,7 @@ enum IntegrationProvider {
   OPENAI // OpenAI API (GPT and Codex models)
   OPENAI_COMPATIBLE // any OpenAI-compatible URL + token, e.g. 9Router
   OPENROUTER // OpenRouter: a key only, its base URL is fixed (ticket 0064)
+  GEMINI // Gemini API (Google AI Studio): a key only, its base URL is fixed (ticket 0080)
   ATLASSIAN
   EMBEDDINGS // OpenAI-compatible embeddings endpoint for retrieval (ADR 0007)
   LINE // LINE Messaging API channel (ADR 0011): channel access token + channel secret
