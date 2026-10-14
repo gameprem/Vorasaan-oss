@@ -53,6 +53,7 @@ describe('measuring prompts', () => {
         outputTokens: estimateTokens(JSON.stringify(output)),
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
+        reasoningTokens: 0,
       },
     ]);
     expect(usage[0]?.inputTokens).not.toBe(FAKE_USAGE.inputTokens);

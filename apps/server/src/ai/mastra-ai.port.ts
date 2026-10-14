@@ -51,7 +51,7 @@ import {
   type SuggestionForAi,
 } from './ai.port.ts';
 import type { LanguageStrategy } from './language.ts';
-import { type MastraModel, mastraModelOf } from './model-config.ts';
+import { type MastraModel, mastraModelOf, providerOptionsOf } from './model-config.ts';
 import {
   type CacheUsage,
   cacheMarkOf,
@@ -183,6 +183,8 @@ export function agentGenerate(
     model,
   );
   const mark = cacheMarkOf(model);
+  // Gemini's thinking kept low (ticket 0080); nothing for other providers.
+  const providerOptions = providerOptionsOf(model);
   // Always stream: some OpenAI-compatible routers (e.g. 9Router) answer with SSE even
   // for non-streaming requests, which breaks a plain generate() call. Streaming works
   // with every provider, and we only need the final validated object.
@@ -193,6 +195,7 @@ export function agentGenerate(
     const message = mark ? [markedUserMessage(prompt, mark, INSTRUCTIONS_TOKENS)] : prompt.text;
     const stream = await agent.stream(message as Parameters<typeof agent.stream>[0], {
       structuredOutput: { schema },
+      ...(providerOptions ? { providerOptions } : {}),
     });
     const object = await stream.object;
     const usage = await logUsage(task, stream.usage);
@@ -732,8 +735,10 @@ async function* streamChat(
     }),
     model,
   );
+  const providerOptions = providerOptionsOf(model);
   const output = await agent.stream(toAgentMessages(messages, tools.length > 0), {
     maxSteps: 1,
+    ...(providerOptions ? { providerOptions } : {}),
     ...(tools.length ? { clientTools: toAgentTools(tools) } : {}),
     ...(signal ? { abortSignal: signal } : {}),
   });

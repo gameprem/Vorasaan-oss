@@ -38,7 +38,13 @@ Free text people wrote themselves (feedback, reasons) is kept, apart from names 
     "provider": "ANTHROPIC"
   },
   "language": "th",
-  "usage": { "inputTokens": 4210, "outputTokens": 655, "cacheReadTokens": 3120, "cacheWriteTokens": 0 },
+  "usage": {
+    "inputTokens": 4210,
+    "outputTokens": 655,
+    "cacheReadTokens": 3120,
+    "cacheWriteTokens": 0,
+    "reasoningTokens": null
+  },
   "latencyMs": 8412,
   "success": true,
   "error": null,
@@ -92,9 +98,9 @@ Free text people wrote themselves (feedback, reasons) is kept, apart from names 
 | `task` | The AI call: `generateChoices`, `draftSpecProposal`, `draftSpecFromAttachments`, `draftSpecFromSuggestion`, `summarizeAttachment`, `grillingQuestions`, `grillingFollowUp`, `draftBriefFromGrilling`, `suggestFeatures`, `checkFeatureFit`, `chat`, `summarizeConversation`, `redraftChoices`, `redraftSpecProposal`, `redraftBriefProposal`, `redraftFeatureSuggestion`, `draftAcceptanceCriteria`, `draftDesignDoc`, `redraftDesignDoc`. New tasks may appear. |
 | `taskKind` | The Settings task it belongs to (`CHOICES`, `SPEC_PROPOSAL`, `SUMMARIES`, `GRILLING`, `FEATURE_SUGGESTIONS`, `FIT_CHECK`, `CHAT`). |
 | `prompt.name`, `prompt.version` | The prompt the call rendered and its Prompt Version. `default@<hash>` is the built-in prompt; the hash (12 hex digits of its SHA-256) changes whenever its text does. `v<n>@<hash>` is the Organization's Prompt Version number `n` (0071), hashed the same way. The calls of an Eval Run (0071) leave Receipts too; they have no outcomes. |
-| `model` | `source`: `APPROVED_MODEL` or `ENV` (a `VORASAAN_MODEL*` variable); `approvedModelId`; `name`, the provider's model id; `provider`: `ANTHROPIC`, `OPENAI`, `OPENAI_COMPATIBLE` or `OPENROUTER`. |
+| `model` | `source`: `APPROVED_MODEL` or `ENV` (a `VORASAAN_MODEL*` variable); `approvedModelId`; `name`, the provider's model id; `provider`: `ANTHROPIC`, `OPENAI`, `OPENAI_COMPATIBLE`, `OPENROUTER` or `GEMINI`. |
 | `language` | The Reply Language the call was asked for (`en`, `th`). |
-| `usage` | Tokens in and out, and read from and written to the provider's prompt cache, summed over the call's requests (a structured call retried after an invalid answer counts both). `null` when the provider didn't say. |
+| `usage` | Tokens in and out, and read from and written to the provider's prompt cache, summed over the call's requests (a structured call retried after an invalid answer counts both). `reasoningTokens` are the output tokens the model spent thinking (a part of `outputTokens`, e.g. Gemini's thinking; added by ticket 0080, so older lines have `null`). `null` when the provider didn't say. |
 | `latencyMs` | How long the call took, end to end. |
 | `success`, `error` | Whether it returned. A failed call has a Receipt too, with a short, redacted `error`. A chat reply stopped by the person counts as failed ("Stopped by the person"). |
 | `output` | What it produced, by reference: `CHOICES` (a Decision Request's id), `SPEC_PROPOSAL`, `BRIEF_PROPOSAL`, `FEATURE_SUGGESTION_BATCH` (the batch of Feature Suggestions generated together), `REDRAFT` (a Redraft's id), `CONVERSATION_MESSAGE` (a reply), `CONVERSATION` (a Conversation Summary), `ATTACHMENT` (a summary), `GRILLING_ROUND` (its questions), `GRILLING_QUESTION` (a follow-up), `PROMPT_ANALYSIS` (the patterns the AI found in a prompt's feedback) `PROMPT_VERSION` (a Prompt Version it proposed) and `DESIGN_DOC_PROPOSAL` (a Design Doc it drafted, ticket 0069). `null` for the fit check, which stores nothing. The id may point at nothing if writing the output failed after the call. |

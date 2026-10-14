@@ -50,6 +50,19 @@ function windowOf(inputTokenLimit: number | null | undefined): number | null {
   return inputTokenLimit;
 }
 
+/**
+ * Models the list leaves out: they answer `generateContent` but don't write text for a
+ * chat (speech, images, music, video, robotics, computer use, transcription, embeddings,
+ * long-running research agents). Seen in Google's real list for a new key.
+ */
+const NOT_FOR_TEXT =
+  /(^|-)(tts|image|imagen|veo|lyria|transcribe|robotics|computer-use|embedding|aqa|deep-research|antigravity|nano-banana)(-|$)/;
+
+/** Whether a model id writes text Vorasaan can use (its tasks, chat and tools). */
+export function isTextModel(id: string): boolean {
+  return !NOT_FOR_TEXT.test(id.toLowerCase());
+}
+
 /** How long the model list may take before the picker falls back to typing the id. */
 export const GEMINI_LIST_TIMEOUT_MS = 10_000;
 
@@ -66,7 +79,8 @@ function statusMessage(status: number): string {
 
 /**
  * The Gemini API's model list (`GET /models`), only the models that generate text
- * (`generateContent`), sorted by name. The list needs the key, sent in the
+ * (`generateContent`, and not a speech, image or other non-text model), sorted by name.
+ * A listed model may still be closed to new keys; the Test button says so. The list needs the key, sent in the
  * `x-goog-api-key` header (never in the URL, so it can't reach a log line). Never
  * throws: a failure is the `error` of the view.
  */
@@ -99,7 +113,9 @@ export async function listGeminiModels(
     const models = listed
       .filter(
         (m) =>
-          !m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent'),
+          (!m.supportedGenerationMethods ||
+            m.supportedGenerationMethods.includes('generateContent')) &&
+          isTextModel(m.name.replace(/^models\//, '')),
       )
       .map((m) => {
         const id = m.name.replace(/^models\//, '');

@@ -60,6 +60,7 @@ export function measuringAiPort(
       outputTokens: measure.output,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
+      reasoningTokens: 0,
     });
   };
   // The inner port's own usage is not reported: the measure replaces it.

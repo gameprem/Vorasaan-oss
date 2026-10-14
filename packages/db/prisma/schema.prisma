@@ -1515,6 +1515,7 @@ model Receipt {
   outputTokens     Int?
   cacheReadTokens  Int?
   cacheWriteTokens Int?
+  reasoningTokens  Int? // of outputTokens, those spent thinking (ticket 0080)
   latencyMs        Int
   success          Boolean
   error            String? // a short, redacted message when it failed

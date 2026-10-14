@@ -504,6 +504,8 @@ export type CallUsage = {
   outputTokens: number | null;
   cacheReadTokens: number | null;
   cacheWriteTokens: number | null;
+  /** Of `outputTokens`, those spent thinking (ticket 0080); null when not reported. */
+  reasoningTokens: number | null;
 };
 
 /**

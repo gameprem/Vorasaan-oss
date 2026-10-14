@@ -399,16 +399,44 @@ describe('cache usage', () => {
         cachedInputTokens: 1500,
         cacheCreationInputTokens: 20,
       }),
-    ).toEqual({ inputTokens: 1530, outputTokens: 2, cacheReadTokens: 1500, cacheWriteTokens: 20 });
+    ).toEqual({
+      inputTokens: 1530,
+      outputTokens: 2,
+      cacheReadTokens: 1500,
+      cacheWriteTokens: 20,
+      reasoningTokens: null,
+    });
     expect(
       cacheUsageOf({ inputTokens: 9, raw: { inputTokens: { cacheRead: 4, cacheWrite: 1 } } }),
-    ).toEqual({ inputTokens: 9, outputTokens: null, cacheReadTokens: 4, cacheWriteTokens: 1 });
+    ).toEqual({
+      inputTokens: 9,
+      outputTokens: null,
+      cacheReadTokens: 4,
+      cacheWriteTokens: 1,
+      reasoningTokens: null,
+    });
     expect(cacheUsageOf(undefined)).toEqual({
       inputTokens: null,
       outputTokens: null,
       cacheReadTokens: null,
       cacheWriteTokens: null,
+      reasoningTokens: null,
     });
+  });
+
+  test('reads reasoning tokens, part of the output, wherever the AI SDK puts them', () => {
+    // Mastra's usage for a Gemini call: Gemini's thoughtsTokenCount as reasoningTokens.
+    expect(cacheUsageOf({ inputTokens: 100, outputTokens: 90, reasoningTokens: 85 })).toEqual(
+      expect.objectContaining({ outputTokens: 90, reasoningTokens: 85 }),
+    );
+    expect(
+      cacheUsageOf({ outputTokens: 90, outputTokenDetails: { reasoningTokens: 70 } })
+        .reasoningTokens,
+    ).toBe(70);
+    expect(
+      cacheUsageOf({ outputTokens: 90, raw: { outputTokens: { total: 90, reasoning: 60 } } })
+        .reasoningTokens,
+    ).toBe(60);
   });
 
   test('logs one line per call', () => {
@@ -416,6 +444,10 @@ describe('cache usage', () => {
     try {
       logCacheUsage('chat', { inputTokens: 10, outputTokens: 2, cachedInputTokens: 8 });
       expect(log).toHaveBeenCalledWith('chat: input 10 (cache read 8, cache write ?), output 2');
+      logCacheUsage('chat', { inputTokens: 10, outputTokens: 90, reasoningTokens: 85 });
+      expect(log).toHaveBeenCalledWith(
+        'chat: input 10 (cache read ?, cache write ?), output 90 (reasoning 85)',
+      );
     } finally {
       log.mockRestore();
     }

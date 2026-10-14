@@ -1,6 +1,7 @@
 // A local stand-in for the Gemini API (ticket 0080): the model list and
 // `streamGenerateContent`, streamed the way Gemini streams it, with implicit-cache
-// usage. Tests point GOOGLE_BASE_URL at it; no real key or network is ever used.
+// usage and thinking tokens (`thoughtsTokenCount`, billed as output). Like Gemini, a Gemma
+// model refuses any thinking settings. Tests point GOOGLE_BASE_URL at it; no real key or network is ever used.
 
 type Json = Record<string, unknown>;
 
@@ -56,7 +57,8 @@ export function startFakeGemini(key: string): FakeGemini {
     usage: {
       promptTokenCount: 2410,
       candidatesTokenCount: 12,
-      totalTokenCount: 2422,
+      thoughtsTokenCount: 30,
+      totalTokenCount: 2452,
       cachedContentTokenCount: 1980,
     },
   };
@@ -111,6 +113,18 @@ export function startFakeGemini(key: string): FakeGemini {
       if (req.method !== 'POST' || !match) return new Response('not found', { status: 404 });
 
       const config = (body?.generationConfig ?? {}) as Json;
+      if (match[1]?.startsWith('gemma-') && config.thinkingConfig) {
+        return Response.json(
+          {
+            error: {
+              code: 400,
+              message: 'Thinking level is not supported for this model.',
+              status: 'INVALID_ARGUMENT',
+            },
+          },
+          { status: 400 },
+        );
+      }
       const structured = config.responseMimeType === 'application/json';
       const parts = fake.functionCall
         ? [{ functionCall: fake.functionCall }]

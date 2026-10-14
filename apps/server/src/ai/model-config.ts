@@ -59,3 +59,61 @@ export function mastraModelOf(choice: {
   }
   return choice.name;
 }
+
+/** How much a Gemini model thinks (`VORASAAN_GEMINI_THINKING`, ticket 0080). */
+export type GeminiThinking = 'low' | 'high' | 'default';
+
+/** The operator's choice; anything but `high` or `default` is the default, `low`. */
+export function geminiThinking(env: NodeJS.ProcessEnv = process.env): GeminiThinking {
+  const value = env.VORASAAN_GEMINI_THINKING?.trim().toLowerCase();
+  return value === 'high' || value === 'default' ? value : 'low';
+}
+
+/** Gemini's thinking settings, as the AI SDK's Google provider takes them. */
+export type GeminiThinkingConfig = { thinkingLevel: 'low' | 'high' } | { thinkingBudget: number };
+
+/** Per-call provider options for Mastra's `agent.stream`: today only Gemini's thinking. */
+export type ModelProviderOptions = { google: { thinkingConfig: GeminiThinkingConfig } };
+
+/**
+ * Gemini's thinking for one model id (without `google/`), or null to send nothing.
+ * Thinking tokens bill as output, and Gemini 3 thinks by default, so Vorasaan's
+ * structured tasks and chat ask for little of it (ticket 0080):
+ * - `gemini-2.5-…` takes a budget: 0 turns it off on Flash and Flash-Lite; Pro needs 128 or more.
+ * - Older Gemini models (`gemini-1.…`, `gemini-2.0-…`) don't think: nothing.
+ * - Every other `gemini-…` (Gemini 3 and later, `gemini-flash-latest`, `gemini-pro-latest`)
+ *   takes a level; `minimal` isn't accepted by every model, `low` is.
+ * - Anything else (Gemma, `gemma-…`) refuses thinking settings: nothing.
+ * `high` asks Gemini 3 for its most thinking and leaves 2.5's own dynamic thinking;
+ * `default` sends nothing at all.
+ */
+export function geminiThinkingConfig(
+  modelId: string,
+  thinking: GeminiThinking = geminiThinking(),
+): GeminiThinkingConfig | null {
+  const id = modelId.trim().toLowerCase();
+  if (thinking === 'default' || !id.startsWith('gemini-')) return null;
+  if (/^gemini-(1\.|2\.0)/.test(id)) return null;
+  if (id.startsWith('gemini-2.')) {
+    if (thinking === 'high') return null;
+    return { thinkingBudget: id.includes('-pro') ? 128 : 0 };
+  }
+  return { thinkingLevel: thinking };
+}
+
+/**
+ * The provider options every call on this model carries (structured tasks, chat, the
+ * connection test), or null. Only Gemini models through Mastra's Google provider
+ * (`google/…`, an Approved Model or a `VORASAAN_MODEL*` env model) get any; other
+ * providers' calls are unchanged.
+ */
+export function providerOptionsOf(
+  model: MastraModel,
+  thinking: GeminiThinking = geminiThinking(),
+): ModelProviderOptions | null {
+  if (typeof model !== 'string' && !('id' in model)) return null;
+  const id = typeof model === 'string' ? model : model.id;
+  if (!id.toLowerCase().startsWith('google/')) return null;
+  const thinkingConfig = geminiThinkingConfig(id.slice('google/'.length), thinking);
+  return thinkingConfig ? { google: { thinkingConfig } } : null;
+}
