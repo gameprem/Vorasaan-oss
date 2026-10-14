@@ -2,6 +2,7 @@ import type { ConversationView } from '@vorasaan/shared';
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { Chat } from '@/components/chat/chat';
+import { DeletionWatch } from '@/components/deletion-watch';
 import { ApiError, api, currentUser } from '@/lib/api';
 import { chipsFor, contextLabel, loadDoc, loadModels, placeholderFor } from '@/lib/chat-data';
 import { isId } from '@/lib/ids';
@@ -48,20 +49,26 @@ export default async function ConversationPage({
   const [doc, models, lang] = await Promise.all([loadDoc(scope), loadModels(), requestLanguage()]);
 
   return (
-    <Chat
-      // Another Conversation is another chat: nothing of this one's state carries over.
-      key={conversation.id}
-      me={{ id: me.id, name: me.name }}
-      initial={conversation}
-      scope={scope}
-      doc={doc}
-      chips={chipsFor(scope, grilling)}
-      placeholder={placeholderFor(scope, grilling, lang)}
-      context={contextLabel(scope, doc, grilling, lang)}
-      // A Grilling Conversation's questions come from the server: no model to pick.
-      models={grilling ? null : models}
-      lang={lang}
-      focusMessageId={focus}
-    />
+    <>
+      <DeletionWatch
+        projectId={scope.project.id}
+        featureId={scope.kind === 'FEATURE' ? scope.feature.id : undefined}
+      />
+      <Chat
+        // Another Conversation is another chat: nothing of this one's state carries over.
+        key={conversation.id}
+        me={{ id: me.id, name: me.name }}
+        initial={conversation}
+        scope={scope}
+        doc={doc}
+        chips={chipsFor(scope, grilling)}
+        placeholder={placeholderFor(scope, grilling, lang)}
+        context={contextLabel(scope, doc, grilling, lang)}
+        // A Grilling Conversation's questions come from the server: no model to pick.
+        models={grilling ? null : models}
+        lang={lang}
+        focusMessageId={focus}
+      />
+    </>
   );
 }
