@@ -181,6 +181,26 @@ export const NotificationCreatedEvent = z.object({ notification: NotificationVie
 export type NotificationCreatedEvent = z.infer<typeof NotificationCreatedEvent>;
 
 /**
+ * A Feature was deleted (ticket 0049): a page showing it, or anything of it, moves to its
+ * Project. Sent to everyone in the Organization with a stream open.
+ */
+export const FeatureDeletedEvent = z.object({
+  featureId: z.uuid(),
+  projectId: z.uuid(),
+  title: z.string(),
+});
+export type FeatureDeletedEvent = z.infer<typeof FeatureDeletedEvent>;
+
+/** A Project was deleted (ticket 0049), with its Teams and Features: their pages move away. */
+export const ProjectDeletedEvent = z.object({
+  projectId: z.uuid(),
+  name: z.string(),
+  teamIds: z.array(z.uuid()),
+  featureIds: z.array(z.uuid()),
+});
+export type ProjectDeletedEvent = z.infer<typeof ProjectDeletedEvent>;
+
+/**
  * One SSE message: its `event:` name and its JSON `data:` payload. The
  * `conversation.*` events stream a Conversation's reply, and its Action Cards,
  * to its owner only.
@@ -202,6 +222,9 @@ export const ServerEvent = z.discriminatedUnion('event', [
   z.object({ event: z.literal('chatAccount.changed'), data: ChatAccountChangedEvent }),
   /** A Redraft of a proposal the viewer may act on started, finished or failed (0065). */
   z.object({ event: z.literal('proposal.redrafted'), data: ProposalRedraftedEvent }),
+  /** A Feature or a Project was deleted (0049). */
+  z.object({ event: z.literal('feature.deleted'), data: FeatureDeletedEvent }),
+  z.object({ event: z.literal('project.deleted'), data: ProjectDeletedEvent }),
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;
 export type ServerEventName = ServerEvent['event'];

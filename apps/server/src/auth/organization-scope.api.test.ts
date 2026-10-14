@@ -297,6 +297,9 @@ describe('Records are scoped to the caller’s Organization', () => {
     ['GET', `/design-doc-proposals/${ids.designDocProposal}/redrafts`],
     // Admin routes: Olga administers Globex, not Acme.
     ['DELETE', `/invitations/${ids.invitation}`],
+    // Deletes (ticket 0049), last: Olga is an Admin, of Globex.
+    ['DELETE', `/features/${FEATURE}`],
+    ['DELETE', `/projects/${PROJECT}`],
     ['GET', `/prompt-versions/${ids.promptVersion}/redrafts`],
   ];
 
