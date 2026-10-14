@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import type { PrismaClient } from '@vorasaan/db';
+import type { Prisma, PrismaClient } from '@vorasaan/db';
 import type { AttachmentFileSweepResult } from '@vorasaan/shared';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { type FileStorage, InjectFileStorage } from '../storage/file-storage.ts';
@@ -27,23 +27,50 @@ export class AttachmentFilesService {
     @InjectFileStorage() private readonly storage: FileStorage,
   ) {}
 
-  /** Deletes a Feature (its rows cascade), then its Attachments' files. */
-  async deleteFeature(featureId: string): Promise<void> {
-    const keys = await this.db.$transaction(async (tx) => {
+  /**
+   * Deletes a Feature (its rows cascade), then its Attachments' files. `within` runs in the
+   * same transaction first, once the Feature is locked (ticket 0049: who to tell, rows that
+   * name it by a plain id); what it returns is returned once the files are gone.
+   */
+  async deleteFeature<T = void>(
+    featureId: string,
+    within?: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    const { keys, result } = await this.db.$transaction(async (tx) => {
+      // Locked first, so an Attachment added meanwhile waits for the delete (and then fails
+      // on its foreign key) instead of slipping in after its file was listed.
+      const locked = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "Feature" WHERE id = ${featureId} FOR UPDATE`;
+      if (!locked.length) throw new NotFoundException('Feature not found');
+      const result = (await within?.(tx)) as T;
       const files = await tx.attachment.findMany({
         where: { featureId, storageKey: { not: null } },
         select: { storageKey: true },
       });
-      const { count } = await tx.feature.deleteMany({ where: { id: featureId } });
-      if (count === 0) throw new NotFoundException('Feature not found');
-      return files.map((f) => f.storageKey as string);
+      await tx.feature.delete({ where: { id: featureId } });
+      return { keys: files.map((f) => f.storageKey as string), result };
     });
     await this.deleteFiles(keys);
+    return result;
   }
 
-  /** Deletes a Project (its Teams, Features and rows cascade), then all those Attachments' files. */
-  async deleteProject(projectId: string): Promise<void> {
-    const keys = await this.db.$transaction(async (tx) => {
+  /**
+   * Deletes a Project (its Teams, Features and rows cascade), then all those Attachments'
+   * files. `within` runs in the same transaction first, as for `deleteFeature`.
+   */
+  async deleteProject<T = void>(
+    projectId: string,
+    within?: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    const { keys, result } = await this.db.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "Project" WHERE id = ${projectId} FOR UPDATE`;
+      if (!locked.length) throw new NotFoundException('Project not found');
+      // Its Features too: a Feature Attachment being added locks only its Feature.
+      await tx.$queryRaw`
+        SELECT f.id FROM "Feature" f JOIN "Team" t ON t.id = f."teamId"
+        WHERE t."projectId" = ${projectId} FOR UPDATE OF f`;
+      const result = (await within?.(tx)) as T;
       const files = await tx.attachment.findMany({
         where: {
           storageKey: { not: null },
@@ -51,11 +78,11 @@ export class AttachmentFilesService {
         },
         select: { storageKey: true },
       });
-      const { count } = await tx.project.deleteMany({ where: { id: projectId } });
-      if (count === 0) throw new NotFoundException('Project not found');
-      return files.map((f) => f.storageKey as string);
+      await tx.project.delete({ where: { id: projectId } });
+      return { keys: files.map((f) => f.storageKey as string), result };
     });
     await this.deleteFiles(keys);
+    return result;
   }
 
   /** Deletes stored Attachment files that no Attachment refers to any more. */

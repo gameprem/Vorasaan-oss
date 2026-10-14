@@ -23,6 +23,7 @@ import {
   ConversationFoldDraft,
   type ConversationScopeForAi,
   type DecisionForAi,
+  DesignDocDraft,
   type DismissedSuggestionForAi,
   FeatureFitDraft,
   type FeatureForAi,
@@ -501,6 +502,29 @@ export class MastraAiPort implements AiPort {
       options?.onUsage,
     );
     return generateStructured(generate, 'redraft-prompt-version', prompt, RedraftedPromptVersion);
+  }
+
+  async draftDesignDoc(input: Parameters<AiPort['draftDesignDoc']>[0], options?: AiCallOptions) {
+    const prompt = await TASK_PROMPTS.draftDesignDoc(input, this.lang(options));
+    const generate = agentGenerate(
+      'draft-design-doc',
+      await this.resolveModel('draftDesignDoc', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'draft-design-doc', prompt, DesignDocDraft);
+  }
+
+  async redraftDesignDoc(
+    input: Parameters<AiPort['redraftDesignDoc']>[0],
+    options?: AiCallOptions,
+  ) {
+    const prompt = await TASK_PROMPTS.redraftDesignDoc(input, this.lang(options));
+    const generate = agentGenerate(
+      'redraft-design-doc',
+      await this.resolveModel('redraftDesignDoc', options?.model),
+      options?.onUsage,
+    );
+    return generateStructured(generate, 'redraft-design-doc', prompt, RedraftedMarkdown);
   }
 
   async *chat(

@@ -96,6 +96,14 @@ _Avoid_: Revision, version, iteration, retry
 The human-approved description of how one target Platform of a Feature will build what the Spec says, such as the API contract and data model for the Back-End, screens and states for the Front-End and Mobile, or the test plan for QA. The AI drafts it from the approved Spec once that Platform's Coverage is complete, and a Tech Lead or Role Owner of the Platform approves it. It follows the Spec and goes stale when the Spec changes; it never changes the Spec.
 _Avoid_: SDD, tech spec, design spec, requirements doc
 
+**Design Doc template**:
+The sections a Design Doc starts from: one for each kind of Platform (Back-End, Front-End, Mobile) and one for QA. Each is built in until a Project's POs or Admins edit it, and each Platform names the one its Design Docs start from.
+_Avoid_: Design template, doc skeleton, blueprint
+
+**Hand-off**:
+One Feature's distilled context for a developer's coding assistant, as one Markdown file that `vorasaan run` writes in the repository: the latest Spec Version, the Feature's Decisions and open Decision Requests, the approved Design Doc of the developer's Platform, the Project's Feature Guidelines and Project Brief, and the most relevant retrieved context, within a token budget. It is a snapshot: running `vorasaan run` again replaces it. Everything people wrote is marked as data for the assistant, never instructions.
+_Avoid_: Context file, prompt, SPEC.md, export
+
 ### Project context
 
 **Project Brief**:
@@ -195,7 +203,7 @@ How long a Decision Request took from being sent to being decided, and how long 
 _Avoid_: Cycle time, turnaround
 
 **Inbox Item**:
-Something a person must act on (decide a Decision Request, answer a request for more info, approve a Spec Proposal). It disappears when the action is done.
+Something a person must act on (decide a Decision Request, answer a request for more info, approve a Spec Proposal or a Design Doc). It disappears when the action is done.
 _Avoid_: Task, todo, notification
 
 **Notification**:
@@ -235,7 +243,7 @@ A person's own Conversation for one Grilling round, opened for each person holdi
 _Avoid_: Interview, Grilling thread
 
 **AI Provider**:
-A service an Admin connects with its own key (Anthropic, OpenAI, OpenRouter, or any OpenAI-compatible endpoint, such as a local model). An Organization may connect several. Approved Models run on them.
+A service an Admin connects with its own key (Anthropic, OpenAI, OpenRouter, Gemini, or any OpenAI-compatible endpoint, such as a local model). An Organization may connect several. Approved Models run on them.
 _Avoid_: LLM integration, backend, vendor
 
 **Approved Model**:

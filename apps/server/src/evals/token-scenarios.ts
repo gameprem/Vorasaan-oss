@@ -10,6 +10,7 @@ import type {
 import type { AiTask } from '../ai/ai.config.ts';
 import type { AiPort } from '../ai/ai.port.ts';
 import { TASK_SKILLS } from '../ai/prompts.ts';
+import { designDocApprovers } from '../design-docs/design-doc-access.ts';
 import { PromptReplay } from '../prompt-versions/replay.ts';
 import { NEEDLE_PARAGRAPH, NEEDLE_QUESTION } from '../retrieval/large-project.fixture.ts';
 import type { TestApp } from '../test/app.ts';
@@ -285,6 +286,43 @@ export async function runTokenScenarios(
       input: cases.length ? Math.round(input / cases.length) : 0,
     });
   }
+
+  // Design Docs (ticket 0069), last, so nothing above reads the Spec Version they need: the
+  // acceptance criteria are approved and someone holds QA, so Back-End is covered; the AI
+  // drafts its Design Doc (and QA's once every target is covered), and its approver asks
+  // for a Redraft.
+  await db.teamMembership.createMany({
+    data: [{ teamId: SEED.teamId, userId: beam.id, role: 'QA' }],
+    skipDuplicates: true,
+  });
+  const criteria = await db.specProposal.findFirst({
+    where: { featureId: FEATURE, status: 'PENDING', source: 'ACCEPTANCE_CRITERIA' },
+    select: { id: true },
+  });
+  if (criteria) {
+    await ok(asPim('POST', `/spec-proposals/${criteria.id}/approve`), 'Approve the criteria');
+  }
+  await testApp.designDocs.drain();
+  const backEnd = await db.designDocProposal.findFirst({
+    where: {
+      status: 'PENDING',
+      designDoc: { featureId: FEATURE, platformId: SEED.platforms.backEnd },
+    },
+    select: { id: true },
+  });
+  if (backEnd) {
+    const [approver] = await designDocApprovers(db, FEATURE, ['TECH_LEAD', 'BACKEND']);
+    if (approver) {
+      await ok(
+        as(app, approver.userId)('POST', `/design-doc-proposals/${backEnd.id}/request-changes`, {
+          feedback: 'Name the table that keeps the payment status',
+        }),
+        'Design Doc: Request changes',
+      );
+    }
+  }
+  await testApp.designDocs.drain();
+  await testApp.receipts.drain();
 
   const receipts = await db.receipt.findMany({
     where: { evalRunId: null },

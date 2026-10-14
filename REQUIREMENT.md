@@ -108,6 +108,7 @@ A Feature may have several open Decision Requests at once.
 * **Org Roles:** `ADMIN` (settings, integrations, create Project/Team, invite, set Delegations for others) and `MEMBER`.
 * **Team Roles:** `PO`, `DESIGNER`, `TECH_LEAD`, `BACKEND`, `FRONTEND`, `MOBILE`, `QA`. They are held per Team membership: a person can hold several, and one Team Role can be held by many people.
 * Everyone in the Organization can **read** every Feature. **Actions** (decide, Claim, approve Spec Proposals) require the matching Team Role. NestJS Guards enforce this.
+* **Deleting:** a Feature's POs and Admins delete a Feature, and Admins delete a Project, after typing its name in the web app (the CLI has no delete). Everything under it goes, its stored Attachment files once the database delete commits; Receipts stay for the Learning Loop and the AI usage history (0049).
 
 ### 3.8. Project Brief, Grilling & Feature Suggestions ([ADR 0006](./docs/adr/0006-project-brief-above-features.md))
 Before and alongside Features, a Project has a shared foundation the AI and new Features build on. It works for a **new Project** (start from Grilling) and an **existing one** (start from what is already there).
@@ -226,6 +227,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 - [x] End-to-end browser tests in CI (0039).
 - [x] `GET /me/teams` for the Delegation and CLI pickers (0040).
 - [x] Hardening: SSE ends on a revoked token, Attachment file cleanup and the orphan sweep, TUI polish (0041).
+- [x] Delete a Feature or a Project, with its stored files, live pages moving away (0049).
 
 ### Post-MVP (in order)
 1. **Chat-first Web UI** ([ADR 0008](./docs/adr/0008-chat-first-web-ui.md)): a Sidebar (Inbox, Projects → Features, recent Conversations, and Settings, which opens as a full-screen modal with Back) and a Conversation with the AI per Project or Feature. The AI proposes through Action Cards that a person approves, and Grilling runs as per-person Conversations with follow-ups. It looks like Gemini, with the palette from ADR 0008 (mockup: `docs/design/chat-web-ui-mockup.html`).
@@ -247,8 +249,9 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
    - [x] Decision Lead Time (0056).
    - [x] Link a LINE, Slack or Teams account (0057).
    - [x] Decide from LINE, Slack and Teams (0058).
-4. **OpenRouter** as an AI Provider: the Admin enters only the key, picks Approved Models from OpenRouter's model list with their Context Window prefilled, and Anthropic models routed through it get prompt caching.
+4. **OpenRouter** and **Gemini** as AI Providers: the Admin enters only the key, picks Approved Models from the provider's model list with their Context Window prefilled, and Anthropic models routed through OpenRouter get prompt caching (Gemini caches a repeated prefix by itself).
    - [x] OpenRouter provider (0064).
+   - [x] Gemini provider (0080).
 5. **Request changes** ([ADR 0013](./docs/adr/0013-request-changes-redrafts-proposals.md)): every AI proposal (Choices, Spec Proposals, Brief Proposals, Feature Suggestions, later Design Docs) gets Request changes next to Approve and Decline. The person explains what to change, and the AI writes a Redraft of the same proposal. Earlier Redrafts stay, with their feedback and a diff. Nothing changes until Approve. It works from Chat Cards too.
    - [x] Request changes and Redrafts (0065).
 6. **UI kit** ([ADR 0016](./docs/adr/0016-ui-kit-on-react-aria-components.md)): our own accessible components on React Aria, styled with the ADR 0008 tokens in light and dark, in `apps/web/components/ui/`. Searchable pickers for models, Team Roles, people, Features and time zones (in English and Thai), and date and time pickers with an optional Buddhist-era year. They replace every browser-native select, checkbox, radio, date and time input.
@@ -275,8 +278,9 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 13. **Agent Skills** ([ADR 0017](./docs/adr/0017-agent-skills-installable-skill-md-packages.md)): the AI can use Agent Skills in the open SKILL.md format (the same folders coding assistants use, such as [diagram-design](https://github.com/cathrynlavery/diagram-design)). An Admin installs one from a GitHub URL or a zip, pinned to the version installed, approves it and enables it per Project; an update shows a diff first. Skills are text and templates only: no script in them ever runs. The AI sees only their names and descriptions and loads a Skill or one of its files when it needs it. What it makes with a Skill (a diagram, say) is shown sandboxed and reaches a Spec or Design Doc only as a proposal a person approves. Receipts record which Skills a call used.
     - [x] Agent Skills (0078).
 14. **Design Docs per Platform** ([ADR 0014](./docs/adr/0014-design-docs-derived-from-the-spec-per-platform.md)): once a Feature's Spec is approved and a Platform's Coverage is complete, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA) from a template the Project can edit. The Platform's Tech Lead or Role Owners approve it. When the Spec changes, the Design Docs it affects go stale and the AI proposes an update.
-    - [ ] Design Docs per Platform (0069).
+    - [x] Design Docs per Platform (0069). Agent Skills aren't used while drafting yet; `vorasaan run` (15) hands over the approved Design Doc of the developer's Platform.
 15. `vorasaan run --ai claude`: write the Feature's distilled context to `.vorasaan/specs/<feature>.md` (latest Spec, relevant Decisions, retrieved chunks and project rules, plus the Jira Epic key if linked) and hand it to the coding assistant, so it reads one Feature's context instead of everything. It also hands over the Feature's approved Design Doc for the developer's Platform.
+    - [x] `vorasaan run` writes the Feature's Hand-off and starts the coding assistant on it (0079). Agent Skills aren't handed over yet.
 16. **Grilling Workflow:** PO → Designer → Dev question rounds that produce the Spec, as per-person Conversations (ADR 0008).
 17. **Design Flow Revision:** cascade impact analysis (minor → auto Spec Proposal; major → `REVISION_PENDING` with PO + Dev sign-off).
 18. Jira/Confluence write-back (Epic/Task creation) and Figma / Google Docs connectors.

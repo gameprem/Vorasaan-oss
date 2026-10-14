@@ -131,6 +131,38 @@ const CALLS: Record<AiTask, (ai: AiPort, options: AiCallOptions) => Promise<unkn
       },
       o,
     ),
+  draftDesignDoc: (ai, o) =>
+    ai.draftDesignDoc(
+      {
+        feature,
+        doc: {
+          name: 'Back-End',
+          platform: { name: 'Back-End', roles: ['BACKEND'] },
+          targets: [{ name: 'Back-End', roles: ['BACKEND'] }],
+          template: '## API contract',
+        },
+        specVersion: 1,
+        specMarkdown: '# Spec',
+        current: null,
+        specChange: null,
+        asked: [],
+        context,
+      },
+      o,
+    ),
+  redraftDesignDoc: (ai, o) =>
+    ai.redraftDesignDoc(
+      {
+        ...feedback,
+        feature,
+        doc: { name: 'QA', platform: null, targets: [], template: '## Test plan' },
+        specVersion: 1,
+        specMarkdown: '# Spec',
+        proposedMarkdown: '# QA',
+        context,
+      },
+      o,
+    ),
   chat: async (ai, o) => {
     const chunks = [];
     for await (const chunk of ai.chat(

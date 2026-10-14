@@ -42,6 +42,7 @@ const GROUPS: { kind: InboxItemKind; heading: string }[] = [
   { kind: 'CLAIM', heading: 'Sent to you, not Claimed yet' },
   { kind: 'ANSWER', heading: 'The Decider needs more info' },
   { kind: 'APPROVE_PROPOSAL', heading: 'Spec Proposals to approve' },
+  { kind: 'APPROVE_DESIGN_DOC', heading: 'Design Docs to approve' },
   { kind: 'ANSWER_GRILLING', heading: 'Grilling questions for your role' },
   { kind: 'APPROVE_BRIEF_PROPOSAL', heading: 'Brief Proposals to approve' },
 ];
@@ -105,6 +106,19 @@ function describe(item: InboxItem): {
         badge: <Tag>Grilling</Tag>,
         title: `${ROUND_LABEL[g.round]} round: ${g.unanswered} question${g.unanswered === 1 ? '' : 's'} for ${ROLE_LABEL[g.role]}`,
         meta: item.project.name,
+      };
+    }
+    case 'APPROVE_DESIGN_DOC': {
+      const d = item.designDoc;
+      return {
+        key: d.proposalId,
+        href: `/features/${item.feature.id}/design-docs/${d.key}`,
+        badge: <Tag>Design Doc</Tag>,
+        title:
+          d.reason === 'SPEC_CHANGED'
+            ? `${d.name} Design Doc update for ${item.feature.title}`
+            : `${d.name} Design Doc for ${item.feature.title}`,
+        meta: item.feature.title,
       };
     }
     case 'APPROVE_BRIEF_PROPOSAL':

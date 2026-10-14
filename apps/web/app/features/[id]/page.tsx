@@ -3,6 +3,7 @@ import type {
   DecisionGraphView,
   DecisionLogEntry,
   FeatureCoverageView,
+  FeatureDesignDocsView,
   FeatureView,
   ProjectPlatformsView,
   RoleOwnerView,
@@ -18,6 +19,14 @@ import { AttachmentsPanel } from '@/components/attachments-panel';
 import { BlockedBadge, KindBadge, Notice, relativeTime } from '@/components/bits';
 import { CoverageChips } from '@/components/coverage-chips';
 import { DecisionGraph } from '@/components/decision-graph';
+import { DeleteByName } from '@/components/delete-by-name';
+import { DesignDocLanes } from '@/components/design-doc-lanes';
+import {
+  DesignDocLink,
+  DesignDocStateBadge,
+  DraftDesignDocButton,
+  RefreshWhileDrafting,
+} from '@/components/design-docs';
 import { DraftedWith } from '@/components/drafted-with';
 import { FeaturePlatformsEditor } from '@/components/feature-platforms-editor';
 import { RevertButton } from '@/components/revert-button';
@@ -27,6 +36,7 @@ import { SpecPanel } from '@/components/spec-panel';
 import { ROLE_LABEL, secondaryButton } from '@/components/ui';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ApiError, api, currentUser } from '@/lib/api';
+import { approversText, designDocLine } from '@/lib/design-docs';
 import { revertSpec } from '@/lib/feature-actions';
 import { isId } from '@/lib/ids';
 
@@ -34,6 +44,7 @@ export const metadata = { title: 'Feature' };
 
 const TABS = [
   { id: 'spec', label: 'Spec' },
+  { id: 'design-docs', label: 'Design Docs' },
   { id: 'attachments', label: 'Attachments' },
   { id: 'team', label: 'Role Owners' },
   { id: 'history', label: 'Version history' },
@@ -118,6 +129,10 @@ export default async function FeaturePage({
     tab === 'attachments'
       ? await load(() => api<AttachmentView[]>(`/features/${id}/attachments`))
       : null;
+  const designDocs =
+    tab === 'design-docs'
+      ? await load(() => api<FeatureDesignDocsView>(`/features/${id}/design-docs`))
+      : null;
   const graph =
     tab === 'graph'
       ? await load(() => api<DecisionGraphView>(`/features/${id}/decision-graph`))
@@ -189,11 +204,23 @@ export default async function FeaturePage({
             </p>
           )}
         </div>
-        {feature.myRoles.length > 0 && (
-          <Link href={`/features/${id}/raise`} className={secondaryButton}>
-            Raise a Decision Request
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {feature.myRoles.length > 0 && (
+            <Link href={`/features/${id}/raise`} className={secondaryButton}>
+              Raise a Decision Request
+            </Link>
+          )}
+          {/* Who writes the Spec may delete the Feature: its POs and Admins (ticket 0049). */}
+          {canEditSpec && (
+            <DeleteByName
+              kind="Feature"
+              id={id}
+              name={feature.title}
+              then={`/projects/${feature.projectId}`}
+              consequences="Its Spec and Spec Versions, Decision Requests and Decisions, Design Docs, Conversations and Attachments are deleted with it. Receipts of the AI’s work on it are kept."
+            />
+          )}
+        </div>
       </div>
 
       <nav aria-label="Feature sections" className="flex gap-2 overflow-x-auto pb-1">
@@ -237,6 +264,50 @@ export default async function FeaturePage({
             canEdit={canEditSpec}
           />
         )}
+
+        {tab === 'design-docs' &&
+          designDocs &&
+          (designDocs.data ? (
+            <section aria-labelledby="design-docs-heading" className="max-w-4xl">
+              <RefreshWhileDrafting
+                active={designDocs.data.docs.some((d) => d.state === 'DRAFTING')}
+              />
+              <h2 id="design-docs-heading" className="sr-only">
+                Design Docs
+              </h2>
+              <p className="mb-6 text-fg-soft">
+                How each target Platform will build what the Spec says, and QA's test plan. The AI
+                drafts each one from the approved Spec once its Platform is covered; a Tech Lead or
+                a Role Owner of the Platform approves it.
+              </p>
+              <ul className="rows">
+                {designDocs.data.docs.map((d) => (
+                  <li key={d.key} className="py-5" data-testid={`design-doc-${d.name}`}>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <DesignDocLink featureId={id} doc={d}>
+                        {d.name} Design Doc
+                      </DesignDocLink>
+                      <DesignDocStateBadge state={d.state} />
+                    </div>
+                    <p className="mt-2">{designDocLine(d)}</p>
+                    <p className="mt-1 text-sm text-fg-soft">
+                      Approved by a {approversText(d)}.
+                      {d.questions.length > 0 &&
+                        ` ${d.questions.length} question${d.questions.length === 1 ? '' : 's'} raised.`}
+                    </p>
+                    {d.canApprove &&
+                      (d.state === 'READY' || (d.state === 'STALE' && !d.proposal)) && (
+                        <div className="mt-3">
+                          <DraftDesignDocButton featureId={id} doc={d} />
+                        </div>
+                      )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : (
+            <Notice tone="error">{designDocs.error}</Notice>
+          ))}
 
         {tab === 'attachments' &&
           attachments &&
@@ -387,21 +458,27 @@ export default async function FeaturePage({
           (!graph.data ? (
             <Notice tone="error">{graph.error}</Notice>
           ) : graph.data.branches.length === 0 ? (
-            <EmptyState
-              title="No Decision Requests yet"
-              action={
-                feature.myRoles.length > 0 ? (
-                  <Link href={`/features/${id}/raise`} className={secondaryButton}>
-                    Raise a Decision Request
-                  </Link>
-                ) : undefined
-              }
-            >
-              When someone raises a Blocker or a Question on this Feature, it branches off the Spec
-              here and merges back at the Spec Version it produces.
-            </EmptyState>
+            <>
+              <EmptyState
+                title="No Decision Requests yet"
+                action={
+                  feature.myRoles.length > 0 ? (
+                    <Link href={`/features/${id}/raise`} className={secondaryButton}>
+                      Raise a Decision Request
+                    </Link>
+                  ) : undefined
+                }
+              >
+                When someone raises a Blocker or a Question on this Feature, it branches off the
+                Spec here and merges back at the Spec Version it produces.
+              </EmptyState>
+              <DesignDocLanes graph={graph.data} />
+            </>
           ) : (
-            <DecisionGraph graph={graph.data} />
+            <>
+              <DecisionGraph graph={graph.data} />
+              <DesignDocLanes graph={graph.data} />
+            </>
           ))}
       </div>
     </article>

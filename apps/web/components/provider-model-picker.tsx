@@ -1,17 +1,18 @@
 'use client';
 
-import type { OpenRouterModelsView, OpenRouterModelView } from '@vorasaan/shared';
+import type { ProviderModelsView, ProviderModelView } from '@vorasaan/shared';
 import { useEffect, useId, useMemo, useState } from 'react';
 
-// OpenRouter's model list as a searchable picker (ticket 0064). Picking a model
-// fills the model id (and, in Settings, its Context Window from `context_length`).
-// When the list can't be loaded, it says so and the Admin types the id instead.
+// A provider's model list as a searchable picker: OpenRouter's (ticket 0064) or the
+// Gemini API's (ticket 0080). Picking a model fills the model id (and, in Settings,
+// its Context Window from the list). When the list can't be loaded, it says so and
+// the Admin types the id instead.
 
 /** How many matches are shown at once; a narrower search shows the rest. */
 const SHOWN = 50;
 
 /** Every word of the search, in the model's name or id. */
-export function matchesSearch(model: OpenRouterModelView, search: string): boolean {
+export function matchesSearch(model: ProviderModelView, search: string): boolean {
   const haystack = `${model.name} ${model.id}`.toLowerCase();
   return search
     .toLowerCase()
@@ -27,18 +28,24 @@ function windowLabel(tokens: number): string {
   return `${tokens.toLocaleString('en')} tokens`;
 }
 
-export function OpenRouterModelPicker({
+export function ProviderModelPicker({
+  providerName,
+  exampleId,
   load,
   selectedId,
   onPick,
   inputClass,
 }: {
-  load: () => Promise<OpenRouterModelsView>;
+  /** "OpenRouter" or "Gemini", in the labels and messages. */
+  providerName: string;
+  /** A model id as this provider spells it, for the fallback message. */
+  exampleId: string;
+  load: () => Promise<ProviderModelsView>;
   selectedId: string;
-  onPick: (model: OpenRouterModelView) => void;
+  onPick: (model: ProviderModelView) => void;
   inputClass: string;
 }) {
-  const [list, setList] = useState<OpenRouterModelsView | null>(null);
+  const [list, setList] = useState<ProviderModelsView | null>(null);
   const [search, setSearch] = useState('');
   const searchId = useId();
 
@@ -47,12 +54,13 @@ export function OpenRouterModelPicker({
     load()
       .then((result) => live && setList(result))
       .catch(
-        () => live && setList({ models: [], error: "Could not load OpenRouter's model list" }),
+        () =>
+          live && setList({ models: [], error: `Could not load ${providerName}'s model list.` }),
       );
     return () => {
       live = false;
     };
-  }, [load]);
+  }, [load, providerName]);
 
   const matches = useMemo(
     () => (list?.models ?? []).filter((m) => matchesSearch(m, search)),
@@ -62,15 +70,15 @@ export function OpenRouterModelPicker({
   if (!list) {
     return (
       <p role="status" className="text-sm text-fg-soft">
-        Loading OpenRouter's models…
+        Loading {providerName}'s models…
       </p>
     );
   }
   if (list.error || list.models.length === 0) {
     return (
       <p role="status" className="text-sm text-fg-soft">
-        {list.error ?? 'OpenRouter listed no models.'} Type the model id instead, e.g.
-        anthropic/model-name.
+        {list.error ?? `${providerName} listed no models.`} Type the model id instead, e.g.{' '}
+        {exampleId}.
       </p>
     );
   }
@@ -78,7 +86,7 @@ export function OpenRouterModelPicker({
   return (
     <div>
       <label htmlFor={searchId} className="text-sm">
-        Search OpenRouter models
+        Search {providerName} models
       </label>
       <input
         id={searchId}
@@ -90,7 +98,7 @@ export function OpenRouterModelPicker({
         className={inputClass}
       />
       <ul
-        aria-label="OpenRouter models"
+        aria-label={`${providerName} models`}
         className="mt-2 max-h-56 overflow-y-auto rounded-tile bg-surface"
       >
         {matches.slice(0, SHOWN).map((m) => {

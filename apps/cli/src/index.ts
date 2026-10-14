@@ -4,8 +4,9 @@ import { pickProjectInTerminal, runInit } from './commands/init.ts';
 import { runLogin, runLogout, runWhoami } from './commands/login.ts';
 import { runRaise } from './commands/raise.ts';
 import { UsageError } from './commands/raise-options.ts';
+import { pickFeatureInTerminal, runRun, spawnInTerminal } from './commands/run.ts';
 import { confirmInTerminal, runScan } from './commands/scan.ts';
-import { ConfigError } from './config.ts';
+import { ConfigError, loadConfig } from './config.ts';
 import { buildProgram } from './program.ts';
 import { currentRepo } from './repo.ts';
 
@@ -28,6 +29,23 @@ try {
         confirm: confirmInTerminal,
         print: (text) => console.log(text),
       }),
+    run: async (api, { dir, ...options }) => {
+      const repo = await currentRepo(dir, api.baseUrl);
+      if (repo.notice) console.error(repo.notice);
+      const { credentials } = await loadConfig(process.env);
+      const result = await runRun(options, {
+        api,
+        repo,
+        secrets: 'token' in credentials ? [credentials.token] : [],
+        pickFeature: pickFeatureInTerminal,
+        print: (text) => console.log(text),
+        interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+        which: (bin) => Bun.which(bin),
+        spawn: spawnInTerminal,
+        env: process.env,
+      });
+      process.exitCode = result.exitCode;
+    },
     tui: async (api, options) => {
       // Loaded lazily so the scriptable subcommands never pay for React and Ink.
       const { runTui } = await import('./tui/run.tsx');

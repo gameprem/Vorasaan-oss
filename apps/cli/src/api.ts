@@ -8,6 +8,7 @@ import type {
   DecisionRequestView,
   FeatureSummaryView,
   FeatureView,
+  HandOffView,
   InboxItem,
   MeView,
   MyTeamView,
@@ -80,6 +81,22 @@ export class VorasaanApi {
     return this.request<SpecVersionView[]>(
       'GET',
       `/features/${encodeURIComponent(featureId)}/spec-versions`,
+    );
+  }
+
+  /**
+   * A Feature's Hand-off (ticket 0079): the Markdown `vorasaan run` writes for a coding
+   * assistant. `platform` and `hint` are sent as given; the server picks the Platform.
+   */
+  handOff(featureId: string, query: { platform?: string; hint?: string[]; budget?: number } = {}) {
+    const params = new URLSearchParams();
+    if (query.platform) params.set('platform', query.platform);
+    if (query.hint?.length) params.set('hint', query.hint.join(','));
+    if (query.budget !== undefined) params.set('budget', String(query.budget));
+    const search = params.size ? `?${params}` : '';
+    return this.request<HandOffView>(
+      'GET',
+      `/features/${encodeURIComponent(featureId)}/hand-off${search}`,
     );
   }
 

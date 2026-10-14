@@ -637,7 +637,7 @@ export class PromptProposalsService
     const ids = (kind: ProposalKind) => [
       ...new Set(cases.filter((c) => c.proposalKind === kind).map((c) => c.proposalId)),
     ];
-    const [requests, specs, briefs, suggestions, versions] = await Promise.all([
+    const [requests, specs, briefs, suggestions, versions, designDocs] = await Promise.all([
       this.db.decisionRequest.findMany({
         where: { id: { in: ids('CHOICES') } },
         select: { id: true },
@@ -658,6 +658,10 @@ export class PromptProposalsService
         where: { id: { in: ids('PROMPT_VERSION') } },
         select: { id: true, promptName: true, number: true, analysisId: true },
       }),
+      this.db.designDocProposal.findMany({
+        where: { id: { in: ids('DESIGN_DOC_PROPOSAL') } },
+        select: { id: true, designDoc: { select: { featureId: true, platformId: true } } },
+      }),
     ]);
     const out = new Map<string, string>();
     for (const r of requests) out.set(`CHOICES:${r.id}`, `/requests/${r.id}`);
@@ -666,6 +670,12 @@ export class PromptProposalsService
     }
     for (const p of briefs) out.set(`BRIEF_PROPOSAL:${p.id}`, `/projects/${p.projectId}`);
     for (const s of suggestions) out.set(`FEATURE_SUGGESTION:${s.id}`, `/projects/${s.projectId}`);
+    for (const p of designDocs) {
+      out.set(
+        `DESIGN_DOC_PROPOSAL:${p.id}`,
+        `/features/${p.designDoc.featureId}/design-docs/${p.designDoc.platformId ?? 'qa'}`,
+      );
+    }
     for (const v of versions) {
       out.set(
         `PROMPT_VERSION:${v.id}`,

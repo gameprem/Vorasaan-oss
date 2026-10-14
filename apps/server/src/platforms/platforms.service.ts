@@ -9,6 +9,7 @@ import type { Prisma, PrismaClient, User } from '@vorasaan/db';
 import {
   BUILT_IN_PLATFORMS,
   type PlatformDefinition,
+  PlatformDesignTemplate,
   type PlatformRef,
   type PlatformsInUse,
   type PlatformTemplateInput,
@@ -20,7 +21,9 @@ import {
   type SpecTemplateView,
   specTemplate,
 } from '@vorasaan/shared';
+import { featureInOrganizationOf } from '../auth/organization-scope.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
+import { SpecChanges } from '../design-docs/spec-changes.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -39,7 +42,10 @@ const ordered = [
  */
 @Injectable()
 export class PlatformsService {
-  constructor(@InjectPrisma() private readonly db: PrismaClient) {}
+  constructor(
+    @InjectPrisma() private readonly db: PrismaClient,
+    private readonly specChanges: SpecChanges,
+  ) {}
 
   // ─── A Project's list (everyone reads; Admins and the Project's POs edit) ─
 
@@ -108,6 +114,14 @@ export class PlatformsService {
       }
       return this.list(tx, projectId);
     });
+    // A Platform's Team Roles or checks may have completed (or broken) Features' Coverage,
+    // so Design Docs may be due (ticket 0069).
+    const targeting = await this.db.featurePlatform.findMany({
+      where: { platform: { projectId } },
+      distinct: ['featureId'],
+      select: { featureId: true },
+    });
+    for (const { featureId } of targeting) this.specChanges.changed(featureId);
     const { canEdit } = await projectAccess(this.db, user, projectId);
     return { projectId, canEdit, platforms };
   }
@@ -172,14 +186,14 @@ export class PlatformsService {
     featureId: string,
     { platformIds }: SetFeaturePlatformsInput,
   ): Promise<PlatformRef[]> {
-    const feature = await this.db.feature.findUnique({
-      where: { id: featureId },
+    const feature = await this.db.feature.findFirst({
+      where: { id: featureId, ...featureInOrganizationOf(user.id) },
       select: { teamId: true, team: { select: { projectId: true } } },
     });
     if (!feature) throw new NotFoundException('Feature not found');
     await this.assertCanManageTeam(user, feature.teamId);
     const { projectId } = feature.team;
-    return this.db.$transaction(async (tx) => {
+    const targets = await this.db.$transaction(async (tx) => {
       await this.assertTargetable(tx, projectId, platformIds);
       await tx.featurePlatform.deleteMany({
         where: { featureId, platformId: { notIn: platformIds } },
@@ -190,6 +204,9 @@ export class PlatformsService {
       });
       return this.targets(tx, featureId);
     });
+    // New targets may have Design Docs due; QA's covers every target (ticket 0069).
+    this.specChanges.changed(featureId);
+    return targets;
   }
 
   /**
@@ -223,9 +240,9 @@ export class PlatformsService {
   }
 
   /** What the Feature's first Spec starts from: one section per target Platform. */
-  async specTemplate(featureId: string): Promise<SpecTemplateView> {
-    const feature = await this.db.feature.findUnique({
-      where: { id: featureId },
+  async specTemplate(user: User, featureId: string): Promise<SpecTemplateView> {
+    const feature = await this.db.feature.findFirst({
+      where: { id: featureId, ...featureInOrganizationOf(user.id) },
       select: { title: true },
     });
     if (!feature) throw new NotFoundException('Feature not found');
@@ -268,7 +285,11 @@ export class PlatformsService {
   }
 }
 
-function definitionData(p: PlatformDefinition): PlatformDefinition {
+function definitionData(
+  p: Omit<PlatformDefinition, 'designTemplate'> & { designTemplate?: string | null },
+): PlatformDefinition {
+  // QA is never a Platform's template (the contract refuses it); anything else reads as unset.
+  const template = PlatformDesignTemplate.safeParse(p.designTemplate);
   return {
     name: p.name,
     roles: p.roles ?? [],
@@ -276,6 +297,7 @@ function definitionData(p: PlatformDefinition): PlatformDefinition {
     someoneToAsk: p.someoneToAsk,
     noOpenBlockers: p.noOpenBlockers,
     qaReady: p.qaReady,
+    designTemplate: template.success ? template.data : null,
   };
 }
 

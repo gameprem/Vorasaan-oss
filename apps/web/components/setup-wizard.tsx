@@ -10,6 +10,7 @@ import {
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import {
   completeSetup,
+  listGeminiModelsDuringSetup,
   listOpenRouterModelsDuringSetup,
   testAiDuringSetup,
 } from '@/lib/setup-actions';
@@ -45,6 +46,10 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
   const [finishing, startFinish] = useTransition();
   const loadOpenRouterModels = useCallback(
     () => listOpenRouterModelsDuringSetup(setupToken),
+    [setupToken],
+  );
+  const loadGeminiModels = useCallback(
+    (apiKey: string) => listGeminiModelsDuringSetup(apiKey, setupToken),
     [setupToken],
   );
 
@@ -217,6 +222,7 @@ export function SetupWizard({ initialToken = '' }: { initialToken?: string }) {
               onChange={setProvider}
               test={(input) => testAiDuringSetup(input, setupToken)}
               loadOpenRouterModels={loadOpenRouterModels}
+              loadGeminiModels={loadGeminiModels}
             />
           </>
         )}

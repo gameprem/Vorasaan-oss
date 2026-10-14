@@ -92,6 +92,8 @@ describe('loadAiConfig', () => {
       analyzeFeedbackModel: DEFAULT_MODEL,
       proposePromptVersionModel: DEFAULT_MODEL,
       redraftPromptVersionModel: DEFAULT_MODEL,
+      draftDesignDocModel: DEFAULT_MODEL,
+      redraftDesignDocModel: DEFAULT_MODEL,
     });
   });
 
@@ -123,6 +125,8 @@ describe('loadAiConfig', () => {
       analyzeFeedbackModel: 'openai/some-model',
       proposePromptVersionModel: 'openai/some-model',
       redraftPromptVersionModel: 'openai/some-model',
+      draftDesignDocModel: 'openai/some-model',
+      redraftDesignDocModel: 'openai/some-model',
     });
   });
 });

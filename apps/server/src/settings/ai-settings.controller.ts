@@ -49,7 +49,7 @@ export class AiSettingsController {
     return this.settings.updateProvider(id, body);
   }
 
-  /** OpenRouter's model list for the picker (ticket 0064); 422 for any other provider. */
+  /** OpenRouter's or Gemini's model list for the picker (tickets 0064, 0080); 422 for any other provider. */
   @Get('providers/:id/models')
   providerModels(@Param('id', ParseUUIDPipe) id: string) {
     return this.settings.providerModels(id);

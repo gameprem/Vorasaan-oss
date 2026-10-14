@@ -3,6 +3,7 @@ import { AGENT_SKILL_EVAL_CASES } from './cases/agent-skills.ts';
 import { CHOICES_EVAL_CASES } from './cases/choices.ts';
 import { CONVERSATION_EVAL_CASES } from './cases/conversation.ts';
 import { COVERAGE_EVAL_CASES } from './cases/coverage.ts';
+import { DESIGN_DOC_EVAL_CASES } from './cases/design-docs.ts';
 import { FEATURE_SUGGESTION_EVAL_CASES } from './cases/feature-suggestions.ts';
 import { GRILLING_EVAL_CASES } from './cases/grilling.ts';
 import { PROMPT_PROPOSAL_EVAL_CASES } from './cases/prompt-proposals.ts';
@@ -25,6 +26,7 @@ export const EVAL_CASES: EvalCase[] = [
   ...PROMPT_PROPOSAL_EVAL_CASES,
   ...COVERAGE_EVAL_CASES,
   ...AGENT_SKILL_EVAL_CASES,
+  ...DESIGN_DOC_EVAL_CASES,
 ];
 
 /** The checked-in cases that evaluate one prompt. */

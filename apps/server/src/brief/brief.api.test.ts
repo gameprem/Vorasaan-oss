@@ -109,8 +109,8 @@ describe('Project Brief', () => {
     const outsider = await db.user.create({
       data: { email: 'out@else.test', name: 'Out', passwordHash: 'x' },
     });
-    expect((await as(app, outsider.id)('GET', brief)).status).toBe(403);
-    expect((await as(app, outsider.id)('GET', versions)).status).toBe(403);
+    expect((await as(app, outsider.id)('GET', brief)).status).toBe(404);
+    expect((await as(app, outsider.id)('GET', versions)).status).toBe(404);
   });
 
   test('a PO of one of the Project’s Teams edits v1 then v2; a Member gets 403; a stale edit gets 409', async () => {

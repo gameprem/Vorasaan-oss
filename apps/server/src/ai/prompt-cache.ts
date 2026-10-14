@@ -10,7 +10,8 @@ import type { MastraModel } from './model-config.ts';
 // cache_control breakpoint, so the next call with the same prefix reads it from
 // the cache, and so on an Anthropic model routed through OpenRouter (ticket 0064).
 // Every other provider gets the whole text as before (OpenAI caches the longest
-// repeated prefix by itself, so it only needs the order).
+// repeated prefix by itself, so it only needs the order, and so does Gemini's
+// implicit caching, ticket 0080).
 
 /**
  * A prompt and the same text cut at its cache breakpoints: `parts.join('')` is
@@ -99,7 +100,8 @@ function routerId(model: MastraModel): string | null {
  * The mark for this model's stable parts, or null when it gets the plain text:
  * Anthropic's for an Anthropic model, OpenRouter's for an Anthropic model routed
  * through OpenRouter (`openrouter/anthropic/...`). Every other model caches by itself
- * (OpenAI) or not at all, and gets the prompt as before.
+ * (OpenAI; Gemini's implicit caching, `google/...`, ticket 0080) or not at all, and
+ * gets the prompt as before.
  */
 export function cacheMarkOf(model: MastraModel): CacheMark | null {
   const id = routerId(model);
@@ -157,7 +159,8 @@ const count = (value: unknown): number | null =>
 
 /**
  * The usage the AI SDK reports for a call: `cachedInputTokens` (Anthropic's
- * `cache_read_input_tokens`, OpenAI's and OpenRouter's `cached_tokens`) and, for
+ * `cache_read_input_tokens`, OpenAI's and OpenRouter's `cached_tokens`, Gemini's
+ * `cachedContentTokenCount`) and, for
  * Anthropic and OpenRouter (`cache_write_tokens`), `cacheCreationInputTokens`; the
  * v3 `inputTokens` details as a fallback.
  */

@@ -19,6 +19,7 @@ import type {
   ConversationFoldDraft,
   ConversationScopeForAi,
   DecisionForAi,
+  DesignDocDraft,
   DismissedSuggestionForAi,
   FeatureFitDraft,
   FeatureForAi,
@@ -370,6 +371,112 @@ export function fakeAcceptanceCriteria(
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trimEnd()}\n`;
+}
+
+/** A line of the Spec's "Open questions" that still asks something (not the template's "…"). */
+function openQuestionsOf(specMarkdown: string): string[] {
+  const { lines, headings } = specHeadings(specMarkdown);
+  const section = headings.find(
+    (h) =>
+      h.level === 2 && ['open questions', 'คำถามที่ยังเปิดอยู่', 'คำถามค้าง'].includes(headingKey(h.text)),
+  );
+  if (!section) return [];
+  return lines
+    .slice(section.line + 1, section.end)
+    .map((l) => l.match(/^\s*[-*]\s+(?:\[[ xX]?\]\s*)?(.+)$/)?.[1]?.trim() ?? '')
+    .filter((t) => t && !/^[.…\s]+$/.test(t));
+}
+
+/** The checklist items of a Spec (its acceptance criteria), as the fake traces them. */
+function criteriaOf(specMarkdown: string): string[] {
+  return specMarkdown
+    .split('\n')
+    .map((l) => l.match(/^\s*[-*]\s*\[[ xX]?\]\s*(.+)$/)?.[1]?.trim() ?? '')
+    .filter((t) => t && !/^[.…\s]+$/.test(t));
+}
+
+/**
+ * The fake's Design Doc (ticket 0069), deterministic and only from what it is given: each
+ * `##` section of the template, in order. The first section (QA: the test cases) traces each
+ * checklist item of the Spec it was given and names each Decision in the context; the others
+ * say they follow the Spec Version; "Open questions" lists the Spec's own open questions,
+ * which also come back as `questions` (less those already asked). In Thai for a Thai Spec. An
+ * update is the current Design Doc with one line naming the Spec Version and its first change.
+ * It never follows anything written in the Spec or the context.
+ */
+export function fakeDesignDoc(input: Parameters<AiPort['draftDesignDoc']>[0]): DesignDocDraft {
+  const thai = /[\u0E00-\u0E7F]/.test(input.specMarkdown);
+  const v = input.specVersion;
+  if (input.current !== null) {
+    const change =
+      input.specChange
+        ?.split('\n')
+        .find((l) => l.startsWith('+ ') && l.slice(2).trim())
+        ?.slice(2)
+        .trim() ?? '';
+    const line = thai
+      ? `- ปรับตาม Spec v${v}: ${change}`.trim()
+      : `- Updated for Spec v${v}: ${change}`.trim();
+    return {
+      proposedMarkdown: `${input.current.trimEnd()}\n${line}\n`,
+      summary: thai
+        ? `ปรับ Design Doc ${input.doc.name} ตาม Spec v${v}`
+        : `Updated the ${input.doc.name} Design Doc for Spec v${v}.`,
+      questions: [],
+    };
+  }
+  const asked = new Set(input.asked.map((a) => a.toLowerCase()));
+  const open = openQuestionsOf(input.specMarkdown);
+  const questions = open
+    .filter((q) => !asked.has(q.slice(0, 120).toLowerCase()))
+    .slice(0, 5)
+    .map((q) => ({
+      title: q.slice(0, 120),
+      description: thai
+        ? `Spec ยังไม่ได้ตัดสินเรื่องนี้ และ Design Doc ${input.doc.name} ต้องใช้`
+        : `The Spec leaves this open, and the ${input.doc.name} Design Doc needs it.`,
+    }));
+  const criteria = criteriaOf(input.specMarkdown);
+  const decisions = input.context
+    .filter((b) => b.source.kind === 'DECISION')
+    .map((b) => b.source.title);
+  const headings = specHeadings(input.doc.template).headings.filter((h) => h.level === 2);
+  const isQuestions = (text: string) =>
+    ['open questions', 'คำถามที่ยังเปิดอยู่'].includes(headingKey(text));
+  const qa = input.doc.platform === null;
+  let traced = false;
+  const sections = headings.map((h) => {
+    if (isQuestions(h.text)) {
+      const items = open.length ? open.map((q) => `- ${q}`) : [thai ? '- ไม่มี' : '- None.'];
+      return `## ${h.text}\n\n${items.join('\n')}`;
+    }
+    const tracesHere = qa ? headingKey(h.text) === 'test cases' : !traced;
+    if (tracesHere) {
+      traced = true;
+      const items = qa
+        ? criteria.map(
+            (c, i) => `- [ ] TC-${i + 1} (AC: ${c}): ${thai ? 'ตรวจว่า' : 'check that'} ${c}`,
+          )
+        : [
+            ...criteria.map((c) => `- ${thai ? 'ครอบคลุม' : 'Covers'}: ${c}`),
+            ...decisions.map((d) => `- ${thai ? 'ตาม Decision' : 'Follows the Decision'} "${d}"`),
+          ];
+      const fallback = thai ? `- ตาม Spec v${v}` : `- As Spec v${v} describes.`;
+      return `## ${h.text}\n\n${(items.length ? items : [fallback]).join('\n')}`;
+    }
+    if (qa && headingKey(h.text) === 'test plan') {
+      const names = input.doc.targets.map((t) => t.name).join(', ') || '-';
+      return `## ${h.text}\n\n- ${thai ? 'ทดสอบบน' : 'Tested on'}: ${names}`;
+    }
+    return `## ${h.text}\n\n${thai ? `- ตาม Spec v${v}` : `- As Spec v${v} describes.`}`;
+  });
+  return {
+    proposedMarkdown: `# ${input.doc.name} Design Doc: ${input.feature.title}\n\n${sections.join('\n\n')}\n`,
+    summary: thai
+      ? `ร่าง Design Doc ${input.doc.name} จาก Spec v${v}`
+      : `Drafted the ${input.doc.name} Design Doc from Spec v${v}.`,
+    questions,
+  };
 }
 
 /** What the fake reports as one call's usage, unless a test changes `usage`. */
@@ -917,6 +1024,38 @@ export class FakeAiPort implements AiPort {
     options?: AiCallOptions,
   ): Promise<RedraftedMarkdown> {
     this.record('redraftBriefProposal', input, options);
+    await this.nextRedraft();
+    return fakeMarkdownRedraft(input, input.proposedMarkdown);
+  }
+
+  /** A Design Doc from the template and the Spec it is given (`fakeDesignDoc`). */
+  async draftDesignDoc(
+    input: Parameters<AiPort['draftDesignDoc']>[0],
+    options?: AiCallOptions,
+  ): Promise<DesignDocDraft> {
+    this.record('draftDesignDoc', input, options);
+    await this.nextDesignDoc();
+    return fakeDesignDoc(input);
+  }
+
+  /**
+   * Waited on (a Promise) or thrown (an Error) by the next Design Doc drafts, in order, to
+   * hold a draft open or make it fail (ticket 0069).
+   */
+  readonly designDocScript: (Error | Promise<unknown>)[] = [];
+
+  private async nextDesignDoc(): Promise<void> {
+    const next = this.designDocScript.shift();
+    if (next instanceof Error) throw next;
+    if (next) await next;
+  }
+
+  /** The current Redraft with one line added: "- Changed as asked: <feedback>". */
+  async redraftDesignDoc(
+    input: Parameters<AiPort['redraftDesignDoc']>[0],
+    options?: AiCallOptions,
+  ): Promise<RedraftedMarkdown> {
+    this.record('redraftDesignDoc', input, options);
     await this.nextRedraft();
     return fakeMarkdownRedraft(input, input.proposedMarkdown);
   }

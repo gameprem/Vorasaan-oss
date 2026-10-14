@@ -133,6 +133,7 @@ export const ProposalKind = z.enum([
   'BRIEF_PROPOSAL',
   'FEATURE_SUGGESTION',
   'PROMPT_VERSION',
+  'DESIGN_DOC_PROPOSAL',
 ]);
 export type ProposalKind = z.infer<typeof ProposalKind>;
 
@@ -152,6 +153,7 @@ export const ReceiptOutputKind = z.enum([
   'GRILLING_QUESTION',
   'PROMPT_ANALYSIS',
   'PROMPT_VERSION',
+  'DESIGN_DOC_PROPOSAL',
 ]);
 export type ReceiptOutputKind = z.infer<typeof ReceiptOutputKind>;
 
@@ -172,3 +174,16 @@ export type PromptAnalysisStatus = z.infer<typeof PromptAnalysisStatus>;
 
 export const PromptAnalysisTrigger = z.enum(['MANUAL', 'FEEDBACK']);
 export type PromptAnalysisTrigger = z.infer<typeof PromptAnalysisTrigger>;
+
+/** The template a Design Doc starts from (ticket 0069): one per kind of Platform, and QA's. */
+export const DesignTemplateKind = z.enum(['BACK_END', 'FRONT_END', 'MOBILE', 'QA']);
+export type DesignTemplateKind = z.infer<typeof DesignTemplateKind>;
+
+export const DesignDocVersionSource = z.enum(['AI_DRAFT', 'REVERT']);
+export type DesignDocVersionSource = z.infer<typeof DesignDocVersionSource>;
+
+export const DesignDocProposalReason = z.enum(['FIRST_DRAFT', 'SPEC_CHANGED']);
+export type DesignDocProposalReason = z.infer<typeof DesignDocProposalReason>;
+
+export const DesignDocProposalStatus = z.enum(['PENDING', 'APPROVED', 'DECLINED', 'SUPERSEDED']);
+export type DesignDocProposalStatus = z.infer<typeof DesignDocProposalStatus>;

@@ -23,6 +23,8 @@ import {
   MyDelegationsController,
 } from './delegations/delegations.controller.ts';
 import { DelegationsService } from './delegations/delegations.service.ts';
+import { DesignDocsModule } from './design-docs/design-docs.module.ts';
+import { SpecChangesModule } from './design-docs/spec-changes.ts';
 import { FeatureGuidelinesModule } from './feature-guidelines/feature-guidelines.module.ts';
 import { FeatureSuggestionsModule } from './feature-suggestions/feature-suggestions.module.ts';
 import { DecisionGraphController } from './features/decision-graph.controller.ts';
@@ -30,8 +32,10 @@ import { DecisionGraphService } from './features/decision-graph.service.ts';
 import { FeaturesController } from './features/features.controller.ts';
 import { GettingStartedModule } from './getting-started/getting-started.module.ts';
 import { GrillingModule } from './grilling/grilling.module.ts';
+import { HandOffModule } from './hand-off/hand-off.module.ts';
 import { HealthController } from './health/health.controller.ts';
 import { InboxModule } from './inbox/inbox.module.ts';
+import { DeletionService } from './org/deletion.service.ts';
 import { OrgController } from './org/org.controller.ts';
 import { OrgService } from './org/org.service.ts';
 import { PlatformsModule } from './platforms/platforms.module.ts';
@@ -51,6 +55,7 @@ import { SpecModule } from './spec/spec.module.ts';
   imports: [
     PrismaModule,
     ClockModule,
+    SpecChangesModule,
     MastraModule,
     RetrievalModule,
     AtlassianModule,
@@ -65,6 +70,8 @@ import { SpecModule } from './spec/spec.module.ts';
     DecisionRequestsModule,
     DecisionStatsModule,
     SpecModule,
+    DesignDocsModule,
+    HandOffModule,
     BriefModule,
     RedraftsModule,
     ReceiptsModule,
@@ -98,6 +105,7 @@ import { SpecModule } from './spec/spec.module.ts';
     AuthService,
     DecisionGraphService,
     DelegationsService,
+    DeletionService,
     OrgService,
     SetupTokenService,
   ],

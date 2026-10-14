@@ -4,7 +4,7 @@ import {
   type AiSettingsInput,
   type AiTestResult,
   type LoginResult,
-  type OpenRouterModelsView,
+  type ProviderModelsView,
   SETUP_TOKEN_HEADER,
   type SetupInput,
 } from '@vorasaan/shared';
@@ -43,11 +43,32 @@ export async function testAiDuringSetup(
 /** OpenRouter's model list for the provider step (ticket 0064). */
 export async function listOpenRouterModelsDuringSetup(
   setupToken: string,
-): Promise<OpenRouterModelsView> {
+): Promise<ProviderModelsView> {
   try {
-    return await api<OpenRouterModelsView>('/setup/openrouter-models', {
+    return await api<ProviderModelsView>('/setup/openrouter-models', {
       method: 'POST',
       body: {},
+      headers: tokenHeader(setupToken),
+      redirectOnUnauthorized: false,
+      anonymous: true,
+    });
+  } catch (error) {
+    return { models: [], error: errorOf(error) };
+  }
+}
+
+/**
+ * The Gemini API's model list for the provider step (ticket 0080), with the key typed
+ * there: the Gemini API lists models only for a key. The key is not stored.
+ */
+export async function listGeminiModelsDuringSetup(
+  apiKey: string,
+  setupToken: string,
+): Promise<ProviderModelsView> {
+  try {
+    return await api<ProviderModelsView>('/setup/gemini-models', {
+      method: 'POST',
+      body: { apiKey },
       headers: tokenHeader(setupToken),
       redirectOnUnauthorized: false,
       anonymous: true,

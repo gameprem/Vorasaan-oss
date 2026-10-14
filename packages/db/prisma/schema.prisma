@@ -43,6 +43,7 @@ enum IntegrationProvider {
   OPENAI // OpenAI API (GPT and Codex models)
   OPENAI_COMPATIBLE // any OpenAI-compatible URL + token, e.g. 9Router
   OPENROUTER // OpenRouter: a key only, its base URL is fixed (ticket 0064)
+  GEMINI // Gemini API (Google AI Studio): a key only, its base URL is fixed (ticket 0080)
   ATLASSIAN
   EMBEDDINGS // OpenAI-compatible embeddings endpoint for retrieval (ADR 0007)
   LINE // LINE Messaging API channel (ADR 0011): channel access token + channel secret
@@ -274,6 +275,10 @@ model User {
   agentSkillVersionsDecided AgentSkillVersion[] @relation("AgentSkillVersionDecidedBy")
   agentSkillsEnabled        ProjectAgentSkill[] @relation("ProjectAgentSkillEnabledBy")
 
+  designDocVersions    DesignDocVersion[]  @relation("DesignDocVersionApprovedBy")
+  designDocProposals   DesignDocProposal[] @relation("DesignDocProposalReviewedBy")
+  designTemplatesSaved DesignTemplate[]    @relation("DesignTemplateUpdatedBy")
+
   delegationsGiven    Delegation[] @relation("DelegationDelegator")
   delegationsReceived Delegation[] @relation("DelegationDelegate")
   delegationsCreated  Delegation[] @relation("DelegationCreatedBy")
@@ -445,27 +450,27 @@ model OrgIntegration {
 // with a name people recognize. Exactly one per Organization is the default
 // (at most one by a partial unique index in the migration; the service keeps one).
 model ApprovedModel {
-  id             String         @id @default(uuid())
-  organizationId String
-  integrationId  String // the LLM provider it runs on; a provider with models can't be deleted
-  modelId        String // the provider's model name, e.g. claude-opus-5-5
-  displayName    String // e.g. "Fast", "Best", "Local (no data leaves)"
-  note           String?
+  id                    String         @id @default(uuid())
+  organizationId        String
+  integrationId         String // the LLM provider it runs on; a provider with models can't be deleted
+  modelId               String // the provider's model name, e.g. claude-opus-5-5
+  displayName           String // e.g. "Fast", "Best", "Local (no data leaves)"
+  note                  String?
   // How many tokens one call to it may hold, prompt and reply together (ticket 0060):
   // prefilled for known models, else VORASAAN_CONTEXT_WINDOW; an Admin can edit it.
-  contextWindow  Int
+  contextWindow         Int
   // What a million tokens cost on it, in US dollars, as the Admin set them (ticket 0075):
   // the AI usage dashboard's estimated cost. Both null: no cost is shown, only tokens.
   inputPricePerMillion  Float?
   outputPricePerMillion Float?
-  position       Int
-  isDefault      Boolean        @default(false)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  integration    OrgIntegration @relation(fields: [integrationId], references: [id], onDelete: NoAction)
-  taskModels     AiTaskModel[]
-  conversations  Conversation[] // picked in them (ticket 0054)
+  position              Int
+  isDefault             Boolean        @default(false)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  organization          Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integration           OrgIntegration @relation(fields: [integrationId], references: [id], onDelete: NoAction)
+  taskModels            AiTaskModel[]
+  conversations         Conversation[] // picked in them (ticket 0054)
 
   @@unique([organizationId, displayName])
   @@index([organizationId, position])
@@ -482,6 +487,7 @@ enum AiTaskKind {
   FIT_CHECK // a new Feature against the Feature Guidelines
   CHAT // Conversation replies
   PROMPT_PROPOSALS // the AI reading feedback and proposing Prompt Versions (ticket 0072)
+  DESIGN_DOCS // Design Docs drafted from the approved Spec, and their Redrafts (ticket 0069)
 }
 
 // The Approved Model an AI task uses. No row: the default Approved Model.
@@ -524,6 +530,7 @@ model Project {
   conversations      Conversation[]
   platforms          Platform[]
   agentSkills        ProjectAgentSkill[]
+  designTemplates    DesignTemplate[] // its own Design Doc templates; none: the built-in ones
 
   @@unique([organizationId, name])
   @@unique([organizationId, jiraKey])
@@ -598,6 +605,7 @@ model Feature {
   suggestion       FeatureSuggestion? // the Feature Suggestion it was accepted from, if any
   conversations    Conversation[]
   platforms        FeaturePlatform[] // the Platforms it targets (ADR 0009)
+  designDocs       DesignDoc[] // one per target Platform, and QA's (ADR 0014)
 
   @@index([teamId])
   @@index([jiraIssueKey])
@@ -611,18 +619,21 @@ model Feature {
 // Names are unique per Project ignoring case (a unique index on lower(name) in the
 // migration), since a Spec section matches its name case-insensitively.
 model Platform {
-  id             String            @id @default(uuid())
+  id             String              @id @default(uuid())
   projectId      String
   name           String
   position       Int
   roles          TeamRole[]
-  specSection    Boolean           @default(true)
-  someoneToAsk   Boolean           @default(true)
-  noOpenBlockers Boolean           @default(true)
-  qaReady        Boolean           @default(true)
-  createdAt      DateTime          @default(now())
-  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  specSection    Boolean             @default(true)
+  someoneToAsk   Boolean             @default(true)
+  noOpenBlockers Boolean             @default(true)
+  qaReady        Boolean             @default(true)
+  // The Design Doc template it starts from (ticket 0069); null: chosen from its Team Roles.
+  designTemplate DesignTemplateKind?
+  createdAt      DateTime            @default(now())
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   features       FeaturePlatform[]
+  designDocs     DesignDoc[]
 
   @@index([projectId, position])
 }
@@ -645,17 +656,18 @@ model FeaturePlatform {
 // No rows: the built-in template (Back-End, Front-End, Mobile) is the default. Changing
 // it never rewrites existing Projects.
 model OrgPlatformTemplate {
-  id             String       @id @default(uuid())
+  id             String              @id @default(uuid())
   organizationId String
   name           String
   position       Int
   roles          TeamRole[]
-  specSection    Boolean      @default(true)
-  someoneToAsk   Boolean      @default(true)
-  noOpenBlockers Boolean      @default(true)
-  qaReady        Boolean      @default(true)
-  createdAt      DateTime     @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  specSection    Boolean             @default(true)
+  someoneToAsk   Boolean             @default(true)
+  noOpenBlockers Boolean             @default(true)
+  qaReady        Boolean             @default(true)
+  designTemplate DesignTemplateKind? // as on Platform (ticket 0069)
+  createdAt      DateTime            @default(now())
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, position])
 }
@@ -702,23 +714,26 @@ model Attachment {
 
 // Immutable. The highest version is the current Spec. Markdown is canonical (ADR 0002).
 model SpecVersion {
-  id             String            @id @default(uuid())
-  featureId      String
-  version        Int
-  markdown       String
-  source         SpecVersionSource
-  summary        String? // one-line "what changed"
-  approvedById   String
-  proposalId     String?           @unique
-  revertedFromId String?
-  createdAt      DateTime          @default(now())
-  feature        Feature           @relation(fields: [featureId], references: [id], onDelete: Cascade)
-  approvedBy     User              @relation("SpecVersionApprovedBy", fields: [approvedById], references: [id])
-  proposal       SpecProposal?     @relation(fields: [proposalId], references: [id])
-  revertedFrom   SpecVersion?      @relation("SpecRevert", fields: [revertedFromId], references: [id])
-  reverts        SpecVersion[]     @relation("SpecRevert")
-  basedProposals SpecProposal[]    @relation("ProposalBase")
-  notifications  Notification[]
+  id                 String              @id @default(uuid())
+  featureId          String
+  version            Int
+  markdown           String
+  source             SpecVersionSource
+  summary            String? // one-line "what changed"
+  approvedById       String
+  proposalId         String?             @unique
+  revertedFromId     String?
+  createdAt          DateTime            @default(now())
+  feature            Feature             @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  approvedBy         User                @relation("SpecVersionApprovedBy", fields: [approvedById], references: [id])
+  proposal           SpecProposal?       @relation(fields: [proposalId], references: [id])
+  revertedFrom       SpecVersion?        @relation("SpecRevert", fields: [revertedFromId], references: [id])
+  reverts            SpecVersion[]       @relation("SpecRevert")
+  basedProposals     SpecProposal[]      @relation("ProposalBase")
+  notifications      Notification[]
+  // The Design Doc versions and proposals that follow it (ticket 0069).
+  designDocVersions  DesignDocVersion[]
+  designDocProposals DesignDocProposal[]
 
   @@unique([featureId, version])
 }
@@ -839,9 +854,12 @@ model DecisionRequest {
   choicesApprovedModelId  String?
   choicesModelDisplayName String?
   choicesModelName        String?
+  // The Design Doc whose drafting found this question (ticket 0069); null otherwise.
+  designDocId             String?
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
   feature                 Feature               @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  designDoc               DesignDoc?            @relation(fields: [designDocId], references: [id], onDelete: SetNull)
   raiser                  User                  @relation("RequestRaiser", fields: [raiserId], references: [id])
   decider                 User?                 @relation("RequestDecider", fields: [deciderId], references: [id])
 
@@ -860,6 +878,7 @@ model DecisionRequest {
   @@index([status, dueAt])
   @@index([deciderId, status])
   @@index([raiserId, status])
+  @@index([designDocId])
 }
 
 // Who the Raiser sent the request to (one Role Owner, or all of them for the role).
@@ -1392,6 +1411,7 @@ enum ProposalKind {
   BRIEF_PROPOSAL
   FEATURE_SUGGESTION
   PROMPT_VERSION // a Prompt Version the AI proposed (ticket 0072)
+  DESIGN_DOC_PROPOSAL // a Design Doc the AI drafted or updated (ticket 0069)
 }
 
 enum RedraftStatus {
@@ -1431,12 +1451,14 @@ model Redraft {
   briefProposalId     String?
   featureSuggestionId String?
   promptVersionId     String?
+  designDocProposalId String?
   requestedBy         User?              @relation("RedraftRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   request             DecisionRequest?   @relation(fields: [requestId], references: [id], onDelete: Cascade)
   specProposal        SpecProposal?      @relation(fields: [specProposalId], references: [id], onDelete: Cascade)
   briefProposal       BriefProposal?     @relation(fields: [briefProposalId], references: [id], onDelete: Cascade)
   featureSuggestion   FeatureSuggestion? @relation(fields: [featureSuggestionId], references: [id], onDelete: Cascade)
   promptVersion       PromptVersion?     @relation(fields: [promptVersionId], references: [id], onDelete: Cascade)
+  designDocProposal   DesignDocProposal? @relation(fields: [designDocProposalId], references: [id], onDelete: Cascade)
 
   @@unique([proposalKind, proposalId, number])
   @@index([requestId])
@@ -1444,6 +1466,7 @@ model Redraft {
   @@index([briefProposalId])
   @@index([featureSuggestionId])
   @@index([promptVersionId])
+  @@index([designDocProposalId])
   @@index([requestedById])
 }
 
@@ -1463,6 +1486,7 @@ enum ReceiptOutputKind {
   GRILLING_QUESTION // a follow-up on a Grilling question
   PROMPT_ANALYSIS // the patterns the AI found in a prompt's feedback (ticket 0072)
   PROMPT_VERSION // a Prompt Version the AI proposed
+  DESIGN_DOC_PROPOSAL // a Design Doc drafted or updated from the Spec (ticket 0069)
 }
 
 enum ReceiptOutcomeKind {
@@ -1477,7 +1501,7 @@ enum ReceiptOutcomeKind {
 // produced. Kept for the Organization's retention (receiptRetentionDays), then deleted with
 // its outcomes.
 model Receipt {
-  id               String             @id @default(uuid())
+  id               String              @id @default(uuid())
   task             String // the AI task, e.g. generateChoices
   taskKind         String // its Settings task (AiTaskKind), e.g. CHOICES
   promptName       String // the prompt it rendered (a packages/skills name)
@@ -1507,10 +1531,10 @@ model Receipt {
   // The Project the call worked for (ticket 0075), a plain id so the Receipt outlives it;
   // null for Organization-wide work (Prompt proposals, Eval Runs).
   projectId        String?
-  createdAt        DateTime           @default(now())
-  requestedBy      User?              @relation("ReceiptRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
-  outcomes         ReceiptOutcome[]   @relation("ReceiptOutcomes")
-  redraftOutcomes  ReceiptOutcome[]   @relation("ReceiptRedraftOutcomes")
+  createdAt        DateTime            @default(now())
+  requestedBy      User?               @relation("ReceiptRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  outcomes         ReceiptOutcome[]    @relation("ReceiptOutcomes")
+  redraftOutcomes  ReceiptOutcome[]    @relation("ReceiptRedraftOutcomes")
   // The Agent Skills (ticket 0078) whose text the call read: loaded in its turn before it.
   agentSkills      ReceiptAgentSkill[]
 
@@ -1745,7 +1769,7 @@ enum AgentSkillVersionStatus {
 // and assets/), text and templates only. The AI sees it only through its active version, and
 // only in the Projects it is enabled in. Not one of Vorasaan's own prompts (packages/skills).
 model AgentSkill {
-  id              String             @id @default(uuid())
+  id              String              @id @default(uuid())
   organizationId  String
   // The SKILL.md `name` of the active version (of the first one until it is approved).
   name            String
@@ -1754,14 +1778,14 @@ model AgentSkill {
   // and the folder within the repository ("" for its root). ZIP: the folder within the zip.
   repository      String?
   ref             String?
-  subpath         String             @default("")
+  subpath         String              @default("")
   // The approved version the AI uses; null until one is approved.
-  activeVersionId String?            @unique
+  activeVersionId String?             @unique
   installedById   String?
-  createdAt       DateTime           @default(now())
-  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  installedBy     User?              @relation("AgentSkillInstalledBy", fields: [installedById], references: [id], onDelete: SetNull)
-  activeVersion   AgentSkillVersion? @relation("AgentSkillActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  createdAt       DateTime            @default(now())
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  installedBy     User?               @relation("AgentSkillInstalledBy", fields: [installedById], references: [id], onDelete: SetNull)
+  activeVersion   AgentSkillVersion?  @relation("AgentSkillActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
   versions        AgentSkillVersion[] @relation("AgentSkillVersions")
   projects        ProjectAgentSkill[]
 
@@ -1839,4 +1863,127 @@ model ReceiptAgentSkill {
 
   @@id([receiptId, skillId])
   @@index([skillId])
+}
+
+// ─── Design Docs (ADR 0014, ticket 0069) ─────────────────────────────────────
+
+// The template a Design Doc starts from: one per Platform kind, and QA's.
+enum DesignTemplateKind {
+  BACK_END // API contract, data model, sequences, error cases
+  FRONT_END // screens and states, API calls, validation
+  MOBILE // as Front-End, plus offline and push
+  QA // a test plan and test cases traced to the Spec's acceptance criteria
+}
+
+enum DesignDocVersionSource {
+  AI_DRAFT // an approved Design Doc proposal
+  REVERT // rolled back to an earlier version
+}
+
+// Why the AI drafted a Design Doc proposal.
+enum DesignDocProposalReason {
+  FIRST_DRAFT // the Spec is approved and the Platform's Coverage complete: version 1
+  SPEC_CHANGED // a new Spec Version changed what the Design Doc covers: an update
+}
+
+enum DesignDocProposalStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  SUPERSEDED // the Spec changed what it covers before anyone decided; a newer one replaces it
+}
+
+// A Project's own Design Doc template of one kind (Markdown). None: the built-in one.
+model DesignTemplate {
+  id          String             @id @default(uuid())
+  projectId   String
+  kind        DesignTemplateKind
+  markdown    String
+  updatedById String?
+  updatedAt   DateTime           @updatedAt
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  updatedBy   User?              @relation("DesignTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, kind])
+}
+
+// The Design Doc of one target Platform of a Feature (`platformId`), or its QA Design Doc
+// (`platformId` null, `template` QA). One each: a unique index on (featureId, platformId)
+// and a partial unique index on featureId where platformId is null, both in the migration.
+// Created when it is first drafted. Its approved versions are DesignDocVersions; it is
+// stale when the Spec Version its latest version follows differs from the latest Spec in
+// what it covers (computed on read, never stored).
+model DesignDoc {
+  id         String              @id @default(uuid())
+  featureId  String
+  platformId String?
+  template   DesignTemplateKind // the template it was first drafted from
+  // A draft being written (the AI is called outside any transaction): set while it runs,
+  // so two drafts never start; older than 10 minutes, it was abandoned.
+  draftingAt DateTime?
+  // Why the last draft failed (a short message), until the next one starts.
+  draftError String?
+  createdAt  DateTime            @default(now())
+  feature    Feature             @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  platform   Platform?           @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  versions   DesignDocVersion[]
+  proposals  DesignDocProposal[]
+  questions  DecisionRequest[] // raised from what drafting found
+
+  @@index([featureId])
+  @@index([platformId])
+}
+
+// Immutable. The highest version is the current Design Doc. Markdown is canonical (ADR 0002).
+model DesignDocVersion {
+  id             String                 @id @default(uuid())
+  designDocId    String
+  version        Int
+  markdown       String
+  source         DesignDocVersionSource
+  summary        String?
+  specVersionId  String // the Spec Version it follows
+  approvedById   String
+  proposalId     String?                @unique
+  revertedFromId String?
+  createdAt      DateTime               @default(now())
+  designDoc      DesignDoc              @relation(fields: [designDocId], references: [id], onDelete: Cascade)
+  specVersion    SpecVersion            @relation(fields: [specVersionId], references: [id], onDelete: Cascade)
+  approvedBy     User                   @relation("DesignDocVersionApprovedBy", fields: [approvedById], references: [id])
+  proposal       DesignDocProposal?     @relation("DesignDocProposalResult", fields: [proposalId], references: [id])
+  revertedFrom   DesignDocVersion?      @relation("DesignDocRevert", fields: [revertedFromId], references: [id])
+  reverts        DesignDocVersion[]     @relation("DesignDocRevert")
+  basedProposals DesignDocProposal[]    @relation("DesignDocProposalBase")
+
+  @@unique([designDocId, version])
+}
+
+// An AI-drafted Design Doc (the first version, or an update after the Spec changed), awaiting
+// a Tech Lead or a Role Owner of the Platform's Team Roles. It holds its latest Redraft.
+model DesignDocProposal {
+  id               String                  @id @default(uuid())
+  designDocId      String
+  reason           DesignDocProposalReason
+  specVersionId    String // the Spec Version it was drafted from (kept current while it covers the same)
+  baseVersionId    String? // the Design Doc version it updates; null for the first draft
+  proposedMarkdown String
+  summary          String?
+  status           DesignDocProposalStatus @default(PENDING)
+  reviewedById     String?
+  reviewedAt       DateTime?
+  declineReason    String?
+  // The model that drafted it (ticket 0054), as it was then (see SpecProposal).
+  approvedModelId  String?
+  modelDisplayName String?
+  modelName        String?
+  createdAt        DateTime                @default(now())
+  designDoc        DesignDoc               @relation(fields: [designDocId], references: [id], onDelete: Cascade)
+  specVersion      SpecVersion             @relation(fields: [specVersionId], references: [id], onDelete: Cascade)
+  baseVersion      DesignDocVersion?       @relation("DesignDocProposalBase", fields: [baseVersionId], references: [id])
+  reviewedBy       User?                   @relation("DesignDocProposalReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  resultVersion    DesignDocVersion?       @relation("DesignDocProposalResult")
+  redrafts         Redraft[]
+
+  @@index([designDocId, status])
+  @@index([status])
 }

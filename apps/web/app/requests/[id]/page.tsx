@@ -23,6 +23,7 @@ import {
   statusText,
 } from '@/components/bits';
 import { DecideForm } from '@/components/decide-form';
+import { DeletionWatch } from '@/components/deletion-watch';
 import { DraftReview } from '@/components/draft-review';
 import { ProposalRedrafts } from '@/components/redrafts';
 import {
@@ -176,6 +177,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
 
   return (
     <article className="max-w-3xl">
+      <DeletionWatch featureId={request.featureId} />
       <p className="text-sm text-fg-soft">
         <Link
           href={`/features/${request.featureId}`}

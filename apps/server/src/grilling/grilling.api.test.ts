@@ -372,8 +372,8 @@ describe('Grilling', () => {
     const outsider = await db.user.create({
       data: { email: 'out@else.test', name: 'Out', passwordHash: 'x' },
     });
-    expect((await answer(outsider.id)).status).toBe(403);
-    expect((await asUser(outsider.id)('GET', `/grillings/${g.id}`)).status).toBe(403);
+    expect((await answer(outsider.id)).status).toBe(404);
+    expect((await asUser(outsider.id)('GET', `/grillings/${g.id}`)).status).toBe(404);
     // A PO of another Project's Team is not a PO here.
     const seededPo = await person('Pat');
     await join(SEED.teamId, seededPo, 'PO');

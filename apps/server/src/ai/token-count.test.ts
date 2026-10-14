@@ -105,6 +105,8 @@ describe('isContextTooLong', () => {
       "This model's maximum context length is 128000 tokens. However, your messages resulted in 130000 tokens.",
       'Input is too long for requested model.',
       'the request exceeds the available context size, try increasing the context window',
+      // Gemini (ticket 0080).
+      'The input token count (1200000) exceeds the maximum number of tokens allowed (1048576).',
     ]) {
       expect(isContextTooLong(new Error(message))).toBe(true);
     }

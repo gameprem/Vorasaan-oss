@@ -364,6 +364,9 @@ describe('cache breaks', () => {
       OPENROUTER_CACHE_MARK,
     );
     expect(cacheMarkOf('openrouter/anthropic/example-model')).toBe(OPENROUTER_CACHE_MARK);
+    // Gemini caches a repeated prefix by itself (implicit caching, ticket 0080): no marks.
+    expect(cacheMarkOf({ id: 'google/gemini-example-pro', apiKey: 'k' })).toBeNull();
+    expect(cacheMarkOf('google/gemini-example-pro')).toBeNull();
     expect(OPENROUTER_CACHE_MARK).toEqual({
       openrouter: { cacheControl: { type: 'ephemeral' } },
     });

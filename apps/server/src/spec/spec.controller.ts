@@ -24,8 +24,8 @@ export class SpecController {
   constructor(private readonly spec: SpecService) {}
 
   @Get('spec-proposals/:id')
-  getProposal(@Param('id', ParseUUIDPipe) id: string) {
-    return this.spec.getProposal(id);
+  getProposal(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.spec.getProposal(user, id);
   }
 
   @Post('spec-proposals/:id/approve')
@@ -62,13 +62,17 @@ export class SpecController {
   }
 
   @Get('features/:id/spec-versions')
-  versions(@Param('id', ParseUUIDPipe) id: string) {
-    return this.spec.listVersions(id);
+  versions(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.spec.listVersions(user, id);
   }
 
   @Get('features/:id/spec-versions/:version')
-  version(@Param('id', ParseUUIDPipe) id: string, @Param('version', ParseIntPipe) version: number) {
-    return this.spec.getVersion(id, version);
+  version(
+    @CurrentUser() user: User,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('version', ParseIntPipe) version: number,
+  ) {
+    return this.spec.getVersion(user, id, version);
   }
 
   @Post('features/:id/spec-versions/:version/revert')
@@ -83,14 +87,15 @@ export class SpecController {
 
   @Get('features/:id/spec-diff')
   diff(
+    @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
     @Query({ schema: SpecDiffQuery }) query: SpecDiffQuery,
   ) {
-    return this.spec.diff(id, query.from, query.to);
+    return this.spec.diff(user, id, query.from, query.to);
   }
 
   @Get('features/:id/decision-log')
-  decisionLog(@Param('id', ParseUUIDPipe) id: string) {
-    return this.spec.decisionLog(id);
+  decisionLog(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.spec.decisionLog(user, id);
   }
 }

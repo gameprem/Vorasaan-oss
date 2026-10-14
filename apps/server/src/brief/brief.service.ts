@@ -35,6 +35,9 @@ import { assertCanEditProject, projectAccess } from './brief-access.ts';
 /** BriefVersion.version is a Postgres int4. */
 const MAX_VERSION = 2_147_483_647;
 
+/** An unknown Brief Proposal, and one outside the caller's Organization, read the same. */
+const BRIEF_PROPOSAL_NOT_FOUND = 'Brief Proposal not found';
+
 /** Thrown inside a transaction to roll it back and answer 409. */
 class StaleStateError extends Error {}
 
@@ -195,7 +198,7 @@ export class BriefService {
 
   async getProposal(user: User, id: string): Promise<BriefProposalView> {
     const proposal = await this.findProposalOrThrow(id);
-    await projectAccess(this.db, user, proposal.projectId);
+    await projectAccess(this.db, user, proposal.projectId, BRIEF_PROPOSAL_NOT_FOUND);
     return toBriefProposalView(proposal);
   }
 
@@ -334,14 +337,14 @@ export class BriefService {
       where: { id },
       include: briefProposalInclude,
     });
-    if (!proposal) throw new NotFoundException('Brief Proposal not found');
+    if (!proposal) throw new NotFoundException(BRIEF_PROPOSAL_NOT_FOUND);
     return proposal;
   }
 
   /** The named approver reviews, and only while they may still edit the Brief. */
   private async findPendingForApprover(user: User, id: string) {
     const proposal = await this.findProposalOrThrow(id);
-    await assertCanEditProject(this.db, user, proposal.projectId);
+    await assertCanEditProject(this.db, user, proposal.projectId, BRIEF_PROPOSAL_NOT_FOUND);
     if (proposal.approverId !== user.id) {
       throw new ForbiddenException('Only the approver can review this Brief Proposal');
     }

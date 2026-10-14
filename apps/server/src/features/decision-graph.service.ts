@@ -3,13 +3,16 @@ import type { PrismaClient, User } from '@vorasaan/db';
 import {
   type DecisionGraphBranch,
   type DecisionGraphBranchState,
+  type DecisionGraphDesignDoc,
   type DecisionGraphNode,
   type DecisionGraphRedraft,
   type DecisionGraphView,
   type DecisionRequestStatus,
+  designDocAffected,
   type ProposalStatus,
   responseWindowLabels,
 } from '@vorasaan/shared';
+import { featureInOrganizationOf } from '../auth/organization-scope.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import { responseWindowState } from '../decision-requests/decision-request.view.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
@@ -51,15 +54,12 @@ export class DecisionGraphService {
     // Everyone in the Feature's Organization reads it; anyone else learns nothing, not even
     // that it exists.
     const feature = await this.db.feature.findFirst({
-      where: {
-        id: featureId,
-        team: { project: { organization: { memberships: { some: { userId: user.id } } } } },
-      },
+      where: { id: featureId, ...featureInOrganizationOf(user.id) },
       select: { id: true },
     });
     if (!feature) throw new NotFoundException('Feature not found');
 
-    const [versions, requests, redrafts] = await Promise.all([
+    const [versions, requests, redrafts, designDocs] = await Promise.all([
       this.db.specVersion.findMany({
         where: { featureId },
         orderBy: { version: 'asc' },
@@ -126,6 +126,11 @@ export class DecisionGraphService {
           requestId: true,
           specProposalId: true,
         },
+      }),
+      // Its Design Docs (ticket 0069): their sub-lanes are read only when it has any.
+      this.db.designDoc.findMany({
+        where: { featureId },
+        select: { id: true, platformId: true },
       }),
     ]);
 
@@ -220,6 +225,123 @@ export class DecisionGraphService {
       ];
     });
 
-    return { featureId, nodes, branches };
+    return {
+      featureId,
+      nodes,
+      branches,
+      designDocs: designDocs.length ? await this.designDocs(featureId, designDocs) : [],
+    };
+  }
+
+  /**
+   * The Design Docs' sub-lanes (ticket 0069): each Design Doc drafted so far, in the Project's
+   * order of its Platform and QA last, with its approved versions (oldest first) against the
+   * Spec Versions they follow, and its pending proposal.
+   */
+  private async designDocs(
+    featureId: string,
+    docs: { id: string; platformId: string | null }[],
+  ): Promise<DecisionGraphDesignDoc[]> {
+    const [targets, latest] = await Promise.all([
+      this.db.platform.findMany({
+        where: { features: { some: { featureId } } },
+        orderBy: [{ position: 'asc' }, { id: 'asc' }],
+        select: { id: true, name: true },
+      }),
+      this.db.specVersion.findFirst({
+        where: { featureId },
+        orderBy: { version: 'desc' },
+        select: { id: true, markdown: true },
+      }),
+    ]);
+    const ids = docs.map((d) => d.id);
+    const [versions, pending] = await Promise.all([
+      this.db.$queryRaw<
+        {
+          designDocId: string;
+          version: number;
+          source: 'AI_DRAFT' | 'REVERT';
+          createdAt: Date;
+          specVersionId: string;
+          specVersion: number;
+          approvedById: string;
+          approvedByName: string;
+        }[]
+      >`
+        SELECT v."designDocId", v.version, v.source::text AS source, v."createdAt",
+               v."specVersionId", s.version AS "specVersion",
+               u.id AS "approvedById", u.name AS "approvedByName"
+        FROM "DesignDocVersion" v
+        JOIN "SpecVersion" s ON s.id = v."specVersionId"
+        JOIN "User" u ON u.id = v."approvedById"
+        WHERE v."designDocId" = ANY(${ids}::text[])
+        ORDER BY v."designDocId", v.version`,
+      this.db.$queryRaw<
+        {
+          designDocId: string;
+          reason: 'FIRST_DRAFT' | 'SPEC_CHANGED';
+          createdAt: Date;
+          specVersion: number;
+        }[]
+      >`
+        SELECT p."designDocId", p.reason::text AS reason, p."createdAt", s.version AS "specVersion"
+        FROM "DesignDocProposal" p
+        JOIN "SpecVersion" s ON s.id = p."specVersionId"
+        WHERE p."designDocId" = ANY(${ids}::text[]) AND p.status = 'PENDING'`,
+    ]);
+    // The Spec each Design Doc's latest version follows, to tell whether it is stale.
+    const followed = [
+      ...new Set(
+        docs.flatMap((d) => {
+          const last = versions.filter((v) => v.designDocId === d.id).at(-1);
+          return last && last.specVersionId !== latest?.id ? [last.specVersionId] : [];
+        }),
+      ),
+    ];
+    const specs = followed.length
+      ? await this.db.specVersion.findMany({
+          where: { id: { in: followed } },
+          select: { id: true, markdown: true },
+        })
+      : [];
+    const markdownOf = new Map(specs.map((s) => [s.id, s.markdown]));
+    const names = targets.map((t) => t.name);
+    const position = new Map(targets.map((t, i) => [t.id, i]));
+    return docs
+      .filter((d) => d.platformId === null || position.has(d.platformId))
+      .sort(
+        (a, b) =>
+          (a.platformId === null ? names.length : (position.get(a.platformId) ?? 0)) -
+          (b.platformId === null ? names.length : (position.get(b.platformId) ?? 0)),
+      )
+      .map((d) => {
+        const name = d.platformId ? (targets.find((t) => t.id === d.platformId)?.name ?? '') : 'QA';
+        const mine = versions.filter((v) => v.designDocId === d.id);
+        const last = mine.at(-1);
+        const before = last ? markdownOf.get(last.specVersionId) : undefined;
+        const p = pending.find((x) => x.designDocId === d.id);
+        return {
+          key: d.platformId ?? 'qa',
+          name,
+          stale:
+            before !== undefined &&
+            latest !== null &&
+            designDocAffected(before, latest.markdown, d.platformId ? name : null, names),
+          versions: mine.map((v) => ({
+            version: v.version,
+            specVersion: v.specVersion,
+            source: v.source,
+            approvedBy: { id: v.approvedById, name: v.approvedByName },
+            createdAt: v.createdAt.toISOString(),
+          })),
+          pending: p
+            ? {
+                reason: p.reason,
+                specVersion: p.specVersion,
+                createdAt: p.createdAt.toISOString(),
+              }
+            : null,
+        };
+      });
   }
 }

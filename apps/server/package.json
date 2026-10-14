@@ -18,6 +18,7 @@
     "eval:prompt-proposals": "bun scripts/eval-prompt-proposals.ts",
     "eval:coverage": "bun scripts/eval-coverage.ts",
     "eval:agent-skills": "bun scripts/eval-agent-skills.ts",
+    "eval:design-docs": "bun scripts/eval-design-docs.ts",
     "tokens:fixture": "bun scripts/token-fixture.ts",
     "tokens:tasks": "bun scripts/token-report.ts",
     "bench": "bun scripts/bench.ts"

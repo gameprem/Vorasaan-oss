@@ -1,4 +1,4 @@
-import { CONTEXT_WINDOW_LIMITS, type OpenRouterModelsView } from '@vorasaan/shared';
+import { CONTEXT_WINDOW_LIMITS, type ProviderModelsView } from '@vorasaan/shared';
 import { z } from 'zod';
 
 // OpenRouter as an AI provider (ticket 0064). An Admin gives only a key; the base
@@ -86,7 +86,7 @@ export const OPENROUTER_LIST_TIMEOUT_MS = 10_000;
  */
 export async function listOpenRouterModels(
   env: Record<string, string | undefined> = process.env,
-): Promise<OpenRouterModelsView> {
+): Promise<ProviderModelsView> {
   try {
     const res = await fetch(`${openRouterBaseUrl(env)}/models`, {
       headers: { accept: 'application/json', ...openRouterHeaders(env) },

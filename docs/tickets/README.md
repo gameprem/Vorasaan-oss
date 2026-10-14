@@ -121,14 +121,13 @@ Follow-ups recorded during the MVP reviews.
 | 0039 | [End-to-end browser tests in CI](./0039-e2e-in-ci.md) | none |
 | 0040 | [`GET /me/teams`](./0040-me-teams.md) | none |
 | 0041 | [Hardening follow-ups from the MVP reviews](./0041-hardening.md) | none |
+| 0049 | [Delete a Feature or a Project](./0049-delete-feature-project.md) | 0041 |
 
 ## Backlog
 
 Recorded follow-ups that are not scheduled yet.
 
-| # | Ticket | Depends on |
-| --- | --- | --- |
-| 0049 | [Delete a Feature or a Project](./0049-delete-feature-project.md) | none |
+Nothing at the moment: 0049 (deleting a Feature or a Project) is done, under MVP polish.
 
 ## Chat-first Web UI (Post-MVP 1)
 
@@ -179,11 +178,12 @@ No Decision Request waits silently: Response Windows with escalation, Decision L
 
 ## Next (Post-MVP 4–9)
 
-In this order: OpenRouter as a provider and Request changes on every AI proposal (ADR 0013), both done; then our own UI kit (ADR 0016), done; then a context meter with `/compact`, a readable chat history and cursor pagination, done; then the Decision Graph of a Feature, done; then language rules with Thai eval cases, done (its English-first comparison is run by hand).
+In this order: OpenRouter as a provider and Request changes on every AI proposal (ADR 0013), both done; then our own UI kit (ADR 0016), done; then a context meter with `/compact`, a readable chat history and cursor pagination, done; then the Decision Graph of a Feature, done; then language rules with Thai eval cases, done (its English-first comparison is run by hand). Later, Gemini joined OpenRouter as a key-only provider with its model list, done (0080).
 
 | # | Ticket | Depends on |
 | --- | --- | --- |
 | 0064 | [OpenRouter as an AI Provider](./0064-openrouter-provider.md) | 0053, 0060, 0061 |
+| 0080 | [Gemini as an AI Provider](./0080-gemini-provider.md) | 0053, 0060, 0061, 0064, 0070, 0075 |
 | 0065 | [Request changes: the AI redrafts from a person's explanation](./0065-request-changes.md) | 0043, 0058, 0060 |
 | 0077 | [UI kit, and replace browser-native controls](./0077-ui-kit.md) | 0045, 0046 |
 | 0066 | [Context meter, /compact, chat history and cursor pagination](./0066-context-meter-and-compact.md) | 0054, 0060, 0061, 0077 |
@@ -231,8 +231,16 @@ The AI can use Agent Skills in the open SKILL.md format, installed by an Admin f
 
 ## Design Docs (Post-MVP 14)
 
-Once a Feature's Spec is approved and a Platform is covered, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA), and the Platform's people approve it. The Spec stays the source of truth (ADR 0014).
+Once a Feature's Spec is approved and a Platform is covered, the AI drafts that Platform's Design Doc (Back-End, Front-End, Mobile, QA), and the Platform's people approve it. The Spec stays the source of truth (ADR 0014). Done: each target Platform's Design Doc, and QA's once every target is covered, is drafted in the background from a settled Spec and the Platform's template (built in, or the Project's own; a Platform names its template); a Tech Lead or a Role Owner of the Platform's Team Roles approves, declines or Requests changes, everyone else gets a 403; approved versions follow a Spec Version and have diffs and revert; a Spec change that touches what a Design Doc covers makes it stale and the AI proposes an update; what the design needs that the Spec leaves open becomes a draft Question on the Feature; the web app has a Design Docs tab, a page per Design Doc, the templates on the Project's Platforms tab, Inbox Items and a sub-lane under the Decision Graph (0069).
 
 | # | Ticket | Depends on |
 | --- | --- | --- |
 | 0069 | [Design Docs per Platform](./0069-design-docs.md) | 0050, 0051, 0065 |
+
+## `vorasaan run` (Post-MVP 15)
+
+A developer hands one Feature's approved context to their coding assistant: `vorasaan run --ai claude` writes the Feature's Hand-off (the latest Spec, its Decisions, the Project rules, the most relevant retrieved context, the Jira Epic key and the approved Design Doc of their Platform) to `.vorasaan/specs/<feature>.md` and starts the assistant on it. Done: `vorasaan run [--feature] [--ai claude|codex|gemini] [--platform] [--budget] [--no-launch]` writes the Hand-off the server assembles within a token budget (`GET /features/:id/hand-off`: the Spec first, the Feature's Decisions and open Decision Requests, the approved Design Doc of the Platform picked from `--platform`, the Team Roles or the changed files' hint, with whether the Spec changed it since, the Feature Guidelines and the Project Brief, retrieved context, everything fenced as data and credentials redacted) only inside `.vorasaan/specs/`, never through a symlink, suggests the .gitignore line, and starts the assistant in the repository with the path only and without the Vorasaan credentials, or prints the command (0079).
+
+| # | Ticket | Depends on |
+| --- | --- | --- |
+| 0079 | [`vorasaan run`: hand a Feature's context to the coding assistant](./0079-vorasaan-run.md) | 0052, 0060, 0068, 0069, 0076 |

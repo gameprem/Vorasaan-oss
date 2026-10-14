@@ -44,8 +44,15 @@ import {
   type RecordedModelColumns,
   toRecordedModelColumns,
 } from '../ai/recorded-model.ts';
+import { featureInOrganizationOf, organizationOf } from '../auth/organization-scope.ts';
 import { assertCanEditProject, projectAccess } from '../brief/brief-access.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
+import {
+  assertDesignDocApprover,
+  designDocApprovers,
+  designDocForAi,
+  rolesOf,
+} from '../design-docs/design-doc-access.ts';
 import { ProjectFoundation, withoutBrief } from '../feature-guidelines/project-foundation.ts';
 import { EventBus } from '../inbox/event-bus.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
@@ -82,6 +89,7 @@ type Guard =
   | { kind: 'BRIEF_PROPOSAL'; projectId: string; baseVersionId: string | null }
   | { kind: 'FEATURE_SUGGESTION'; projectId: string }
   | { kind: 'PROMPT_VERSION'; promptName: SkillName; analysisId: string }
+  | { kind: 'DESIGN_DOC_PROPOSAL'; featureId: string; designDocId: string; specVersionId: string }
   | {
       kind: 'CHOICES';
       featureId: string;
@@ -95,6 +103,7 @@ function receiptScope(guard: Guard): { featureId?: string; projectId?: string } 
   switch (guard.kind) {
     case 'SPEC_PROPOSAL':
     case 'CHOICES':
+    case 'DESIGN_DOC_PROPOSAL':
       return { featureId: guard.featureId };
     case 'BRIEF_PROPOSAL':
     case 'FEATURE_SUGGESTION':
@@ -117,13 +126,19 @@ type RedraftRow = Prisma.RedraftGetPayload<{
 
 const FK: Record<
   ProposalKind,
-  'requestId' | 'specProposalId' | 'briefProposalId' | 'featureSuggestionId' | 'promptVersionId'
+  | 'requestId'
+  | 'specProposalId'
+  | 'briefProposalId'
+  | 'featureSuggestionId'
+  | 'promptVersionId'
+  | 'designDocProposalId'
 > = {
   CHOICES: 'requestId',
   SPEC_PROPOSAL: 'specProposalId',
   BRIEF_PROPOSAL: 'briefProposalId',
   FEATURE_SUGGESTION: 'featureSuggestionId',
   PROMPT_VERSION: 'promptVersionId',
+  DESIGN_DOC_PROPOSAL: 'designDocProposalId',
 };
 
 /**
@@ -143,6 +158,7 @@ const NAME: Record<ProposalKind, string> = {
   BRIEF_PROPOSAL: 'This Brief Proposal',
   FEATURE_SUGGESTION: 'This Feature Suggestion',
   PROMPT_VERSION: 'This Prompt Version',
+  DESIGN_DOC_PROPOSAL: 'This Design Doc',
 };
 
 /** The limit of Request changes per proposal: VORASAAN_MAX_REDRAFTS, else 10. */
@@ -429,6 +445,15 @@ export class RedraftsService {
           if (updated.count !== 1) throw moved();
           break;
         }
+        case 'DESIGN_DOC_PROPOSAL': {
+          if (written.content.kind !== 'MARKDOWN') throw moved();
+          const updated = await tx.designDocProposal.updateMany({
+            where: { id: ref.id, status: 'PENDING', specVersionId: guard.specVersionId },
+            data: { proposedMarkdown: written.content.markdown, ...model },
+          });
+          if (updated.count !== 1) throw moved();
+          break;
+        }
         case 'CHOICES': {
           if (written.content.kind !== 'CHOICES') throw moved();
           const updated = await tx.decisionRequest.updateMany({
@@ -660,6 +685,50 @@ export class RedraftsService {
           model: await this.models.record(model),
         };
       }
+      case 'DESIGN_DOC_PROPOSAL': {
+        if (content.kind !== 'MARKDOWN') throw new Error('Not a Markdown proposal');
+        const [input, spec] = await Promise.all([
+          designDocForAi(this.db, guard.designDocId),
+          this.db.specVersion.findUniqueOrThrow({
+            where: { id: guard.specVersionId },
+            select: { version: true, markdown: true },
+          }),
+        ]);
+        const specMarkdown = input.scope(spec.markdown);
+        const { model, budget } = await this.budgets.forTask(
+          'redraftDesignDoc',
+          'decisionRequest',
+          {
+            fixed: estimateTokens(specMarkdown) + estimateTokens(content.markdown),
+          },
+        );
+        const { context } = splitFeatureSpec(
+          await this.retriever.forFeature(
+            guard.featureId,
+            `${input.doc.name} design: ${input.feature.title}\n\n${query}`,
+            budget.context,
+            { k: budget.topK },
+          ),
+        );
+        const out = await this.ai.redraftDesignDoc(
+          {
+            ...feedback,
+            feature: input.feature,
+            doc: input.doc,
+            specVersion: spec.version,
+            specMarkdown,
+            proposedMarkdown: content.markdown,
+            context,
+          },
+          { model, language, receipt },
+        );
+        return {
+          content: { kind: 'MARKDOWN', markdown: normalizeMarkdown(out.proposedMarkdown) },
+          summary: out.summary,
+          preferences: out.preferences,
+          model: await this.models.record(model),
+        };
+      }
       case 'CHOICES': {
         if (content.kind !== 'CHOICES') throw new Error('Not Choices');
         const request = await this.db.decisionRequest.findUniqueOrThrow({
@@ -724,7 +793,9 @@ export class RedraftsService {
   private async authorize(user: User, ref: ProposalRef): Promise<Target> {
     switch (ref.kind) {
       case 'SPEC_PROPOSAL': {
-        const p = await this.db.specProposal.findUnique({ where: { id: ref.id } });
+        const p = await this.db.specProposal.findFirst({
+          where: { id: ref.id, feature: featureInOrganizationOf(user.id) },
+        });
         if (!p) throw new NotFoundException('Spec Proposal not found');
         if (p.approverId !== user.id) {
           throw new ForbiddenException(
@@ -761,7 +832,7 @@ export class RedraftsService {
       case 'BRIEF_PROPOSAL': {
         const p = await this.db.briefProposal.findUnique({ where: { id: ref.id } });
         if (!p) throw new NotFoundException('Brief Proposal not found');
-        await projectAccess(this.db, user, p.projectId);
+        await projectAccess(this.db, user, p.projectId, 'Brief Proposal not found');
         if (p.approverId !== user.id) {
           throw new ForbiddenException(
             'Only the approver can request changes to this Brief Proposal',
@@ -793,7 +864,7 @@ export class RedraftsService {
         const s = await this.db.featureSuggestion.findUnique({ where: { id: ref.id } });
         if (!s) throw new NotFoundException('Feature Suggestion not found');
         // Whoever may accept or dismiss it: the Project's POs and Admins.
-        await assertCanEditProject(this.db, user, s.projectId);
+        await assertCanEditProject(this.db, user, s.projectId, 'Feature Suggestion not found');
         if (s.status !== 'PENDING') {
           throw new ConflictException(
             `This Feature Suggestion is already ${s.status.toLowerCase()}`,
@@ -816,7 +887,9 @@ export class RedraftsService {
         };
       }
       case 'PROMPT_VERSION': {
-        const v = await this.db.promptVersion.findUnique({ where: { id: ref.id } });
+        const v = await this.db.promptVersion.findFirst({
+          where: { id: ref.id, organization: organizationOf(user.id) },
+        });
         if (!v) throw new NotFoundException('Prompt Version not found');
         await this.assertAdmin(
           user,
@@ -843,9 +916,57 @@ export class RedraftsService {
           },
         };
       }
+      case 'DESIGN_DOC_PROPOSAL': {
+        const p = await this.db.designDocProposal.findFirst({
+          where: { id: ref.id, designDoc: { feature: featureInOrganizationOf(user.id) } },
+          include: {
+            designDoc: {
+              select: { featureId: true, platform: { select: { roles: true } } },
+            },
+          },
+        });
+        if (!p) throw new NotFoundException('Design Doc proposal not found');
+        const roles = rolesOf(p.designDoc.platform);
+        await assertDesignDocApprover(
+          this.db,
+          user,
+          p.designDoc.featureId,
+          roles,
+          'request changes to this Design Doc',
+        );
+        if (p.status !== 'PENDING') {
+          throw new ConflictException(
+            `This Design Doc proposal is already ${p.status.toLowerCase()}`,
+          );
+        }
+        const latest = await this.db.specVersion.findFirst({
+          where: { featureId: p.designDoc.featureId },
+          orderBy: { version: 'desc' },
+          select: { id: true },
+        });
+        if (latest?.id !== p.specVersionId) {
+          throw new ConflictException(
+            'The Spec has changed since this Design Doc was drafted, so it can no longer be redrafted',
+          );
+        }
+        const approvers = await designDocApprovers(this.db, p.designDoc.featureId, roles);
+        return {
+          ref,
+          content: { kind: 'MARKDOWN', markdown: p.proposedMarkdown },
+          draftedAt: p.createdAt,
+          draftedWith: pickModel(p),
+          audience: approvers.map((a) => a.userId),
+          guard: {
+            kind: 'DESIGN_DOC_PROPOSAL',
+            featureId: p.designDoc.featureId,
+            designDocId: p.designDocId,
+            specVersionId: p.specVersionId,
+          },
+        };
+      }
       case 'CHOICES': {
-        const r = await this.db.decisionRequest.findUnique({
-          where: { id: ref.id },
+        const r = await this.db.decisionRequest.findFirst({
+          where: { id: ref.id, feature: featureInOrganizationOf(user.id) },
           include: {
             choices: { orderBy: { position: 'asc' } },
             recipients: { select: { userId: true } },
@@ -920,7 +1041,9 @@ export class RedraftsService {
   private async assertVisible(user: User, ref: ProposalRef) {
     switch (ref.kind) {
       case 'SPEC_PROPOSAL': {
-        const exists = await this.db.specProposal.count({ where: { id: ref.id } });
+        const exists = await this.db.specProposal.count({
+          where: { id: ref.id, feature: featureInOrganizationOf(user.id) },
+        });
         if (!exists) throw new NotFoundException('Spec Proposal not found');
         return;
       }
@@ -930,7 +1053,7 @@ export class RedraftsService {
           select: { projectId: true },
         });
         if (!p) throw new NotFoundException('Brief Proposal not found');
-        await projectAccess(this.db, user, p.projectId);
+        await projectAccess(this.db, user, p.projectId, 'Brief Proposal not found');
         return;
       }
       case 'FEATURE_SUGGESTION': {
@@ -939,16 +1062,27 @@ export class RedraftsService {
           select: { projectId: true },
         });
         if (!s) throw new NotFoundException('Feature Suggestion not found');
-        await projectAccess(this.db, user, s.projectId);
+        await projectAccess(this.db, user, s.projectId, 'Feature Suggestion not found');
         return;
       }
       case 'CHOICES': {
-        const exists = await this.db.decisionRequest.count({ where: { id: ref.id } });
+        const exists = await this.db.decisionRequest.count({
+          where: { id: ref.id, feature: featureInOrganizationOf(user.id) },
+        });
         if (!exists) throw new NotFoundException('Decision Request not found');
         return;
       }
+      case 'DESIGN_DOC_PROPOSAL': {
+        const exists = await this.db.designDocProposal.count({
+          where: { id: ref.id, designDoc: { feature: featureInOrganizationOf(user.id) } },
+        });
+        if (!exists) throw new NotFoundException('Design Doc proposal not found');
+        return;
+      }
       case 'PROMPT_VERSION': {
-        const exists = await this.db.promptVersion.count({ where: { id: ref.id } });
+        const exists = await this.db.promptVersion.count({
+          where: { id: ref.id, organization: organizationOf(user.id) },
+        });
         if (!exists) throw new NotFoundException('Prompt Version not found');
         await this.assertAdmin(
           user,
@@ -1148,6 +1282,12 @@ export class RedraftsService {
               s.createdAt,
               null,
             )
+          : null;
+      }
+      case 'DESIGN_DOC_PROPOSAL': {
+        const p = await this.db.designDocProposal.findUnique({ where: { id: ref.id } });
+        return p
+          ? viewOf({ kind: 'MARKDOWN', markdown: p.proposedMarkdown }, p.createdAt, pickModel(p))
           : null;
       }
       case 'PROMPT_VERSION': {

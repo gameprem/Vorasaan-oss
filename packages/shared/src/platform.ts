@@ -18,6 +18,13 @@ export const PlatformName = z
   .regex(/^[^\r\n#]+$/, 'A Platform name is one line, without "#"');
 
 /**
+ * The Design Doc templates a Platform can start from (ticket 0069). QA is not a Platform
+ * (ADR 0009): its Design Doc has a template of its own.
+ */
+export const PlatformDesignTemplate = z.enum(['BACK_END', 'FRONT_END', 'MOBILE']);
+export type PlatformDesignTemplate = z.infer<typeof PlatformDesignTemplate>;
+
+/**
  * What a Platform is (ADR 0009): its name, the Team Roles who can answer for it, and the
  * Coverage checks it switches on. A template switches every check on.
  */
@@ -36,6 +43,11 @@ export const PlatformDefinition = z.object({
   noOpenBlockers: z.boolean().default(true),
   /** Its section has acceptance criteria or test cases, and someone in the Team holds QA. */
   qaReady: z.boolean().default(true),
+  /**
+   * The Design Doc template it starts from (ticket 0069), so a Platform added later, such as
+   * Flutter, names one. Null: chosen from its Team Roles (`platformDesignTemplate`).
+   */
+  designTemplate: PlatformDesignTemplate.nullable().default(null),
 });
 export type PlatformDefinition = z.infer<typeof PlatformDefinition>;
 export type PlatformDefinitionInput = z.input<typeof PlatformDefinition>;
@@ -48,6 +60,8 @@ export const BUILT_IN_PLATFORMS: readonly PlatformDefinition[] = [
 ].map((p) => ({
   ...p,
   roles: p.roles as TeamRole[],
+  // Chosen from the roles: Back-End, Front-End and Mobile.
+  designTemplate: null,
   specSection: true,
   someoneToAsk: true,
   noOpenBlockers: true,

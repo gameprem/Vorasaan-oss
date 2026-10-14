@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { InboxItem, ResponseWindowState } from '@vorasaan/shared';
 import { id, NO_WINDOW, request } from './fixtures.ts';
-import { inboxItemLine, requestLine } from './format.ts';
+import { inboxItemDetail, inboxItemKey, inboxItemLine, requestLine } from './format.ts';
 
 const now = new Date('2026-10-05T10:00:00Z');
 const item = (responseWindow: ResponseWindowState) =>
@@ -59,5 +59,25 @@ describe('Response Window labels in the TUI (ticket 0055)', () => {
         now,
       ),
     ).toBe('[Needs info] Blocker: Provider has no webhook · Async checkout');
+  });
+});
+
+describe('Design Docs in the TUI Inbox (ticket 0069)', () => {
+  test('an approver sees which Design Doc waits, and that it is reviewed in the web app', () => {
+    const designDoc = (reason: 'FIRST_DRAFT' | 'SPEC_CHANGED') =>
+      ({
+        kind: 'APPROVE_DESIGN_DOC',
+        feature: { id: id(101), title: 'Async checkout' },
+        since: now.toISOString(),
+        designDoc: { proposalId: id(401), key: id(21), name: 'Back-End', reason },
+      }) as InboxItem;
+    expect(inboxItemLine(designDoc('FIRST_DRAFT'))).toBe(
+      'Approve Back-End Design Doc · Async checkout',
+    );
+    expect(inboxItemLine(designDoc('SPEC_CHANGED'))).toBe(
+      'Approve Back-End Design Doc update · Async checkout',
+    );
+    expect(inboxItemKey(designDoc('FIRST_DRAFT'))).toBe(`design-doc:${id(401)}`);
+    expect(inboxItemDetail(designDoc('SPEC_CHANGED'))[1]).toContain('web app');
   });
 });

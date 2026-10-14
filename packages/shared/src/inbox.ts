@@ -15,6 +15,7 @@ import {
   BriefVersionSource,
   DecisionRequestKind,
   DecisionRequestStatus,
+  DesignDocProposalReason,
   GrillingRoundKind,
   NotificationType,
   SpecVersionSource,
@@ -107,6 +108,22 @@ export const InboxItem = z.discriminatedUnion('kind', [
     ...projectItemBase,
     briefProposal: z.object({ id: Id, source: BriefVersionSource }),
   }),
+  /**
+   * Approve, decline or Request changes on a PENDING Design Doc proposal (ticket 0069) of a
+   * Feature where I'm a Tech Lead or a Role Owner of its Platform's Team Roles.
+   */
+  z.object({
+    kind: z.literal('APPROVE_DESIGN_DOC'),
+    ...itemBase,
+    designDoc: z.object({
+      proposalId: Id,
+      /** The Platform's id, or `qa`. */
+      key: z.string(),
+      /** "Back-End", or "QA". */
+      name: z.string(),
+      reason: DesignDocProposalReason,
+    }),
+  }),
 ]);
 export type InboxItem = z.infer<typeof InboxItem>;
 export type InboxItemKind = InboxItem['kind'];
@@ -164,6 +181,26 @@ export const NotificationCreatedEvent = z.object({ notification: NotificationVie
 export type NotificationCreatedEvent = z.infer<typeof NotificationCreatedEvent>;
 
 /**
+ * A Feature was deleted (ticket 0049): a page showing it, or anything of it, moves to its
+ * Project. Sent to everyone in the Organization with a stream open.
+ */
+export const FeatureDeletedEvent = z.object({
+  featureId: z.uuid(),
+  projectId: z.uuid(),
+  title: z.string(),
+});
+export type FeatureDeletedEvent = z.infer<typeof FeatureDeletedEvent>;
+
+/** A Project was deleted (ticket 0049), with its Teams and Features: their pages move away. */
+export const ProjectDeletedEvent = z.object({
+  projectId: z.uuid(),
+  name: z.string(),
+  teamIds: z.array(z.uuid()),
+  featureIds: z.array(z.uuid()),
+});
+export type ProjectDeletedEvent = z.infer<typeof ProjectDeletedEvent>;
+
+/**
  * One SSE message: its `event:` name and its JSON `data:` payload. The
  * `conversation.*` events stream a Conversation's reply, and its Action Cards,
  * to its owner only.
@@ -185,6 +222,9 @@ export const ServerEvent = z.discriminatedUnion('event', [
   z.object({ event: z.literal('chatAccount.changed'), data: ChatAccountChangedEvent }),
   /** A Redraft of a proposal the viewer may act on started, finished or failed (0065). */
   z.object({ event: z.literal('proposal.redrafted'), data: ProposalRedraftedEvent }),
+  /** A Feature or a Project was deleted (0049). */
+  z.object({ event: z.literal('feature.deleted'), data: FeatureDeletedEvent }),
+  z.object({ event: z.literal('project.deleted'), data: ProjectDeletedEvent }),
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;
 export type ServerEventName = ServerEvent['event'];

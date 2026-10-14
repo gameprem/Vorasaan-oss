@@ -53,7 +53,7 @@ export class PlatformsController {
 
   /** What the Feature's first Spec starts from: a section per target Platform. */
   @Get('features/:id/spec-template')
-  specTemplate(@Param('id', ParseUUIDPipe) id: string) {
-    return this.platforms.specTemplate(id);
+  specTemplate(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.platforms.specTemplate(user, id);
   }
 }

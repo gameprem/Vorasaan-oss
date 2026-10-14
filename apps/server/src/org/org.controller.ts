@@ -24,17 +24,21 @@ import {
 } from '@vorasaan/shared';
 import { AdminOnly } from '../auth/admin.guard.ts';
 import { CurrentUser, Public } from '../auth/identity.guard.ts';
+import { DeletionService } from './deletion.service.ts';
 import { OrgService } from './org.service.ts';
 
 @Controller()
 export class OrgController {
-  constructor(private readonly org: OrgService) {}
+  constructor(
+    private readonly org: OrgService,
+    private readonly deletion: DeletionService,
+  ) {}
 
   // Projects & Teams
 
   @Get('projects')
-  projects() {
-    return this.org.listProjects();
+  projects(@CurrentUser() user: User) {
+    return this.org.listProjects(user);
   }
 
   @AdminOnly()
@@ -43,13 +47,22 @@ export class OrgController {
     return this.org.createProject(body);
   }
 
+  /** Deletes the Project with its Teams and Features (ticket 0049): Admins only. */
+  @AdminOnly()
+  @Delete('projects/:id')
+  @HttpCode(204)
+  async deleteProject(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    await this.deletion.deleteProject(user, id);
+  }
+
   @AdminOnly()
   @Post('projects/:id/teams')
   createTeam(
+    @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) projectId: string,
     @Body({ schema: CreateTeamInput }) body: CreateTeamInput,
   ) {
-    return this.org.createTeam(projectId, body.name);
+    return this.org.createTeam(user, projectId, body.name);
   }
 
   @Get('me/teams')
@@ -84,14 +97,14 @@ export class OrgController {
   // Members & invitations
 
   @Get('members')
-  members() {
-    return this.org.listMembers();
+  members(@CurrentUser() user: User) {
+    return this.org.listMembers(user);
   }
 
   @AdminOnly()
   @Get('invitations')
-  invitations() {
-    return this.org.listInvitations();
+  invitations(@CurrentUser() user: User) {
+    return this.org.listInvitations(user);
   }
 
   @AdminOnly()
@@ -106,8 +119,8 @@ export class OrgController {
   @AdminOnly()
   @Delete('invitations/:id')
   @HttpCode(204)
-  async revokeInvitation(@Param('id', ParseUUIDPipe) id: string) {
-    await this.org.revokeInvitation(id);
+  async revokeInvitation(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    await this.org.revokeInvitation(user, id);
   }
 
   @Public()
@@ -137,8 +150,8 @@ export class OrgController {
   }
 
   @Get('features/:id/role-owners')
-  roleOwners(@Param('id', ParseUUIDPipe) id: string) {
-    return this.org.listRoleOwners(id);
+  roleOwners(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.org.listRoleOwners(user, id);
   }
 
   @Put('features/:id/role-owners')

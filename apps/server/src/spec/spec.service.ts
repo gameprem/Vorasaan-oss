@@ -23,8 +23,13 @@ import { AI_PORT, AiOutputError, type AiPort } from '../ai/ai.port.ts';
 import { ContextBudgets } from '../ai/context-budget.ts';
 import { personLanguage } from '../ai/language.ts';
 import { fromRecordedModelColumns, toRecordedModelColumns } from '../ai/recorded-model.ts';
+import {
+  assertFeatureInOrganization,
+  featureInOrganizationOf,
+} from '../auth/organization-scope.ts';
 import { CoverageService } from '../coverage/coverage.service.ts';
 import { nextStatus } from '../decision-requests/decision-request.state.ts';
+import { SpecChanges } from '../design-docs/spec-changes.ts';
 import { NotificationsService } from '../inbox/notifications.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { ReceiptsService } from '../receipts/receipts.service.ts';
@@ -59,6 +64,7 @@ export class SpecService {
     private readonly budgets: ContextBudgets,
     private readonly receipts: ReceiptsService,
     private readonly coverage: CoverageService,
+    private readonly specChanges: SpecChanges,
   ) {}
 
   /**
@@ -68,8 +74,8 @@ export class SpecService {
    * material and Attachments first, then related parts of the Project.
    */
   async proposeFromAttachments(user: User, featureId: string): Promise<SpecProposalView> {
-    const feature = await this.db.feature.findUnique({
-      where: { id: featureId },
+    const feature = await this.db.feature.findFirst({
+      where: { id: featureId, ...featureInOrganizationOf(user.id) },
       select: { title: true, description: true },
     });
     if (!feature) throw new NotFoundException('Feature not found');
@@ -162,8 +168,8 @@ export class SpecService {
     platformId: string,
   ): Promise<SpecProposalView> {
     const [feature, platform, base] = await Promise.all([
-      this.db.feature.findUnique({
-        where: { id: featureId },
+      this.db.feature.findFirst({
+        where: { id: featureId, ...featureInOrganizationOf(user.id) },
         select: { title: true, description: true },
       }),
       this.db.platform.findFirst({
@@ -263,7 +269,7 @@ export class SpecService {
     input: { proposedMarkdown: string },
     draftedWith?: RecordedModel,
   ): Promise<SpecProposalView> {
-    await this.assertFeatureExists(featureId);
+    await assertFeatureInOrganization(this.db, user.id, featureId);
     await assertCanEditSpec(this.db, user, featureId);
     const base = await this.db.specVersion.findFirst({
       where: { featureId },
@@ -291,8 +297,8 @@ export class SpecService {
     return toSpecProposalView(proposal);
   }
 
-  async getProposal(id: string): Promise<SpecProposalView> {
-    return toSpecProposalView(await this.findProposalOrThrow(id));
+  async getProposal(user: User, id: string): Promise<SpecProposalView> {
+    return toSpecProposalView(await this.findProposalOrThrow(user, id));
   }
 
   /**
@@ -368,6 +374,8 @@ export class SpecService {
       });
       await this.notifications.publish(outbox);
       this.indexing.schedule({ source: 'SPEC_VERSION', id: version.id });
+      // A new Spec Version: Design Docs may be due, or stale (ticket 0069).
+      this.specChanges.changed(version.featureId);
       this.receipts.outcome({
         kind: 'APPROVE',
         proposal: { kind: 'SPEC_PROPOSAL', id },
@@ -394,6 +402,8 @@ export class SpecService {
       include: specProposalInclude,
     });
     await this.notifications.publish(this.notifications.outbox().inboxChanged(user.id));
+    // No Spec Proposal awaits approval any more: Design Docs may be due (ticket 0069).
+    this.specChanges.changed(updated.featureId);
     this.receipts.outcome({
       kind: 'DECLINE',
       proposal: { kind: 'SPEC_PROPOSAL', id },
@@ -404,8 +414,8 @@ export class SpecService {
     return toSpecProposalView(updated);
   }
 
-  async listVersions(featureId: string): Promise<SpecVersionView[]> {
-    await this.assertFeatureExists(featureId);
+  async listVersions(user: User, featureId: string): Promise<SpecVersionView[]> {
+    await assertFeatureInOrganization(this.db, user.id, featureId);
     const versions = await this.db.specVersion.findMany({
       where: { featureId },
       orderBy: { version: 'desc' },
@@ -414,14 +424,14 @@ export class SpecService {
     return versions.map(toSpecVersionView);
   }
 
-  async getVersion(featureId: string, version: number): Promise<SpecVersionView> {
-    await this.assertFeatureExists(featureId);
+  async getVersion(user: User, featureId: string, version: number): Promise<SpecVersionView> {
+    await assertFeatureInOrganization(this.db, user.id, featureId);
     return toSpecVersionView(await this.findVersionOrThrow(featureId, version));
   }
 
   /** `from = 0` stands for the empty Spec before v1. */
-  async diff(featureId: string, from: number, to: number): Promise<SpecDiff> {
-    await this.assertFeatureExists(featureId);
+  async diff(user: User, featureId: string, from: number, to: number): Promise<SpecDiff> {
+    await assertFeatureInOrganization(this.db, user.id, featureId);
     const [before, after] = await Promise.all([
       from === 0 ? '' : this.findVersionOrThrow(featureId, from).then((v) => v.markdown),
       this.findVersionOrThrow(featureId, to).then((v) => v.markdown),
@@ -446,7 +456,7 @@ export class SpecService {
     version: number,
     input: RevertSpecInput,
   ): Promise<SpecVersionView> {
-    await this.assertFeatureExists(featureId);
+    await assertFeatureInOrganization(this.db, user.id, featureId);
     await assertCanEditSpec(this.db, user, featureId);
     const target = await this.findVersionOrThrow(featureId, version);
     const outbox = this.notifications.outbox();
@@ -486,6 +496,7 @@ export class SpecService {
       });
       await this.notifications.publish(outbox);
       this.indexing.schedule({ source: 'SPEC_VERSION', id: created.id });
+      this.specChanges.changed(featureId);
       return toSpecVersionView(created);
     } catch (error) {
       if (error instanceof StaleStateError) throw new ConflictException(error.message);
@@ -498,8 +509,8 @@ export class SpecService {
     }
   }
 
-  async decisionLog(featureId: string): Promise<DecisionLogEntry[]> {
-    await this.assertFeatureExists(featureId);
+  async decisionLog(user: User, featureId: string): Promise<DecisionLogEntry[]> {
+    await assertFeatureInOrganization(this.db, user.id, featureId);
     const person = { select: { id: true, name: true } } as const;
     const decisions = await this.db.decision.findMany({
       where: { request: { featureId } },
@@ -542,9 +553,10 @@ export class SpecService {
     }));
   }
 
-  private async findProposalOrThrow(id: string): Promise<SpecProposalWithRelations> {
-    const proposal = await this.db.specProposal.findUnique({
-      where: { id },
+  /** The Spec Proposal, if it is about a Feature of the user's Organization; 404 otherwise. */
+  private async findProposalOrThrow(user: User, id: string): Promise<SpecProposalWithRelations> {
+    const proposal = await this.db.specProposal.findFirst({
+      where: { id, feature: featureInOrganizationOf(user.id) },
       include: specProposalInclude,
     });
     if (!proposal) throw new NotFoundException('Spec Proposal not found');
@@ -552,7 +564,7 @@ export class SpecService {
   }
 
   private async findPendingForApprover(user: User, id: string) {
-    const proposal = await this.findProposalOrThrow(id);
+    const proposal = await this.findProposalOrThrow(user, id);
     if (proposal.approverId !== user.id) {
       throw new ForbiddenException('Only the approver can review this Spec Proposal');
     }
@@ -571,10 +583,5 @@ export class SpecService {
     });
     if (!found) throw new NotFoundException(`Spec Version v${version} not found`);
     return found;
-  }
-
-  private async assertFeatureExists(featureId: string) {
-    const exists = await this.db.feature.count({ where: { id: featureId } });
-    if (!exists) throw new NotFoundException('Feature not found');
   }
 }

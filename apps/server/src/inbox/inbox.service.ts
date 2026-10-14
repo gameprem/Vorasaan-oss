@@ -28,46 +28,49 @@ export class InboxService {
 
   async items(userId: string): Promise<InboxItem[]> {
     const grillingsWhere = await awaitingGrillingsWhere(this.db, userId);
-    const [toDecide, toAnswer, toApprove, toGrill, briefsToApprove] = await Promise.all([
-      this.requestsToDecide(userId),
-      this.db.decisionRequest.findMany({
-        where: { status: 'NEEDS_INFO', raiserId: userId },
-        include: {
-          feature,
-          decider: person,
-          messages: {
-            where: { kind: 'QUESTION' },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: { body: true, createdAt: true },
+    const [toDecide, toAnswer, toApprove, toGrill, briefsToApprove, designDocs] = await Promise.all(
+      [
+        this.requestsToDecide(userId),
+        this.db.decisionRequest.findMany({
+          where: { status: 'NEEDS_INFO', raiserId: userId },
+          include: {
+            feature,
+            decider: person,
+            messages: {
+              where: { kind: 'QUESTION' },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: { body: true, createdAt: true },
+            },
           },
-        },
-      }),
-      this.proposalsToApprove(userId),
-      // Grilling questions waiting for a Team Role I hold (same as `GET /grillings?awaiting=me`).
-      grillingsWhere
-        ? this.db.grilling.findMany({
-            where: grillingsWhere,
-            include: {
-              project,
-              rounds: {
-                where: { status: 'ASKING' },
-                select: {
-                  id: true,
-                  kind: true,
-                  role: true,
-                  createdAt: true,
-                  _count: { select: { questions: { where: { answeredAt: null } } } },
+        }),
+        this.proposalsToApprove(userId),
+        // Grilling questions waiting for a Team Role I hold (same as `GET /grillings?awaiting=me`).
+        grillingsWhere
+          ? this.db.grilling.findMany({
+              where: grillingsWhere,
+              include: {
+                project,
+                rounds: {
+                  where: { status: 'ASKING' },
+                  select: {
+                    id: true,
+                    kind: true,
+                    role: true,
+                    createdAt: true,
+                    _count: { select: { questions: { where: { answeredAt: null } } } },
+                  },
                 },
               },
-            },
-          })
-        : [],
-      this.db.briefProposal.findMany({
-        where: { status: 'PENDING', approverId: userId },
-        include: { project },
-      }),
-    ]);
+            })
+          : [],
+        this.db.briefProposal.findMany({
+          where: { status: 'PENDING', approverId: userId },
+          include: { project },
+        }),
+        this.designDocsToApprove(userId),
+      ],
+    );
 
     // My Grilling Conversation for each round asked of me (ticket 0044).
     const grillingConversations = toGrill.length
@@ -146,6 +149,19 @@ export class InboxService {
           briefProposal: { id: p.id, source: p.source },
         }),
       ),
+      ...designDocs.map(
+        (p): InboxItem => ({
+          kind: 'APPROVE_DESIGN_DOC',
+          feature: p.feature,
+          since: p.createdAt.toISOString(),
+          designDoc: {
+            proposalId: p.id,
+            key: p.platformId ?? 'qa',
+            name: p.platformName ?? 'QA',
+            reason: p.reason,
+          },
+        }),
+      ),
     ];
     return items.sort((a, b) => b.since.localeCompare(a.since));
   }
@@ -170,6 +186,42 @@ export class InboxService {
       LEFT JOIN "User" behalf ON behalf.id = me."onBehalfOfId"
       WHERE d.status = 'OPEN'
         AND (d."deciderId" = ${userId} OR (d."deciderId" IS NULL AND me.id IS NOT NULL))`;
+  }
+
+  /**
+   * PENDING Design Doc proposals (ticket 0069) I approve, in one statement: for one of the
+   * Design Doc's Team Roles (Tech Lead, and its Platform's, or QA), I am a Role Owner of the
+   * Feature, or the Feature has no Role Owner of it and I hold it in the Feature's Team (the
+   * rule of `designDocApprovers`).
+   */
+  private designDocsToApprove(userId: string) {
+    return this.db.$queryRaw<DesignDocToApproveRow[]>`
+      SELECT p.id, p.reason::text AS reason, p."createdAt", d."platformId",
+             pl.name AS "platformName",
+             json_build_object('id', f.id, 'title', f.title) AS feature
+      FROM "DesignDocProposal" p
+      JOIN "DesignDoc" d ON d.id = p."designDocId"
+      JOIN "Feature" f ON f.id = d."featureId"
+      LEFT JOIN "Platform" pl ON pl.id = d."platformId"
+      WHERE p.status = 'PENDING'
+        -- Only the Design Docs the Feature still has: its target Platforms', and QA's while
+        -- it targets any.
+        AND EXISTS (
+          SELECT 1 FROM "FeaturePlatform" fp
+          WHERE fp."featureId" = f.id AND (d."platformId" IS NULL OR fp."platformId" = d."platformId"))
+        AND EXISTS (
+          SELECT 1
+          FROM unnest(ARRAY['TECH_LEAD']::"TeamRole"[]
+                      || CASE WHEN d."platformId" IS NULL THEN ARRAY['QA']::"TeamRole"[]
+                              ELSE pl.roles END) AS r(role)
+          WHERE EXISTS (
+                  SELECT 1 FROM "RoleOwner" ro
+                  WHERE ro."featureId" = f.id AND ro."userId" = ${userId} AND ro.role = r.role)
+             OR (NOT EXISTS (
+                   SELECT 1 FROM "RoleOwner" ro WHERE ro."featureId" = f.id AND ro.role = r.role)
+                 AND EXISTS (
+                   SELECT 1 FROM "TeamMembership" tm
+                   WHERE tm."teamId" = f."teamId" AND tm."userId" = ${userId} AND tm.role = r.role)))`;
   }
 
   /** PENDING Spec Proposals I approve, with their Feature and Decision Request, in one statement. */
@@ -201,6 +253,15 @@ type RequestToDecideRow = {
   feature: FeatureRef;
   raiser: PersonRef;
   onBehalfOf: PersonRef | null;
+};
+
+type DesignDocToApproveRow = {
+  id: string;
+  reason: 'FIRST_DRAFT' | 'SPEC_CHANGED';
+  createdAt: Date;
+  platformId: string | null;
+  platformName: string | null;
+  feature: FeatureRef;
 };
 
 type ProposalToApproveRow = {

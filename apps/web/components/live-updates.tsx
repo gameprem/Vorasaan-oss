@@ -1,6 +1,12 @@
 'use client';
 
-import { NotificationCreatedEvent, ServerEvent, type ServerEventName } from '@vorasaan/shared';
+import {
+  FeatureDeletedEvent,
+  NotificationCreatedEvent,
+  ProjectDeletedEvent,
+  ServerEvent,
+  type ServerEventName,
+} from '@vorasaan/shared';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -8,7 +14,9 @@ import {
   type ConversationEvent,
   dispatchConversationEvent,
 } from '@/lib/conversation-events';
+import { ANNOUNCE_EVENT, type Deleted, deletedText, isOwnDelete, leaveTo } from '@/lib/deleted';
 import { notificationText } from './notification-text';
+import { toast } from './ui/toast';
 
 // Listens to the signed-in user's event stream (through the same-origin /api/events
 // bridge) and re-renders the current route when their Inbox Items or Notifications
@@ -22,6 +30,9 @@ const NOTIFICATION_CREATED: ServerEventName = 'notification.created';
 const CHAT_ACCOUNT_CHANGED: ServerEventName = 'chatAccount.changed';
 /** A Redraft of a proposal started or finished (ticket 0065): its page shows it. */
 const PROPOSAL_REDRAFTED: ServerEventName = 'proposal.redrafted';
+/** A Feature or a Project was deleted (ticket 0049): a page showing it moves away. */
+const FEATURE_DELETED: ServerEventName = 'feature.deleted';
+const PROJECT_DELETED: ServerEventName = 'project.deleted';
 /** Backoff between reconnects: 1 s, 2 s, 4 s ... capped at 30 s; give up after 8 in a row. */
 const BASE_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 30_000;
@@ -34,6 +45,17 @@ export function LiveUpdates() {
   const [announcement, setAnnouncement] = useState('');
   const [gaveUp, setGaveUp] = useState(false);
   const retry = useRef<() => void>(() => {});
+
+  // Status messages from elsewhere that must survive a navigation (ticket 0049).
+  useEffect(() => {
+    const said = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      toast({ title: text });
+      setAnnouncement(text);
+    };
+    window.addEventListener(ANNOUNCE_EVENT, said);
+    return () => window.removeEventListener(ANNOUNCE_EVENT, said);
+  }, []);
 
   useEffect(() => {
     let source: EventSource | null = null;
@@ -62,6 +84,37 @@ export function LiveUpdates() {
       es.addEventListener(INBOX_CHANGED, refresh);
       es.addEventListener(CHAT_ACCOUNT_CHANGED, refresh);
       es.addEventListener(PROPOSAL_REDRAFTED, refresh);
+      const deleted = (read: (data: unknown) => Deleted | null) => (e: Event) => {
+        let data: unknown;
+        try {
+          data = JSON.parse((e as MessageEvent<string>).data);
+        } catch {}
+        const event = read(data);
+        if (!event) return refresh();
+        const id = event.kind === 'feature' ? event.data.featureId : event.data.projectId;
+        const to = leaveTo(event, window.location.pathname);
+        // This browser's own delete already moved on and said so.
+        if (isOwnDelete(id)) return to ? router.replace(to) : refresh();
+        if (!to) return refresh();
+        const text = deletedText(event);
+        toast({ title: text });
+        setAnnouncement(text);
+        router.replace(to);
+      };
+      es.addEventListener(
+        FEATURE_DELETED,
+        deleted((data) => {
+          const parsed = FeatureDeletedEvent.safeParse(data);
+          return parsed.success ? { kind: 'feature', data: parsed.data } : null;
+        }),
+      );
+      es.addEventListener(
+        PROJECT_DELETED,
+        deleted((data) => {
+          const parsed = ProjectDeletedEvent.safeParse(data);
+          return parsed.success ? { kind: 'project', data: parsed.data } : null;
+        }),
+      );
       es.addEventListener(NOTIFICATION_CREATED, (e) => {
         refresh();
         let data: unknown;
