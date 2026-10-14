@@ -31,6 +31,7 @@ import {
   GEMINI_DEFAULT_URL,
   geminiBaseUrl,
   geminiContextWindow,
+  isTextModel,
   listGeminiModels,
 } from './gemini.ts';
 import { agentGenerate, MastraAiPort, pingModel } from './mastra-ai.port.ts';
@@ -469,6 +470,35 @@ describe("Gemini's model list", () => {
     expect(await geminiContextWindow('models/gemini-example-pro', LIST_KEY, env())).toBe(1_048_576);
     expect(await geminiContextWindow('gemini-missing', LIST_KEY, env())).toBeNull();
     fake.pageSize = 50;
+  });
+
+  test('leaves out the models that answer generateContent but write no text for a chat', () => {
+    // Ids from Google's real list for a new key.
+    for (const id of [
+      'gemini-flash-latest',
+      'gemini-pro-latest',
+      'gemini-3.8-flash',
+      'gemini-3.1-pro-preview-customtools',
+      'gemma-4-31b-it',
+    ]) {
+      expect(isTextModel(id)).toBe(true);
+    }
+    for (const id of [
+      'gemini-3.8-flash-tts',
+      'gemini-2.5-flash-preview-tts',
+      'gemini-3.1-flash-image',
+      'gemini-3-pro-image-preview',
+      'nano-banana-pro-preview',
+      'lyria-3.5',
+      'gemini-3.5-transcribe',
+      'gemini-robotics-er-2-preview',
+      'gemini-2.5-computer-use-preview-10-2025',
+      'deep-research-pro-preview-12-2025',
+      'antigravity-preview-latest',
+      'gemini-embedding-001',
+    ]) {
+      expect(isTextModel(id)).toBe(false);
+    }
   });
 
   test('a list that cannot be loaded is an error that never carries the key, never a throw', async () => {
