@@ -19,6 +19,7 @@ import { AttachmentsPanel } from '@/components/attachments-panel';
 import { BlockedBadge, KindBadge, Notice, relativeTime } from '@/components/bits';
 import { CoverageChips } from '@/components/coverage-chips';
 import { DecisionGraph } from '@/components/decision-graph';
+import { DeleteByName } from '@/components/delete-by-name';
 import { DesignDocLanes } from '@/components/design-doc-lanes';
 import {
   DesignDocLink,
@@ -203,11 +204,23 @@ export default async function FeaturePage({
             </p>
           )}
         </div>
-        {feature.myRoles.length > 0 && (
-          <Link href={`/features/${id}/raise`} className={secondaryButton}>
-            Raise a Decision Request
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {feature.myRoles.length > 0 && (
+            <Link href={`/features/${id}/raise`} className={secondaryButton}>
+              Raise a Decision Request
+            </Link>
+          )}
+          {/* Who writes the Spec may delete the Feature: its POs and Admins (ticket 0049). */}
+          {canEditSpec && (
+            <DeleteByName
+              kind="Feature"
+              id={id}
+              name={feature.title}
+              then={`/projects/${feature.projectId}`}
+              consequences="Its Spec and Spec Versions, Decision Requests and Decisions, Design Docs, Conversations and Attachments are deleted with it. Receipts of the AI’s work on it are kept."
+            />
+          )}
+        </div>
       </div>
 
       <nav aria-label="Feature sections" className="flex gap-2 overflow-x-auto pb-1">

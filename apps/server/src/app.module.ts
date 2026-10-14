@@ -35,6 +35,7 @@ import { GrillingModule } from './grilling/grilling.module.ts';
 import { HandOffModule } from './hand-off/hand-off.module.ts';
 import { HealthController } from './health/health.controller.ts';
 import { InboxModule } from './inbox/inbox.module.ts';
+import { DeletionService } from './org/deletion.service.ts';
 import { OrgController } from './org/org.controller.ts';
 import { OrgService } from './org/org.service.ts';
 import { PlatformsModule } from './platforms/platforms.module.ts';
@@ -104,6 +105,7 @@ import { SpecModule } from './spec/spec.module.ts';
     AuthService,
     DecisionGraphService,
     DelegationsService,
+    DeletionService,
     OrgService,
     SetupTokenService,
   ],

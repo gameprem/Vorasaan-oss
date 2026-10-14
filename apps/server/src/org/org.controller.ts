@@ -24,11 +24,15 @@ import {
 } from '@vorasaan/shared';
 import { AdminOnly } from '../auth/admin.guard.ts';
 import { CurrentUser, Public } from '../auth/identity.guard.ts';
+import { DeletionService } from './deletion.service.ts';
 import { OrgService } from './org.service.ts';
 
 @Controller()
 export class OrgController {
-  constructor(private readonly org: OrgService) {}
+  constructor(
+    private readonly org: OrgService,
+    private readonly deletion: DeletionService,
+  ) {}
 
   // Projects & Teams
 
@@ -41,6 +45,14 @@ export class OrgController {
   @Post('projects')
   createProject(@Body({ schema: CreateProjectInput }) body: CreateProjectInput) {
     return this.org.createProject(body);
+  }
+
+  /** Deletes the Project with its Teams and Features (ticket 0049): Admins only. */
+  @AdminOnly()
+  @Delete('projects/:id')
+  @HttpCode(204)
+  async deleteProject(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    await this.deletion.deleteProject(user, id);
   }
 
   @AdminOnly()

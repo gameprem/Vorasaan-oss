@@ -121,14 +121,13 @@ Follow-ups recorded during the MVP reviews.
 | 0039 | [End-to-end browser tests in CI](./0039-e2e-in-ci.md) | none |
 | 0040 | [`GET /me/teams`](./0040-me-teams.md) | none |
 | 0041 | [Hardening follow-ups from the MVP reviews](./0041-hardening.md) | none |
+| 0049 | [Delete a Feature or a Project](./0049-delete-feature-project.md) | 0041 |
 
 ## Backlog
 
 Recorded follow-ups that are not scheduled yet.
 
-| # | Ticket | Depends on |
-| --- | --- | --- |
-| 0049 | [Delete a Feature or a Project](./0049-delete-feature-project.md) | none |
+Nothing at the moment: 0049 (deleting a Feature or a Project) is done, under MVP polish.
 
 ## Chat-first Web UI (Post-MVP 1)
 

@@ -108,6 +108,7 @@ A Feature may have several open Decision Requests at once.
 * **Org Roles:** `ADMIN` (settings, integrations, create Project/Team, invite, set Delegations for others) and `MEMBER`.
 * **Team Roles:** `PO`, `DESIGNER`, `TECH_LEAD`, `BACKEND`, `FRONTEND`, `MOBILE`, `QA`. They are held per Team membership: a person can hold several, and one Team Role can be held by many people.
 * Everyone in the Organization can **read** every Feature. **Actions** (decide, Claim, approve Spec Proposals) require the matching Team Role. NestJS Guards enforce this.
+* **Deleting:** a Feature's POs and Admins delete a Feature, and Admins delete a Project, after typing its name in the web app (the CLI has no delete). Everything under it goes, its stored Attachment files once the database delete commits; Receipts stay for the Learning Loop and the AI usage history (0049).
 
 ### 3.8. Project Brief, Grilling & Feature Suggestions ([ADR 0006](./docs/adr/0006-project-brief-above-features.md))
 Before and alongside Features, a Project has a shared foundation the AI and new Features build on. It works for a **new Project** (start from Grilling) and an **existing one** (start from what is already there).
@@ -226,6 +227,7 @@ Seed data → `vorasaan raise` (plain prompt) → Mastra generates Choices → w
 - [x] End-to-end browser tests in CI (0039).
 - [x] `GET /me/teams` for the Delegation and CLI pickers (0040).
 - [x] Hardening: SSE ends on a revoked token, Attachment file cleanup and the orphan sweep, TUI polish (0041).
+- [x] Delete a Feature or a Project, with its stored files, live pages moving away (0049).
 
 ### Post-MVP (in order)
 1. **Chat-first Web UI** ([ADR 0008](./docs/adr/0008-chat-first-web-ui.md)): a Sidebar (Inbox, Projects → Features, recent Conversations, and Settings, which opens as a full-screen modal with Back) and a Conversation with the AI per Project or Feature. The AI proposes through Action Cards that a person approves, and Grilling runs as per-person Conversations with follow-ups. It looks like Gemini, with the palette from ADR 0008 (mockup: `docs/design/chat-web-ui-mockup.html`).

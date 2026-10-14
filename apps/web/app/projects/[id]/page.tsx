@@ -28,6 +28,7 @@ import { Notice, relativeTime } from '@/components/bits';
 import { BriefPanel } from '@/components/brief-panel';
 import { CoverageMatrix } from '@/components/coverage-matrix';
 import { DecisionSpeedPanel } from '@/components/decision-speed-panel';
+import { DeleteByName } from '@/components/delete-by-name';
 import { DesignTemplatesEditor } from '@/components/design-templates-editor';
 import { DraftedWith } from '@/components/drafted-with';
 import { GrillingSection } from '@/components/grilling-section';
@@ -143,7 +144,18 @@ export default async function ProjectPage({
           Projects
         </Link>
       </p>
-      <h1 className="mt-1 text-3xl font-semibold tracking-tight">{project.name}</h1>
+      <div className="mt-1 flex flex-wrap items-start justify-between gap-4">
+        <h1 className="text-3xl font-semibold tracking-tight">{project.name}</h1>
+        {me?.isAdmin && (
+          <DeleteByName
+            kind="Project"
+            id={id}
+            name={project.name}
+            then="/projects"
+            consequences="Its Teams and their Features, the Project Brief, Grillings, Feature Suggestions, Platforms, Conversations and Attachments are deleted with it. Receipts of the AI’s work in it are kept."
+          />
+        )}
+      </div>
       <p className="mt-2 text-sm text-fg-soft">
         {project.teams.length === 0
           ? 'No Teams yet.'
@@ -608,13 +620,15 @@ async function SuggestionsTab({
                       <p className="mt-3 text-sm">
                         Accepted by {s.decidedBy?.name ?? 'someone'}
                         {s.decidedAt && ` ${relativeTime(s.decidedAt)}`}.{' '}
-                        {s.featureId && (
+                        {s.featureId ? (
                           <Link
                             href={`/features/${s.featureId}`}
                             className="font-medium text-jade underline-offset-2 hover:underline"
                           >
                             Open the Feature
                           </Link>
+                        ) : (
+                          'Its Feature was deleted since.'
                         )}
                       </p>
                     )}

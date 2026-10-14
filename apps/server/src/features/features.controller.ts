@@ -1,8 +1,17 @@
-import { Controller, Get, NotFoundException, Param, ParseUUIDPipe } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import type { PrismaClient, User } from '@vorasaan/db';
 import type { FeatureSummaryView, FeatureView } from '@vorasaan/shared';
 import { CurrentUser } from '../auth/identity.guard.ts';
 import { featureInOrganizationOf } from '../auth/organization-scope.ts';
+import { DeletionService } from '../org/deletion.service.ts';
 import { PlatformsService } from '../platforms/platforms.service.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { AtlassianSettingsService } from '../settings/atlassian-settings.service.ts';
@@ -14,6 +23,7 @@ export class FeaturesController {
     @InjectPrisma() private readonly db: PrismaClient,
     private readonly atlassian: AtlassianSettingsService,
     private readonly platforms: PlatformsService,
+    private readonly deletion: DeletionService,
   ) {}
 
   /** Features where the current user is a Role Owner (the CLI's Feature picker and TUI). */
@@ -70,5 +80,15 @@ export class FeaturesController {
       openBlockers: f._count.decisionRequests,
       platforms,
     };
+  }
+
+  /**
+   * Deletes the Feature and everything under it (ticket 0049): its PO Role Owners and
+   * Admins. Stored Attachment files go once the database delete commits.
+   */
+  @Delete(':id')
+  @HttpCode(204)
+  async remove(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.deletion.deleteFeature(user, id);
   }
 }
