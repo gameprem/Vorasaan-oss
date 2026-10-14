@@ -200,13 +200,20 @@ describe('Gemini calls', () => {
       ).toEqual(CHOICES as never);
       // Gemini's cachedContentTokenCount (implicit caching), logged and on the Receipt.
       expect(log).toHaveBeenCalledWith(
-        'generate-choices: input 2410 (cache read 1980, cache write ?), output 12',
+        // Thinking tokens bill as output: 12 written + 30 thought.
+        'generate-choices: input 2410 (cache read 1980, cache write ?), output 42 (reasoning 30)',
       );
     } finally {
       log.mockRestore();
     }
     expect(usages).toEqual([
-      { inputTokens: 2410, outputTokens: 12, cacheReadTokens: 1980, cacheWriteTokens: null },
+      {
+        inputTokens: 2410,
+        outputTokens: 42,
+        cacheReadTokens: 1980,
+        cacheWriteTokens: null,
+        reasoningTokens: 30,
+      },
     ]);
     const [call] = fake.requests;
     expect(call?.path).toBe('/v1beta/models/gemini-example-pro:streamGenerateContent');
@@ -350,6 +357,71 @@ describe('Gemini calls', () => {
         name: d.name,
         unsupported: [],
       });
+    }
+  });
+
+  test('thinking is kept low on every call: a task, a chat and the connection test', async () => {
+    fake.requests.length = 0;
+    fake.functionCall = null;
+    fake.structured = CHOICES;
+    const quiet = spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+    try {
+      await port('gemini-3-example-flash').generateChoices(choicesInput);
+      await collect(port('gemini-3-example-flash').chat(chatInput));
+      fake.structured = { reply: 'ok' };
+      await pingModel(model('gemini-3-example-flash'));
+      // Gemini 2.5 takes a budget instead: off on Flash, Pro's least (128) on Pro.
+      await pingModel(model('gemini-2.5-flash'));
+      await pingModel(model('gemini-2.5-pro'));
+    } finally {
+      quiet.mockRestore();
+    }
+    const thinking = fake.requests.map(
+      (r) => (r.body?.generationConfig as Record<string, unknown> | undefined)?.thinkingConfig,
+    );
+    expect(thinking).toEqual([
+      { thinkingLevel: 'low' },
+      { thinkingLevel: 'low' },
+      { thinkingLevel: 'low' },
+      { thinkingBudget: 0 },
+      { thinkingBudget: 128 },
+    ]);
+  });
+
+  test('a Gemma model gets no thinking settings, which it would refuse', async () => {
+    fake.requests.length = 0;
+    fake.structured = { reply: 'ok' };
+    const quiet = spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+    try {
+      await pingModel(model('gemma-example-27b-it'));
+      await collect(port('gemma-example-27b-it').chat(chatInput));
+    } finally {
+      quiet.mockRestore();
+    }
+    expect(fake.requests).toHaveLength(2);
+    for (const r of fake.requests) {
+      expect(JSON.stringify(r.body)).not.toContain('thinking');
+    }
+  });
+
+  test('VORASAAN_GEMINI_THINKING=default sends nothing, high asks for the most', async () => {
+    const previous = process.env.VORASAAN_GEMINI_THINKING;
+    fake.structured = { reply: 'ok' };
+    const quiet = spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+    try {
+      fake.requests.length = 0;
+      process.env.VORASAAN_GEMINI_THINKING = 'default';
+      await pingModel(model('gemini-3-example-flash'));
+      expect(JSON.stringify(fake.requests[0]?.body)).not.toContain('thinking');
+      fake.requests.length = 0;
+      process.env.VORASAAN_GEMINI_THINKING = 'high';
+      await pingModel(model('gemini-3-example-flash'));
+      const config = fake.requests[0]?.body?.generationConfig as Record<string, unknown>;
+      expect(config.thinkingConfig).toEqual({ thinkingLevel: 'high' });
+    } finally {
+      quiet.mockRestore();
+      if (previous === undefined) delete process.env.VORASAAN_GEMINI_THINKING;
+      else process.env.VORASAAN_GEMINI_THINKING = previous;
     }
   });
 

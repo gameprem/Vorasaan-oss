@@ -152,6 +152,11 @@ export type CacheUsage = {
   outputTokens: number | null;
   cacheReadTokens: number | null;
   cacheWriteTokens: number | null;
+  /**
+   * Of `outputTokens`, those the model spent thinking (Gemini's `thoughtsTokenCount`,
+   * OpenAI's reasoning tokens); null when the provider doesn't say (ticket 0080).
+   */
+  reasoningTokens: number | null;
 };
 
 const count = (value: unknown): number | null =>
@@ -162,17 +167,27 @@ const count = (value: unknown): number | null =>
  * `cache_read_input_tokens`, OpenAI's and OpenRouter's `cached_tokens`, Gemini's
  * `cachedContentTokenCount`) and, for
  * Anthropic and OpenRouter (`cache_write_tokens`), `cacheCreationInputTokens`; the
- * v3 `inputTokens` details as a fallback.
+ * v3 `inputTokens` details as a fallback. Reasoning tokens (part of the output) from
+ * `reasoningTokens`, else the newer `outputTokenDetails.reasoningTokens`, else the v3
+ * `outputTokens.reasoning` (Gemini's `thoughtsTokenCount`).
  */
 export function cacheUsageOf(usage: unknown): CacheUsage {
   const u = (usage ?? {}) as Record<string, unknown>;
-  const raw = (u.raw ?? {}) as { inputTokens?: Record<string, unknown> };
+  const raw = (u.raw ?? {}) as {
+    inputTokens?: Record<string, unknown>;
+    outputTokens?: Record<string, unknown>;
+  };
   const details = raw.inputTokens ?? {};
+  const outputDetails = (u.outputTokenDetails ?? {}) as Record<string, unknown>;
   return {
     inputTokens: count(u.inputTokens),
     outputTokens: count(u.outputTokens),
     cacheReadTokens: count(u.cachedInputTokens) ?? count(details.cacheRead),
     cacheWriteTokens: count(u.cacheCreationInputTokens) ?? count(details.cacheWrite),
+    reasoningTokens:
+      count(u.reasoningTokens) ??
+      count(outputDetails.reasoningTokens) ??
+      count(raw.outputTokens?.reasoning),
   };
 }
 
@@ -180,14 +195,16 @@ const logger = new Logger('AiUsage');
 
 /**
  * Logs one AI call's usage and cache hits, e.g.
- * `chat: input 2410 (cache read 1980, cache write 0), output 112`. Never throws.
+ * `chat: input 2410 (cache read 1980, cache write 0), output 112`, and the thinking
+ * when the provider reports some: `output 90 (reasoning 85)`. Never throws.
  */
 export function logCacheUsage(task: string, usage: unknown): CacheUsage {
   const u = cacheUsageOf(usage);
   const n = (v: number | null) => (v === null ? '?' : String(v));
   logger.log(
     `${task}: input ${n(u.inputTokens)} (cache read ${n(u.cacheReadTokens)}, ` +
-      `cache write ${n(u.cacheWriteTokens)}), output ${n(u.outputTokens)}`,
+      `cache write ${n(u.cacheWriteTokens)}), output ${n(u.outputTokens)}` +
+      (u.reasoningTokens ? ` (reasoning ${u.reasoningTokens})` : ''),
   );
   return u;
 }

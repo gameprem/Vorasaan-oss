@@ -116,7 +116,7 @@ export function AiUsageDashboard({
           <Stat
             label="Tokens in / out"
             value={`${tokens(totals.inputTokens)} / ${tokens(totals.outputTokens)}`}
-            hint={`${calls(totals.calls)}${totals.failedCalls ? `, ${whole.format(totals.failedCalls)} failed` : ''}`}
+            hint={`${calls(totals.calls)}${totals.failedCalls ? `, ${whole.format(totals.failedCalls)} failed` : ''}${totals.reasoningTokens ? `; out includes ${tokens(totals.reasoningTokens)} thinking` : ''}`}
           />
           <Stat
             label="Cache hit ratio"
@@ -512,7 +512,7 @@ function TaskChart({ view }: { view: AiUsageView }) {
     key,
     label: name,
     values: [usage.inputTokens, usage.outputTokens],
-    detail: `${name}: ${whole.format(usage.inputTokens)} tokens in, ${whole.format(usage.outputTokens)} out, ${calls(usage.calls)}, cache hit ${percent(usage.cacheHitRatio)}, p50 ${latency(usage.latencyP50Ms)}, p95 ${latency(usage.latencyP95Ms)}${usage.costUsd !== null ? `, ${usd(usage.costUsd)}` : ''}`,
+    detail: `${name}: ${whole.format(usage.inputTokens)} tokens in, ${whole.format(usage.outputTokens)} out${usage.reasoningTokens ? ` (${whole.format(usage.reasoningTokens)} thinking)` : ''}, ${calls(usage.calls)}, cache hit ${percent(usage.cacheHitRatio)}, p50 ${latency(usage.latencyP50Ms)}, p95 ${latency(usage.latencyP95Ms)}${usage.costUsd !== null ? `, ${usd(usage.costUsd)}` : ''}`,
   }));
   const total = view.totals.inputTokens + view.totals.outputTokens;
   const top = [...rows].sort(
@@ -573,6 +573,7 @@ function UsageRows({ title, first, rows }: { title: string; first: string; rows:
             <Num head>Calls</Num>
             <Num head>Tokens in</Num>
             <Num head>Tokens out</Num>
+            <Num head>Of which thinking</Num>
             <Num head>Cache hit</Num>
             <Num head>Estimated cost</Num>
             <Num head>p50</Num>
@@ -593,6 +594,7 @@ function UsageRows({ title, first, rows }: { title: string; first: string; rows:
               </Num>
               <Num>{whole.format(usage.inputTokens)}</Num>
               <Num>{whole.format(usage.outputTokens)}</Num>
+              <Num>{whole.format(usage.reasoningTokens)}</Num>
               <Num>{percent(usage.cacheHitRatio)}</Num>
               <Num>{usd(usage.costUsd)}</Num>
               <Num>{latency(usage.latencyP50Ms)}</Num>

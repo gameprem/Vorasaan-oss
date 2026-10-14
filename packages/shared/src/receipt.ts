@@ -88,6 +88,8 @@ export const ReceiptExportLine = z.object({
     outputTokens: Tokens,
     cacheReadTokens: Tokens,
     cacheWriteTokens: Tokens,
+    /** Of `outputTokens`, those the model spent thinking (ticket 0080). */
+    reasoningTokens: Tokens,
   }),
   latencyMs: z.int().min(0),
   success: z.boolean(),

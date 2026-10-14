@@ -485,6 +485,7 @@ export const FAKE_USAGE: CallUsage = {
   outputTokens: 300,
   cacheReadTokens: 800,
   cacheWriteTokens: 150,
+  reasoningTokens: 100,
 };
 
 /** Deterministic stand-in for tests. Records calls so tests can assert on them. */
@@ -596,7 +597,13 @@ export class FakeAiPort implements AiPort {
       const inputTokens = Math.ceil((await chatPromptTokens(input)) * this.tokenScale);
       const cacheReadTokens = Math.min(inputTokens, this.cacheReadTokens);
       const outputTokens = chunks.filter((c) => c.type === 'text').length;
-      options?.onUsage?.({ inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens: 0 });
+      options?.onUsage?.({
+        inputTokens,
+        outputTokens,
+        cacheReadTokens,
+        cacheWriteTokens: 0,
+        reasoningTokens: 0,
+      });
       yield {
         type: 'usage',
         usage: { inputTokens, cacheReadTokens: Math.min(inputTokens, this.cacheReadTokens) },

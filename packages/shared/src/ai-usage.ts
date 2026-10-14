@@ -46,6 +46,11 @@ export const AiUsageTotals = z.object({
   /** Input tokens read from the provider's prompt cache (a part of `inputTokens`). */
   cacheReadTokens: Tokens,
   cacheWriteTokens: Tokens,
+  /**
+   * Output tokens the model spent thinking (a part of `outputTokens`; ticket 0080), from
+   * the calls whose provider reported them.
+   */
+  reasoningTokens: Tokens,
   /** Cache reads over input tokens; null with no input tokens. */
   cacheHitRatio: z.number().min(0).nullable(),
   /**
