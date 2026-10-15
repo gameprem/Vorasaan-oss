@@ -14,8 +14,16 @@ export type FakeOpenRouter = {
   /** The base URL, e.g. http://localhost:1234/api/v1, for OPENROUTER_BASE_URL. */
   url: string;
   requests: FakeOpenRouterRequest[];
-  /** The models `GET /models` lists. */
-  models: { id: string; name?: string; context_length?: number | null }[];
+  /**
+   * The models `GET /models` lists, in OpenRouter's shape: `supported_parameters` names
+   * the request parameters a model takes (`reasoning`, `include_reasoning`, `tools`...).
+   */
+  models: {
+    id: string;
+    name?: string;
+    context_length?: number | null;
+    supported_parameters?: string[];
+  }[];
   /** When set, `GET /models` answers with this status instead of the list. */
   modelsStatus: number | null;
   /** The only key chat completions accept; any other gets a 401 that echoes it. */

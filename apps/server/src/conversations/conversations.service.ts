@@ -140,6 +140,11 @@ type Meter = {
   usage: StepUsage;
   /** The turn's thinking tokens, summed over its steps (ticket 0081); null when none reported. */
   reasoningTokens?: number | null;
+  /**
+   * A step's provider refused the reasoning parameter and the step went without it
+   * (ticket 0081): the reply records no level, so it doesn't say "Thought deeper".
+   */
+  reasoningRefused?: boolean;
 };
 /** What a fold records besides its summary: why it happened, who asked, and what to keep. */
 type FoldRecord = {
@@ -645,6 +650,9 @@ export class ConversationsService {
                 meter.reasoningTokens = (meter.reasoningTokens ?? 0) + usage.reasoningTokens;
               }
             },
+            onReasoningRefused: () => {
+              meter.reasoningRefused = true;
+            },
             language,
             receipt: {
               requestedById: user.id,
@@ -783,7 +791,8 @@ export class ConversationsService {
       content: text,
       ...toRecordedModelColumns(model.record),
       modelNotice: model.notice,
-      reasoningLevel: message.reasoningLevel,
+      // The level the reply was asked at ("Think deeper"), unless it never reached the model.
+      reasoningLevel: meter.reasoningRefused ? null : message.reasoningLevel,
       reasoningTokens: meter.reasoningTokens ?? null,
     });
     this.bus.emit(user.id, {

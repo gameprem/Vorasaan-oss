@@ -44,6 +44,11 @@ export type ReceiptEntry = {
   language: string | undefined;
   /** The Reasoning Level chosen for it (ticket 0081); left out, none was chosen. */
   reasoning?: ReasoningChoice | undefined;
+  /**
+   * The provider refused the reasoning parameter and the call went once more without it
+   * (ticket 0081): no level was sent, whatever was chosen.
+   */
+  reasoningRefused?: boolean;
   link: ReceiptLink | undefined;
 };
 
@@ -483,10 +488,12 @@ async function receiptData(entry: ReceiptEntry): Promise<Prisma.ReceiptUnchecked
     cacheReadTokens: usage?.cacheReadTokens ?? null,
     cacheWriteTokens: usage?.cacheWriteTokens ?? null,
     reasoningTokens: usage?.reasoningTokens ?? null,
-    // The level sent to the model: none when its model has no reasoning control.
-    reasoningLevel: model
-      ? sentReasoningLevel(reasoningTargetOfChoice(model), entry.reasoning?.level ?? null)
-      : null,
+    // The level sent to the model: none when its model has no reasoning control, or when
+    // the provider refused the parameter and the call went again without it.
+    reasoningLevel:
+      model && !entry.reasoningRefused
+        ? sentReasoningLevel(reasoningTargetOfChoice(model), entry.reasoning?.level ?? null)
+        : null,
     latencyMs: Math.max(0, Math.round(entry.latencyMs)),
     success: entry.success,
     error: entry.error,

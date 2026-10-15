@@ -55,6 +55,7 @@ export class ReceiptingAiPort implements AiPort {
     const at = this.clock.now();
     const started = performance.now();
     let usage: CallUsage | null = null;
+    let reasoningRefused = false;
     let recorded = false;
     return {
       options: {
@@ -62,6 +63,11 @@ export class ReceiptingAiPort implements AiPort {
         onUsage: (reported: CallUsage) => {
           usage = addUsage(usage, reported);
           options?.onUsage?.(reported);
+        },
+        // The provider refused the reasoning parameter (ticket 0081): no level was sent.
+        onReasoningRefused: () => {
+          reasoningRefused = true;
+          options?.onReasoningRefused?.();
         },
       } satisfies AiCallOptions,
       done: (error: unknown) => {
@@ -79,6 +85,7 @@ export class ReceiptingAiPort implements AiPort {
             prompt: options?.prompt,
             language: options?.language,
             reasoning: options?.reasoning,
+            reasoningRefused,
             link: options?.receipt,
           });
         } catch {
