@@ -33,9 +33,17 @@ import type { AiTask } from '../ai/ai.config.ts';
  * redraftBriefProposal 1304, redraftFeatureSuggestion 1247, analyzeFeedback 2112,
  * proposePromptVersion 2018, redraftPromptVersion 3087, draftDesignDoc 1897,
  * redraftDesignDoc 1873. Scores on the fake unchanged, Thai included.
+ *
+ * 2026-10-15, ticket 0068 (Thai prompt hill-climb on Gemini): a Choice's description names
+ * the request's own facts (+24: generateChoices 1664 → 1688, and the prompts that carry
+ * that template as text: analyzeFeedback 2175 → 2198, proposePromptVersion 2081 → 2105,
+ * redraftPromptVersion 3149 → 3197); the Conversation Summary says a pending Action Card in
+ * its own language and leaves the Conversation's own Project and Feature out of its facts
+ * (+32: summarizeConversation 1596 → 1628). Real-model language checks: choices 3/5 → 4/5,
+ * conversation 3/4 → 4/4. Scores on the fake unchanged.
  */
 export const EVAL_CASE_GUARD: Record<AiTask, { tokens: number; score: number; thai?: number }> = {
-  generateChoices: { tokens: 1664, score: 0.7, thai: 0.399 },
+  generateChoices: { tokens: 1688, score: 0.7, thai: 0.399 },
   draftSpecProposal: { tokens: 1516, score: 1, thai: 1 },
   summarizeAttachment: { tokens: 925, score: 0.8, thai: 0.2 },
   draftSpecFromAttachments: { tokens: 1400, score: 0.76, thai: 0.4 },
@@ -47,14 +55,14 @@ export const EVAL_CASE_GUARD: Record<AiTask, { tokens: number; score: number; th
   checkFeatureFit: { tokens: 1378, score: 0.708, thai: 0.333 },
   draftAcceptanceCriteria: { tokens: 1408, score: 1, thai: 1 },
   chat: { tokens: 2324, score: 0.909, thai: 0.775 },
-  summarizeConversation: { tokens: 1596, score: 0.916, thai: 0.916 },
+  summarizeConversation: { tokens: 1628, score: 0.916, thai: 0.916 },
   redraftChoices: { tokens: 1903, score: 0.833, thai: 0.666 },
   redraftSpecProposal: { tokens: 1916, score: 0.8, thai: 0.833 },
   redraftBriefProposal: { tokens: 1367, score: 0.9, thai: 0.8 },
   redraftFeatureSuggestion: { tokens: 1310, score: 0.666, thai: 0.666 },
-  analyzeFeedback: { tokens: 2175, score: 0.888, thai: 0.666 },
-  proposePromptVersion: { tokens: 2081, score: 1 },
-  redraftPromptVersion: { tokens: 3149, score: 0.666 },
+  analyzeFeedback: { tokens: 2198, score: 0.888, thai: 0.666 },
+  proposePromptVersion: { tokens: 2105, score: 1 },
+  redraftPromptVersion: { tokens: 3197, score: 0.666 },
   // Ticket 0069: new, with their cases (cases/design-docs.ts).
   draftDesignDoc: { tokens: 1960, score: 1, thai: 1 },
   redraftDesignDoc: { tokens: 1936, score: 1, thai: 1 },
@@ -83,9 +91,12 @@ export const EVAL_CASE_GUARD: Record<AiTask, { tokens: number; score: number; th
  * suggestFeatures 8094, draftSpecFromSuggestion 7856, checkFeatureFit 6659,
  * draftAcceptanceCriteria 9819, chat 10095, redraftChoices 9127, redraftSpecProposal 9377,
  * redraftFeatureSuggestion 8078, draftDesignDoc 10478, redraftDesignDoc 11197.
+ *
+ * 2026-10-15, ticket 0068: a Choice's description names the request's own facts;
+ * generateChoices 9454 → 9478 (+24).
  */
 export const PRODUCT_TOKEN_GUARD: Partial<Record<AiTask, number>> = {
-  generateChoices: 9454,
+  generateChoices: 9478,
   draftSpecProposal: 9250,
   draftSpecFromAttachments: 27974,
   grillingQuestions: 8125,

@@ -9,9 +9,9 @@ The updated summary, in these sections. Merge with the summary so far: keep ever
 - `goal`: what the person is trying to do in this Conversation, in one or two sentences.
 - `agreed`: each thing the person and the assistant agreed on, decided or settled, one per item, with its reason when one was given. Say plainly when an agreed point is not yet in the Spec or the Brief.
 - `openQuestions`: questions still waiting for an answer, and who could answer them when that was said.
-- `pendingActionCards`: each Action Card still PROPOSED, with what it proposes; leave out those approved, declined or stale.
+- `pendingActionCards`: each Action Card still PROPOSED, with what it proposes in your own words, in the summary's language; leave out those approved, declined or stale.
 - `preferences`: what the person said about how they want to work: language, tone, format, priorities, things to avoid.
-- `keyFacts`: names, numbers, dates, amounts, limits, ids, ticket keys, Feature and document titles that later turns may need. Copy each exactly as written; never round a number or shorten an id.
+- `keyFacts`: names, numbers, dates, amounts, limits, ids, ticket keys, Feature and document titles that later turns may need. Copy each exactly as written; never round a number or shorten an id. Leave out the Project and Feature this Conversation is about: they are always known.
 - `unrecorded`: only when a Spec or Brief is given below: each agreed point (from the summary so far or the messages) that it does not record yet, written as one line ready to add to it. Leave it empty when no Spec or Brief is given, or when everything agreed is already in it.
 
 ## Rules
