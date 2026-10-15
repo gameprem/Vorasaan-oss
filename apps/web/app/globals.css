@@ -27,7 +27,7 @@
   --ink: #3346c8;
   --ink-wash: #e1e6fb;
   --on-ink: #ffffff;
-  --jade: #0c7d61;
+  --jade: #0a775c; /* 4.7:1 on jade-wash (AA); #0c7d61 was 4.35:1 */
   --jade-wash: #dcf2ea;
   --lacquer: #b8321f;
   --lacquer-wash: #fbe5e0;
