@@ -1,11 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { type ReactNode, useState } from 'react';
 import { saveSpec } from '@/lib/feature-actions';
-import { markdownComponents } from './chat/markdown';
 import { type SaveMarkdownInput, SpecEditor } from './spec-editor';
 import { secondaryButton } from './ui';
 
@@ -13,6 +10,7 @@ import { secondaryButton } from './ui';
 export function SpecPanel({
   featureId,
   markdown,
+  rendered,
   version,
   meta,
   canEdit,
@@ -22,6 +20,8 @@ export function SpecPanel({
   /** What a first Spec starts from: a section per target Platform (from the server). */
   template?: string;
   markdown: string | null;
+  /** `markdown` rendered on the server (`MarkdownContent`), so the renderer isn't shipped here. */
+  rendered: ReactNode;
   version: number;
   meta: string | null;
   canEdit: boolean;
@@ -71,11 +71,7 @@ export function SpecPanel({
           </button>
         )}
       </div>
-      <div className="spec rounded-sheet bg-rail p-6 sm:p-10">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-          {markdown}
-        </ReactMarkdown>
-      </div>
+      <div className="spec rounded-sheet bg-rail p-6 sm:p-10">{rendered}</div>
     </>
   );
 }

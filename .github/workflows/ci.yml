@@ -46,6 +46,8 @@ jobs:
       # The web image runs `next build` (docker/Dockerfile.web); build here too so a
       # prerender-time failure is caught before merge, not at install time.
       - run: cd apps/web && bun --bun next build
+      # First-load JS of the main routes stays within apps/web/bundle-budget.json (+5%).
+      - run: cd apps/web && bun run bundle:check
 
   # The main web flows in a real browser (ticket 0039): the server with canned AI output
   # (VORASAAN_AI=fake) and the dev identity cookie, and the production web build.

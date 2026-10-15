@@ -50,11 +50,3 @@ export const GettingStartedView = z.object({
   dismissed: z.boolean(),
 });
 export type GettingStartedView = z.infer<typeof GettingStartedView>;
-
-export const GETTING_STARTED_LABEL: Record<GettingStartedItemKey, string> = {
-  PROJECT_AND_TEAM: 'Create a Project and a Team',
-  FEATURE_WITH_SPEC: 'Create a Feature and write its Spec',
-  INVITE_MEMBERS: 'Invite members',
-  LINK_CLI: 'Link the CLI (vorasaan login)',
-  CHAT_APP: 'Connect a chat app (LINE, Slack or Teams)',
-};

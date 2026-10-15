@@ -26,6 +26,7 @@ import { ActionForm } from '@/components/action-form';
 import { AttachmentsPanel } from '@/components/attachments-panel';
 import { Notice, relativeTime } from '@/components/bits';
 import { BriefPanel } from '@/components/brief-panel';
+import { MarkdownContent } from '@/components/chat/markdown';
 import { CoverageMatrix } from '@/components/coverage-matrix';
 import { DecisionSpeedPanel } from '@/components/decision-speed-panel';
 import { DeleteByName } from '@/components/delete-by-name';
@@ -240,6 +241,7 @@ async function BriefTab({ projectId, brief }: { projectId: string; brief: Projec
       <BriefPanel
         projectId={projectId}
         markdown={brief.markdown}
+        rendered={<MarkdownContent>{brief.markdown}</MarkdownContent>}
         version={brief.version}
         meta={
           current

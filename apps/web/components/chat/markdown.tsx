@@ -40,12 +40,23 @@ export const markdownComponents: Components = {
   },
 };
 
+/**
+ * The rendered Markdown alone, without a wrapper. A Server Component can render it and hand
+ * it to a Client Component (the Spec and Brief panels), so the Markdown renderer stays off
+ * that page's client bundle.
+ */
+export function MarkdownContent({ children }: { children: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {children}
+    </ReactMarkdown>
+  );
+}
+
 export function Markdown({ children, className }: { children: string; className?: string }) {
   return (
     <div className={className ? `md ${className}` : 'md'}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-        {children}
-      </ReactMarkdown>
+      <MarkdownContent>{children}</MarkdownContent>
     </div>
   );
 }

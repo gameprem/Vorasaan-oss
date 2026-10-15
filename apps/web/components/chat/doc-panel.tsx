@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { type Ref, useId } from 'react';
 import { CloseIcon, ExternalIcon } from '../icons';
 import { SpecDiff } from '../spec-diff';
-import { Markdown } from './markdown';
+import { Markdown } from './lazy-markdown';
 
 // The document beside the chat (ADR 0008): the Feature's latest Spec or the Project's
 // latest Brief, as a rounded sheet. A proposal still waiting in this Conversation shows

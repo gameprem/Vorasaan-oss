@@ -1,6 +1,6 @@
 'use client';
 
-import { CHAT_LANGUAGE_LABEL, ChatLanguage } from '@vorasaan/shared';
+import { CHAT_LANGUAGE_LABEL, CHAT_LANGUAGES, type ChatLanguage } from '@vorasaan/shared';
 import { useState, useTransition } from 'react';
 import { saveOrganizationSettings } from '@/lib/getting-started-actions';
 import { primaryButton } from './ui';
@@ -25,7 +25,7 @@ export function OrganizationLanguageForm({ language }: { language: ChatLanguage 
         label="Language"
         labelClassName="font-medium"
         className="max-w-sm"
-        options={ChatLanguage.options.map((lang) => ({
+        options={CHAT_LANGUAGES.map((lang) => ({
           id: lang,
           label: CHAT_LANGUAGE_LABEL[lang],
         }))}

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RequestHistoryKind, ResponseWindowUnit } from './enums.ts';
+import { isKnownTimeZone } from './response-window-values.ts';
 
 // Response Windows (ADR 0011, ticket 0055): how long a Decision Request may wait for a
 // decision, in the Organization's working time, before it escalates.
@@ -9,8 +10,6 @@ const Timestamp = z.iso.datetime();
 
 /** How many steps an escalation has: remind, add Delegates, tell the Raiser and Tech Leads. */
 export const ESCALATION_STEPS = 3;
-/** From this step on a request counts as "escalated": its Delegates were added. */
-export const ESCALATED_FROM_STEP = 2;
 
 /** A window length, such as 4 working hours or 2 working days. */
 export const ResponseWindow = z.strictObject({
@@ -22,18 +21,7 @@ export type ResponseWindow = z.infer<typeof ResponseWindow>;
 /** `HH:MM`, 24-hour, in the Organization's time zone. */
 export const TimeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM, such as 09:00');
 
-export const TimeZone = z
-  .string()
-  .trim()
-  .min(1)
-  .refine((tz) => {
-    try {
-      new Intl.DateTimeFormat('en-US', { timeZone: tz });
-      return true;
-    } catch {
-      return false;
-    }
-  }, 'Not a known time zone');
+export const TimeZone = z.string().trim().min(1).refine(isKnownTimeZone, 'Not a known time zone');
 
 export const Holiday = z.strictObject({
   date: z.iso.date(),
@@ -108,17 +96,6 @@ export const ResponseWindowSettingsView = z.object({
 });
 export type ResponseWindowSettingsView = z.infer<typeof ResponseWindowSettingsView>;
 
-/** What an Organization uses until an Admin saves its own. */
-export const DEFAULT_RESPONSE_WINDOW_SETTINGS = {
-  timeZone: 'UTC',
-  workingDays: [1, 2, 3, 4, 5],
-  workStart: '09:00',
-  workEnd: '18:00',
-  holidays: [],
-  blocker: { value: 4, unit: 'WORKING_HOURS' },
-  question: { value: 2, unit: 'WORKING_DAYS' },
-} as const satisfies ResponseWindowSettingsInput;
-
 /** `PUT /projects/:id/response-windows` (Admins): null keeps the Organization's default. */
 export const ProjectResponseWindowsInput = z.strictObject({
   blocker: ResponseWindow.nullable(),
@@ -152,28 +129,3 @@ export const RequestHistoryEntryView = z.object({
   createdAt: Timestamp,
 });
 export type RequestHistoryEntryView = z.infer<typeof RequestHistoryEntryView>;
-
-/** "4 working hours", "1 working day". */
-export const responseWindowText = (w: ResponseWindow) =>
-  `${w.value} working ${w.unit === 'WORKING_HOURS' ? 'hour' : 'day'}${w.value === 1 ? '' : 's'}`;
-
-/** `45m`, `2h`, `3d`: rounded down, never below a minute. */
-export function formatSpan(ms: number): string {
-  const minutes = Math.max(1, Math.floor(ms / 60_000));
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
-/**
- * The labels the Inbox and the lists show for a request: "due in 2h" or "overdue 1h",
- * then "escalated" once its Delegates were added. None while paused or not sent.
- */
-export function responseWindowLabels(state: ResponseWindowState, now: Date = new Date()): string[] {
-  if (!state.dueAt || state.paused) return [];
-  const left = Date.parse(state.dueAt) - now.getTime();
-  const labels = [left > 0 ? `due in ${formatSpan(left)}` : `overdue ${formatSpan(-left)}`];
-  if (state.escalationStep >= ESCALATED_FROM_STEP) labels.push('escalated');
-  return labels;
-}
