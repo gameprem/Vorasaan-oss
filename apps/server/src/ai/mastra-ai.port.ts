@@ -68,7 +68,9 @@ import {
   isReasoningRefusal,
   type ModelProviderOptions,
   providerOptionsOf,
+  type ReasoningTarget,
   reasoningTargetOf,
+  reasoningTargetOfCall,
 } from './reasoning.ts';
 import { generateStructured, type StructuredGenerate } from './structured.ts';
 import { estimateChatTokens, messagesAsText } from './token-count.ts';
@@ -182,46 +184,62 @@ function redactLogs<A extends { name: string; __setLogger(logger: ConsoleLogger)
 
 const reasoningLogger = new Logger('AiReasoning');
 
+/** Logs a refused reasoning parameter (ticket 0081), before the call goes once more without it. */
+function logRefusal(task: string, providerOptions: ModelProviderOptions, error: unknown): void {
+  reasoningLogger.warn(
+    `${task}: the model refused its reasoning parameter ${JSON.stringify(providerOptions)} ` +
+      `(${(error as Error)?.message ?? error}); retrying once without it`,
+  );
+}
+
 /**
  * Runs `call` with the reasoning parameter, and once more without it when the provider
- * refuses the parameter with a 400 (ticket 0081), saying so in the log. `started` tells
- * whether the call already gave something away (a chat's streamed text): then it is not
- * retried.
+ * refuses the parameter with a 400 (ticket 0081), saying so in the log and telling
+ * `onRefused`, so the Receipt records that no level was sent.
  */
 async function withoutReasoningOnRefusal<T>(
   task: string,
   providerOptions: ModelProviderOptions | null,
   call: (providerOptions: ModelProviderOptions | null) => Promise<T>,
+  onRefused?: () => void,
 ): Promise<T> {
   try {
     return await call(providerOptions);
   } catch (error) {
     if (!providerOptions || !isReasoningRefusal(error)) throw error;
-    reasoningLogger.warn(
-      `${task}: the model refused its reasoning parameter ${JSON.stringify(providerOptions)} ` +
-        `(${(error as Error)?.message ?? error}); retrying once without it`,
-    );
+    logRefusal(task, providerOptions, error);
+    onRefused?.();
     return call(null);
   }
 }
 
+/** What a call tells its caller (tickets 0070, 0081), and the target its reasoning maps to. */
+export type AgentCallOptions = {
+  /** Told each provider call's usage, for its Receipt. */
+  onUsage?: (usage: CacheUsage) => void;
+  /** Told when the provider refused the reasoning parameter and the call went without it. */
+  onReasoningRefused?: () => void;
+  /** The model's reasoning target, when the model chosen knows more than its id. */
+  target?: ReasoningTarget;
+};
+
 /**
- * `onUsage` is told each call's usage (ticket 0070), for its Receipt. `reasoning` is the
- * call's Reasoning Level (ticket 0081), mapped to the provider's own parameter; null
- * sends none. The connection test runs at LOW.
+ * `reasoning` is the call's Reasoning Level (ticket 0081), mapped to the provider's own
+ * parameter on `options.target` (by default the model's own); null sends none. The
+ * connection test runs at LOW.
  */
 export function agentGenerate(
   task: string,
   model: MastraModel,
-  onUsage?: (usage: CacheUsage) => void,
   reasoning: ReasoningLevel | null = 'LOW',
+  options: AgentCallOptions = {},
 ): StructuredGenerate {
   const agent = redactLogs(
     new Agent({ id: task, name: task, instructions: INSTRUCTIONS, model: model as AgentModel }),
     model,
   );
   const mark = cacheMarkOf(model);
-  const providerOptions = providerOptionsOf(model, reasoning);
+  const providerOptions = providerOptionsOf(model, reasoning, options.target);
   // Always stream: some OpenAI-compatible routers (e.g. 9Router) answer with SSE even
   // for non-streaming requests, which breaks a plain generate() call. Streaming works
   // with every provider, and we only need the final validated object.
@@ -230,16 +248,21 @@ export function agentGenerate(
     // Anthropic, directly or through OpenRouter: the prompt's stable parts carry
     // cache_control (tickets 0061, 0064). Every other model gets the whole text, as before.
     const message = mark ? [markedUserMessage(prompt, mark, INSTRUCTIONS_TOKENS)] : prompt.text;
-    return withoutReasoningOnRefusal(task, providerOptions, async (options) => {
-      const stream = await agent.stream(message as Parameters<typeof agent.stream>[0], {
-        structuredOutput: { schema },
-        ...(options ? { providerOptions: options } : {}),
-      });
-      const object = await stream.object;
-      const usage = await logUsage(task, stream.usage);
-      if (usage) onUsage?.(usage);
-      return object;
-    });
+    return withoutReasoningOnRefusal(
+      task,
+      providerOptions,
+      async (sent) => {
+        const stream = await agent.stream(message as Parameters<typeof agent.stream>[0], {
+          structuredOutput: { schema },
+          ...(sent ? { providerOptions: sent } : {}),
+        });
+        const object = await stream.object;
+        const usage = await logUsage(task, stream.usage);
+        if (usage) options.onUsage?.(usage);
+        return object;
+      },
+      options.onReasoningRefused,
+    );
   };
 }
 
@@ -278,15 +301,29 @@ export class MastraAiPort implements AiPort {
     if (options?.reasoning) return options.reasoning.level;
     return chooseReasoning({
       task,
-      target: reasoningTargetOf(model),
+      target: reasoningTargetOfCall(model, options?.model),
       message: options?.reasoningLevel,
     }).level;
+  }
+
+  /** What the call tells its caller, and the target its reasoning maps to. */
+  private callOptions(model: MastraModel, options: AiCallOptions | undefined): AgentCallOptions {
+    return {
+      onUsage: options?.onUsage,
+      onReasoningRefused: options?.onReasoningRefused,
+      target: reasoningTargetOfCall(model, options?.model),
+    };
   }
 
   /** A structured call of `task` on its model, at its Reasoning Level. */
   private async generator(name: string, task: AiTask, options: AiCallOptions | undefined) {
     const model = await this.resolveModel(task, options?.model);
-    return agentGenerate(name, model, options?.onUsage, this.reasoningOf(task, model, options));
+    return agentGenerate(
+      name,
+      model,
+      this.reasoningOf(task, model, options),
+      this.callOptions(model, options),
+    );
   }
 
   async generateChoices(
@@ -567,8 +604,8 @@ export class MastraAiPort implements AiPort {
         input.recentMessages,
         input.tools,
         input.signal,
-        options?.onUsage,
         this.reasoningOf('chat', model, options),
+        this.callOptions(model, options),
       );
     } catch (error) {
       // A request longer than the model's window: the Conversation compacts and retries once.
@@ -729,7 +766,8 @@ function toAgentTools(tools: ChatTool[]) {
  * One step of a Conversation reply: text streamed as written, and the tools the
  * model calls. Mastra runs none of them; they are client tools the server runs.
  * `reasoning` is the reply's Reasoning Level (ticket 0081); a provider refusing its
- * parameter with a 400 before anything was streamed gets the step once more without it.
+ * parameter with a 400 before anything was streamed gets the step once more without it,
+ * and `options.onReasoningRefused` is told.
  */
 async function* streamChat(
   model: MastraModel,
@@ -737,8 +775,8 @@ async function* streamChat(
   messages: ChatMessageForAi[],
   tools: ChatTool[],
   signal: AbortSignal | undefined,
-  onUsage?: (usage: CacheUsage) => void,
   reasoning: ReasoningLevel | null = 'MEDIUM',
+  options: AgentCallOptions = {},
 ): AsyncIterable<ChatChunk> {
   // Anthropic, directly or through OpenRouter: the system prompt's stable parts carry
   // cache_control (tickets 0061, 0064). Every other model gets the whole text as one
@@ -753,7 +791,7 @@ async function* streamChat(
     }),
     model,
   );
-  let providerOptions = providerOptionsOf(model, reasoning);
+  let providerOptions = providerOptionsOf(model, reasoning, options.target);
   for (;;) {
     let streamed = false;
     try {
@@ -788,7 +826,7 @@ async function* streamChat(
         }
       }
       const usage = await logUsage('chat', output.usage);
-      if (usage) onUsage?.(usage);
+      if (usage) options.onUsage?.(usage);
       // The context meter shows the last turn's cache reads (ticket 0066).
       if (usage && (usage.inputTokens !== null || usage.cacheReadTokens !== null)) {
         yield {
@@ -799,10 +837,8 @@ async function* streamChat(
       return;
     } catch (error) {
       if (streamed || !providerOptions || !isReasoningRefusal(error)) throw error;
-      reasoningLogger.warn(
-        `chat: the model refused its reasoning parameter ${JSON.stringify(providerOptions)} ` +
-          `(${(error as Error)?.message ?? error}); retrying once without it`,
-      );
+      logRefusal('chat', providerOptions, error);
+      options.onReasoningRefused?.();
       providerOptions = null;
     }
   }
@@ -830,14 +866,17 @@ function anthropicTarget(
 
 const PingResult = z.object({ reply: z.string() });
 
-/** A tiny structured call to check that a provider config works. */
-export async function pingModel(model: MastraModel): Promise<void> {
-  const generate = agentGenerate(
-    'connection-test',
-    model,
-    undefined,
-    connectionTestReasoning(reasoningTargetOf(model)),
-  );
+/**
+ * A tiny structured call to check that a provider config works. `target` is what the
+ * Approved Model knows of the model's reasoning (ticket 0081), else the model's own.
+ */
+export async function pingModel(
+  model: MastraModel,
+  target: ReasoningTarget = reasoningTargetOf(model),
+): Promise<void> {
+  const generate = agentGenerate('connection-test', model, connectionTestReasoning(target), {
+    target,
+  });
   const raw = await generate('Reply with the single word "ok" in the `reply` field.', PingResult);
   PingResult.parse(raw);
 }

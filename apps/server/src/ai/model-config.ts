@@ -7,6 +7,11 @@ export type ResolvedProvider = {
   model: string;
   apiKey: string;
   baseUrl: string | null;
+  /**
+   * Whether the model takes a reasoning parameter, as its Approved Model recorded it from
+   * OpenRouter's model list (ticket 0081); null or left out: not known.
+   */
+  supportsReasoning?: boolean | null;
 };
 
 /**

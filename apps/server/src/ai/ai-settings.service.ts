@@ -41,7 +41,7 @@ import type { ModelChoice } from './ai.port.ts';
 import { envModelContextWindow, prefilledContextWindow } from './context-window.ts';
 import { geminiContextWindow, listGeminiModels } from './gemini.ts';
 import { type ResolvedProvider, toMastraModel } from './model-config.ts';
-import { listOpenRouterModels, openRouterContextWindow } from './openrouter.ts';
+import { listOpenRouterModels, openRouterModelInfo } from './openrouter.ts';
 import {
   chatReasoningSupport,
   chooseReasoning,
@@ -198,6 +198,7 @@ export class AiSettingsService {
           note: true,
           isDefault: true,
           modelId: true,
+          supportsReasoning: true,
           integration: { select: { provider: true } },
         },
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
@@ -208,9 +209,13 @@ export class AiSettingsService {
       }),
     ]);
     // "Think deeper" (ticket 0081) works on a model with a reasoning control.
-    const models = rows.map(({ modelId, integration, ...m }) => ({
+    const models = rows.map(({ modelId, supportsReasoning, integration, ...m }) => ({
       ...m,
-      reasoning: chatReasoningSupport({ kind: integration.provider as AiProvider, modelId }),
+      reasoning: chatReasoningSupport({
+        kind: integration.provider as AiProvider,
+        modelId,
+        supportsReasoning,
+      }),
     }));
     // What a Conversation with no picked model runs on (chooseModel without a pick).
     const override = envModelOverride('chat');
@@ -332,21 +337,31 @@ export class AiSettingsService {
   }
 
   /**
-   * The window a new model gets when the Admin gives none: for OpenRouter, its
-   * `context_length` from the list (ticket 0064); for Gemini, its `inputTokenLimit`
-   * from the list, read with the provider's key (ticket 0080); else the known
-   * model's, else the default.
+   * What a model's provider lists of it, for a model being added or given a new id:
+   * - `contextWindow`: `window` when the Admin gave one; else, for OpenRouter, its
+   *   `context_length` from the list (ticket 0064); for Gemini, its `inputTokenLimit` from
+   *   the list, read with the provider's key (ticket 0080); else the known model's, else
+   *   the default.
+   * - `supportsReasoning`, for OpenRouter only (ticket 0081): whether the list's
+   *   `supported_parameters` name `reasoning`; null when not known.
+   * OpenRouter's list is read once for both.
    */
-  private async windowFor(kind: AiProvider, modelId: string, apiKey: string): Promise<number> {
+  private async listingFor(
+    kind: AiProvider,
+    modelId: string,
+    apiKey: string,
+    window?: number,
+  ): Promise<{ contextWindow: number; supportsReasoning: boolean | null }> {
     if (kind === 'OPENROUTER') {
-      const listed = await openRouterContextWindow(modelId);
-      if (listed) return listed;
+      const listed = await openRouterModelInfo(modelId);
+      return {
+        contextWindow: window ?? listed.contextWindow ?? prefilledContextWindow(modelId),
+        supportsReasoning: listed.supportsReasoning,
+      };
     }
-    if (kind === 'GEMINI') {
-      const listed = await geminiContextWindow(modelId, apiKey);
-      if (listed) return listed;
-    }
-    return prefilledContextWindow(modelId);
+    if (window !== undefined) return { contextWindow: window, supportsReasoning: null };
+    const listed = kind === 'GEMINI' ? await geminiContextWindow(modelId, apiKey) : null;
+    return { contextWindow: listed ?? prefilledContextWindow(modelId), supportsReasoning: null };
   }
 
   /** Refused while Approved Models run on it: remove or move them first. */
@@ -386,9 +401,12 @@ export class AiSettingsService {
     const organizationId = await this.requireOrganizationId();
     const provider = await this.provider(organizationId, input.providerId);
     await this.assertNameFree(organizationId, input.displayName);
-    const contextWindow =
-      input.contextWindow ??
-      (await this.windowFor(provider.provider as AiProvider, input.modelId, this.keyOf(provider)));
+    const { contextWindow, supportsReasoning } = await this.listingFor(
+      provider.provider as AiProvider,
+      input.modelId,
+      this.keyOf(provider),
+      input.contextWindow,
+    );
     const created = await conflictOnRace(() =>
       this.db.$transaction(async (tx) => {
         const last = await tx.approvedModel.findFirst({
@@ -411,6 +429,7 @@ export class AiSettingsService {
             displayName: input.displayName,
             note: input.note ?? null,
             contextWindow,
+            supportsReasoning,
             ...priceColumns(input.prices ?? null),
             position: last ? last.position + 1 : 0,
             isDefault,
@@ -431,12 +450,20 @@ export class AiSettingsService {
     const provider = input.providerId
       ? await this.provider(organizationId, input.providerId)
       : existing.integration;
-    // A new model id without a window given takes the new model's prefilled window.
-    const contextWindow =
-      input.contextWindow ??
-      (input.modelId && input.modelId !== existing.modelId
-        ? await this.windowFor(provider.provider as AiProvider, input.modelId, this.keyOf(provider))
-        : undefined);
+    // A new model id (or provider) is looked up again: without a window given, it takes the
+    // new model's prefilled window, and OpenRouter's list says whether it can reason.
+    const modelId = input.modelId ?? existing.modelId;
+    const listing =
+      modelId !== existing.modelId || provider.id !== existing.integrationId
+        ? await this.listingFor(
+            provider.provider as AiProvider,
+            modelId,
+            this.keyOf(provider),
+            input.contextWindow ??
+              (modelId === existing.modelId ? existing.contextWindow : undefined),
+          )
+        : null;
+    const contextWindow = input.contextWindow ?? listing?.contextWindow;
     if (input.displayName) await this.assertNameFree(organizationId, input.displayName, id);
     const updated = await conflictOnRace(() =>
       this.db.$transaction(async (tx) => {
@@ -454,6 +481,7 @@ export class AiSettingsService {
             ...(input.displayName ? { displayName: input.displayName } : {}),
             ...(input.note !== undefined ? { note: input.note } : {}),
             ...(contextWindow !== undefined ? { contextWindow } : {}),
+            ...(listing ? { supportsReasoning: listing.supportsReasoning } : {}),
             ...(input.prices !== undefined ? priceColumns(input.prices) : {}),
             ...(input.isDefault ? { isDefault: true } : {}),
           },
@@ -564,7 +592,11 @@ export class AiSettingsService {
     refuseFixedUrl(input, input.provider);
     if (!input.apiKey) throw new UnprocessableEntityException('Enter an API key or token');
     const secretEncrypted = this.secrets().encrypt(input.apiKey);
-    const contextWindow = await this.windowFor(input.provider, input.model, input.apiKey);
+    const { contextWindow, supportsReasoning } = await this.listingFor(
+      input.provider,
+      input.model,
+      input.apiKey,
+    );
     await this.db.$transaction(async (tx) => {
       const provider = await tx.orgIntegration.create({
         data: {
@@ -582,6 +614,7 @@ export class AiSettingsService {
           modelId: input.model,
           displayName: input.model,
           contextWindow,
+          supportsReasoning,
           position: 0,
           isDefault: true,
         },
@@ -630,6 +663,8 @@ export class AiSettingsService {
       model: model.modelId,
       apiKey: this.secrets().decrypt(model.integration.secretEncrypted),
       baseUrl: model.integration.baseUrl,
+      // Only when OpenRouter's list said (ticket 0081); unknown stays out.
+      ...(model.supportsReasoning !== null ? { supportsReasoning: model.supportsReasoning } : {}),
     };
   }
 
@@ -736,7 +771,11 @@ function modelSettingsView(m: ModelWithProvider): ApprovedModelSettingsView {
         : { inputPerMillion: m.inputPricePerMillion, outputPerMillion: m.outputPricePerMillion },
     position: m.position,
     isDefault: m.isDefault,
-    reasoning: reasoningSupport({ kind, modelId: m.modelId }),
+    reasoning: reasoningSupport({
+      kind,
+      modelId: m.modelId,
+      supportsReasoning: m.supportsReasoning,
+    }),
   };
 }
 

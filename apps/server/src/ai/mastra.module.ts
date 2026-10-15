@@ -14,6 +14,7 @@ import { FakeAiPort } from './fake-ai.port.ts';
 import { MastraAiPort, pingModel } from './mastra-ai.port.ts';
 import { toMastraModel } from './model-config.ts';
 import { ModelRoutingAiPort } from './model-routing.ai-port.ts';
+import { reasoningTargetOfChoice } from './reasoning.ts';
 
 /**
  * The adapter that talks to the providers. Tests replace it with a FakeAiPort
@@ -30,7 +31,11 @@ export const AI_ENGINE = Symbol('AI_ENGINE');
   providers: [
     {
       provide: AI_CONNECTION_TESTER,
-      useValue: ((provider) => pingModel(toMastraModel(provider))) satisfies AiConnectionTester,
+      useValue: ((provider) =>
+        pingModel(
+          toMastraModel(provider),
+          reasoningTargetOfChoice({ provider, name: provider.model }),
+        )) satisfies AiConnectionTester,
     },
     AiSettingsService,
     ContextBudgets,

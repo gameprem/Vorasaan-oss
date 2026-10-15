@@ -10,6 +10,7 @@ import {
   openRouterBaseUrl,
   openRouterContextWindow,
   openRouterHeaders,
+  openRouterModelInfo,
 } from './openrouter.ts';
 import { chatPrompt, generateChoicesPrompt } from './prompts.ts';
 
@@ -286,6 +287,48 @@ describe("OpenRouter's model list", () => {
     expect(fake.requests[0]?.headers.authorization).toBeUndefined();
     expect(await openRouterContextWindow('anthropic/example-model', env())).toBe(200_000);
     expect(await openRouterContextWindow('example/missing', env())).toBeNull();
+  });
+
+  test('whether a model can reason, from its supported_parameters (0081 follow-up)', async () => {
+    fake.modelsStatus = null;
+    fake.models = [
+      {
+        id: 'example/thinker',
+        context_length: 131_072,
+        supported_parameters: ['tools', 'reasoning', 'include_reasoning'],
+      },
+      { id: 'example/include-only', supported_parameters: ['include_reasoning'] },
+      {
+        id: 'example/no-think',
+        context_length: 32_768,
+        supported_parameters: ['tools', 'temperature'],
+      },
+      { id: 'example/unsaid' },
+    ];
+    expect(await openRouterModelInfo('example/thinker', env())).toEqual({
+      contextWindow: 131_072,
+      supportsReasoning: true,
+    });
+    expect((await openRouterModelInfo('example/include-only', env())).supportsReasoning).toBe(true);
+    expect(await openRouterModelInfo('example/no-think', env())).toEqual({
+      contextWindow: 32_768,
+      supportsReasoning: false,
+    });
+    // Unknown: the list doesn't say, the model isn't listed, or there is no list.
+    expect((await openRouterModelInfo('example/unsaid', env())).supportsReasoning).toBeNull();
+    expect(await openRouterModelInfo('example/missing', env())).toEqual({
+      contextWindow: null,
+      supportsReasoning: null,
+    });
+    fake.modelsStatus = 503;
+    expect((await openRouterModelInfo('example/no-think', env())).supportsReasoning).toBeNull();
+    fake.modelsStatus = null;
+    // The picker's view is unchanged.
+    expect((await listOpenRouterModels(env())).models[0]).toEqual({
+      id: 'example/include-only',
+      name: 'example/include-only',
+      contextWindow: null,
+    });
   });
 
   test('a list that cannot be loaded is an error, never a throw', async () => {
