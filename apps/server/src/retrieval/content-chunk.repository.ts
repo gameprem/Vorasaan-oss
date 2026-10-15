@@ -69,6 +69,19 @@ export const MAX_SEARCH_K = 100;
  */
 export const EXACT_SEARCH_MAX_CHUNKS = 20_000;
 
+/**
+ * How chunks that rank alike are ordered: the most recently indexed source first, then its
+ * reading order, then the text byte by byte (`COLLATE "C"`, so no locale can reorder it),
+ * and the id only between chunks of the same text. Without it (before this fix, ticket 0076)
+ * a tie was broken by random ids or by the order rows happened to lie on disk, so the same
+ * search on the same data could return different chunks from one database to the next; the
+ * fake embeddings put every chunk that shares no word with the query at exactly distance 1.
+ */
+function tieBreak(table: string): Prisma.Sql {
+  const t = Prisma.raw(table);
+  return Prisma.sql`${t}."createdAt" DESC, ${t}."position", ${t}."text" COLLATE "C", ${t}."id"`;
+}
+
 /** A Thai character, as a Postgres regular expression. */
 const THAI_CHARACTER = '[\u0E00-\u0E7F]';
 /** Below this many Thai characters, a chunk's old and new estimates may round alike. */
@@ -158,6 +171,10 @@ export class ContentChunkRepository {
    * the scope is a small share of the Organization's chunks, most of the `ef_search`
    * candidates fall outside it and the nearest chunks in it are missed. Only a larger
    * scope goes through the HNSW index.
+   *
+   * In the exact ranking, every chunk as near as the k-th is a candidate and `tieBreak`
+   * picks among them, so the same data always gives the same chunks. The HNSW path is
+   * approximate and orders by distance only: the index can't sort by anything else.
    */
   async search(
     scope: SearchScope,
@@ -177,13 +194,17 @@ export class ContentChunkRepository {
           AND "embeddingModel" = ${query.model}
           AND "embeddingDims" = ${dims}
         LIMIT ${this.exactSearchMaxChunks + 1}
+      ), cutoff AS (
+        SELECT "distance" FROM scoped ORDER BY "distance" OFFSET ${limit - 1} LIMIT 1
       ), nearest AS (
-        SELECT "id", "distance" FROM scoped ORDER BY "distance" LIMIT ${limit}
+        SELECT "id", "distance" FROM scoped
+        WHERE NOT EXISTS (SELECT 1 FROM cutoff) OR "distance" <= (SELECT "distance" FROM cutoff)
       )
       SELECT c."id", c."source", c."sourceId", c."featureId", c."position", c."text",
              c."tokenCount", n."distance", (SELECT count(*) FROM scoped) AS "scoped"
       FROM nearest n JOIN "ContentChunk" c ON c."id" = n."id"
-      ORDER BY n."distance", c."id"`;
+      ORDER BY n."distance", ${tieBreak('c')}
+      LIMIT ${limit}`;
     if (Number(exact[0]?.scoped ?? 0) <= this.exactSearchMaxChunks) {
       return exact.map(({ scoped: _, ...row }) => ({ ...row, distance: Number(row.distance) }));
     }
@@ -227,7 +248,7 @@ export class ContentChunkRepository {
       FROM "ContentChunk", websearch_to_tsquery('simple', ${tsquery}) AS q
       WHERE ${scopeCondition(scope)}
         AND to_tsvector('simple', "text") @@ q
-      ORDER BY "rank" DESC, "sourceId", "position"
+      ORDER BY "rank" DESC, ${tieBreak('"ContentChunk"')}
       LIMIT ${limit}`;
     return rows.map((row) => ({ ...row, rank: Number(row.rank) }));
   }

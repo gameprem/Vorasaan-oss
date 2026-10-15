@@ -94,24 +94,38 @@ export const EVAL_CASE_GUARD: Record<AiTask, { tokens: number; score: number; th
  *
  * 2026-10-15, ticket 0068: a Choice's description names the request's own facts;
  * generateChoices 9454 → 9478 (+24).
+ *
+ * 2026-10-15, ticket 0076 (determinism): retrieval broke ties between chunks that rank alike
+ * by random ids or by the order rows lay on disk, and the large Organization inserts its
+ * chunks four batches at a time, so that order changes from one database to the next. The
+ * fake embeddings put every chunk sharing no word with the query at exactly distance 1, so
+ * several calls picked among dozens of equal chunks: on development, rewriting a share of the
+ * seeded chunk rows (same data, other order) moved chat from 10074 to 10230 (CI saw 10206),
+ * redraftSpecProposal from 9440 to 9607 and draftDesignDoc from 10530 to 10554. Ties now go to
+ * the most recently indexed source, in reading order, then the text byte by byte, and every
+ * measure is the same on every run and row order. Before → after: chat 10158 → 10083,
+ * draftSpecFromAttachments 27974 → 27808, draftDesignDoc 10540 → 10289 (lowered: other
+ * chunks win the ties), redraftSpecProposal 9440 → 9544 (+104, inside the 9440 to 9607 it
+ * already ranged over) and redraftDesignDoc 11260 → 11284 (+24): no prompt grew, the guard
+ * was set on one lucky row order.
  */
 export const PRODUCT_TOKEN_GUARD: Partial<Record<AiTask, number>> = {
   generateChoices: 9478,
   draftSpecProposal: 9250,
-  draftSpecFromAttachments: 27974,
+  draftSpecFromAttachments: 27808,
   grillingQuestions: 8125,
   suggestFeatures: 8157,
   draftSpecFromSuggestion: 7919,
   checkFeatureFit: 6721,
   draftAcceptanceCriteria: 9882,
-  chat: 10158,
+  chat: 10083,
   redraftChoices: 9189,
-  redraftSpecProposal: 9440,
+  redraftSpecProposal: 9544,
   redraftFeatureSuggestion: 8141,
   // Ticket 0069: new. The scenarios end with the Back-End Design Doc drafted from the Spec
   // (and QA's) and one Redraft of it.
-  draftDesignDoc: 10540,
-  redraftDesignDoc: 11260,
+  draftDesignDoc: 10289,
+  redraftDesignDoc: 11284,
 };
 
 /** The replay of the approved Receipts in those calls (ticket 0071): its score on the fake. */
