@@ -10,6 +10,7 @@ import { notFound, unstable_rethrow } from 'next/navigation';
 import { Notice, relativeTime, statusText } from '@/components/bits';
 import { Markdown } from '@/components/chat/markdown';
 import {
+  DesignDocMessages,
   DesignDocStateBadge,
   DraftDesignDocButton,
   RefreshWhileDrafting,
@@ -91,35 +92,37 @@ export default async function DesignDocPage({
         From the {DESIGN_TEMPLATE_LABEL[doc.template]} template. A {approversText(doc)} approves it.
         It follows the Spec and never changes it.
       </p>
-      {canDraft && (
-        <div className="mt-4">
-          <DraftDesignDocButton featureId={id} doc={doc} />
-        </div>
-      )}
-
-      {proposal && (
-        <section aria-labelledby="proposal-heading" className="mt-10">
-          <h2 id="proposal-heading" className="text-xl font-semibold">
-            {proposal.reason === 'FIRST_DRAFT'
-              ? `Draft from Spec v${proposal.specVersion}`
-              : `Update for Spec v${proposal.specVersion}`}
-          </h2>
-          <p className="mt-1 text-sm text-fg-soft">
-            Drafted by the AI {relativeTime(proposal.createdAt)}
-            {proposal.baseVersion ? `, changing v${proposal.baseVersion}` : ''}.
-            {proposal.summary ? ` ${proposal.summary}` : ''}
-          </p>
-          <DraftedWith model={proposal.draftedWith} />
+      <DesignDocMessages>
+        {canDraft && (
           <div className="mt-4">
-            <SpecDiff before={proposal.baseMarkdown} after={proposal.proposedMarkdown} />
+            <DraftDesignDocButton featureId={id} doc={doc} />
           </div>
-          {redrafts ? (
-            <ReviewDesignDoc featureId={id} proposal={proposal} redrafts={redrafts} />
-          ) : (
-            <Notice tone="error">Could not load its Redrafts.</Notice>
-          )}
-        </section>
-      )}
+        )}
+
+        {proposal && (
+          <section aria-labelledby="proposal-heading" className="mt-10">
+            <h2 id="proposal-heading" className="text-xl font-semibold">
+              {proposal.reason === 'FIRST_DRAFT'
+                ? `Draft from Spec v${proposal.specVersion}`
+                : `Update for Spec v${proposal.specVersion}`}
+            </h2>
+            <p className="mt-1 text-sm text-fg-soft">
+              Drafted by the AI {relativeTime(proposal.createdAt)}
+              {proposal.baseVersion ? `, changing v${proposal.baseVersion}` : ''}.
+              {proposal.summary ? ` ${proposal.summary}` : ''}
+            </p>
+            <DraftedWith model={proposal.draftedWith} />
+            <div className="mt-4">
+              <SpecDiff before={proposal.baseMarkdown} after={proposal.proposedMarkdown} />
+            </div>
+            {redrafts ? (
+              <ReviewDesignDoc featureId={id} proposal={proposal} redrafts={redrafts} />
+            ) : (
+              <Notice tone="error">Could not load its Redrafts.</Notice>
+            )}
+          </section>
+        )}
+      </DesignDocMessages>
 
       {doc.questions.length > 0 && (
         <section aria-labelledby="questions-heading" className="mt-10">
