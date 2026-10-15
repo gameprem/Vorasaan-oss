@@ -178,7 +178,7 @@ No Decision Request waits silently: Response Windows with escalation, Decision L
 
 ## Next (Post-MVP 4–9)
 
-In this order: OpenRouter as a provider and Request changes on every AI proposal (ADR 0013), both done; then our own UI kit (ADR 0016), done; then a context meter with `/compact`, a readable chat history and cursor pagination, done; then the Decision Graph of a Feature, done; then language rules with Thai eval cases, done (its English-first comparison is run by hand). Later, Gemini joined OpenRouter as a key-only provider with its model list, done (0080); then a Reasoning Level per task and per chat message, mapped to every provider (0081).
+In this order: OpenRouter as a provider and Request changes on every AI proposal (ADR 0013), both done; then our own UI kit (ADR 0016), done; then a context meter with `/compact`, a readable chat history and cursor pagination, done; then the Decision Graph of a Feature, done; then language rules with Thai eval cases, done (its English-first comparison is run by hand). Later, Gemini joined OpenRouter as a key-only provider with its model list, done (0080); then a Reasoning Level per task and per chat message, mapped to every provider, done (0081).
 
 | # | Ticket | Depends on |
 | --- | --- | --- |

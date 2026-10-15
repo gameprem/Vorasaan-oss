@@ -38,6 +38,7 @@ Free text people wrote themselves (feedback, reasons) is kept, apart from names 
     "provider": "ANTHROPIC"
   },
   "language": "th",
+  "reasoningLevel": "LOW",
   "usage": {
     "inputTokens": 4210,
     "outputTokens": 655,
@@ -100,6 +101,7 @@ Free text people wrote themselves (feedback, reasons) is kept, apart from names 
 | `prompt.name`, `prompt.version` | The prompt the call rendered and its Prompt Version. `default@<hash>` is the built-in prompt; the hash (12 hex digits of its SHA-256) changes whenever its text does. `v<n>@<hash>` is the Organization's Prompt Version number `n` (0071), hashed the same way. The calls of an Eval Run (0071) leave Receipts too; they have no outcomes. |
 | `model` | `source`: `APPROVED_MODEL` or `ENV` (a `VORASAAN_MODEL*` variable); `approvedModelId`; `name`, the provider's model id; `provider`: `ANTHROPIC`, `OPENAI`, `OPENAI_COMPATIBLE`, `OPENROUTER` or `GEMINI`. |
 | `language` | The Reply Language the call was asked for (`en`, `th`). |
+| `reasoningLevel` | The Reasoning Level sent to the model (`LOW`, `MEDIUM`, `HIGH`; ticket 0081), or `null` when its model has no reasoning control, the operator turned it off, or the line is older. |
 | `usage` | Tokens in and out, and read from and written to the provider's prompt cache, summed over the call's requests (a structured call retried after an invalid answer counts both). `reasoningTokens` are the output tokens the model spent thinking (a part of `outputTokens`, e.g. Gemini's thinking; added by ticket 0080, so older lines have `null`). `null` when the provider didn't say. |
 | `latencyMs` | How long the call took, end to end. |
 | `success`, `error` | Whether it returned. A failed call has a Receipt too, with a short, redacted `error`. A chat reply stopped by the person counts as failed ("Stopped by the person"). |
