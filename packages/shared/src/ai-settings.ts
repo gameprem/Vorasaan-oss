@@ -253,6 +253,26 @@ export const UpdateApprovedModelInput = z.object({
 });
 export type UpdateApprovedModelInput = z.infer<typeof UpdateApprovedModelInput>;
 
+// ─── Reasoning Level (ticket 0081) ──────────────────────────────────────────
+
+/**
+ * How much an AI call may think before it answers: one setting the server maps to each
+ * provider's own control (Gemini's thinking level or budget, Anthropic's effort, OpenAI's
+ * reasoning effort, OpenRouter's reasoning effort). Thinking tokens bill as output.
+ */
+export const ReasoningLevel = z.enum(['LOW', 'MEDIUM', 'HIGH']);
+export type ReasoningLevel = z.infer<typeof ReasoningLevel>;
+
+/**
+ * Whether a model's thinking can be set (ticket 0081): `reason` says why not, e.g. "Not
+ * supported by this provider" for an OpenAI-compatible endpoint.
+ */
+export const ReasoningSupport = z.object({
+  supported: z.boolean(),
+  reason: z.string().nullable(),
+});
+export type ReasoningSupport = z.infer<typeof ReasoningSupport>;
+
 export const ApprovedModelSettingsView = z.object({
   id: z.string(),
   providerId: z.string(),
@@ -267,6 +287,8 @@ export const ApprovedModelSettingsView = z.object({
   prices: ModelPrices.nullable(),
   position: z.number().int(),
   isDefault: z.boolean(),
+  /** Whether its Reasoning Level can be set (ticket 0081), and why not. */
+  reasoning: ReasoningSupport,
 });
 export type ApprovedModelSettingsView = z.infer<typeof ApprovedModelSettingsView>;
 
@@ -292,12 +314,39 @@ export const SetAiTaskModelsInput = z.object({
 });
 export type SetAiTaskModelsInput = z.infer<typeof SetAiTaskModelsInput>;
 
+/**
+ * The Reasoning Level each task runs at until an Admin sets one (ticket 0081): low for the
+ * structured tasks, medium for chat, a Spec drafted from Attachments and Design Docs.
+ * `note` names the calls of the task with another default.
+ */
+export const REASONING_DEFAULTS: Record<AiTask, { level: ReasoningLevel; note: string | null }> = {
+  CHOICES: { level: 'LOW', note: null },
+  SPEC_PROPOSAL: { level: 'LOW', note: 'Medium for a Spec drafted from Attachments' },
+  SUMMARIES: { level: 'LOW', note: null },
+  GRILLING: { level: 'LOW', note: null },
+  FEATURE_SUGGESTIONS: { level: 'LOW', note: null },
+  FIT_CHECK: { level: 'LOW', note: null },
+  CHAT: { level: 'MEDIUM', note: null },
+  PROMPT_PROPOSALS: { level: 'LOW', note: null },
+  DESIGN_DOCS: { level: 'MEDIUM', note: 'Low for Redrafts' },
+};
+
+/** The Reasoning Level for each task given; `null` (or leaving a task out) means its default. */
+export const SetAiTaskReasoningInput = z.object({
+  tasks: z.partialRecord(AiTask, ReasoningLevel.nullable()),
+});
+export type SetAiTaskReasoningInput = z.infer<typeof SetAiTaskReasoningInput>;
+
 export const AiTaskModelView = z.object({
   task: AiTask,
   /** Null: the default Approved Model. */
   approvedModelId: z.string().nullable(),
   /** The VORASAAN_MODEL_* variables set on the server for this task; they win over Settings. */
   envOverrides: z.array(z.string()),
+  /** The Admin's Reasoning Level for the task (ticket 0081); null: its default. */
+  reasoningLevel: ReasoningLevel.nullable(),
+  /** The VORASAAN_REASONING* variables set for this task; they win over Settings. */
+  reasoningEnvOverrides: z.array(z.string()),
 });
 export type AiTaskModelView = z.infer<typeof AiTaskModelView>;
 
@@ -317,6 +366,8 @@ export const AiModelView = z.object({
   displayName: z.string(),
   note: z.string().nullable(),
   isDefault: z.boolean(),
+  /** Whether "Think deeper" can raise a chat message's Reasoning Level on it (ticket 0081). */
+  reasoning: ReasoningSupport,
 });
 export type AiModelView = z.infer<typeof AiModelView>;
 
@@ -328,6 +379,11 @@ export const AiModelsView = z.object({
    * Approved Model, or when the server's VORASAAN_MODEL_CHAT overrides it.
    */
   chatDefaultId: z.string().nullable(),
+  /**
+   * Whether "Think deeper" works on the model a Conversation with no picked model runs on
+   * (`chatDefaultId`'s, or the env model's when it is null).
+   */
+  chatDefaultReasoning: ReasoningSupport,
 });
 export type AiModelsView = z.infer<typeof AiModelsView>;
 

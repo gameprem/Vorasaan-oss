@@ -1,5 +1,7 @@
+import type { ReasoningLevel } from '@vorasaan/shared';
 import type { AiTask } from './ai.config.ts';
 import type { AiCallOptions, AiPort, ChatChunk, ModelChoice, PromptChoice } from './ai.port.ts';
+import type { ReasoningChoice } from './reasoning.ts';
 
 /** Picks the model of one call: the caller's pick, else the task's, else the default. */
 export type ModelChooser = (task: AiTask, approvedModelId?: string) => Promise<ModelChoice>;
@@ -8,30 +10,51 @@ export type ModelChooser = (task: AiTask, approvedModelId?: string) => Promise<M
 export type PromptChooser = (task: AiTask) => Promise<PromptChoice>;
 
 /**
- * The AiPort the services use. Before each call it chooses the model (ADR 0010)
- * and the version of the task's prompt (ADR 0015, ticket 0071), and hands both to
- * the adapter that talks to the provider (MastraAiPort), or to the FakeAiPort in
- * tests, which records them. The choice is made on every call, so a change in
- * Settings (a model, an approved Prompt Version, a rollback) applies to the next one.
+ * Picks the Reasoning Level of one call on its chosen model (ticket 0081): the caller's
+ * (a message's "Think deeper"), else the env's, else the Admin's, else the task's default.
+ */
+export type ReasoningChooser = (
+  task: AiTask,
+  model: ModelChoice,
+  requested?: ReasoningLevel,
+) => Promise<ReasoningChoice>;
+
+/**
+ * The AiPort the services use. Before each call it chooses the model (ADR 0010),
+ * the version of the task's prompt (ADR 0015, ticket 0071) and its Reasoning Level
+ * (ticket 0081), and hands them to the adapter that talks to the provider
+ * (MastraAiPort), or to the FakeAiPort in tests, which records them. The choice is made
+ * on every call, so a change in Settings (a model, an approved Prompt Version, a
+ * rollback, a Reasoning Level) applies to the next one.
  */
 export class ModelRoutingAiPort implements AiPort {
   constructor(
     private readonly engine: AiPort,
     private readonly choose: ModelChooser,
     private readonly choosePrompt?: PromptChooser,
+    private readonly chooseReasoning?: ReasoningChooser,
   ) {}
 
   /**
    * A caller that already chose the model (`options.model`, e.g. a Conversation's
    * turn, which chooses once for all its steps and records it) keeps it; one that
-   * chose the prompt's version (`options.prompt`, an eval run) keeps that.
+   * chose the prompt's version (`options.prompt`, an eval run) keeps that, and one
+   * that chose the Reasoning Level (`options.reasoning`) keeps it.
    */
   private async options(task: AiTask, options?: AiCallOptions): Promise<AiCallOptions> {
     const [model, prompt] = await Promise.all([
       options?.model ?? this.choose(task, options?.approvedModelId),
       options?.prompt ?? this.choosePrompt?.(task),
     ]);
-    return { ...options, model, ...(prompt ? { prompt } : {}) };
+    // The level is chosen on every call too, so an Admin's change applies to the next one.
+    const reasoning =
+      options?.reasoning ?? (await this.chooseReasoning?.(task, model, options?.reasoningLevel));
+    return {
+      ...options,
+      model,
+      ...(prompt ? { prompt } : {}),
+      ...(reasoning ? { reasoning } : {}),
+    };
   }
 
   async *chat(input: Parameters<AiPort['chat']>[0], options?: AiCallOptions) {

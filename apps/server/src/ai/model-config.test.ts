@@ -1,12 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { MastraAiPort } from './mastra-ai.port.ts';
-import {
-  geminiThinking,
-  geminiThinkingConfig,
-  mastraModelOf,
-  providerOptionsOf,
-  toMastraModel,
-} from './model-config.ts';
+import { mastraModelOf, toMastraModel } from './model-config.ts';
 
 describe('toMastraModel', () => {
   test('Claude API', () => {
@@ -196,60 +190,4 @@ describe('MastraAiPort', () => {
   });
   // Chat with tools runs against a stand-in provider in mastra-chat.test.ts.
 });
-
-describe('Gemini thinking (ticket 0080)', () => {
-  test('low by default: a level for Gemini 3 and the latest aliases, a budget for 2.5', () => {
-    expect(geminiThinkingConfig('gemini-3.8-flash', 'low')).toEqual({ thinkingLevel: 'low' });
-    expect(geminiThinkingConfig('gemini-3-pro-preview', 'low')).toEqual({ thinkingLevel: 'low' });
-    expect(geminiThinkingConfig('gemini-flash-latest', 'low')).toEqual({ thinkingLevel: 'low' });
-    expect(geminiThinkingConfig('gemini-pro-latest', 'low')).toEqual({ thinkingLevel: 'low' });
-    expect(geminiThinkingConfig('gemini-2.5-flash', 'low')).toEqual({ thinkingBudget: 0 });
-    expect(geminiThinkingConfig('gemini-2.5-flash-lite', 'low')).toEqual({ thinkingBudget: 0 });
-    // 2.5 Pro can't turn thinking off: 128 is its least.
-    expect(geminiThinkingConfig('gemini-2.5-pro', 'low')).toEqual({ thinkingBudget: 128 });
-  });
-
-  test('nothing for models that refuse or lack thinking settings', () => {
-    for (const id of ['gemma-3-27b-it', 'gemma-3n-e4b-it', 'gemini-2.0-flash', 'gemini-1.5-pro']) {
-      expect(geminiThinkingConfig(id, 'low')).toBeNull();
-      expect(geminiThinkingConfig(id, 'high')).toBeNull();
-    }
-  });
-
-  test('high asks Gemini 3 for its most, and leaves 2.5 to its own; default sends nothing', () => {
-    expect(geminiThinkingConfig('gemini-3.8-flash', 'high')).toEqual({ thinkingLevel: 'high' });
-    expect(geminiThinkingConfig('gemini-2.5-pro', 'high')).toBeNull();
-    expect(geminiThinkingConfig('gemini-3.8-flash', 'default')).toBeNull();
-    expect(geminiThinkingConfig('gemini-2.5-flash', 'default')).toBeNull();
-  });
-
-  test('VORASAAN_GEMINI_THINKING: low unless high or default', () => {
-    expect(geminiThinking({})).toBe('low');
-    expect(geminiThinking({ VORASAAN_GEMINI_THINKING: ' HIGH ' })).toBe('high');
-    expect(geminiThinking({ VORASAAN_GEMINI_THINKING: 'default' })).toBe('default');
-    expect(geminiThinking({ VORASAAN_GEMINI_THINKING: 'minimal' })).toBe('low');
-  });
-
-  test('only google/ models get provider options, from an Approved Model or the env', () => {
-    const approved = toMastraModel({
-      provider: 'GEMINI',
-      model: 'gemini-3.8-flash',
-      apiKey: 'k',
-      baseUrl: null,
-    });
-    const low = { google: { thinkingConfig: { thinkingLevel: 'low' as const } } };
-    expect(providerOptionsOf(approved, 'low')).toEqual(low);
-    expect(providerOptionsOf('google/gemini-3.8-flash', 'low')).toEqual(low);
-    expect(providerOptionsOf('google/gemma-3-27b-it', 'low')).toBeNull();
-    expect(providerOptionsOf('google/gemini-3.8-flash', 'default')).toBeNull();
-    expect(providerOptionsOf('anthropic/claude-x', 'low')).toBeNull();
-    expect(providerOptionsOf('openai/gpt-x', 'low')).toBeNull();
-    expect(providerOptionsOf('openrouter/google/gemini-3.8-flash', 'low')).toBeNull();
-    expect(
-      providerOptionsOf(
-        { providerId: 'custom', modelId: 'gemini-3.8-flash', url: 'http://x', apiKey: 'k' },
-        'low',
-      ),
-    ).toBeNull();
-  });
-});
+// The reasoning parameter of each provider (tickets 0080, 0081): reasoning.test.ts.

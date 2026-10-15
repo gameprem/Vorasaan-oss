@@ -254,6 +254,10 @@ _Avoid_: Engine, LLM option, model preset
 How much one call to an Approved Model can hold, the prompt and the reply together, counted in tokens. Every AI task takes its context, its history and its room for the reply as shares of it.
 _Avoid_: Context length, max tokens, token limit
 
+**Reasoning Level**:
+How much the AI may think before it answers one call: Low, Medium or High. Vorasaan turns it into each AI Provider's own setting, or sends nothing when the model has none. An Admin sets it per AI task (structured work defaults to Low; chat, a Spec drafted from Attachments and Design Docs default to Medium), and a person can raise one chat message to High with "Think deeper". Thinking is billed as output, so a higher level costs more.
+_Avoid_: Thinking budget, effort, reasoning effort, thinking mode
+
 **Conversation Summary**:
 The older part of a Conversation folded into fixed sections (the goal, what was agreed, open questions, pending Action Cards, the person's preferences, and names, numbers and ids) once the Conversation grows too long for its model. The AI then reads those messages only through it; the messages themselves stay in the Conversation.
 _Avoid_: Memory, compaction note, recap

@@ -24,6 +24,8 @@ export type FakeOpenRouter = {
   structured: unknown;
   /** The usage of every reply: OpenRouter's fields, cache reads and writes included. */
   usage: Json;
+  /** A model's refusal of a request (ticket 0081): the message of a 400, or null to answer. */
+  refuse: (body: Json) => string | null;
   stop: () => void;
 };
 
@@ -49,6 +51,7 @@ export function startFakeOpenRouter(key: string): FakeOpenRouter {
       total_tokens: 1852,
       prompt_tokens_details: { cached_tokens: 1500, cache_write_tokens: 300 },
     },
+    refuse: () => null,
   };
   const server = Bun.serve({
     port: 0,
@@ -72,6 +75,10 @@ export function startFakeOpenRouter(key: string): FakeOpenRouter {
           { error: { code: 401, message: `No auth credentials found for ${auth.slice(7)}` } },
           { status: 401 },
         );
+      }
+      const refused = fake.refuse(body ?? {});
+      if (refused) {
+        return Response.json({ error: { code: 400, message: refused } }, { status: 400 });
       }
       const structured = Boolean(body?.response_format) || Array.isArray(body?.tools);
       const content = structured ? JSON.stringify(fake.structured) : 'Retry three times.';

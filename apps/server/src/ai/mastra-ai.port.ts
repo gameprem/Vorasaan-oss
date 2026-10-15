@@ -3,7 +3,7 @@ import { Agent } from '@mastra/core/agent';
 import { ConsoleLogger } from '@mastra/core/logger';
 import { createTool } from '@mastra/core/tools';
 import { Logger } from '@nestjs/common';
-import type { GrillingRoundKind, TeamRole } from '@vorasaan/shared';
+import type { GrillingRoundKind, ReasoningLevel, TeamRole } from '@vorasaan/shared';
 import { z } from 'zod';
 import { estimateTokens } from '../retrieval/token-estimate.ts';
 import type { AiTask } from './ai.config.ts';
@@ -51,7 +51,7 @@ import {
   type SuggestionForAi,
 } from './ai.port.ts';
 import type { LanguageStrategy } from './language.ts';
-import { type MastraModel, mastraModelOf, providerOptionsOf } from './model-config.ts';
+import { type MastraModel, mastraModelOf } from './model-config.ts';
 import {
   type CacheUsage,
   cacheMarkOf,
@@ -62,6 +62,14 @@ import {
   wholePrompt,
 } from './prompt-cache.ts';
 import { chatPrompt, type PromptOptions, TASK_PROMPTS } from './prompts.ts';
+import {
+  chooseReasoning,
+  connectionTestReasoning,
+  isReasoningRefusal,
+  type ModelProviderOptions,
+  providerOptionsOf,
+  reasoningTargetOf,
+} from './reasoning.ts';
 import { generateStructured, type StructuredGenerate } from './structured.ts';
 import { estimateChatTokens, messagesAsText } from './token-count.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
@@ -172,19 +180,48 @@ function redactLogs<A extends { name: string; __setLogger(logger: ConsoleLogger)
   return agent;
 }
 
-/** `onUsage` is told each call's usage (ticket 0070), for its Receipt. */
+const reasoningLogger = new Logger('AiReasoning');
+
+/**
+ * Runs `call` with the reasoning parameter, and once more without it when the provider
+ * refuses the parameter with a 400 (ticket 0081), saying so in the log. `started` tells
+ * whether the call already gave something away (a chat's streamed text): then it is not
+ * retried.
+ */
+async function withoutReasoningOnRefusal<T>(
+  task: string,
+  providerOptions: ModelProviderOptions | null,
+  call: (providerOptions: ModelProviderOptions | null) => Promise<T>,
+): Promise<T> {
+  try {
+    return await call(providerOptions);
+  } catch (error) {
+    if (!providerOptions || !isReasoningRefusal(error)) throw error;
+    reasoningLogger.warn(
+      `${task}: the model refused its reasoning parameter ${JSON.stringify(providerOptions)} ` +
+        `(${(error as Error)?.message ?? error}); retrying once without it`,
+    );
+    return call(null);
+  }
+}
+
+/**
+ * `onUsage` is told each call's usage (ticket 0070), for its Receipt. `reasoning` is the
+ * call's Reasoning Level (ticket 0081), mapped to the provider's own parameter; null
+ * sends none. The connection test runs at LOW.
+ */
 export function agentGenerate(
   task: string,
   model: MastraModel,
   onUsage?: (usage: CacheUsage) => void,
+  reasoning: ReasoningLevel | null = 'LOW',
 ): StructuredGenerate {
   const agent = redactLogs(
     new Agent({ id: task, name: task, instructions: INSTRUCTIONS, model: model as AgentModel }),
     model,
   );
   const mark = cacheMarkOf(model);
-  // Gemini's thinking kept low (ticket 0080); nothing for other providers.
-  const providerOptions = providerOptionsOf(model);
+  const providerOptions = providerOptionsOf(model, reasoning);
   // Always stream: some OpenAI-compatible routers (e.g. 9Router) answer with SSE even
   // for non-streaming requests, which breaks a plain generate() call. Streaming works
   // with every provider, and we only need the final validated object.
@@ -193,14 +230,16 @@ export function agentGenerate(
     // Anthropic, directly or through OpenRouter: the prompt's stable parts carry
     // cache_control (tickets 0061, 0064). Every other model gets the whole text, as before.
     const message = mark ? [markedUserMessage(prompt, mark, INSTRUCTIONS_TOKENS)] : prompt.text;
-    const stream = await agent.stream(message as Parameters<typeof agent.stream>[0], {
-      structuredOutput: { schema },
-      ...(providerOptions ? { providerOptions } : {}),
+    return withoutReasoningOnRefusal(task, providerOptions, async (options) => {
+      const stream = await agent.stream(message as Parameters<typeof agent.stream>[0], {
+        structuredOutput: { schema },
+        ...(options ? { providerOptions: options } : {}),
+      });
+      const object = await stream.object;
+      const usage = await logUsage(task, stream.usage);
+      if (usage) onUsage?.(usage);
+      return object;
     });
-    const object = await stream.object;
-    const usage = await logUsage(task, stream.usage);
-    if (usage) onUsage?.(usage);
-    return object;
   };
 }
 
@@ -227,6 +266,29 @@ export class MastraAiPort implements AiPort {
     };
   }
 
+  /**
+   * The call's Reasoning Level (ticket 0081): as `ModelRoutingAiPort` chose it, else (the
+   * eval scripts) the caller's, the env's or the task's default.
+   */
+  private reasoningOf(
+    task: AiTask,
+    model: MastraModel,
+    options: AiCallOptions | undefined,
+  ): ReasoningLevel | null {
+    if (options?.reasoning) return options.reasoning.level;
+    return chooseReasoning({
+      task,
+      target: reasoningTargetOf(model),
+      message: options?.reasoningLevel,
+    }).level;
+  }
+
+  /** A structured call of `task` on its model, at its Reasoning Level. */
+  private async generator(name: string, task: AiTask, options: AiCallOptions | undefined) {
+    const model = await this.resolveModel(task, options?.model);
+    return agentGenerate(name, model, options?.onUsage, this.reasoningOf(task, model, options));
+  }
+
   async generateChoices(
     input: {
       specMarkdown: string;
@@ -237,11 +299,7 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.generateChoices(input, this.lang(options));
-    const generate = agentGenerate(
-      'generate-choices',
-      await this.resolveModel('generateChoices', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('generate-choices', 'generateChoices', options);
     return generateStructured(generate, 'generate-choices', prompt, GeneratedChoices);
   }
 
@@ -256,21 +314,13 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.draftSpecProposal(input, this.lang(options));
-    const generate = agentGenerate(
-      'draft-spec-proposal',
-      await this.resolveModel('draftSpecProposal', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('draft-spec-proposal', 'draftSpecProposal', options);
     return generateStructured(generate, 'draft-spec-proposal', prompt, SpecProposalDraft);
   }
 
   async summarizeAttachment(input: { attachment: AttachmentForAi }, options?: AiCallOptions) {
     const prompt = await TASK_PROMPTS.summarizeAttachment(input, this.lang(options));
-    const generate = agentGenerate(
-      'summarize-attachment',
-      await this.resolveModel('summarizeAttachment', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('summarize-attachment', 'summarizeAttachment', options);
     return generateStructured(generate, 'summarize-attachment', prompt, AttachmentSummary);
   }
 
@@ -283,10 +333,10 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.draftSpecFromAttachments(input, this.lang(options));
-    const generate = agentGenerate(
+    const generate = await this.generator(
       'draft-spec-from-attachments',
-      await this.resolveModel('draftSpecFromAttachments', options?.model),
-      options?.onUsage,
+      'draftSpecFromAttachments',
+      options,
     );
     return generateStructured(generate, 'draft-spec-from-attachments', prompt, SpecProposalDraft);
   }
@@ -303,11 +353,7 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.grillingQuestions(input, this.lang(options));
-    const generate = agentGenerate(
-      'grilling-questions',
-      await this.resolveModel('grillingQuestions', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('grilling-questions', 'grillingQuestions', options);
     return generateStructured(generate, 'grilling-questions', prompt, GrillingQuestionDrafts);
   }
 
@@ -324,11 +370,7 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.grillingFollowUp(input, this.lang(options));
-    const generate = agentGenerate(
-      'grilling-follow-up',
-      await this.resolveModel('grillingFollowUp', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('grilling-follow-up', 'grillingFollowUp', options);
     return generateStructured(generate, 'grilling-follow-up', prompt, GrillingFollowUpDecision);
   }
 
@@ -344,10 +386,10 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.draftBriefFromGrilling(input, this.lang(options));
-    const generate = agentGenerate(
+    const generate = await this.generator(
       'draft-brief-from-grilling',
-      await this.resolveModel('draftBriefFromGrilling', options?.model),
-      options?.onUsage,
+      'draftBriefFromGrilling',
+      options,
     );
     return generateStructured(generate, 'draft-brief-from-grilling', prompt, BriefDraft);
   }
@@ -365,11 +407,7 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.suggestFeatures(input, this.lang(options));
-    const generate = agentGenerate(
-      'suggest-features',
-      await this.resolveModel('suggestFeatures', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('suggest-features', 'suggestFeatures', options);
     return generateStructured(generate, 'suggest-features', prompt, FeatureSuggestionDrafts);
   }
 
@@ -383,10 +421,10 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.draftSpecFromSuggestion(input, this.lang(options));
-    const generate = agentGenerate(
+    const generate = await this.generator(
       'draft-spec-from-suggestion',
-      await this.resolveModel('draftSpecFromSuggestion', options?.model),
-      options?.onUsage,
+      'draftSpecFromSuggestion',
+      options,
     );
     return generateStructured(generate, 'draft-spec-from-suggestion', prompt, SpecProposalDraft);
   }
@@ -401,11 +439,7 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.checkFeatureFit(input, this.lang(options));
-    const generate = agentGenerate(
-      'check-feature-fit',
-      await this.resolveModel('checkFeatureFit', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('check-feature-fit', 'checkFeatureFit', options);
     return generateStructured(generate, 'check-feature-fit', prompt, FeatureFitDraft);
   }
 
@@ -414,21 +448,17 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.draftAcceptanceCriteria(input, this.lang(options));
-    const generate = agentGenerate(
+    const generate = await this.generator(
       'draft-acceptance-criteria',
-      await this.resolveModel('draftAcceptanceCriteria', options?.model),
-      options?.onUsage,
+      'draftAcceptanceCriteria',
+      options,
     );
     return generateStructured(generate, 'draft-acceptance-criteria', prompt, SpecProposalDraft);
   }
 
   async redraftChoices(input: Parameters<AiPort['redraftChoices']>[0], options?: AiCallOptions) {
     const prompt = await TASK_PROMPTS.redraftChoices(input, this.lang(options));
-    const generate = agentGenerate(
-      'redraft-choices',
-      await this.resolveModel('redraftChoices', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('redraft-choices', 'redraftChoices', options);
     return generateStructured(generate, 'redraft-choices', prompt, RedraftedChoices);
   }
 
@@ -437,11 +467,7 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.redraftSpecProposal(input, this.lang(options));
-    const generate = agentGenerate(
-      'redraft-spec-proposal',
-      await this.resolveModel('redraftSpecProposal', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('redraft-spec-proposal', 'redraftSpecProposal', options);
     return generateStructured(generate, 'redraft-spec-proposal', prompt, RedraftedMarkdown);
   }
 
@@ -450,10 +476,10 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.redraftBriefProposal(input, this.lang(options));
-    const generate = agentGenerate(
+    const generate = await this.generator(
       'redraft-brief-proposal',
-      await this.resolveModel('redraftBriefProposal', options?.model),
-      options?.onUsage,
+      'redraftBriefProposal',
+      options,
     );
     return generateStructured(generate, 'redraft-brief-proposal', prompt, RedraftedMarkdown);
   }
@@ -463,21 +489,17 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.redraftFeatureSuggestion(input, this.lang(options));
-    const generate = agentGenerate(
+    const generate = await this.generator(
       'redraft-feature-suggestion',
-      await this.resolveModel('redraftFeatureSuggestion', options?.model),
-      options?.onUsage,
+      'redraftFeatureSuggestion',
+      options,
     );
     return generateStructured(generate, 'redraft-feature-suggestion', prompt, RedraftedSuggestion);
   }
 
   async analyzeFeedback(input: Parameters<AiPort['analyzeFeedback']>[0], options?: AiCallOptions) {
     const prompt = await TASK_PROMPTS.analyzeFeedback(input, this.lang(options));
-    const generate = agentGenerate(
-      'analyze-feedback',
-      await this.resolveModel('analyzeFeedback', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('analyze-feedback', 'analyzeFeedback', options);
     return generateStructured(generate, 'analyze-feedback', prompt, FeedbackAnalysis);
   }
 
@@ -486,10 +508,10 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.proposePromptVersion(input, this.lang(options));
-    const generate = agentGenerate(
+    const generate = await this.generator(
       'propose-prompt-version',
-      await this.resolveModel('proposePromptVersion', options?.model),
-      options?.onUsage,
+      'proposePromptVersion',
+      options,
     );
     return generateStructured(generate, 'propose-prompt-version', prompt, ProposedPromptVersion);
   }
@@ -499,21 +521,17 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.redraftPromptVersion(input, this.lang(options));
-    const generate = agentGenerate(
+    const generate = await this.generator(
       'redraft-prompt-version',
-      await this.resolveModel('redraftPromptVersion', options?.model),
-      options?.onUsage,
+      'redraftPromptVersion',
+      options,
     );
     return generateStructured(generate, 'redraft-prompt-version', prompt, RedraftedPromptVersion);
   }
 
   async draftDesignDoc(input: Parameters<AiPort['draftDesignDoc']>[0], options?: AiCallOptions) {
     const prompt = await TASK_PROMPTS.draftDesignDoc(input, this.lang(options));
-    const generate = agentGenerate(
-      'draft-design-doc',
-      await this.resolveModel('draftDesignDoc', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('draft-design-doc', 'draftDesignDoc', options);
     return generateStructured(generate, 'draft-design-doc', prompt, DesignDocDraft);
   }
 
@@ -522,11 +540,7 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.redraftDesignDoc(input, this.lang(options));
-    const generate = agentGenerate(
-      'redraft-design-doc',
-      await this.resolveModel('redraftDesignDoc', options?.model),
-      options?.onUsage,
-    );
+    const generate = await this.generator('redraft-design-doc', 'redraftDesignDoc', options);
     return generateStructured(generate, 'redraft-design-doc', prompt, RedraftedMarkdown);
   }
 
@@ -554,6 +568,7 @@ export class MastraAiPort implements AiPort {
         input.tools,
         input.signal,
         options?.onUsage,
+        this.reasoningOf('chat', model, options),
       );
     } catch (error) {
       // A request longer than the model's window: the Conversation compacts and retries once.
@@ -607,10 +622,10 @@ export class MastraAiPort implements AiPort {
     options?: AiCallOptions,
   ) {
     const prompt = await TASK_PROMPTS.summarizeConversation(input, this.lang(options));
-    const generate = agentGenerate(
+    const generate = await this.generator(
       'summarize-conversation',
-      await this.resolveModel('summarizeConversation', options?.model),
-      options?.onUsage,
+      'summarizeConversation',
+      options,
     );
     return generateStructured(generate, 'summarize-conversation', prompt, ConversationFoldDraft);
   }
@@ -713,6 +728,8 @@ function toAgentTools(tools: ChatTool[]) {
 /**
  * One step of a Conversation reply: text streamed as written, and the tools the
  * model calls. Mastra runs none of them; they are client tools the server runs.
+ * `reasoning` is the reply's Reasoning Level (ticket 0081); a provider refusing its
+ * parameter with a 400 before anything was streamed gets the step once more without it.
  */
 async function* streamChat(
   model: MastraModel,
@@ -721,6 +738,7 @@ async function* streamChat(
   tools: ChatTool[],
   signal: AbortSignal | undefined,
   onUsage?: (usage: CacheUsage) => void,
+  reasoning: ReasoningLevel | null = 'MEDIUM',
 ): AsyncIterable<ChatChunk> {
   // Anthropic, directly or through OpenRouter: the system prompt's stable parts carry
   // cache_control (tickets 0061, 0064). Every other model gets the whole text as one
@@ -735,41 +753,58 @@ async function* streamChat(
     }),
     model,
   );
-  const providerOptions = providerOptionsOf(model);
-  const output = await agent.stream(toAgentMessages(messages, tools.length > 0), {
-    maxSteps: 1,
-    ...(providerOptions ? { providerOptions } : {}),
-    ...(tools.length ? { clientTools: toAgentTools(tools) } : {}),
-    ...(signal ? { abortSignal: signal } : {}),
-  });
-  for await (const chunk of output.fullStream) {
-    // Stopped (ticket 0046): end here, whatever the provider still sends.
-    if (signal?.aborted) return;
-    if (chunk.type === 'text-delta') {
-      if (chunk.payload.text) yield { type: 'text', delta: chunk.payload.text };
-    } else if (chunk.type === 'tool-call') {
-      yield {
-        type: 'tool-call',
-        call: {
-          id: chunk.payload.toolCallId,
-          name: chunk.payload.toolName,
-          args: chunk.payload.args ?? {},
-        },
-      };
-    } else if (chunk.type === 'error') {
-      throw chunk.payload.error instanceof Error
-        ? chunk.payload.error
-        : new Error(`The chat stream failed: ${String(chunk.payload.error)}`);
+  let providerOptions = providerOptionsOf(model, reasoning);
+  for (;;) {
+    let streamed = false;
+    try {
+      const output = await agent.stream(toAgentMessages(messages, tools.length > 0), {
+        maxSteps: 1,
+        ...(providerOptions ? { providerOptions } : {}),
+        ...(tools.length ? { clientTools: toAgentTools(tools) } : {}),
+        ...(signal ? { abortSignal: signal } : {}),
+      });
+      for await (const chunk of output.fullStream) {
+        // Stopped (ticket 0046): end here, whatever the provider still sends.
+        if (signal?.aborted) return;
+        if (chunk.type === 'text-delta') {
+          if (chunk.payload.text) {
+            streamed = true;
+            yield { type: 'text', delta: chunk.payload.text };
+          }
+        } else if (chunk.type === 'tool-call') {
+          streamed = true;
+          yield {
+            type: 'tool-call',
+            call: {
+              id: chunk.payload.toolCallId,
+              name: chunk.payload.toolName,
+              args: chunk.payload.args ?? {},
+            },
+          };
+        } else if (chunk.type === 'error') {
+          throw chunk.payload.error instanceof Error
+            ? chunk.payload.error
+            : new Error(`The chat stream failed: ${String(chunk.payload.error)}`);
+        }
+      }
+      const usage = await logUsage('chat', output.usage);
+      if (usage) onUsage?.(usage);
+      // The context meter shows the last turn's cache reads (ticket 0066).
+      if (usage && (usage.inputTokens !== null || usage.cacheReadTokens !== null)) {
+        yield {
+          type: 'usage',
+          usage: { inputTokens: usage.inputTokens, cacheReadTokens: usage.cacheReadTokens },
+        };
+      }
+      return;
+    } catch (error) {
+      if (streamed || !providerOptions || !isReasoningRefusal(error)) throw error;
+      reasoningLogger.warn(
+        `chat: the model refused its reasoning parameter ${JSON.stringify(providerOptions)} ` +
+          `(${(error as Error)?.message ?? error}); retrying once without it`,
+      );
+      providerOptions = null;
     }
-  }
-  const usage = await logUsage('chat', output.usage);
-  if (usage) onUsage?.(usage);
-  // The context meter shows the last turn's cache reads (ticket 0066).
-  if (usage && (usage.inputTokens !== null || usage.cacheReadTokens !== null)) {
-    yield {
-      type: 'usage',
-      usage: { inputTokens: usage.inputTokens, cacheReadTokens: usage.cacheReadTokens },
-    };
   }
 }
 
@@ -797,7 +832,12 @@ const PingResult = z.object({ reply: z.string() });
 
 /** A tiny structured call to check that a provider config works. */
 export async function pingModel(model: MastraModel): Promise<void> {
-  const generate = agentGenerate('connection-test', model);
+  const generate = agentGenerate(
+    'connection-test',
+    model,
+    undefined,
+    connectionTestReasoning(reasoningTargetOf(model)),
+  );
   const raw = await generate('Reply with the single word "ok" in the `reply` field.', PingResult);
   PingResult.parse(raw);
 }

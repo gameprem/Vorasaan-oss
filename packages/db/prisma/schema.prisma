@@ -336,6 +336,7 @@ model Organization {
   integrations      OrgIntegration[]
   approvedModels    ApprovedModel[]
   aiTaskModels      AiTaskModel[]
+  aiTaskReasoning   AiTaskReasoning[]
   projects          Project[]
   chunks            ContentChunk[]
   guidelines        GuidelineCriterion[]
@@ -502,6 +503,27 @@ model AiTaskModel {
 
   @@unique([organizationId, task])
   @@index([approvedModelId])
+}
+
+// How much an AI call may think before it answers (ticket 0081): mapped by the server to
+// each provider's own control (Gemini's thinking, Anthropic's effort, OpenAI's and
+// OpenRouter's reasoning effort).
+enum ReasoningLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// The Reasoning Level an Admin set for an AI task (ticket 0081). No row: the task's default
+// (low for structured tasks, medium for chat, a Spec from Attachments and Design Docs).
+model AiTaskReasoning {
+  id             String         @id @default(uuid())
+  organizationId String
+  task           AiTaskKind
+  level          ReasoningLevel
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, task])
 }
 
 // ─── Project / Team / Feature ───────────────────────────────────────────────
@@ -1255,6 +1277,12 @@ model ConversationMessage {
   // (ticket 0047, `GrillingNote` in @vorasaan/shared), so it can be shown in the
   // reader's language. `content` holds the same in English.
   grillingNotes    Json?
+  // "Think deeper" (ticket 0081): the Reasoning Level the person asked for, on their message
+  // and on the reply to it; null for the chat task's own level.
+  reasoningLevel   ReasoningLevel?
+  // ASSISTANT: the tokens the reply's model spent thinking, summed over the turn's steps,
+  // when the provider reported them.
+  reasoningTokens  Int?
   createdAt        DateTime                @default(now())
   conversation     Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   actionCards      ActionCard[] // made by this ASSISTANT message's tool calls
@@ -1516,6 +1544,7 @@ model Receipt {
   cacheReadTokens  Int?
   cacheWriteTokens Int?
   reasoningTokens  Int? // of outputTokens, those spent thinking (ticket 0080)
+  reasoningLevel   String? // the Reasoning Level sent (ticket 0081); null: the model has no control
   latencyMs        Int
   success          Boolean
   error            String? // a short, redacted message when it failed

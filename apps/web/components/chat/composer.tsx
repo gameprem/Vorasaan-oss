@@ -1,10 +1,14 @@
 'use client';
 
-import { type AttachmentView, MAX_CONVERSATION_MESSAGE_CHARS } from '@vorasaan/shared';
+import {
+  type AttachmentView,
+  MAX_CONVERSATION_MESSAGE_CHARS,
+  type ReasoningSupport,
+} from '@vorasaan/shared';
 import { type ReactNode, type Ref, useEffect, useId, useRef, useState } from 'react';
 import { addLinkAttachment } from '@/lib/attachment-actions';
 import type { AttachmentOwner } from '@/lib/ids';
-import { PlusIcon, SendIcon, StopIcon } from '../icons';
+import { BulbIcon, PlusIcon, SendIcon, StopIcon } from '../icons';
 
 // The composer (ADR 0008): a large rounded field. Enter sends, Shift+Enter starts a new
 // line. While the AI writes, Send becomes Stop. "+ Attachment" adds a file or a link to the
@@ -23,6 +27,7 @@ export function Composer({
   attachTo,
   context,
   model,
+  thinkDeeper,
   disabled,
   inputRef,
 }: {
@@ -40,6 +45,8 @@ export function Composer({
   context: ReactNode;
   /** The model menu (ticket 0054), between Attachment and the context. */
   model?: ReactNode;
+  /** "Think deeper" (ticket 0081): the next message only, at the HIGH Reasoning Level. */
+  thinkDeeper?: { on: boolean; onToggle: (on: boolean) => void; support: ReasoningSupport };
   /** Why sending isn't possible yet (no scope picked), if it isn't. */
   disabled?: string;
   inputRef: Ref<HTMLTextAreaElement>;
@@ -99,6 +106,7 @@ export function Composer({
       <div className="composer-row">
         {attachTo && <AttachButton owner={attachTo} />}
         {model}
+        {thinkDeeper && <ThinkDeeper {...thinkDeeper} />}
         <span className="scope">{context}</span>
         {replying ? (
           <button
@@ -124,6 +132,47 @@ export function Composer({
         )}
       </div>
     </form>
+  );
+}
+
+/**
+ * "Think deeper" (ticket 0081): a toggle for the next message alone, which asks the model to
+ * think at the HIGH Reasoning Level. Without a reasoning control on the chat's model it stays
+ * focusable but does nothing, and says why.
+ */
+function ThinkDeeper({
+  on,
+  onToggle,
+  support,
+}: {
+  on: boolean;
+  onToggle: (on: boolean) => void;
+  support: ReasoningSupport;
+}) {
+  const reasonId = useId();
+  const off = !support.supported;
+  return (
+    <>
+      <button
+        type="button"
+        className="chip think"
+        aria-pressed={off ? false : on}
+        aria-disabled={off || undefined}
+        aria-describedby={reasonId}
+        title={off ? `Think deeper: ${support.reason ?? 'not available'}` : undefined}
+        onClick={() => {
+          if (!off) onToggle(!on);
+        }}
+        aria-label="Think deeper"
+      >
+        <BulbIcon /> <span className="think-label">Think deeper</span>
+      </button>
+      <span id={reasonId} className="sr-only">
+        {off
+          ? `Not available: ${support.reason ?? 'this model has no reasoning control'}.`
+          : 'For your next message only: the model thinks longer, which costs more.'}
+      </span>
+    </>
   );
 }
 
