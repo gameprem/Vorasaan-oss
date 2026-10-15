@@ -12,8 +12,10 @@ import {
   openRouterReasoning,
   providerOptionsOf,
   reasoningEnvOverridesFor,
+  reasoningOptionsFor,
   reasoningSupport,
   reasoningTargetOf,
+  reasoningTargetOfCall,
   reasoningTargetOfChoice,
 } from './reasoning.ts';
 
@@ -179,6 +181,57 @@ describe('reasoningSupport', () => {
         name: 'm',
       }),
     ).toEqual({ kind: 'OPENAI_COMPATIBLE', modelId: 'm' });
+  });
+});
+
+describe('an OpenRouter model whose listing says it has no reasoning (0081 follow-up)', () => {
+  const openrouter = (supportsReasoning?: boolean | null) => ({
+    provider: 'OPENROUTER' as const,
+    model: 'example/no-think',
+    apiKey: 'k',
+    baseUrl: null,
+    ...(supportsReasoning !== undefined ? { supportsReasoning } : {}),
+  });
+
+  test('gets nothing and has no reasoning control; unknown keeps the effort', () => {
+    const none = reasoningTargetOfChoice({ provider: openrouter(false), name: 'example/no-think' });
+    expect(none).toEqual({
+      kind: 'OPENROUTER',
+      modelId: 'example/no-think',
+      supportsReasoning: false,
+    });
+    expect(reasoningOptionsFor(none, 'HIGH')).toBeNull();
+    expect(reasoningSupport(none)).toEqual({
+      supported: false,
+      reason: 'This model has no reasoning control',
+    });
+    for (const flag of [true, null, undefined]) {
+      const target = reasoningTargetOfChoice({ provider: openrouter(flag), name: 'x' });
+      expect(reasoningOptionsFor(target, 'HIGH')).toEqual({
+        openrouter: { reasoning: { effort: 'high' } },
+      });
+      expect(reasoningSupport(target).supported).toBe(true);
+    }
+  });
+
+  test('the target of a call carries the flag of the model chosen for it, only when it is that model', () => {
+    const model = toMastraModel(openrouter(false));
+    expect(reasoningTargetOfCall(model, { provider: openrouter(false), name: 'n' })).toEqual({
+      kind: 'OPENROUTER',
+      modelId: 'example/no-think',
+      supportsReasoning: false,
+    });
+    // An eval script's own model, or no choice: the model's own target.
+    expect(
+      reasoningTargetOfCall('openrouter/example/other', { provider: openrouter(false), name: 'n' }),
+    ).toEqual({
+      kind: 'OPENROUTER',
+      modelId: 'example/other',
+    });
+    expect(reasoningTargetOfCall(model, undefined)).toEqual({
+      kind: 'OPENROUTER',
+      modelId: 'example/no-think',
+    });
   });
 });
 

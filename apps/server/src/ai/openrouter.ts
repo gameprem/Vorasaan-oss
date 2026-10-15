@@ -64,6 +64,8 @@ const ModelList = z.object({
       id: z.string().min(1).max(200),
       name: z.string().max(300).nullish(),
       context_length: z.number().nullish(),
+      // The request parameters the model takes (`reasoning`, `include_reasoning`, `tools`...).
+      supported_parameters: z.array(z.string()).nullish(),
     }),
   ),
 });
@@ -80,13 +82,12 @@ function windowOf(contextLength: number | null | undefined): number | null {
 /** How long the model list may take before the picker falls back to typing the id. */
 export const OPENROUTER_LIST_TIMEOUT_MS = 10_000;
 
-/**
- * OpenRouter's model list (`GET /models`), sorted by name. The list is public, so
- * no key is sent with it. Never throws: a failure is the `error` of the view.
- */
-export async function listOpenRouterModels(
-  env: Record<string, string | undefined> = process.env,
-): Promise<ProviderModelsView> {
+type ListedModel = z.infer<typeof ModelList>['data'][number];
+
+/** OpenRouter's model list as sent, or why it couldn't be read. Never throws. */
+async function fetchOpenRouterModels(
+  env: Record<string, string | undefined>,
+): Promise<{ models: ListedModel[]; error: string | null }> {
   try {
     const res = await fetch(`${openRouterBaseUrl(env)}/models`, {
       headers: { accept: 'application/json', ...openRouterHeaders(env) },
@@ -100,14 +101,7 @@ export async function listOpenRouterModels(
     if (!parsed.success) {
       return { models: [], error: 'OpenRouter sent a model list Vorasaan could not read' };
     }
-    const models = parsed.data.data
-      .map((m) => ({
-        id: m.id,
-        name: m.name?.trim() || m.id,
-        contextWindow: windowOf(m.context_length),
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'en'));
-    return { models, error: null };
+    return { models: parsed.data.data, error: null };
   } catch (error) {
     const reason =
       (error as Error)?.name === 'TimeoutError'
@@ -117,11 +111,56 @@ export async function listOpenRouterModels(
   }
 }
 
+/**
+ * OpenRouter's model list (`GET /models`), sorted by name. The list is public, so
+ * no key is sent with it. Never throws: a failure is the `error` of the view.
+ */
+export async function listOpenRouterModels(
+  env: Record<string, string | undefined> = process.env,
+): Promise<ProviderModelsView> {
+  const { models, error } = await fetchOpenRouterModels(env);
+  return {
+    models: models
+      .map((m) => ({
+        id: m.id,
+        name: m.name?.trim() || m.id,
+        contextWindow: windowOf(m.context_length),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'en')),
+    error,
+  };
+}
+
+/** What OpenRouter's list says of one model id: nulls when not listed, or no list. */
+export type OpenRouterModelInfo = {
+  contextWindow: number | null;
+  /**
+   * Whether the model takes a reasoning parameter (ticket 0081): its `supported_parameters`
+   * name `reasoning` or `include_reasoning`. Null when the list doesn't say.
+   */
+  supportsReasoning: boolean | null;
+};
+
+/** One model's window and reasoning support, from one read of OpenRouter's list. */
+export async function openRouterModelInfo(
+  modelId: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<OpenRouterModelInfo> {
+  const { models } = await fetchOpenRouterModels(env);
+  const listed = models.find((m) => m.id === modelId.trim());
+  const parameters = listed?.supported_parameters;
+  return {
+    contextWindow: windowOf(listed?.context_length),
+    supportsReasoning: parameters
+      ? parameters.includes('reasoning') || parameters.includes('include_reasoning')
+      : null,
+  };
+}
+
 /** The window OpenRouter's list gives a model id, or null (not listed, or no list). */
 export async function openRouterContextWindow(
   modelId: string,
   env: Record<string, string | undefined> = process.env,
 ): Promise<number | null> {
-  const { models } = await listOpenRouterModels(env);
-  return models.find((m) => m.id === modelId.trim())?.contextWindow ?? null;
+  return (await openRouterModelInfo(modelId, env)).contextWindow;
 }

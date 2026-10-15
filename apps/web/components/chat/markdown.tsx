@@ -26,6 +26,11 @@ function fencedBlock(node: Element | undefined): { lang: string; text: string } 
 
 export const markdownComponents: Components = {
   a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+  // A GFM task item ("- [x] ...") renders a disabled checkbox with no label of its own; it
+  // says whether the item is done, and the item's text follows it.
+  input: ({ node: _node, ...props }) => (
+    <input {...props} aria-label={props.checked ? 'Done' : 'Not done'} />
+  ),
   pre: ({ node, ...props }) => {
     const block = fencedBlock(node);
     if (block && (block.lang === 'svg' || block.lang === 'html') && block.text.trim()) {

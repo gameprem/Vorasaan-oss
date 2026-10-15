@@ -464,6 +464,10 @@ model ApprovedModel {
   // the AI usage dashboard's estimated cost. Both null: no cost is shown, only tokens.
   inputPricePerMillion  Float?
   outputPricePerMillion Float?
+  // Whether the model takes a reasoning parameter, as OpenRouter's model list said when it
+  // was added or its model id changed (ticket 0081): false sends none and offers no
+  // "Think deeper". Null: not known (any other provider, or no list), sent as before.
+  supportsReasoning     Boolean?
   position              Int
   isDefault             Boolean        @default(false)
   createdAt             DateTime       @default(now())

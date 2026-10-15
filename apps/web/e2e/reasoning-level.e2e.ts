@@ -149,7 +149,7 @@ for (const theme of THEMES) {
       await tabTo(toggle);
       await page.keyboard.press('Space');
       await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-      await expectNoViolations(page, 'form.composer');
+      await expectNoViolations(page, 'main');
 
       await message.fill(unique('Think hard about retries'));
       await message.press('Enter');
@@ -174,10 +174,9 @@ for (const theme of THEMES) {
       );
       await page.keyboard.press('Space');
       await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-      // The composer and the reply's thinking line. (The page's own disclaimer is outside
-      // this ticket.)
-      await expectNoViolations(page, 'form.composer');
-      await expectNoViolations(page, '.msg.ai .thought');
+      // The whole Conversation page: the composer, the replies' thinking line and the
+      // disclaimer under the composer.
+      await expectNoViolations(page, 'main');
     } finally {
       await remove(request, added);
     }

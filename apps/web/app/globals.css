@@ -23,15 +23,15 @@
   --line: #dfe4ef;
   --fg: #1c2033;
   --fg-soft: #586078;
-  --fg-faint: #8a91a8;
+  --fg-faint: #8a91a8; /* 3.14:1 on bg: large text (24px, 18.66px bold), disabled or decorative only */
   --ink: #3346c8;
   --ink-wash: #e1e6fb;
   --on-ink: #ffffff;
-  --jade: #0c7d61;
+  --jade: #0a775c; /* 4.7:1 on jade-wash (AA); #0c7d61 was 4.35:1 */
   --jade-wash: #dcf2ea;
   --lacquer: #b8321f;
   --lacquer-wash: #fbe5e0;
-  --saffron: #b26a00;
+  --saffron: #955800; /* 5.07:1 on saffron-wash, 4.7:1 on surface-hi (AA); #b26a00 was 3.62:1 */
   --ember: #e0642a;
   --saffron-wash: #fdf0d9;
   --spark-a: #3346c8;
@@ -229,7 +229,7 @@ body {
   letter-spacing: -0.01em;
 }
 .brand .th {
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   font-size: 13px;
 }
 .icon-btn {
@@ -267,7 +267,7 @@ body {
 }
 .new kbd {
   font: 11px var(--mono);
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   margin-left: 6px;
 }
 .side-scroll {
@@ -320,7 +320,7 @@ body {
   font-weight: 600;
 }
 .item .muted {
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   font-size: 12px;
   margin-left: auto;
   white-space: nowrap;
@@ -367,7 +367,7 @@ body {
   display: inline-grid;
   place-items: center;
   border-radius: 999px;
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   flex: none;
 }
 .caret svg {
@@ -394,7 +394,7 @@ body {
 }
 .side-empty {
   margin: 0 14px;
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   font-size: 13px;
 }
 .side-foot {
@@ -412,7 +412,7 @@ body {
 }
 .me small {
   display: block;
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   font-size: 12px;
 }
 .avatar {

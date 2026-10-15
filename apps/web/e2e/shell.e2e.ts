@@ -1,4 +1,7 @@
-import { expect, pim, SEED, test } from './fixtures';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { E2E } from './env';
+import { beam, expect, expectNoViolations, pim, SEED, THEMES, test, unique } from './fixtures';
 
 const featurePath = `/features/${SEED.featureId}`;
 
@@ -145,4 +148,77 @@ test('at 375px the Sidebar is a drawer and the page does not scroll sideways', a
   await page.keyboard.press('Escape');
   await expect(sidebar).toBeHidden();
   await expect(page.getByRole('button', { name: 'Open the Sidebar' })).toBeFocused();
+});
+
+test('the Sidebar passes axe in light and dark: expanded, collapsed and as a drawer', async ({
+  as,
+  request,
+}) => {
+  // A Feature with an open Blocker (its "1 Blocker" label) and a Question sent to Pim (the
+  // Inbox count), so every state colour of the Sidebar shows.
+  const featureId = execFileSync(
+    'bun',
+    [
+      fileURLToPath(new URL('./seed-decision-graph.ts', import.meta.url)),
+      unique('Sidebar payouts'),
+      'empty',
+    ],
+    { env: { ...process.env, DATABASE_URL: E2E.databaseUrl }, encoding: 'utf8' },
+  ).trim();
+  const asBeam = { 'x-vorasaan-user': beam.id };
+  const raise = async (kind: 'BLOCKER' | 'QUESTION', recipients: unknown) => {
+    const raised = await request.post(`${E2E.apiUrl}/decision-requests`, {
+      headers: asBeam,
+      data: { featureId, kind, title: unique('Sidebar request'), description: 'For the Sidebar.' },
+    });
+    expect(raised.status()).toBe(201);
+    const { id } = (await raised.json()) as { id: string };
+    const sent = await request.post(`${E2E.apiUrl}/decision-requests/${id}/submit`, {
+      headers: asBeam,
+      data: { deciderRole: 'PO', recipients },
+    });
+    expect(sent.ok()).toBe(true);
+    return id;
+  };
+  const raised = [await raise('BLOCKER', 'ALL'), await raise('QUESTION', { userId: pim.id })];
+
+  try {
+    const page = await as(pim);
+    await page.goto(`/features/${featureId}`);
+    const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
+    await expect(sidebar.getByRole('link', { name: /^Inbox/ }).locator('.count')).toBeVisible();
+    await expect(
+      sidebar
+        .locator('.muted')
+        .filter({ hasText: /Blocker/ })
+        .first(),
+    ).toBeVisible();
+    const check = async () => {
+      for (const theme of THEMES) {
+        await page.emulateMedia({ colorScheme: theme });
+        await expectNoViolations(page, 'aside.side');
+      }
+      await page.emulateMedia({ colorScheme: 'light' });
+    };
+    await check();
+
+    // Collapsed to a rail of icons.
+    await sidebar.getByRole('button', { name: 'Collapse the Sidebar' }).click();
+    await expect(sidebar.getByRole('button', { name: 'Expand the Sidebar' })).toBeVisible();
+    await check();
+    await sidebar.getByRole('button', { name: 'Expand the Sidebar' }).click();
+
+    // A drawer on a phone, over the whole page.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.getByRole('button', { name: 'Open the Sidebar' }).click();
+    await expect(sidebar).toBeVisible();
+    for (const theme of THEMES) {
+      await page.emulateMedia({ colorScheme: theme });
+      await expectNoViolations(page);
+    }
+  } finally {
+    for (const id of raised) {
+      await request.post(`${E2E.apiUrl}/decision-requests/${id}/withdraw`, { headers: asBeam });
+    }
+  }
 });

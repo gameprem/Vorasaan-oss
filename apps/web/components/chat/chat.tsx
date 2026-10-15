@@ -142,7 +142,7 @@ export function Chat({
   /** A new Conversation is being started: its id comes with the first event. */
   const starting = useRef(false);
   const input = useRef<HTMLTextAreaElement | null>(null);
-  const thread = useRef<HTMLDivElement>(null);
+  const thread = useRef<HTMLElement>(null);
   const atBottom = useRef(!focusMessageId);
   /** Where the view was before content went in above it, to put it back (no jump). */
   const anchor = useRef<{ height: number; top: number } | null>(null);
@@ -674,9 +674,12 @@ export function Chat({
         </header>
 
         <div className="thread-wrap">
-          <div
+          <section
             ref={thread}
             className="chat-thread"
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrolling region must be reachable by keyboard
+            tabIndex={0}
+            aria-label="Conversation"
             onScroll={(e) => {
               const el = e.currentTarget;
               const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -794,7 +797,7 @@ export function Chat({
                 )}
               </div>
             )}
-          </div>
+          </section>
           {newPill && (
             <button type="button" className="new-pill" onClick={toLatest}>
               ↓ New messages

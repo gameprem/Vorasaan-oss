@@ -494,6 +494,12 @@ export type AiCallOptions = {
    * retried after an invalid answer reports twice, and the Receipt sums them.
    */
   onUsage?: (usage: CallUsage) => void;
+  /**
+   * Told when the provider refused the call's reasoning parameter with a 400 and the call
+   * went once more without it (ticket 0081): no level reached the model. `ReceiptingAiPort`
+   * then records none, and a Conversation's reply doesn't say "Thought deeper".
+   */
+  onReasoningRefused?: () => void;
 };
 
 /**

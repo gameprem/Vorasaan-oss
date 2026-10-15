@@ -92,6 +92,7 @@ export function SpecEditor({
     <div>
       <section aria-label={`${noun} editor`} className="min-h-60 rounded-card bg-rail py-4">
         <BlockEditor
+          label={noun}
           markdown={current ?? template}
           getMarkdown={getMarkdown}
           onChange={() => setError(undefined)}

@@ -18,8 +18,16 @@ import type { MastraModel, ResolvedProvider } from './model-config.ts';
 // - an OpenAI-compatible endpoint: nothing (servers differ).
 // A model known to refuse the parameter gets none.
 
-/** The provider kind and model id a call runs on, as far as reasoning is concerned. */
-export type ReasoningTarget = { kind: AiProvider; modelId: string } | null;
+/**
+ * The provider kind and model id a call runs on, as far as reasoning is concerned.
+ * `supportsReasoning` is what the Approved Model knows of it (OpenRouter's model list):
+ * false sends nothing; left out or null, the model's kind and id decide.
+ */
+export type ReasoningTarget = {
+  kind: AiProvider;
+  modelId: string;
+  supportsReasoning?: boolean | null;
+} | null;
 
 /** Mastra's "provider/" prefixes, and the kind each one is. */
 const PREFIXES: Partial<Record<string, AiProvider>> = {
@@ -47,8 +55,28 @@ export function reasoningTargetOfChoice(choice: {
   provider: ResolvedProvider | null;
   name: string;
 }): ReasoningTarget {
-  if (choice.provider) return { kind: choice.provider.provider, modelId: choice.provider.model };
-  return fromRouterId(choice.name);
+  const p = choice.provider;
+  if (!p) return fromRouterId(choice.name);
+  return {
+    kind: p.provider,
+    modelId: p.model,
+    ...(typeof p.supportsReasoning === 'boolean' ? { supportsReasoning: p.supportsReasoning } : {}),
+  };
+}
+
+/**
+ * The target of one call's Mastra model, with what the model chosen for it knows of its
+ * reasoning (`supportsReasoning`), when the call runs on that very model (an eval script
+ * may resolve its own).
+ */
+export function reasoningTargetOfCall(
+  model: MastraModel,
+  choice: { provider: ResolvedProvider | null; name: string } | undefined,
+): ReasoningTarget {
+  const target = reasoningTargetOf(model);
+  const chosen = choice ? reasoningTargetOfChoice(choice) : null;
+  if (!target || chosen?.supportsReasoning === undefined) return target;
+  return chosen.kind === target.kind && chosen.modelId === target.modelId ? chosen : target;
 }
 
 type Effort = 'low' | 'medium' | 'high';
@@ -133,7 +161,8 @@ export function reasoningOptionsFor(
   target: ReasoningTarget,
   level: ReasoningLevel | null,
 ): ModelProviderOptions | null {
-  if (!target || !level) return null;
+  // OpenRouter's list says the model takes no reasoning parameter: like a model that refuses it.
+  if (!target || !level || target.supportsReasoning === false) return null;
   switch (target.kind) {
     case 'GEMINI': {
       const thinkingConfig = geminiThinkingConfig(target.modelId, level);
@@ -160,8 +189,9 @@ export function reasoningOptionsFor(
 export function providerOptionsOf(
   model: MastraModel,
   level: ReasoningLevel | null,
+  target: ReasoningTarget = reasoningTargetOf(model),
 ): ModelProviderOptions | null {
-  return reasoningOptionsFor(reasoningTargetOf(model), level);
+  return reasoningOptionsFor(target, level);
 }
 
 const LEVELS: readonly ReasoningLevel[] = ['LOW', 'MEDIUM', 'HIGH'];

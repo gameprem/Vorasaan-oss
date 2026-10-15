@@ -38,7 +38,6 @@ test("a Feature targets its Project's Platforms, and its first Spec gets a secti
   await expect(editor.getByRole('heading', { name: 'Back-End', level: 2 })).toBeVisible();
   await expect(editor.getByRole('heading', { name: 'Mobile', level: 2 })).toBeVisible();
   await expect(editor.getByRole('heading', { name: 'Front-End' })).toHaveCount(0);
-  // The picker and the header list; the block editor's own markup is BlockNote's.
-  await expectNoViolations(page, 'fieldset');
-  await expectNoViolations(page, 'ul[aria-label="Target Platforms"]');
+  // The whole Feature page: the picker, the header list and the Spec editor.
+  await expectNoViolations(page, 'main');
 });
