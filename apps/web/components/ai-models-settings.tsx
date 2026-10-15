@@ -11,6 +11,8 @@ import {
   DEFAULT_MODELS,
   DEFAULT_PROVIDER_NAMES,
   knownContextWindow,
+  REASONING_DEFAULTS,
+  type ReasoningLevel,
 } from '@vorasaan/shared';
 import { useCallback, useState, useTransition } from 'react';
 import {
@@ -21,6 +23,7 @@ import {
   deleteApprovedModel,
   listProviderModels,
   setAiTaskModels,
+  setAiTaskReasoning,
   testApprovedModel,
   updateAiProvider,
   updateApprovedModel,
@@ -33,7 +36,8 @@ import { Checkbox } from './ui/checkbox';
 import { Select } from './ui/select';
 
 // Settings → AI models (ADR 0010): the providers (with their keys), the Approved
-// Models people may use with one default, and the model of each AI task.
+// Models people may use with one default, and the model and the Reasoning Level
+// (ticket 0081) of each AI task.
 
 const kindLabel = (kind: AiProvider) => PROVIDERS.find((p) => p.value === kind)?.label ?? kind;
 
@@ -72,6 +76,7 @@ export function AiModelsSettings({ settings }: { settings: AiSettingsView }) {
         key={JSON.stringify(settings.models.map((m) => [m.id, m.displayName, m.isDefault]))}
         settings={settings}
       />
+      <ReasoningSection settings={settings} />
     </div>
   );
 }
@@ -389,6 +394,8 @@ function ModelRow({
         )}
         <span className="text-sm text-fg-soft">
           {model.modelId} · {model.providerName} · {formatWindow(model.contextWindow)}
+          {!model.reasoning.supported &&
+            ` · Reasoning Level: ${lowerFirst(model.reasoning.reason)}`}
         </span>
         <span className="ml-auto flex flex-wrap gap-3 text-sm">
           <button
@@ -751,6 +758,104 @@ function TasksSection({ settings }: { settings: AiSettingsView }) {
             className={primaryButton}
           >
             {pending ? 'Saving…' : 'Save tasks'}
+          </button>
+          <Status message={message} />
+        </div>
+      </form>
+    </section>
+  );
+}
+
+// ─── Reasoning Level per task (ticket 0081) ─────────────────────────────────
+
+const LEVEL_LABEL: Record<ReasoningLevel, string> = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High' };
+
+const lowerFirst = (text: string | null) =>
+  text ? `${text.charAt(0).toLowerCase()}${text.slice(1)}` : 'not supported';
+
+function ReasoningSection({ settings }: { settings: AiSettingsView }) {
+  const initial = Object.fromEntries(
+    settings.tasks.map((t) => [t.task, t.reasoningLevel ?? '']),
+  ) as Record<AiTask, ReasoningLevel | ''>;
+  const [choice, setChoice] = useState(initial);
+  const { pending, message, run, clear } = useAction();
+  const unsupported = settings.models.filter((m) => !m.reasoning.supported);
+
+  return (
+    <section aria-labelledby="ai-reasoning">
+      <h3 id="ai-reasoning" className="text-lg font-semibold">
+        Reasoning Level per task
+      </h3>
+      <p className="mt-1 text-sm text-fg-soft">
+        How much the model may think before it answers. Thinking is billed as output, so a higher
+        level costs more. Vorasaan maps it to each provider&apos;s own setting. Changes apply to the
+        next request.
+      </p>
+      {unsupported.length > 0 && (
+        <p className="mt-1 text-sm text-fg-soft">
+          Not supported by {unsupported.map((m) => m.displayName).join(', ')}: those models get no
+          reasoning setting.
+        </p>
+      )}
+      <form
+        className="mt-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run(
+            () =>
+              setAiTaskReasoning({
+                tasks: Object.fromEntries(
+                  settings.tasks.map((t) => [t.task, choice[t.task] || null]),
+                ),
+              }),
+            'Saved.',
+          );
+        }}
+      >
+        <div className="rows">
+          {settings.tasks.map((t) => {
+            const fallback = REASONING_DEFAULTS[t.task];
+            const label = `Reasoning Level: ${TASK_LABEL[t.task].label}`;
+            return (
+              <div
+                key={t.task}
+                className="grid items-center gap-2 px-4 py-3 sm:grid-cols-[1fr_16rem]"
+              >
+                <span>
+                  <span className="block font-medium">{TASK_LABEL[t.task].label}</span>
+                  {t.reasoningEnvOverrides.length > 0 && (
+                    <span className="block text-sm text-lacquer">
+                      Set on the server by {t.reasoningEnvOverrides.join(', ')}, which wins over
+                      this setting.
+                    </span>
+                  )}
+                </span>
+                <Select
+                  aria-label={label}
+                  options={[
+                    {
+                      id: '',
+                      label: `Default (${LEVEL_LABEL[fallback.level]})`,
+                      ...(fallback.note ? { description: fallback.note } : {}),
+                    },
+                    ...(['LOW', 'MEDIUM', 'HIGH'] as const).map((level) => ({
+                      id: level,
+                      label: LEVEL_LABEL[level],
+                    })),
+                  ]}
+                  value={choice[t.task]}
+                  onChange={(id) => {
+                    clear();
+                    setChoice({ ...choice, [t.task]: id as ReasoningLevel | '' });
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex items-center gap-4">
+          <button type="submit" disabled={pending} className={primaryButton}>
+            {pending ? 'Saving…' : 'Save Reasoning Levels'}
           </button>
           <Status message={message} />
         </div>

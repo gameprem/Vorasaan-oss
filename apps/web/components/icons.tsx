@@ -153,6 +153,19 @@ export function SendIcon({ size = 16 }: IconProps) {
   );
 }
 
+/** Think deeper (ticket 0081): a light bulb. */
+export function BulbIcon({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M6 12.5h4M6.5 14.5h3M8 1.5a4.5 4.5 0 0 0-2.6 8.2c.4.3.6.7.6 1.2v.6h4v-.6c0-.5.2-.9.6-1.2A4.5 4.5 0 0 0 8 1.5Z"
+        {...stroke}
+        strokeWidth={1.4}
+      />
+    </svg>
+  );
+}
+
 /** Stop the reply being written. */
 export function StopIcon({ size = 14 }: IconProps) {
   return (

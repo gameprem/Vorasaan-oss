@@ -49,7 +49,11 @@ export async function loadModels(): Promise<AiModelsView> {
   try {
     return await api<AiModelsView>('/ai/models');
   } catch {
-    return { models: [], chatDefaultId: null };
+    return {
+      models: [],
+      chatDefaultId: null,
+      chatDefaultReasoning: { supported: false, reason: 'The models could not be loaded' },
+    };
   }
 }
 
