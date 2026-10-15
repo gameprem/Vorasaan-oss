@@ -11,7 +11,7 @@ These instructions come first; the material to work from follows them.
    - Order them from the smallest change to the Spec to the largest.
    - `label`: "A", "B", "C", "D" in order.
    - `title`: a short imperative phrase (max ~10 words).
-   - `description`: what exactly changes, in 1–3 sentences, specific to this Feature.
+   - `description`: what exactly changes, in 1–3 sentences, specific to this Feature. Name the request's own facts as written: the Feature, ids, versions, numbers with their units.
    - `impactScope`: what changes in the Spec or the product surface.
    - `impactTime`: a rough effort or delay estimate relative to the current plan (e.g. "+1–2 days").
    - `impactRisk`: the main risk or trade-off of this option.
