@@ -54,16 +54,16 @@ const STROKE: Record<DecisionGraphBranchState, string> = {
   NEEDS_INFO: 'stroke-saffron',
   AWAITING_APPROVAL: 'stroke-ink',
   MERGED: 'stroke-jade',
-  CLOSED: 'stroke-fg-faint',
-  WITHDRAWN: 'stroke-fg-faint',
+  CLOSED: 'stroke-fg-soft',
+  WITHDRAWN: 'stroke-fg-soft',
 };
 const FILL: Record<DecisionGraphBranchState, string> = {
   WAITING: 'fill-saffron',
   NEEDS_INFO: 'fill-saffron',
   AWAITING_APPROVAL: 'fill-ink',
   MERGED: 'fill-jade',
-  CLOSED: 'fill-fg-faint',
-  WITHDRAWN: 'fill-fg-faint',
+  CLOSED: 'fill-fg-soft',
+  WITHDRAWN: 'fill-fg-soft',
 };
 
 const kindText = (b: DecisionGraphBranch) => (b.kind === 'BLOCKER' ? 'Blocker' : 'Question');
@@ -239,7 +239,7 @@ export function DecisionGraph({ graph }: { graph: DecisionGraphView }) {
             x2={layout.mainTo}
             y1={layout.mainY}
             y2={layout.mainY}
-            className="stroke-fg-faint"
+            className="stroke-fg-soft"
             strokeWidth={2}
             aria-hidden
           />
@@ -248,7 +248,7 @@ export function DecisionGraph({ graph }: { graph: DecisionGraphView }) {
               cx={layout.origin.x}
               cy={layout.origin.y}
               r={4}
-              className="fill-rail stroke-fg-faint"
+              className="fill-rail stroke-fg-soft"
               strokeWidth={2}
               aria-hidden
             />
@@ -405,7 +405,7 @@ function Legend() {
     [swatch('stroke-jade'), 'Merged into the Spec'],
     [swatch('stroke-ink', true), 'Spec Proposal awaiting approval'],
     [swatch('stroke-saffron', true), 'Waiting for a person'],
-    [swatch('stroke-fg-faint'), 'Closed without a Spec change'],
+    [swatch('stroke-fg-soft'), 'Closed without a Spec change'],
     [dot('fill-lacquer'), 'Blocker'],
     [
       <svg key="mark" width="12" height="12" aria-hidden className="shrink-0">
