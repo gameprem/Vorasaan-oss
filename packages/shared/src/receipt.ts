@@ -83,11 +83,15 @@ export const ReceiptExportLine = z.object({
   }),
   /** The Reply Language asked for ("en", "th"). */
   language: z.string().nullable(),
+  /** The Reasoning Level the call ran at (ticket 0081); null when its model has no control. */
+  reasoningLevel: z.string().nullable(),
   usage: z.object({
     inputTokens: Tokens,
     outputTokens: Tokens,
     cacheReadTokens: Tokens,
     cacheWriteTokens: Tokens,
+    /** Of `outputTokens`, those the model spent thinking (ticket 0080). */
+    reasoningTokens: Tokens,
   }),
   latencyMs: z.int().min(0),
   success: z.boolean(),

@@ -157,6 +157,8 @@ describe('AI usage dashboard and budget (ticket 0075)', () => {
           projectId: other.id,
           inputTokens: 4000,
           outputTokens: 500,
+          // Of the output, thinking (ticket 0080); the other Receipts report none (null).
+          reasoningTokens: 300,
           latencyMs: 1500,
         }),
         // A server-set model for the whole Organization (Prompt proposals).
@@ -196,6 +198,7 @@ describe('AI usage dashboard and budget (ticket 0075)', () => {
       inputTokens: 4 * 1000 + 4000 + 2000 + 500,
       outputTokens: 4 * 100 + 500 + 200 + 50,
       cacheReadTokens: 1000,
+      reasoningTokens: 300,
       unpricedCalls: 2,
     });
     expect(view.totals.costUsd).toBeCloseTo(cost(4500, 450), 9);
@@ -223,9 +226,11 @@ describe('AI usage dashboard and budget (ticket 0075)', () => {
     expect(tasks.CHAT).toMatchObject({
       calls: 1,
       inputTokens: 4000,
+      reasoningTokens: 300,
       costUsd: null,
       unpricedCalls: 1,
     });
+    expect(tasks.CHOICES?.reasoningTokens).toBe(0);
     expect(tasks.PROMPT_PROPOSALS).toMatchObject({ calls: 1, costUsd: null, latencyP50Ms: 800 });
     expect(tasks.EVAL_RUN).toMatchObject({ calls: 1, inputTokens: 500, outputTokens: 50 });
     expect(tasks.EVAL_RUN?.costUsd).toBeCloseTo(cost(500, 50), 9);

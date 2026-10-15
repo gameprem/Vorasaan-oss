@@ -121,6 +121,8 @@ export function Chat({
   /** The model picked in this Conversation (the server's), and one picked since, sent with the next message. */
   const [savedModelId, setSavedModelId] = useState<string | null>(initial?.modelId ?? null);
   const [pickedModelId, setPickedModelId] = useState<string | null>(null);
+  // "Think deeper" (ticket 0081): for the next message only.
+  const [thinkDeeper, setThinkDeeper] = useState(false);
   /** Where the loaded messages sit (ticket 0066): a cursor each way while there is more. */
   const [olderCursor, setOlderCursor] = useState(initial?.page.olderCursor ?? null);
   const [newerCursor, setNewerCursor] = useState(initial?.page.newerCursor ?? null);
@@ -393,6 +395,15 @@ export function Chat({
   const currentModelId =
     approved(pickedModelId) ?? approved(savedModelId) ?? models?.chatDefaultId ?? null;
   const pick = approved(pickedModelId) ? { approvedModelId: pickedModelId } : {};
+  // Whether the next reply's model can think deeper: the picked or saved model's, else the
+  // chat default's (an env model's when no Approved Model is the default).
+  const reasoningSupport = (currentModelId
+    ? models?.models.find((m) => m.id === currentModelId)?.reasoning
+    : models?.chatDefaultReasoning) ?? {
+    supported: false,
+    reason: 'The models could not be loaded',
+  };
+  const deeper = thinkDeeper && reasoningSupport.supported;
 
   // ── The context meter (ticket 0066) ───────────────────────────────────────
   // Loaded on opening, and again for a model picked in the menu (the server's numbers for
@@ -462,6 +473,9 @@ export function Chat({
     setPending(content);
     setDraft('');
     setSending(true);
+    // The toggle applies to this message alone: it is off again for the next one.
+    const reasoning = deeper ? { reasoningLevel: 'HIGH' as const } : {};
+    setThinkDeeper(false);
     atBottom.current = true;
     setNewPill(false);
     // From a deep link: the reply goes at the end, so show the end first.
@@ -482,6 +496,7 @@ export function Chat({
             : { kind: 'PROJECT', projectId: scope.project.id },
         content,
         ...pick,
+        ...reasoning,
       });
       starting.current = false;
       if (res.ok) {
@@ -517,7 +532,7 @@ export function Chat({
 
     const res = await postJson<ConversationTurnView>(
       `/api/conversations/${conversationId.current}/messages`,
-      { content, ...pick },
+      { content, ...pick, ...reasoning },
     );
     setSending(false);
     if (res.ok) {
@@ -856,6 +871,11 @@ export function Chat({
                 </>
               )
             }
+            thinkDeeper={
+              grilling || !models
+                ? undefined
+                : { on: deeper, onToggle: setThinkDeeper, support: reasoningSupport }
+            }
             disabled={sendDisabled}
             inputRef={input}
           />
@@ -907,7 +927,12 @@ function AiMessage({
   focused = false,
 }: {
   message: Pick<ConversationMessageView, 'content' | 'toolCalls'> &
-    Partial<Pick<ConversationMessageView, 'id' | 'model' | 'modelNotice'>>;
+    Partial<
+      Pick<
+        ConversationMessageView,
+        'id' | 'model' | 'modelNotice' | 'reasoningLevel' | 'reasoningTokens'
+      >
+    >;
   /** The first of the AI's messages in a turn carries the spark. */
   first: boolean;
   grilling: boolean;
@@ -940,6 +965,14 @@ function AiMessage({
           {toolText(c.name, c.args)}
         </div>
       ))}
+      {model && message.reasoningLevel === 'HIGH' && (
+        <div className="thought">
+          Thought deeper
+          {message.reasoningTokens !== null && message.reasoningTokens !== undefined
+            ? ` · ${message.reasoningTokens.toLocaleString('en')} reasoning tokens`
+            : ''}
+        </div>
+      )}
       {model && (
         <div className="by">
           <span className="sr-only">Written with </span>

@@ -58,6 +58,8 @@ export function toConversationMessageView(m: MessageRow): ConversationMessageVie
     model: fromRecordedModelColumns(m),
     modelNotice: m.modelNotice,
     grillingNotes: notes?.success ? notes.data : null,
+    reasoningLevel: m.reasoningLevel,
+    reasoningTokens: m.reasoningTokens,
     createdAt: m.createdAt.toISOString(),
   };
 }

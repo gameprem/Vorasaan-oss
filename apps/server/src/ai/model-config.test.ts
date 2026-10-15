@@ -190,3 +190,4 @@ describe('MastraAiPort', () => {
   });
   // Chat with tools runs against a stand-in provider in mastra-chat.test.ts.
 });
+// The reasoning parameter of each provider (tickets 0080, 0081): reasoning.test.ts.

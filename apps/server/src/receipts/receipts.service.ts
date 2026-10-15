@@ -19,6 +19,11 @@ import { skillVersion } from '@vorasaan/skills';
 import { AI_TASKS, type AiTask } from '../ai/ai.config.ts';
 import type { CallUsage, ModelChoice, PromptChoice, ReceiptLink } from '../ai/ai.port.ts';
 import { TASK_SKILLS } from '../ai/prompts.ts';
+import {
+  type ReasoningChoice,
+  reasoningTargetOfChoice,
+  sentReasoningLevel,
+} from '../ai/reasoning.ts';
 import { type Clock, InjectClock } from '../clock/clock.ts';
 import { InjectPrisma } from '../prisma/prisma.module.ts';
 import { PeopleRedactor } from './redact.ts';
@@ -37,6 +42,8 @@ export type ReceiptEntry = {
   /** The version of the prompt it rendered (ticket 0071); left out, the built-in default. */
   prompt: PromptChoice | undefined;
   language: string | undefined;
+  /** The Reasoning Level chosen for it (ticket 0081); left out, none was chosen. */
+  reasoning?: ReasoningChoice | undefined;
   link: ReceiptLink | undefined;
 };
 
@@ -475,6 +482,11 @@ async function receiptData(entry: ReceiptEntry): Promise<Prisma.ReceiptUnchecked
     outputTokens: usage?.outputTokens ?? null,
     cacheReadTokens: usage?.cacheReadTokens ?? null,
     cacheWriteTokens: usage?.cacheWriteTokens ?? null,
+    reasoningTokens: usage?.reasoningTokens ?? null,
+    // The level sent to the model: none when its model has no reasoning control.
+    reasoningLevel: model
+      ? sentReasoningLevel(reasoningTargetOfChoice(model), entry.reasoning?.level ?? null)
+      : null,
     latencyMs: Math.max(0, Math.round(entry.latencyMs)),
     success: entry.success,
     error: entry.error,
@@ -538,11 +550,13 @@ function exportLine(row: ExportRow, people: PeopleRedactor): ReceiptExportLine {
       provider: row.providerKind,
     },
     language: row.language,
+    reasoningLevel: row.reasoningLevel,
     usage: {
       inputTokens: row.inputTokens,
       outputTokens: row.outputTokens,
       cacheReadTokens: row.cacheReadTokens,
       cacheWriteTokens: row.cacheWriteTokens,
+      reasoningTokens: row.reasoningTokens,
     },
     latencyMs: row.latencyMs,
     success: row.success,

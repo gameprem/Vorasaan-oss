@@ -17,6 +17,7 @@ function addUsage(a: CallUsage | null, b: CallUsage): CallUsage {
     outputTokens: sum(a.outputTokens, b.outputTokens),
     cacheReadTokens: sum(a.cacheReadTokens, b.cacheReadTokens),
     cacheWriteTokens: sum(a.cacheWriteTokens, b.cacheWriteTokens),
+    reasoningTokens: sum(a.reasoningTokens, b.reasoningTokens),
   };
 }
 
@@ -77,6 +78,7 @@ export class ReceiptingAiPort implements AiPort {
             model: options?.model,
             prompt: options?.prompt,
             language: options?.language,
+            reasoning: options?.reasoning,
             link: options?.receipt,
           });
         } catch {

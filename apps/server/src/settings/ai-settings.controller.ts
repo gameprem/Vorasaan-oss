@@ -14,13 +14,17 @@ import {
   CreateAiProviderInput,
   CreateApprovedModelInput,
   SetAiTaskModelsInput,
+  SetAiTaskReasoningInput,
   UpdateAiProviderInput,
   UpdateApprovedModelInput,
 } from '@vorasaan/shared';
 import { AiSettingsService } from '../ai/ai-settings.service.ts';
 import { AdminOnly } from '../auth/admin.guard.ts';
 
-/** Settings → AI models (ADR 0010): providers, Approved Models and the model per task. */
+/**
+ * Settings → AI models (ADR 0010): providers, Approved Models, and the model and the
+ * Reasoning Level (ticket 0081) per task.
+ */
 @AdminOnly()
 @Controller('settings/ai')
 export class AiSettingsController {
@@ -95,5 +99,11 @@ export class AiSettingsController {
   @Put('tasks')
   setTasks(@Body({ schema: SetAiTaskModelsInput }) body: SetAiTaskModelsInput) {
     return this.settings.setTaskModels(body);
+  }
+
+  /** The Reasoning Level per task (ticket 0081); `null` for a task goes back to its default. */
+  @Put('reasoning')
+  setReasoning(@Body({ schema: SetAiTaskReasoningInput }) body: SetAiTaskReasoningInput) {
+    return this.settings.setTaskReasoning(body);
   }
 }

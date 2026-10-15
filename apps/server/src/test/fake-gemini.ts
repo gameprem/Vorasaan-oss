@@ -1,6 +1,7 @@
 // A local stand-in for the Gemini API (ticket 0080): the model list and
 // `streamGenerateContent`, streamed the way Gemini streams it, with implicit-cache
-// usage. Tests point GOOGLE_BASE_URL at it; no real key or network is ever used.
+// usage and thinking tokens (`thoughtsTokenCount`, billed as output). Like Gemini, a Gemma
+// model refuses any thinking settings. Tests point GOOGLE_BASE_URL at it; no real key or network is ever used.
 
 type Json = Record<string, unknown>;
 
@@ -37,8 +38,21 @@ export type FakeGemini = {
   functionCall: { name: string; args: Json } | null;
   /** The usage of every reply, in Gemini's `usageMetadata` fields. */
   usage: Json;
+  /**
+   * A model's refusal of a request (ticket 0081): the message of a 400 to answer with, or
+   * null to answer. By default, as Google does, a Gemma model refuses any thinking settings.
+   */
+  refuse: (model: string, body: Json) => string | null;
   stop: () => void;
 };
+
+/** Gemma refuses any thinking settings, as Google's API does. */
+export function gemmaRefusesThinking(model: string, body: Json): string | null {
+  const config = (body.generationConfig ?? {}) as Json;
+  return model.startsWith('gemma-') && config.thinkingConfig
+    ? 'Thinking level is not supported for this model.'
+    : null;
+}
 
 function sse(chunks: object[]): string {
   return chunks.map((c) => `data: ${JSON.stringify(c)}\r\n\r\n`).join('');
@@ -56,9 +70,11 @@ export function startFakeGemini(key: string): FakeGemini {
     usage: {
       promptTokenCount: 2410,
       candidatesTokenCount: 12,
-      totalTokenCount: 2422,
+      thoughtsTokenCount: 30,
+      totalTokenCount: 2452,
       cachedContentTokenCount: 1980,
     },
+    refuse: gemmaRefusesThinking,
   };
   const server = Bun.serve({
     port: 0,
@@ -111,6 +127,13 @@ export function startFakeGemini(key: string): FakeGemini {
       if (req.method !== 'POST' || !match) return new Response('not found', { status: 404 });
 
       const config = (body?.generationConfig ?? {}) as Json;
+      const refused = fake.refuse(match[1] ?? '', body ?? {});
+      if (refused) {
+        return Response.json(
+          { error: { code: 400, message: refused, status: 'INVALID_ARGUMENT' } },
+          { status: 400 },
+        );
+      }
       const structured = config.responseMimeType === 'application/json';
       const parts = fake.functionCall
         ? [{ functionCall: fake.functionCall }]

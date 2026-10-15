@@ -31,6 +31,7 @@ import {
   GEMINI_DEFAULT_URL,
   geminiBaseUrl,
   geminiContextWindow,
+  isTextModel,
   listGeminiModels,
 } from './gemini.ts';
 import { agentGenerate, MastraAiPort, pingModel } from './mastra-ai.port.ts';
@@ -199,13 +200,20 @@ describe('Gemini calls', () => {
       ).toEqual(CHOICES as never);
       // Gemini's cachedContentTokenCount (implicit caching), logged and on the Receipt.
       expect(log).toHaveBeenCalledWith(
-        'generate-choices: input 2410 (cache read 1980, cache write ?), output 12',
+        // Thinking tokens bill as output: 12 written + 30 thought.
+        'generate-choices: input 2410 (cache read 1980, cache write ?), output 42 (reasoning 30)',
       );
     } finally {
       log.mockRestore();
     }
     expect(usages).toEqual([
-      { inputTokens: 2410, outputTokens: 12, cacheReadTokens: 1980, cacheWriteTokens: null },
+      {
+        inputTokens: 2410,
+        outputTokens: 42,
+        cacheReadTokens: 1980,
+        cacheWriteTokens: null,
+        reasoningTokens: 30,
+      },
     ]);
     const [call] = fake.requests;
     expect(call?.path).toBe('/v1beta/models/gemini-example-pro:streamGenerateContent');
@@ -352,6 +360,72 @@ describe('Gemini calls', () => {
     }
   });
 
+  test('thinking at each call’s default level: a task, a chat and the connection test', async () => {
+    fake.requests.length = 0;
+    fake.functionCall = null;
+    fake.structured = CHOICES;
+    const quiet = spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+    try {
+      await port('gemini-3-example-flash').generateChoices(choicesInput);
+      await collect(port('gemini-3-example-flash').chat(chatInput));
+      fake.structured = { reply: 'ok' };
+      await pingModel(model('gemini-3-example-flash'));
+      // Gemini 2.5 takes a budget instead: off on Flash, Pro's least (128) on Pro.
+      await pingModel(model('gemini-2.5-flash'));
+      await pingModel(model('gemini-2.5-pro'));
+    } finally {
+      quiet.mockRestore();
+    }
+    const thinking = fake.requests.map(
+      (r) => (r.body?.generationConfig as Record<string, unknown> | undefined)?.thinkingConfig,
+    );
+    // Ticket 0081: a structured task defaults to LOW, chat to MEDIUM, the connection test LOW.
+    expect(thinking).toEqual([
+      { thinkingLevel: 'low' },
+      { thinkingLevel: 'medium' },
+      { thinkingLevel: 'low' },
+      { thinkingBudget: 0 },
+      { thinkingBudget: 128 },
+    ]);
+  });
+
+  test('a Gemma model gets no thinking settings, which it would refuse', async () => {
+    fake.requests.length = 0;
+    fake.structured = { reply: 'ok' };
+    const quiet = spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+    try {
+      await pingModel(model('gemma-example-27b-it'));
+      await collect(port('gemma-example-27b-it').chat(chatInput));
+    } finally {
+      quiet.mockRestore();
+    }
+    expect(fake.requests).toHaveLength(2);
+    for (const r of fake.requests) {
+      expect(JSON.stringify(r.body)).not.toContain('thinking');
+    }
+  });
+
+  test('VORASAAN_GEMINI_THINKING=default sends nothing, high asks for the most', async () => {
+    const previous = process.env.VORASAAN_GEMINI_THINKING;
+    fake.structured = { reply: 'ok' };
+    const quiet = spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+    try {
+      fake.requests.length = 0;
+      process.env.VORASAAN_GEMINI_THINKING = 'default';
+      await pingModel(model('gemini-3-example-flash'));
+      expect(JSON.stringify(fake.requests[0]?.body)).not.toContain('thinking');
+      fake.requests.length = 0;
+      process.env.VORASAAN_GEMINI_THINKING = 'high';
+      await pingModel(model('gemini-3-example-flash'));
+      const config = fake.requests[0]?.body?.generationConfig as Record<string, unknown>;
+      expect(config.thinkingConfig).toEqual({ thinkingLevel: 'high' });
+    } finally {
+      quiet.mockRestore();
+      if (previous === undefined) delete process.env.VORASAAN_GEMINI_THINKING;
+      else process.env.VORASAAN_GEMINI_THINKING = previous;
+    }
+  });
+
   test('the key travels only in the x-goog-api-key header', () => {
     expect(fake.requests.length).toBeGreaterThan(0);
     for (const r of fake.requests) {
@@ -469,6 +543,35 @@ describe("Gemini's model list", () => {
     expect(await geminiContextWindow('models/gemini-example-pro', LIST_KEY, env())).toBe(1_048_576);
     expect(await geminiContextWindow('gemini-missing', LIST_KEY, env())).toBeNull();
     fake.pageSize = 50;
+  });
+
+  test('leaves out the models that answer generateContent but write no text for a chat', () => {
+    // Ids from Google's real list for a new key.
+    for (const id of [
+      'gemini-flash-latest',
+      'gemini-pro-latest',
+      'gemini-3.8-flash',
+      'gemini-3.1-pro-preview-customtools',
+      'gemma-4-31b-it',
+    ]) {
+      expect(isTextModel(id)).toBe(true);
+    }
+    for (const id of [
+      'gemini-3.8-flash-tts',
+      'gemini-2.5-flash-preview-tts',
+      'gemini-3.1-flash-image',
+      'gemini-3-pro-image-preview',
+      'nano-banana-pro-preview',
+      'lyria-3.5',
+      'gemini-3.5-transcribe',
+      'gemini-robotics-er-2-preview',
+      'gemini-2.5-computer-use-preview-10-2025',
+      'deep-research-pro-preview-12-2025',
+      'antigravity-preview-latest',
+      'gemini-embedding-001',
+    ]) {
+      expect(isTextModel(id)).toBe(false);
+    }
   });
 
   test('a list that cannot be loaded is an error that never carries the key, never a throw', async () => {

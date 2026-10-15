@@ -8,6 +8,7 @@ import {
   GuidelineFitVerdict,
   MAX_GRILLING_QUESTIONS,
   type ProposalKind,
+  type ReasoningLevel,
   type ReceiptOutcomeKind,
   type ReceiptOutputKind,
   SuggestionLevel,
@@ -17,6 +18,7 @@ import type { SkillName } from '@vorasaan/skills';
 import { z } from 'zod';
 import type { ReplyLanguage } from './language.ts';
 import type { ResolvedProvider } from './model-config.ts';
+import type { ReasoningChoice } from './reasoning.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
 
 // The only way server code talks to an LLM. Production uses MastraAiPort;
@@ -467,6 +469,17 @@ export type ModelChoice = {
 export type AiCallOptions = {
   approvedModelId?: string;
   model?: ModelChoice;
+  /**
+   * The Reasoning Level the caller asks for (ticket 0081): a chat message sent with
+   * "Think deeper" asks for HIGH. It wins over the task's level.
+   */
+  reasoningLevel?: ReasoningLevel;
+  /**
+   * The call's Reasoning Level, filled in by `ModelRoutingAiPort` from `reasoningLevel`,
+   * the env, the Admin's setting and the task's default. Left out (the eval scripts),
+   * the adapter chooses it from the env and the default.
+   */
+  reasoning?: ReasoningChoice;
   language?: ReplyLanguage;
   /**
    * The version of the task's prompt (ticket 0071), filled in by `ModelRoutingAiPort`:
@@ -504,6 +517,8 @@ export type CallUsage = {
   outputTokens: number | null;
   cacheReadTokens: number | null;
   cacheWriteTokens: number | null;
+  /** Of `outputTokens`, those spent thinking (ticket 0080); null when not reported. */
+  reasoningTokens: number | null;
 };
 
 /**

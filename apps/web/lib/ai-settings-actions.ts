@@ -7,6 +7,7 @@ import type {
   ProviderModelsView,
   ReceiptSettingsInput,
   SetAiTaskModelsInput,
+  SetAiTaskReasoningInput,
   UpdateAiProviderInput,
   UpdateApprovedModelInput,
 } from '@vorasaan/shared';
@@ -65,6 +66,11 @@ export async function testApprovedModel(id: string): Promise<AiTestResult> {
 
 export async function setAiTaskModels(input: SetAiTaskModelsInput) {
   return attempt(() => api('/settings/ai/tasks', { method: 'PUT', body: input }));
+}
+
+/** The Reasoning Level per task (ticket 0081); null goes back to the task's default. */
+export async function setAiTaskReasoning(input: SetAiTaskReasoningInput) {
+  return attempt(() => api('/settings/ai/reasoning', { method: 'PUT', body: input }));
 }
 
 /**

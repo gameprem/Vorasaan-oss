@@ -57,6 +57,7 @@ type AggregateRow = {
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
+  reasoningTokens: number;
   costUsd: number | null;
   unpricedCalls: number;
   latencyP50Ms: number | null;
@@ -188,6 +189,7 @@ export class AiUsageService implements OnModuleInit {
           r."modelName",
           timezone(${timeZone}, r."createdAt" AT TIME ZONE 'UTC')::date AS day,
           r."inputTokens", r."outputTokens", r."cacheReadTokens", r."cacheWriteTokens",
+          r."reasoningTokens",
           CASE WHEN r.success THEN r."latencyMs" END AS latency,
           r.success,
           (COALESCE(r."inputTokens", 0) * m."inputPricePerMillion"
@@ -215,6 +217,7 @@ export class AiUsageService implements OnModuleInit {
           COALESCE(sum("outputTokens"), 0)::float8 AS "outputTokens",
           COALESCE(sum("cacheReadTokens"), 0)::float8 AS "cacheReadTokens",
           COALESCE(sum("cacheWriteTokens"), 0)::float8 AS "cacheWriteTokens",
+          COALESCE(sum("reasoningTokens"), 0)::float8 AS "reasoningTokens",
           sum(cost)::float8 AS "costUsd",
           (count(*) FILTER (WHERE cost IS NULL))::int AS "unpricedCalls",
           percentile_disc(ARRAY[0.5, 0.95]) WITHIN GROUP (ORDER BY latency) AS latency
@@ -225,7 +228,7 @@ export class AiUsageService implements OnModuleInit {
         g."approvedModelId", m."displayName", g."modelName",
         m."inputPricePerMillion" IS NOT NULL AS priced, g.day, g.calls, g."failedCalls",
         g."inputTokens", g."outputTokens", g."cacheReadTokens", g."cacheWriteTokens",
-        g."costUsd", g."unpricedCalls",
+        g."reasoningTokens", g."costUsd", g."unpricedCalls",
         g.latency[1]::float8 AS "latencyP50Ms", g.latency[2]::float8 AS "latencyP95Ms"
       FROM g
       LEFT JOIN "Project" p ON p.id = g."projectId"
@@ -478,6 +481,7 @@ function usage(row: AggregateRow | null): AiUsageTotals {
     outputTokens: row?.outputTokens ?? 0,
     cacheReadTokens: row?.cacheReadTokens ?? 0,
     cacheWriteTokens: row?.cacheWriteTokens ?? 0,
+    reasoningTokens: row?.reasoningTokens ?? 0,
     cacheHitRatio: input > 0 ? (row?.cacheReadTokens ?? 0) / input : null,
     costUsd: row?.costUsd ?? null,
     unpricedCalls: row?.unpricedCalls ?? 0,

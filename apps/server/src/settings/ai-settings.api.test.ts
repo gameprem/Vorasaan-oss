@@ -21,6 +21,8 @@ import { as } from '../test/http.ts';
 const { pim, beam } = SEED.users;
 
 const ANTHROPIC_KEY = 'sk-ant-secret-9876';
+const CONTROL = { supported: true, reason: null };
+const NO_CONTROL = { supported: false, reason: 'Not supported by this provider' };
 const LOCAL_KEY = 'local-router-token-5555';
 const LOCAL_URL = 'http://localhost:20128/v1';
 
@@ -158,10 +160,17 @@ describe('AI providers and Approved Models', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       models: [
-        { id: best.id, displayName: 'Best', note: null, isDefault: true },
-        { id: fast.id, displayName: 'Local', note: 'No data leaves', isDefault: false },
+        { id: best.id, displayName: 'Best', note: null, isDefault: true, reasoning: CONTROL },
+        {
+          id: fast.id,
+          displayName: 'Local',
+          note: 'No data leaves',
+          isDefault: false,
+          reasoning: NO_CONTROL,
+        },
       ],
       chatDefaultId: best.id,
+      chatDefaultReasoning: CONTROL,
     });
     // The exact shape above already rules out a key hint; short fragments such as a
     // key's last four characters are not checked here, since a random id can contain them.
@@ -288,7 +297,13 @@ describe('AI providers and Approved Models', () => {
     await asAdmin('PATCH', `/settings/ai/models/${fast.id}`, { isDefault: true });
     expect((await asAdmin('DELETE', `/settings/ai/models/${best.id}`)).status).toBe(204);
     expect((await asMember<AiModelsView>('GET', '/ai/models')).body.models).toEqual([
-      { id: fast.id, displayName: 'Local', note: 'No data leaves', isDefault: true },
+      {
+        id: fast.id,
+        displayName: 'Local',
+        note: 'No data leaves',
+        isDefault: true,
+        reasoning: NO_CONTROL,
+      },
     ]);
   });
 

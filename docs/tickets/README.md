@@ -178,12 +178,13 @@ No Decision Request waits silently: Response Windows with escalation, Decision L
 
 ## Next (Post-MVP 4–9)
 
-In this order: OpenRouter as a provider and Request changes on every AI proposal (ADR 0013), both done; then our own UI kit (ADR 0016), done; then a context meter with `/compact`, a readable chat history and cursor pagination, done; then the Decision Graph of a Feature, done; then language rules with Thai eval cases, done (its English-first comparison is run by hand). Later, Gemini joined OpenRouter as a key-only provider with its model list, done (0080).
+In this order: OpenRouter as a provider and Request changes on every AI proposal (ADR 0013), both done; then our own UI kit (ADR 0016), done; then a context meter with `/compact`, a readable chat history and cursor pagination, done; then the Decision Graph of a Feature, done; then language rules with Thai eval cases, done (its English-first comparison is run by hand). Later, Gemini joined OpenRouter as a key-only provider with its model list, done (0080); then a Reasoning Level per task and per chat message, mapped to every provider, done (0081).
 
 | # | Ticket | Depends on |
 | --- | --- | --- |
 | 0064 | [OpenRouter as an AI Provider](./0064-openrouter-provider.md) | 0053, 0060, 0061 |
 | 0080 | [Gemini as an AI Provider](./0080-gemini-provider.md) | 0053, 0060, 0061, 0064, 0070, 0075 |
+| 0081 | [Reasoning Level per task and per chat message](./0081-reasoning-level.md) | 0053, 0060, 0064, 0070, 0075, 0080 |
 | 0065 | [Request changes: the AI redrafts from a person's explanation](./0065-request-changes.md) | 0043, 0058, 0060 |
 | 0077 | [UI kit, and replace browser-native controls](./0077-ui-kit.md) | 0045, 0046 |
 | 0066 | [Context meter, /compact, chat history and cursor pagination](./0066-context-meter-and-compact.md) | 0054, 0060, 0061, 0077 |

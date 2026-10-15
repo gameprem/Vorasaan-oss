@@ -46,8 +46,9 @@ export const AI_ENGINE = Symbol('AI_ENGINE');
         return new MastraAiPort();
       },
     },
-    // Every call: the model and the version of its prompt (ticket 0071) are chosen, then a
-    // Receipt is left (ticket 0070), then the provider (or the fake) is called.
+    // Every call: the model, the version of its prompt (ticket 0071) and its Reasoning Level
+    // (ticket 0081) are chosen, then a Receipt is left (ticket 0070), then the provider (or
+    // the fake) is called.
     {
       provide: AI_PORT,
       inject: [AI_ENGINE, AiSettingsService, ReceiptsService, PromptVersionsService, CLOCK],
@@ -62,6 +63,7 @@ export const AI_ENGINE = Symbol('AI_ENGINE');
           new ReceiptingAiPort(engine, receipts, clock),
           (task, approvedModelId) => settings.chooseModel(task, approvedModelId),
           (task) => prompts.choose(task),
+          (task, model, requested) => settings.chooseReasoning(task, model, requested),
         ),
     },
   ],
