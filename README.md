@@ -67,11 +67,11 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 
 | | |
 | --- | --- |
-| 🎯 **Choice Engine** | Blockers and questions become 2–4 concrete options with impact on scope, time and risk. No more open-ended threads. |
-| 🧭 **Smart routing** | Business questions go to the PO, technical ones to the Tech Lead, UX to the Designer. Delegation while people are on leave is *(planned)*. |
-| 📜 **Versioned Specs** | Markdown Specs with Confluence-style version history and AI-drafted diffs you approve. Revert is *(planned)*. |
+| 🎯 **Choice Engine** | Blockers and Questions become 2–4 concrete Choices with impact on scope, time and risk. No more open-ended threads. |
+| 🧭 **Smart routing** | Business questions go to the PO, technical ones to the Tech Lead, UX to the Designer. A Delegate decides while someone is on leave. |
+| 📜 **Versioned Specs** | Markdown Specs with Confluence-style version history, AI-drafted diffs you approve, and revert to any earlier Spec Version. |
 | 🗂️ **Decision Log** | Every decision is traceable: who decided, what the alternatives were, and which Spec version it produced. |
-| 📎 **One place for context** | Attach Confluence pages, Jira epics, files and URLs so the AI reasons over real context *(planned)*. |
+| 📎 **One place for context** | Attach Confluence pages, Jira epics, files and URLs so the AI reasons over real context. |
 | 💻 **Terminal-native** | Raise from the `vorasaan` CLI with AI-drafted Choices you review first, and keep your Inbox, requests and Specs open in the `vorasaan` TUI: it updates live, pops OS notifications, and lets you decide, Claim, ask for info, withdraw and approve Spec Proposals without leaving the terminal. |
 | 🤝 **Agent handoff** | `vorasaan run --ai claude` hands your coding agent one Feature's approved Spec, its Decisions and your Platform's Design Doc, not a guess. |
 | 🏠 **Self-hosted** | One `docker compose up`. Your data stays on your infrastructure. Bring your own model: Claude API, OpenAI API, Gemini API, OpenRouter, or any OpenAI-compatible URL + token. |
@@ -95,8 +95,8 @@ Every decision is recorded, every Spec change is a reviewed diff, and nothing an
 You need [Docker](https://www.docker.com/) and an LLM provider: a **Claude API** key, an **OpenAI API** key, a **Gemini API** key from [Google AI Studio](https://aistudio.google.com), an **[OpenRouter](https://openrouter.ai)** key, or any **OpenAI-compatible URL + token** (for example [9Router](https://github.com/decolua/9router)).
 
 ```bash
-git clone https://github.com/gameprem/Vorasaan.git
-cd Vorasaan
+git clone https://github.com/gameprem/Vorasaan-oss.git vorasaan
+cd vorasaan
 echo "VORASAAN_SECRET_KEY=$(openssl rand -base64 32)" > .env
 docker compose up -d
 ```
@@ -178,18 +178,21 @@ The binary runs on the OS and CPU it was built on. The CLI keeps the server URL 
 
 ### Development
 
-Requires [Bun](https://bun.sh) ≥ 1.4 and Docker.
+Requires [Bun](https://bun.sh) 1.4.2 and Docker. [`CONTRIBUTING.md`](./CONTRIBUTING.md) has the full guide: tests, end-to-end tests, evals and conventions.
 
 ```bash
-cp .env.example .env          # set VORASAAN_SECRET_KEY
-docker compose up -d db       # PostgreSQL (with pgvector) only
+cp .env.example .env              # set VORASAAN_SECRET_KEY
+docker compose up -d db           # PostgreSQL (with pgvector) only
 bun install
-bun run db:generate && bun run db:migrate
-bun run db:seed               # demo data: pim@acme.test / beam@acme.test, password vorasaan-demo
+bun run db:generate
+bun --env-file=.env run db:migrate
+bun --env-file=.env run db:seed   # demo data: pim@acme.test / beam@acme.test, password vorasaan-demo
 
-VORASAAN_AI=fake bun run --filter @vorasaan/server dev   # API on :4000; drop VORASAAN_AI to use your provider
-bun run --filter @vorasaan/web dev                       # web on :3000
+VORASAAN_AI=fake bun --env-file=.env run --filter @vorasaan/server dev   # API on :4000; drop VORASAAN_AI to use your provider
+bun run --filter @vorasaan/web dev                                       # web on :3000
 ```
+
+The scripts run inside each package, where Bun doesn't read the root `.env`, so `--env-file=.env` passes it on (or export `DATABASE_URL` and `VORASAAN_SECRET_KEY` in your shell).
 
 #### README screenshots
 
@@ -204,9 +207,9 @@ It creates a fresh `vorasaan_screens` database (it refuses any name that doesn't
 | Command | What it does |
 | --- | --- |
 | `bun run lint` | Lint and format-check with Biome (`bun run format` to fix) |
-| `bun run typecheck` | Type-check every workspace |
+| `bun run typecheck` | Type-check every package |
 | `bun run test` | Run the test suites |
-| `bun run check` | Lint, type-check and test in one go (run before committing) |
+| `bun run check` | Lint, type-check and test in one go, as CI does (run before committing) |
 
 ## 🏗️ Architecture
 
@@ -219,11 +222,13 @@ vorasaan/
 ├── packages/
 │   ├── db/         Prisma 7 schema, migrations and client
 │   ├── shared/     Zod schemas: the single API contract
-│   └── skills/     Prompt templates per team and role
+│   └── skills/     Built-in prompts, one Markdown file per AI task
 └── docs/adr/       Architecture Decision Records
 ```
 
-**Tech stack:** Bun · TypeScript · Turborepo · NestJS · Next.js · Mastra · Prisma · PostgreSQL · Zod · Biome
+**Tech stack:** Bun · TypeScript · Turborepo · NestJS · Next.js · Mastra · Prisma · PostgreSQL + pgvector · Zod · Biome
+
+[`docs/architecture.md`](./docs/architecture.md) has diagrams of the system, the packages, the AI call path, the Decision Request lifecycle and the Spec Proposal approve flow.
 
 Key decisions are documented as ADRs:
 
@@ -232,6 +237,18 @@ Key decisions are documented as ADRs:
 - [0003: Mastra runs as a library inside NestJS](./docs/adr/0003-mastra-as-a-library-inside-nestjs.md)
 - [0004: Zod schemas are the only API contract](./docs/adr/0004-zod-is-the-only-api-contract.md)
 - [0005: Bun is the runtime, package manager and test runner](./docs/adr/0005-bun-as-runtime-and-package-manager.md)
+- [0006: A Project Brief sits above Features](./docs/adr/0006-project-brief-above-features.md)
+- [0007: Retrieval with pgvector, behind an EmbeddingPort](./docs/adr/0007-retrieval-with-pgvector.md)
+- [0008: The web app is chat-first, and the AI only proposes from chat](./docs/adr/0008-chat-first-web-ui.md)
+- [0009: Platforms, and coverage checked per Platform](./docs/adr/0009-platforms-and-coverage.md)
+- [0010: Several AI providers, Approved Models and a model picker in chat](./docs/adr/0010-approved-models-and-the-chat-picker.md)
+- [0011: Response Windows, and deciding from LINE, Slack and Teams](./docs/adr/0011-response-windows-and-deciding-from-chat-apps.md)
+- [0012: Context budgets follow the model, and long Conversations compact themselves](./docs/adr/0012-context-budgets-and-auto-compaction.md)
+- [0013: Request changes: the AI redrafts a proposal](./docs/adr/0013-request-changes-redrafts-proposals.md)
+- [0014: Design Docs are derived from the approved Spec, per Platform](./docs/adr/0014-design-docs-derived-from-the-spec-per-platform.md)
+- [0015: Learning Loop: only a person changes the AI's behaviour](./docs/adr/0015-learning-loop-humans-change-the-ai.md)
+- [0016: UI kit on React Aria Components](./docs/adr/0016-ui-kit-on-react-aria-components.md)
+- [0017: Agent Skills: installable SKILL.md packages, text only, approved by an Admin](./docs/adr/0017-agent-skills-installable-skill-md-packages.md)
 
 The domain language (Feature, Spec, Decision Request, Decider, and so on) is defined in [`CONTEXT.md`](./CONTEXT.md). The full product requirements are in [`REQUIREMENT.md`](./REQUIREMENT.md).
 
@@ -243,6 +260,10 @@ The domain language (Feature, Spec, Decision Request, Decider, and so on) is def
 - [x] **Install & onboarding:** Docker install, setup wizard, provider choice, sign-in, invites, Projects/Teams/Features, CLI login
 - [x] **MVP:** attachments, recipient choice + Claim, delegation, notifications, TUI
 - [x] `vorasaan run --ai claude`: hand the approved Spec to your coding agent
+- [x] **Chat-first web app:** Conversations with Action Cards, Request changes and Redrafts, Approved Models with a model picker
+- [x] **Decision speed:** Response Windows with escalation, and deciding from LINE, Slack and Teams
+- [x] **Platforms, Coverage and Design Docs** per Platform
+- [x] **Learning Loop:** Receipts, Prompt Versions with in-app evals, and Agent Skills
 - [ ] **Grilling workflow:** structured PO → Designer → Dev questioning that produces the first Spec
 - [ ] **Design flow revisions** with cascade impact analysis
 - [ ] Jira / Confluence write-back, and Figma and Google Docs connectors
@@ -251,12 +272,12 @@ The domain language (Feature, Spec, Decision Request, Decider, and so on) is def
 
 Contributions are welcome, from bug reports and design feedback to code.
 
-1. Read [`CONTEXT.md`](./CONTEXT.md) so we all speak the same language.
+1. Read [`CONTEXT.md`](./CONTEXT.md) so we all speak the same language, and [`docs/architecture.md`](./docs/architecture.md) for how the pieces fit.
 2. Skim the [ADRs](./docs/adr/) before proposing architectural changes.
-3. Pick up an open ticket, and keep one change per pull request.
-4. Make sure `bun run lint`, `bun run typecheck` and `bun run test` pass.
+3. Pick up a ticket from [`docs/tickets/`](./docs/tickets/README.md) or an issue, and keep one change per pull request, against `main`.
+4. Make sure `bun run check` (lint, type-check and test) passes.
 
-A full `CONTRIBUTING.md` will land with the first release.
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) covers setup, tests, end-to-end tests, evals, commit messages and conventions.
 
 ## 📄 License
 
