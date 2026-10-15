@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ActionCardView } from './action-card.ts';
-import { RecordedModel } from './ai-settings.ts';
+import { ReasoningLevel, RecordedModel } from './ai-settings.ts';
 import { PersonRef } from './decision-request.ts';
 import {
   ConversationMessageRole,
@@ -52,11 +52,18 @@ const MessageContent = z
  */
 const PickedModel = Id.optional();
 
+/**
+ * "Think deeper" (ticket 0081): this one message's Reasoning Level, above the chat task's.
+ * Left out, the reply runs at the task's level.
+ */
+const MessageReasoning = ReasoningLevel.optional();
+
 /** `POST /conversations`: a new Conversation and its first message. */
 export const StartConversationInput = z.object({
   scope: ConversationScopeInput,
   content: MessageContent,
   approvedModelId: PickedModel,
+  reasoningLevel: MessageReasoning,
 });
 export type StartConversationInput = z.infer<typeof StartConversationInput>;
 
@@ -64,6 +71,7 @@ export type StartConversationInput = z.infer<typeof StartConversationInput>;
 export const SendConversationMessageInput = z.object({
   content: MessageContent,
   approvedModelId: PickedModel,
+  reasoningLevel: MessageReasoning,
 });
 export type SendConversationMessageInput = z.infer<typeof SendConversationMessageInput>;
 
@@ -114,6 +122,13 @@ export const ConversationMessageView = z.object({
    * quietly. `content` is the same in English. Null for anything else.
    */
   grillingNotes: z.array(GrillingNote).nullable(),
+  /**
+   * The Reasoning Level the person asked for with "Think deeper" (ticket 0081): on their
+   * message and on the reply to it. Null: the chat task's own level.
+   */
+  reasoningLevel: ReasoningLevel.nullable(),
+  /** ASSISTANT: the tokens the reply's model spent thinking, when it reported them. */
+  reasoningTokens: z.int().nonnegative().nullable(),
   createdAt: Timestamp,
 });
 export type ConversationMessageView = z.infer<typeof ConversationMessageView>;

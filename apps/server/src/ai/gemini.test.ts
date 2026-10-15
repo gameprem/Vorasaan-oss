@@ -360,7 +360,7 @@ describe('Gemini calls', () => {
     }
   });
 
-  test('thinking is kept low on every call: a task, a chat and the connection test', async () => {
+  test('thinking at each call’s default level: a task, a chat and the connection test', async () => {
     fake.requests.length = 0;
     fake.functionCall = null;
     fake.structured = CHOICES;
@@ -379,9 +379,10 @@ describe('Gemini calls', () => {
     const thinking = fake.requests.map(
       (r) => (r.body?.generationConfig as Record<string, unknown> | undefined)?.thinkingConfig,
     );
+    // Ticket 0081: a structured task defaults to LOW, chat to MEDIUM, the connection test LOW.
     expect(thinking).toEqual([
       { thinkingLevel: 'low' },
-      { thinkingLevel: 'low' },
+      { thinkingLevel: 'medium' },
       { thinkingLevel: 'low' },
       { thinkingBudget: 0 },
       { thinkingBudget: 128 },

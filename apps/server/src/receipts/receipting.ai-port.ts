@@ -78,6 +78,7 @@ export class ReceiptingAiPort implements AiPort {
             model: options?.model,
             prompt: options?.prompt,
             language: options?.language,
+            reasoning: options?.reasoning,
             link: options?.receipt,
           });
         } catch {

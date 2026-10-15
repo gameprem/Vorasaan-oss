@@ -104,7 +104,13 @@ export class ConversationsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body({ schema: SendConversationMessageInput }) body: SendConversationMessageInput,
   ) {
-    return this.conversations.send(user, id, body.content, body.approvedModelId);
+    return this.conversations.send(
+      user,
+      id,
+      body.content,
+      body.approvedModelId,
+      body.reasoningLevel,
+    );
   }
 
   /** After a 502: asks the AI again to reply to the last message. */

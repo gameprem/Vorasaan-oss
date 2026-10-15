@@ -47,6 +47,7 @@ import type {
 import { toolTokens } from './context-budget.ts';
 import type { ReplyLanguage } from './language.ts';
 import { chatPrompt, describeDecision, SUMMARY_SECTIONS } from './prompts.ts';
+import type { ReasoningChoice } from './reasoning.ts';
 import { estimateChatTokens } from './token-count.ts';
 import type { WorkflowMemory } from './workflow-memory.ts';
 
@@ -488,6 +489,9 @@ export const FAKE_USAGE: CallUsage = {
   reasoningTokens: 100,
 };
 
+/** The thinking tokens a fake chat step reports at each Reasoning Level (ticket 0081). */
+export const FAKE_REASONING_TOKENS = { NONE: 0, LOW: 16, MEDIUM: 64, HIGH: 640 } as const;
+
 /** Deterministic stand-in for tests. Records calls so tests can assert on them. */
 export class FakeAiPort implements AiPort {
   /** Every call, with the model it was asked to run on (null when none was chosen). */
@@ -499,6 +503,8 @@ export class FakeAiPort implements AiPort {
     language: ReplyLanguage | null;
     /** The version of the prompt it would render (ticket 0071); null when none was chosen. */
     prompt: PromptChoice | null;
+    /** The Reasoning Level it was asked to run at (ticket 0081); null when none was chosen. */
+    reasoning: ReasoningChoice | null;
   }[] = [];
   /** Replies the next chat calls give, in order, instead of the default one. */
   readonly chatScript: ScriptedChatReply[] = [];
@@ -532,6 +538,7 @@ export class FakeAiPort implements AiPort {
       model: options?.model ?? null,
       language: options?.language ?? null,
       prompt: options?.prompt ?? null,
+      reasoning: options?.reasoning ?? null,
     });
     const failure = this.failures.shift();
     if (failure) throw failure;
@@ -578,6 +585,7 @@ export class FakeAiPort implements AiPort {
       model: options?.model ?? null,
       language: options?.language ?? null,
       prompt: options?.prompt ?? null,
+      reasoning: options?.reasoning ?? null,
     });
     const scripted = this.chatScript.shift();
     const chunks: ChatChunk[] = scripted
@@ -602,7 +610,8 @@ export class FakeAiPort implements AiPort {
         outputTokens,
         cacheReadTokens,
         cacheWriteTokens: 0,
-        reasoningTokens: 0,
+        // The fake thinks more the higher the level, so a Think deeper reply shows it.
+        reasoningTokens: FAKE_REASONING_TOKENS[options?.reasoning?.level ?? 'NONE'],
       });
       yield {
         type: 'usage',

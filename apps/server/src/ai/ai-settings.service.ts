@@ -20,8 +20,11 @@ import {
   DEFAULT_PROVIDER_NAMES,
   type ModelPrices,
   type ProviderModelsView,
+  type ReasoningLevel,
+  type ReasoningSupport,
   type RecordedModel,
   type SetAiTaskModelsInput,
+  type SetAiTaskReasoningInput,
   type UpdateAiProviderInput,
   type UpdateApprovedModelInput,
 } from '@vorasaan/shared';
@@ -39,6 +42,14 @@ import { envModelContextWindow, prefilledContextWindow } from './context-window.
 import { geminiContextWindow, listGeminiModels } from './gemini.ts';
 import { type ResolvedProvider, toMastraModel } from './model-config.ts';
 import { listOpenRouterModels, openRouterContextWindow } from './openrouter.ts';
+import {
+  chatReasoningSupport,
+  chooseReasoning,
+  type ReasoningChoice,
+  reasoningEnvOverridesFor,
+  reasoningSupport,
+  reasoningTargetOfChoice,
+} from './reasoning.ts';
 
 export const AI_CONNECTION_TESTER = Symbol('AI_CONNECTION_TESTER');
 export type AiConnectionTester = (provider: ResolvedProvider) => Promise<void>;
@@ -117,8 +128,8 @@ export class AiSettingsService {
 
   async view(): Promise<AiSettingsView> {
     const organizationId = await this.organizationId();
-    if (!organizationId) return { providers: [], models: [], tasks: this.taskViews([]) };
-    const [providers, models, taskModels] = await Promise.all([
+    if (!organizationId) return { providers: [], models: [], tasks: this.taskViews([], []) };
+    const [providers, models, taskModels, reasoning] = await Promise.all([
       this.db.orgIntegration.findMany({
         where: { organizationId, provider: { in: LLM_PROVIDERS } },
         include: { _count: { select: { approvedModels: true } } },
@@ -126,19 +137,25 @@ export class AiSettingsService {
       }),
       this.models(organizationId),
       this.db.aiTaskModel.findMany({ where: { organizationId } }),
+      this.db.aiTaskReasoning.findMany({ where: { organizationId } }),
     ]);
     return {
       providers: providers.map((p) => this.providerView(p, p._count.approvedModels)),
       models: models.map(modelSettingsView),
-      tasks: this.taskViews(taskModels),
+      tasks: this.taskViews(taskModels, reasoning),
     };
   }
 
-  private taskViews(rows: { task: AiTaskKind; approvedModelId: string }[]) {
+  private taskViews(
+    rows: { task: AiTaskKind; approvedModelId: string }[],
+    reasoning: { task: AiTaskKind; level: ReasoningLevel }[],
+  ) {
     return AiTaskKind.options.map((task) => ({
       task,
       approvedModelId: rows.find((r) => r.task === task)?.approvedModelId ?? null,
       envOverrides: envOverridesFor(task),
+      reasoningLevel: reasoning.find((r) => r.task === task)?.level ?? null,
+      reasoningEnvOverrides: reasoningEnvOverridesFor(task),
     }));
   }
 
@@ -165,11 +182,24 @@ export class AiSettingsService {
   /** What every member may see: names and notes only, never a provider, key or URL. */
   async publicModels(): Promise<AiModelsView> {
     const organizationId = await this.organizationId();
-    if (!organizationId) return { models: [], chatDefaultId: null };
-    const [models, chat] = await Promise.all([
+    if (!organizationId) {
+      return {
+        models: [],
+        chatDefaultId: null,
+        chatDefaultReasoning: envChatReasoning(envFallbackModel()),
+      };
+    }
+    const [rows, chat] = await Promise.all([
       this.db.approvedModel.findMany({
         where: { organizationId },
-        select: { id: true, displayName: true, note: true, isDefault: true },
+        select: {
+          id: true,
+          displayName: true,
+          note: true,
+          isDefault: true,
+          modelId: true,
+          integration: { select: { provider: true } },
+        },
         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
       }),
       this.db.aiTaskModel.findUnique({
@@ -177,11 +207,20 @@ export class AiSettingsService {
         select: { approvedModelId: true },
       }),
     ]);
+    // "Think deeper" (ticket 0081) works on a model with a reasoning control.
+    const models = rows.map(({ modelId, integration, ...m }) => ({
+      ...m,
+      reasoning: chatReasoningSupport({ kind: integration.provider as AiProvider, modelId }),
+    }));
     // What a Conversation with no picked model runs on (chooseModel without a pick).
-    const chatDefaultId = envModelOverride('chat')
+    const override = envModelOverride('chat');
+    const chatDefaultId = override
       ? null
       : (chat?.approvedModelId ?? models.find((m) => m.isDefault)?.id ?? null);
-    return { models, chatDefaultId };
+    const chatDefaultReasoning =
+      models.find((m) => m.id === chatDefaultId)?.reasoning ??
+      envChatReasoning(override ?? envFallbackModel());
+    return { models, chatDefaultId, chatDefaultReasoning };
   }
 
   // ─── The chat picker (ticket 0054) ──────────────────────────────────────────
@@ -468,6 +507,51 @@ export class AiSettingsService {
     return this.view();
   }
 
+  // ─── Reasoning Level per task (ticket 0081) ───────────────────────────────
+
+  /** The Admin's Reasoning Level per task; `null` (or a task left out) goes back to the default. */
+  async setTaskReasoning(input: SetAiTaskReasoningInput): Promise<AiSettingsView> {
+    const organizationId = await this.requireOrganizationId();
+    const entries = Object.entries(input.tasks) as [AiTaskKind, ReasoningLevel | null][];
+    await this.db.$transaction(
+      entries.map(([task, level]) =>
+        level
+          ? this.db.aiTaskReasoning.upsert({
+              where: { organizationId_task: { organizationId, task } },
+              update: { level },
+              create: { organizationId, task, level },
+            })
+          : this.db.aiTaskReasoning.deleteMany({ where: { organizationId, task } }),
+      ),
+    );
+    return this.view();
+  }
+
+  /**
+   * The Reasoning Level of one call on its chosen model: the caller's (a message's
+   * "Think deeper"), else the env's, else the Admin's for the task, else the task's default
+   * (`chooseReasoning`). Read on every call, so an Admin's change applies to the next one.
+   */
+  async chooseReasoning(
+    task: AiTask,
+    model: ModelChoice,
+    requested?: ReasoningLevel,
+  ): Promise<ReasoningChoice> {
+    const organizationId = await this.organizationId();
+    const setting = organizationId
+      ? await this.db.aiTaskReasoning.findUnique({
+          where: { organizationId_task: { organizationId, task: AI_TASKS[task].kind } },
+          select: { level: true },
+        })
+      : null;
+    return chooseReasoning({
+      task,
+      target: reasoningTargetOfChoice(model),
+      message: requested,
+      setting: setting?.level,
+    });
+  }
+
   // ─── Setup ────────────────────────────────────────────────────────────────
 
   /** What setup refuses before it writes anything (a base URL for OpenRouter). */
@@ -652,7 +736,13 @@ function modelSettingsView(m: ModelWithProvider): ApprovedModelSettingsView {
         : { inputPerMillion: m.inputPricePerMillion, outputPerMillion: m.outputPricePerMillion },
     position: m.position,
     isDefault: m.isDefault,
+    reasoning: reasoningSupport({ kind, modelId: m.modelId }),
   };
+}
+
+/** Whether "Think deeper" works on an env "provider/model" (ticket 0081). */
+function envChatReasoning(name: string): ReasoningSupport {
+  return chatReasoningSupport(reasoningTargetOfChoice({ provider: null, name }));
 }
 
 /** An Approved Model's price columns (ticket 0075): both set, or both null. */

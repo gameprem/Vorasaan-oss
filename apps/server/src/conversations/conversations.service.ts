@@ -28,6 +28,7 @@ import {
   type ListConversationMessagesQuery,
   type ListConversationsQuery,
   MAX_CONVERSATION_TITLE_CHARS,
+  type ReasoningLevel,
   type RecordedModel,
   type ServerEvent,
   type StopConversationResult,
@@ -132,7 +133,14 @@ const NO_USAGE: StepUsage = { inputTokens: null, cacheReadTokens: null };
  * provider's count over the estimate (1 when the turn didn't count), and the
  * provider's usage of the turn's steps.
  */
-type Meter = { model: TurnModel; budget: Budget; scale: number; usage: StepUsage };
+type Meter = {
+  model: TurnModel;
+  budget: Budget;
+  scale: number;
+  usage: StepUsage;
+  /** The turn's thinking tokens, summed over its steps (ticket 0081); null when none reported. */
+  reasoningTokens?: number | null;
+};
 /** What a fold records besides its summary: why it happened, who asked, and what to keep. */
 type FoldRecord = {
   trigger: ConversationCompactionTrigger;
@@ -205,7 +213,12 @@ export class ConversationsService {
   /** Anyone in the scope's Organization starts one; the AI replies to the first message. */
   async start(
     user: User,
-    input: { scope: ConversationScopeInput; content: string; approvedModelId?: string },
+    input: {
+      scope: ConversationScopeInput;
+      content: string;
+      approvedModelId?: string;
+      reasoningLevel?: ReasoningLevel;
+    },
   ): Promise<ConversationView> {
     const scope = await this.resolveScope(user, input.scope);
     if (input.approvedModelId) await this.models.assertPickable(input.approvedModelId);
@@ -219,7 +232,13 @@ export class ConversationsService {
         },
       });
       await tx.conversationMessage.create({
-        data: { conversationId: created.id, position: 0, role: 'USER', content: input.content },
+        data: {
+          conversationId: created.id,
+          position: 0,
+          role: 'USER',
+          content: input.content,
+          reasoningLevel: input.reasoningLevel ?? null,
+        },
       });
       return created.id;
     });
@@ -430,6 +449,7 @@ export class ConversationsService {
     id: string,
     content: string,
     approvedModelId?: string,
+    reasoningLevel?: ReasoningLevel,
   ): Promise<ConversationTurnView> {
     const conversation = await this.ownedWithAccess(user, id);
     if (approvedModelId) {
@@ -445,7 +465,14 @@ export class ConversationsService {
       await this.db.$transaction(async (tx) => {
         const position = await nextPosition(tx, id);
         await tx.conversationMessage.create({
-          data: { conversationId: id, position, role: 'USER', content },
+          // "Think deeper" (ticket 0081) is this message's alone; a retry keeps it.
+          data: {
+            conversationId: id,
+            position,
+            role: 'USER',
+            content,
+            reasoningLevel: reasoningLevel ?? null,
+          },
         });
         await tx.conversation.update({
           where: { id },
@@ -612,6 +639,12 @@ export class ConversationsService {
           },
           {
             model: model.choice,
+            ...(message.reasoningLevel ? { reasoningLevel: message.reasoningLevel } : {}),
+            onUsage: (usage) => {
+              if (usage.reasoningTokens !== null) {
+                meter.reasoningTokens = (meter.reasoningTokens ?? 0) + usage.reasoningTokens;
+              }
+            },
             language,
             receipt: {
               requestedById: user.id,
@@ -750,6 +783,8 @@ export class ConversationsService {
       content: text,
       ...toRecordedModelColumns(model.record),
       modelNotice: model.notice,
+      reasoningLevel: message.reasoningLevel,
+      reasoningTokens: meter.reasoningTokens ?? null,
     });
     this.bus.emit(user.id, {
       event: 'conversation.done',
