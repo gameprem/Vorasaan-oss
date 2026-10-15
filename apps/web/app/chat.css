@@ -87,6 +87,9 @@
   overflow-anchor: none;
   padding: 16px 24px 12px;
 }
+.chat-thread:focus-visible {
+  outline-offset: -4px;
+}
 .chat-col {
   max-width: 780px;
   margin: 0 auto;
@@ -123,11 +126,11 @@
 }
 .msg.ai .who {
   font-size: 13px;
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   line-height: 28px;
 }
 .msg.ai .stopped {
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   font-style: italic;
 }
 .msg.thinking .who {
@@ -312,7 +315,7 @@
 }
 .starter small {
   margin-top: auto;
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   font-size: 12px;
 }
 .starter .tag {
@@ -367,7 +370,7 @@
   color: var(--saffron);
 }
 .pill.state.muted {
-  color: var(--fg-faint);
+  color: var(--fg-soft);
 }
 .card-body {
   padding: 8px 20px 16px;
@@ -439,7 +442,7 @@
 }
 .card-foot .hint {
   font-size: 12px;
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   margin-left: auto;
 }
 .card-foot .hint.start {
@@ -456,7 +459,7 @@
   color: var(--fg);
 }
 .card-input::placeholder {
-  color: var(--fg-faint);
+  color: var(--fg-soft);
 }
 .btn {
   display: inline-flex;
@@ -524,7 +527,7 @@
   outline: none;
 }
 .composer textarea::placeholder {
-  color: var(--fg-faint);
+  color: var(--fg-soft);
 }
 .composer-row {
   display: flex;
@@ -564,7 +567,7 @@
 }
 .composer-row .scope {
   font-size: 12px;
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -599,7 +602,8 @@
   margin: 8px auto 0;
   text-align: center;
   font-size: 12px;
-  color: var(--fg-faint);
+  /* fg-faint fails AA on the page (3.1:1 in light); fg-soft passes in both themes. */
+  color: var(--fg-soft);
 }
 .attach {
   position: relative;
@@ -713,7 +717,7 @@
 }
 .model-menu .h {
   font-size: 12px;
-  color: var(--fg-faint);
+  color: var(--fg-soft);
   padding: 8px 12px 4px;
 }
 .model-menu .opt {
@@ -752,7 +756,7 @@
 .msg.ai .by {
   margin-top: 6px;
   font-size: 12px;
-  color: var(--fg-faint);
+  color: var(--fg-soft);
 }
 .msg.ai .model-notice {
   margin: 0 0 8px;
@@ -1053,7 +1057,7 @@
   align-items: center;
   gap: 10px;
   font-size: 12px;
-  color: var(--fg-faint);
+  color: var(--fg-soft);
 }
 .compaction-divider::before,
 .compaction-divider::after {
@@ -1087,7 +1091,7 @@
 .older-end {
   text-align: center;
   font-size: 12px;
-  color: var(--fg-faint);
+  color: var(--fg-soft);
 }
 
 /* "↓ New messages" while the person reads further up (ticket 0066). */
