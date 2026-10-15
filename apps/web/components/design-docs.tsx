@@ -8,7 +8,15 @@ import type {
 } from '@vorasaan/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useId, useState, useTransition } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useId,
+  useState,
+  useTransition,
+} from 'react';
 import {
   approveDesignDoc,
   type DesignDocActionResult,
@@ -65,9 +73,34 @@ export function RefreshWhileDrafting({ active }: { active: boolean }) {
   return null;
 }
 
+type Message = { ok: boolean; text: string } | null;
+
+/**
+ * Where a page's Design Doc actions report, when the component that ran one can leave the
+ * page with its result: declining a draft removes the review form on refresh.
+ */
+const MessagesContext = createContext<{
+  message: Message;
+  setMessage: (message: Message) => void;
+} | null>(null);
+
+/** One status line and one alert line for every Design Doc action inside it. */
+export function DesignDocMessages({ children }: { children: ReactNode }) {
+  const [message, setMessage] = useState<Message>(null);
+  return (
+    <MessagesContext.Provider value={{ message, setMessage }}>
+      <Messages message={message} />
+      {children}
+    </MessagesContext.Provider>
+  );
+}
+
 function useResult() {
   const [pending, start] = useTransition();
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const shared = useContext(MessagesContext);
+  const [own, setOwn] = useState<Message>(null);
+  const message = shared ? shared.message : own;
+  const setMessage = shared ? shared.setMessage : setOwn;
   const run = (action: () => Promise<DesignDocActionResult>, done: string, onOk?: () => void) =>
     start(async () => {
       setMessage(null);
@@ -78,11 +111,11 @@ function useResult() {
         onOk?.();
       }
     });
-  return { pending, message, run };
+  return { pending, message, run, shared: shared !== null };
 }
 
 /** The stable status and alert lines of an action. */
-function Messages({ message }: { message: { ok: boolean; text: string } | null }) {
+function Messages({ message }: { message: Message }) {
   return (
     <>
       <p role="status" className="mt-2 text-sm text-jade empty:hidden">
@@ -118,7 +151,7 @@ export function DraftDesignDocButton({
       >
         {action.pending ? 'Asking…' : `Draft the ${doc.name} Design Doc`}
       </Button>
-      <Messages message={action.message} />
+      {!action.shared && <Messages message={action.message} />}
     </div>
   );
 }
@@ -214,7 +247,7 @@ export function ReviewDesignDoc({
           Waiting for a Tech Lead or a Role Owner of {proposal.name} to review it.
         </p>
       )}
-      <Messages message={action.message} />
+      {!action.shared && <Messages message={action.message} />}
     </section>
   );
 }
