@@ -353,6 +353,56 @@ describe('ContextRetriever (real Postgres with pgvector)', () => {
     expect(await db.contentChunk.count()).toBeGreaterThan(0);
   });
 
+  test('chunks that rank alike come back in the same order, however the rows lie on disk (0076)', async () => {
+    // Every chunk below shares no word and no direction with the query: each is at exactly
+    // distance 1 and has the same keyword rank. Only the tie-break decides which k come back.
+    const scope = { organizationId: SEED.organizationId, projectId: SEED.projectId };
+    const dims = 4;
+    const query = { model: 'tie-test', embedding: [1, 0, 0, 0] };
+    const tied = [0, 1, 0, 0];
+    const index = async (sourceId: string, texts: string[], near?: number) => {
+      const vectors = texts.map((_, i) => (i === near ? [1, 0, 0, 0] : tied));
+      await chunks.replace(
+        { ...scope, featureId: null },
+        { source: 'ATTACHMENT', sourceId },
+        texts.map((text, position) => ({ position, text, tokenCount: 3 })),
+        { model: query.model, vectors },
+      );
+    };
+    const older = crypto.randomUUID();
+    const newer = crypto.randomUUID();
+    await index(older, ['tie zeta', 'tie alpha', 'tie needle'], 2);
+    await index(newer, ['tie Zulu', 'tie bravo', 'tie delta']);
+    const where = { ...scope, sources: ['ATTACHMENT' as const] };
+    const read = async () => ({
+      vector: (await chunks.search(where, query, 4)).map((h) => h.text),
+      keyword: (await chunks.keywordSearch(where, 'tie', 4)).map((h) => h.text),
+    });
+
+    // The nearest first; then, among equals, the most recently indexed source in reading order.
+    const expected = {
+      vector: ['tie needle', 'tie Zulu', 'tie bravo', 'tie delta'],
+      keyword: ['tie Zulu', 'tie bravo', 'tie delta', 'tie zeta'],
+    };
+    expect(await read()).toEqual(expected);
+    // Rewriting rows moves them to the end of the table: the order on disk changes, the answer doesn't.
+    for (const sourceId of [newer, older, newer]) {
+      await db.$executeRaw`UPDATE "ContentChunk" SET "text" = "text" WHERE "sourceId" = ${sourceId}`;
+      expect(await read()).toEqual(expected);
+    }
+
+    // Indexed at the same instant: reading order, then the text byte by byte, whatever the
+    // database's collation ('Z' sorts before 'a' in "C", after it in en-US).
+    await db.$executeRaw`UPDATE "ContentChunk" SET "createdAt" = '2026-06-01T10:00:00Z'`;
+    for (const sourceId of [older, newer]) {
+      await db.$executeRaw`UPDATE "ContentChunk" SET "text" = "text" WHERE "sourceId" = ${sourceId}`;
+      expect(await read()).toEqual({
+        vector: ['tie needle', 'tie Zulu', 'tie zeta', 'tie alpha'],
+        keyword: ['tie Zulu', 'tie zeta', 'tie alpha', 'tie bravo'],
+      });
+    }
+  });
+
   test('an unknown Feature gets no context', async () => {
     expect(await retriever.forFeature(crypto.randomUUID(), QUERY, 1_000)).toEqual([]);
   });
