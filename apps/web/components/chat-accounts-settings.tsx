@@ -1,11 +1,12 @@
 'use client';
 
 import {
+  CHAT_EVENT_KINDS,
   CHAT_EVENT_LABEL,
   CHAT_LANGUAGE_LABEL,
+  CHAT_LANGUAGES,
   CHAT_PROVIDER_LABEL,
-  ChatEventKind,
-  ChatLanguage,
+  type ChatLanguage,
   type ChatLinkCodeView,
   type ChatPreferencesView,
   type MyChatAppsView,
@@ -158,7 +159,7 @@ function PreferencesForm({
       <fieldset>
         <legend className="font-medium">Send to my chat apps</legend>
         <div className="mt-2 space-y-2">
-          {ChatEventKind.options.map((kind) => (
+          {CHAT_EVENT_KINDS.map((kind) => (
             <Checkbox
               key={kind}
               isSelected={events.includes(kind)}
@@ -223,7 +224,7 @@ function PreferencesForm({
         className="max-w-sm"
         options={[
           { id: '', label: `The Organization's (${CHAT_LANGUAGE_LABEL[organizationLanguage]})` },
-          ...ChatLanguage.options.map((lang) => ({ id: lang, label: CHAT_LANGUAGE_LABEL[lang] })),
+          ...CHAT_LANGUAGES.map((lang) => ({ id: lang, label: CHAT_LANGUAGE_LABEL[lang] })),
         ]}
         value={language}
         onChange={(lang) => {

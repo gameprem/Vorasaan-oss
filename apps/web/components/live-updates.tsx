@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  FeatureDeletedEvent,
-  NotificationCreatedEvent,
-  ProjectDeletedEvent,
-  ServerEvent,
-  type ServerEventName,
-} from '@vorasaan/shared';
+import type { ServerEventName } from '@vorasaan/shared';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -40,6 +34,8 @@ const MAX_ATTEMPTS = 8;
 /** Several events often arrive together (one Decision touches Inbox and Notifications). */
 const REFRESH_DEBOUNCE_MS = 250;
 
+type Schemas = typeof import('@/lib/server-event-schemas');
+
 export function LiveUpdates() {
   const router = useRouter();
   const [announcement, setAnnouncement] = useState('');
@@ -64,6 +60,16 @@ export function LiveUpdates() {
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
     let idle = false; // gave up after MAX_ATTEMPTS
+    // The events' schemas bring Zod, so they load in their own chunk once the page is
+    // interactive rather than in every page's first load. Each handler waits on the same
+    // promise, so events are still handled in the order they arrived; if the chunk can't
+    // load, they are handled as unreadable events are.
+    const schemas = import('@/lib/server-event-schemas').catch(() => null);
+    const withSchemas = (handle: (s: Schemas | null) => void) => {
+      void schemas.then((s) => {
+        if (!stopped) handle(s);
+      });
+    };
 
     const refresh = () => {
       clearTimeout(refreshTimer);
@@ -84,34 +90,36 @@ export function LiveUpdates() {
       es.addEventListener(INBOX_CHANGED, refresh);
       es.addEventListener(CHAT_ACCOUNT_CHANGED, refresh);
       es.addEventListener(PROPOSAL_REDRAFTED, refresh);
-      const deleted = (read: (data: unknown) => Deleted | null) => (e: Event) => {
+      const deleted = (read: (s: Schemas, data: unknown) => Deleted | null) => (e: Event) => {
         let data: unknown;
         try {
           data = JSON.parse((e as MessageEvent<string>).data);
         } catch {}
-        const event = read(data);
-        if (!event) return refresh();
-        const id = event.kind === 'feature' ? event.data.featureId : event.data.projectId;
-        const to = leaveTo(event, window.location.pathname);
-        // This browser's own delete already moved on and said so.
-        if (isOwnDelete(id)) return to ? router.replace(to) : refresh();
-        if (!to) return refresh();
-        const text = deletedText(event);
-        toast({ title: text });
-        setAnnouncement(text);
-        router.replace(to);
+        withSchemas((s) => {
+          const event = s && read(s, data);
+          if (!event) return refresh();
+          const id = event.kind === 'feature' ? event.data.featureId : event.data.projectId;
+          const to = leaveTo(event, window.location.pathname);
+          // This browser's own delete already moved on and said so.
+          if (isOwnDelete(id)) return to ? router.replace(to) : refresh();
+          if (!to) return refresh();
+          const text = deletedText(event);
+          toast({ title: text });
+          setAnnouncement(text);
+          router.replace(to);
+        });
       };
       es.addEventListener(
         FEATURE_DELETED,
-        deleted((data) => {
-          const parsed = FeatureDeletedEvent.safeParse(data);
+        deleted((s, data) => {
+          const parsed = s.FeatureDeletedEvent.safeParse(data);
           return parsed.success ? { kind: 'feature', data: parsed.data } : null;
         }),
       );
       es.addEventListener(
         PROJECT_DELETED,
-        deleted((data) => {
-          const parsed = ProjectDeletedEvent.safeParse(data);
+        deleted((s, data) => {
+          const parsed = s.ProjectDeletedEvent.safeParse(data);
           return parsed.success ? { kind: 'project', data: parsed.data } : null;
         }),
       );
@@ -121,10 +129,12 @@ export function LiveUpdates() {
         try {
           data = JSON.parse((e as MessageEvent<string>).data);
         } catch {}
-        const parsed = NotificationCreatedEvent.safeParse(data);
-        setAnnouncement(
-          `New Notification: ${parsed.success ? notificationText(parsed.data.notification) : 'open your Inbox.'}`,
-        );
+        withSchemas((s) => {
+          const parsed = s?.NotificationCreatedEvent.safeParse(data);
+          setAnnouncement(
+            `New Notification: ${parsed?.success ? notificationText(parsed.data.notification) : 'open your Inbox.'}`,
+          );
+        });
       });
       for (const name of CONVERSATION_EVENT_NAMES) {
         es.addEventListener(name, (e) => {
@@ -134,8 +144,10 @@ export function LiveUpdates() {
           } catch {
             return;
           }
-          const parsed = ServerEvent.safeParse({ event: name, data });
-          if (parsed.success) dispatchConversationEvent(parsed.data as ConversationEvent);
+          withSchemas((s) => {
+            const parsed = s?.ServerEvent.safeParse({ event: name, data });
+            if (parsed?.success) dispatchConversationEvent(parsed.data as ConversationEvent);
+          });
         });
       }
       es.onerror = () => {

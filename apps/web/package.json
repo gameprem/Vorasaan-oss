@@ -9,7 +9,8 @@
     "start": "bun --bun next start --port 3000",
     "typecheck": "tsc -p tsconfig.json",
     "test": "bun test lib components",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "bundle:check": "bun scripts/bundle-budget.ts"
   },
   "dependencies": {
     "@blocknote/ariakit": "^0.55.0",

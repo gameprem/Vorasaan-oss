@@ -1,10 +1,8 @@
 import { z } from 'zod';
 import { GuidelineCriterionKind } from './enums.ts';
+import { MAX_GUIDELINE_CRITERIA } from './feature-guidelines-values.ts';
 
 const Id = z.uuid();
-
-/** At most this many criteria in the Organization default, and overrides in one Project. */
-export const MAX_GUIDELINE_CRITERIA = 50;
 
 /** What a criterion says: checked one by one by the AI and the UI (REQUIREMENT §3.8). */
 export const GuidelineCriterionText = z.object({

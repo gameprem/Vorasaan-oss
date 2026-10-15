@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CHAT_LANGUAGES } from './chat-apps-values.ts';
 import { ChatEventKind, ChatProvider } from './enums.ts';
 import { minutesOfDay, TimeOfDay, TimeZone } from './response-window.ts';
 
@@ -7,12 +8,6 @@ import { minutesOfDay, TimeOfDay, TimeZone } from './response-window.ts';
 // arrive there as cards whose buttons decide (ticket 0058).
 
 const Timestamp = z.iso.datetime();
-
-export const CHAT_PROVIDER_LABEL: Record<ChatProvider, string> = {
-  LINE: 'LINE',
-  SLACK: 'Slack',
-  TEAMS: 'Microsoft Teams',
-};
 
 /** The lower-case path segment of a chat app: `/chat-apps/line/events`. */
 export const ChatProviderSlug = z.enum(['line', 'slack', 'teams']);
@@ -33,13 +28,6 @@ export const CHAT_LINK_CODE_MINUTES = 10;
 
 /** What goes to chat apps until a person chooses: Decision Requests and NEEDS_INFO. */
 export const DEFAULT_CHAT_EVENTS: readonly ChatEventKind[] = ['DECISION_REQUEST', 'NEEDS_INFO'];
-
-export const CHAT_EVENT_LABEL: Record<ChatEventKind, string> = {
-  DECISION_REQUEST: 'Decision Requests sent to me',
-  NEEDS_INFO: 'Requests for more info on my Decision Requests (NEEDS_INFO)',
-  SPEC_PROPOSAL: 'Spec Proposals to approve (a link to Vorasaan)',
-  ESCALATION: 'Response Window reminders and overdue notices',
-};
 
 const Secret = (message: string) => z.string().trim().min(1, message).max(4096);
 
@@ -97,7 +85,7 @@ export const QuietHours = z
 export type QuietHours = z.infer<typeof QuietHours>;
 
 /** The language of a person's cards and bot replies (ticket 0058). */
-export const ChatLanguage = z.enum(['en', 'th']);
+export const ChatLanguage = z.enum(CHAT_LANGUAGES);
 export type ChatLanguage = z.infer<typeof ChatLanguage>;
 
 /**
@@ -105,11 +93,6 @@ export type ChatLanguage = z.infer<typeof ChatLanguage>;
  * person's cards and bot replies are in their own language, else the Organization's.
  */
 export const DEFAULT_CHAT_LANGUAGE: ChatLanguage = 'en';
-
-export const CHAT_LANGUAGE_LABEL: Record<ChatLanguage, string> = {
-  en: 'English',
-  th: 'ไทย (Thai)',
-};
 
 /** `PUT /me/chat-preferences`: what goes to my chat apps, and when not. */
 export const ChatPreferencesInput = z.strictObject({

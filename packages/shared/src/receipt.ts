@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ProposalKind, ReceiptOutcomeKind, ReceiptOutputKind } from './enums.ts';
+import { MAX_RECEIPT_RETENTION_DAYS } from './receipt-values.ts';
 
 const Timestamp = z.iso.datetime();
 const Tokens = z.int().min(0).nullable();
@@ -10,8 +11,6 @@ const Tokens = z.int().min(0).nullable();
 
 /** How long Receipts are kept unless an Admin says otherwise. */
 export const DEFAULT_RECEIPT_RETENTION_DAYS = 90;
-/** The longest retention an Admin may set: ten years. */
-export const MAX_RECEIPT_RETENTION_DAYS = 3650;
 
 /** `GET /settings/ai/receipts`: collection, retention, and how many Receipts are kept. */
 export const ReceiptSettingsView = z.object({

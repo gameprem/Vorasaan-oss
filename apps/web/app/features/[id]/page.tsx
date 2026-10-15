@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { notFound, unstable_rethrow } from 'next/navigation';
 import { AttachmentsPanel } from '@/components/attachments-panel';
 import { BlockedBadge, KindBadge, Notice, relativeTime } from '@/components/bits';
+import { MarkdownContent } from '@/components/chat/markdown';
 import { CoverageChips } from '@/components/coverage-chips';
 import { DecisionGraph } from '@/components/decision-graph';
 import { DeleteByName } from '@/components/delete-by-name';
@@ -255,6 +256,7 @@ export default async function FeaturePage({
             template={specTemplate?.data?.markdown}
             featureId={id}
             markdown={latest?.markdown ?? null}
+            rendered={latest && <MarkdownContent>{latest.markdown}</MarkdownContent>}
             version={latest?.version ?? 0}
             meta={
               latest

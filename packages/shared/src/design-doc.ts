@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { RecordedModel } from './ai-settings.ts';
 import { headingKey, specHeadings } from './coverage.ts';
 import { PersonRef } from './decision-request.ts';
+import { MAX_DESIGN_TEMPLATE_CHARS } from './design-doc-values.ts';
 import {
   DecisionRequestStatus,
   DesignDocProposalReason,
@@ -10,7 +11,7 @@ import {
   DesignTemplateKind,
   TeamRole,
 } from './enums.ts';
-import { type PlatformDesignTemplate, PlatformRef } from './platform.ts';
+import { PlatformRef } from './platform.ts';
 
 // Design Docs (ADR 0014, ticket 0069): for each target Platform of a Feature, and for QA, the
 // human-approved description of how it will build what the approved Spec says. The AI drafts
@@ -22,13 +23,6 @@ const Id = z.uuid();
 const Timestamp = z.iso.datetime();
 
 // ─── Templates ──────────────────────────────────────────────────────────────
-
-export const DESIGN_TEMPLATE_LABEL: Record<DesignTemplateKind, string> = {
-  BACK_END: 'Back-End',
-  FRONT_END: 'Front-End',
-  MOBILE: 'Mobile',
-  QA: 'QA',
-};
 
 const OPEN_QUESTIONS = `## Open questions
 
@@ -94,29 +88,10 @@ Each test case traced to one acceptance criterion of the Spec: \`- [ ] TC-1 (AC:
 ${OPEN_QUESTIONS}`,
 };
 
-/**
- * The template a Platform's Design Doc starts from: the one it names, else one chosen from its
- * Team Roles (MOBILE → Mobile, FRONTEND or DESIGNER → Front-End, anything else → Back-End).
- */
-export function platformDesignTemplate(platform: {
-  designTemplate?: PlatformDesignTemplate | null;
-  roles: readonly TeamRole[];
-}): PlatformDesignTemplate {
-  if (platform.designTemplate) return platform.designTemplate;
-  if (platform.roles.includes('MOBILE')) return 'MOBILE';
-  if (platform.roles.includes('FRONTEND') || platform.roles.includes('DESIGNER')) {
-    return 'FRONT_END';
-  }
-  return 'BACK_END';
-}
-
 /** The Team Roles who approve a Design Doc: Tech Leads, and the Platform's (QA's for QA). */
 export function designDocRoles(platformRoles: readonly TeamRole[] | null): TeamRole[] {
   return [...new Set<TeamRole>(['TECH_LEAD', ...(platformRoles ?? ['QA'])])];
 }
-
-/** The longest Design Doc template a Project may save. */
-export const MAX_DESIGN_TEMPLATE_CHARS = 20_000;
 
 /** `PUT /projects/:id/design-templates/:kind`: the Project's own template of that kind. */
 export const SetDesignTemplateInput = z.object({

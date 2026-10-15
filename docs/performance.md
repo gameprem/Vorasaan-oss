@@ -188,3 +188,28 @@ FakeAiPort answers, so scores show structure only (a real model is checked with 
 The product's calls run on the small large Organization in `TOKENS_DATABASE_URL` (default
 `vorasaan_tokens_bench`). The recorded numbers in `src/evals/token-guard.ts` are checked by
 `bun run test`, like the query budgets.
+
+## Web bundle budget
+
+```bash
+cd apps/web
+bun --bun next build
+bun run bundle:check            # fails when a main route is over its budget + 5%
+bun run bundle:check --update   # record the current sizes, on purpose
+```
+
+Each main route's first-load client JavaScript, gzip, is summed from the chunks `next build`
+lists in `.next/diagnostics/route-bundle-stats.json` and checked against
+`apps/web/bundle-budget.json`; CI runs it after the build. What keeps the numbers down:
+
+- **No Zod on a page unless it validates there.** The root layout's live updates load the event
+  schemas after the page is interactive (`lib/server-event-schemas.ts`), and the plain values
+  the web shows (labels, limits, `TEAM_ROLES`, text helpers) live in `packages/shared`'s
+  `*-values.ts` files, which import no Zod. A page that imports a schema, or a value from a
+  schema file, carries all of Zod (about 90 kB): add the value to the `-values.ts` file instead.
+- **Markdown is rendered on the server** for the Spec and Brief panels (`MarkdownContent`), and
+  loads in its own chunk in the chat (`components/chat/lazy-markdown.tsx`).
+- **React Aria's strings in English and Thai only**: a Turbopack loader
+  (`lib/react-aria-locales-loader.js`) drops the other 33 locales from its string tables (React Aria has no Thai strings yet, so
+  Thai shows its English ones, as before).
+- The BlockNote editor, the toast region and rarely opened pickers load on demand (`next/dynamic`).

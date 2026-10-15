@@ -1,11 +1,8 @@
 'use client';
 
 import { BRIEF_TEMPLATE } from '@vorasaan/shared';
-import { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { type ReactNode, useState } from 'react';
 import { saveBrief } from '@/lib/project-actions';
-import { markdownComponents } from './chat/markdown';
 import { type SaveMarkdownInput, SpecEditor } from './spec-editor';
 import { secondaryButton } from './ui';
 
@@ -16,12 +13,15 @@ import { secondaryButton } from './ui';
 export function BriefPanel({
   projectId,
   markdown,
+  rendered,
   version,
   meta,
   canEdit,
 }: {
   projectId: string;
   markdown: string;
+  /** `markdown` rendered on the server (`MarkdownContent`), so the renderer isn't shipped here. */
+  rendered: ReactNode;
   /** 0 while the Brief is still the empty template. */
   version: number;
   meta: string | null;
@@ -61,9 +61,7 @@ export function BriefPanel({
       <div
         className={`spec rounded-sheet bg-rail p-6 sm:p-10 ${version === 0 ? 'text-fg-soft' : ''}`}
       >
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-          {markdown}
-        </ReactMarkdown>
+        {rendered}
       </div>
     </>
   );

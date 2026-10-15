@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  DEFAULT_RESPONSE_WINDOW_SETTINGS,
   ProjectResponseWindowsInput,
   ResponseWindowSettingsInput,
-  responseWindowLabels,
   WorkingTimeInput,
 } from './response-window.ts';
+import {
+  DEFAULT_RESPONSE_WINDOW_SETTINGS,
+  responseWindowLabels,
+} from './response-window-values.ts';
 
 const now = new Date('2026-10-05T10:00:00Z');
 const at = (iso: string) => new Date(iso).toISOString();

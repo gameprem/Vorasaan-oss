@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ActionCardView } from './action-card.ts';
 import { ReasoningLevel, RecordedModel } from './ai-settings.ts';
+import { MAX_CONVERSATION_MESSAGE_CHARS } from './conversation-values.ts';
 import { PersonRef } from './decision-request.ts';
 import {
   ConversationMessageRole,
@@ -21,8 +22,6 @@ const FeatureRef = z.object({ id: Id, title: z.string() });
 // ─── Conversations (ADR 0008, ticket 0042) ──────────────────────────────────
 // A person's chat with the AI about a Project or a Feature. Only its owner reads it.
 
-/** The longest message a person can send. */
-export const MAX_CONVERSATION_MESSAGE_CHARS = 20_000;
 /** A Conversation's title: the start of its first message, on one line. */
 export const MAX_CONVERSATION_TITLE_CHARS = 80;
 

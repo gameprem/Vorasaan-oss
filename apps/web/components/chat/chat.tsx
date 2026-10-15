@@ -40,7 +40,7 @@ import { ContextMeter } from './context-meter';
 import { type ChatDoc, DocPanel, docName } from './doc-panel';
 import { AnsweredByOthers, endsWithNotice, GrillingHeader, GrillingMessage } from './grilling';
 import { GRILLING_UI } from './grilling-copy';
-import { Markdown } from './markdown';
+import { Markdown, preloadMarkdown } from './lazy-markdown';
 import { ModelMenu } from './model-menu';
 
 // A Conversation (ADR 0008, ticket 0046), read like Claude or Gemini: the AI's replies
@@ -272,6 +272,9 @@ export function Chat({
     pending === null &&
     newerCursor === null &&
     (last?.role === 'USER' || last?.role === 'TOOL');
+
+  // The Markdown renderer is in its own chunk: fetch it now, before a reply needs it.
+  useEffect(preloadMarkdown, []);
 
   // Announce the state politely; the reply itself is announced by the log when complete.
   useEffect(() => {
