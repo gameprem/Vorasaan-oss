@@ -142,7 +142,7 @@ for (const theme of THEMES) {
     const admin = await as(pim);
     await admin.emulateMedia({ colorScheme: theme });
     await installAndApprove(admin);
-    await expectNoViolations(admin, '.settings-pane');
+    await expectNoViolations(admin);
 
     try {
       // A script that reached the page itself would post this.
@@ -177,12 +177,12 @@ for (const theme of THEMES) {
       await admin.getByRole('link', { name: 'Download SVG' }).click();
       const download = await downloading;
       expect(download.suggestedFilename()).toBe('diagram.svg');
-      // The sandboxed output itself (the chat page around it is covered by its own specs).
-      await expectNoViolations(admin, '[data-sandboxed-output]');
+      // The Conversation page around the sandboxed output (the iframe's title is checked above).
+      await expectNoViolations(admin, 'main');
     } finally {
       await uninstall(admin);
     }
-    await expectNoViolations(admin, '.settings-pane');
+    await expectNoViolations(admin);
   });
 }
 

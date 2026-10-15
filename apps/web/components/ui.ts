@@ -4,7 +4,7 @@ export const primaryButton =
 export const secondaryButton =
   'rounded-full bg-surface px-4 py-2 font-semibold text-fg hover:bg-surface-hi disabled:opacity-40';
 export const field =
-  'mt-1 w-full rounded-tile bg-surface ring-1 ring-inset ring-line px-3 py-2 text-fg placeholder:text-fg-faint';
+  'mt-1 w-full rounded-tile bg-surface ring-1 ring-inset ring-line px-3 py-2 text-fg placeholder:text-fg-soft';
 export const ROLE_LABEL = {
   PO: 'PO',
   DESIGNER: 'Designer',

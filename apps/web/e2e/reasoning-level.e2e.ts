@@ -149,7 +149,7 @@ for (const theme of THEMES) {
       await tabTo(toggle);
       await page.keyboard.press('Space');
       await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-      await expectNoViolations(page, 'form.composer');
+      await expectNoViolations(page, 'main');
 
       await message.fill(unique('Think hard about retries'));
       await message.press('Enter');

@@ -4,7 +4,7 @@ import { useActionState } from 'react';
 import { type LoginState, login } from '@/lib/auth-actions';
 
 export const inputClass =
-  'mt-1 w-full rounded-tile bg-surface ring-1 ring-inset ring-line px-3 py-2 text-fg placeholder:text-fg-faint';
+  'mt-1 w-full rounded-tile bg-surface ring-1 ring-inset ring-line px-3 py-2 text-fg placeholder:text-fg-soft';
 
 export function LoginForm() {
   const [state, action, pending] = useActionState<LoginState, FormData>(login, {});

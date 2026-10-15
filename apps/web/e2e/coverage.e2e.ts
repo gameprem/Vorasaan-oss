@@ -158,7 +158,7 @@ test('a Flutter Platform is added to a Project, a Feature targets it and shows i
   // Flutter is covered now.
   await page.goto(`/features/${featureId}`);
   await expect(header.getByRole('button', { name: 'Flutter: covered' })).toBeVisible();
-  await expectNoViolations(page, 'ul[aria-label="Target Platforms"]');
+  await expectNoViolations(page, 'main');
 });
 
 for (const theme of THEMES) {
@@ -241,7 +241,7 @@ for (const theme of THEMES) {
     await expect(list.getByRole('listitem')).toHaveCount(2);
     await expect(admin.getByRole('status').filter({ hasText: 'Mobile removed' })).toBeVisible();
     await expect(admin.getByRole('button', { name: 'Remove Front-End' })).toBeFocused();
-    await expectNoViolations(admin, '.settings-pane');
+    await expectNoViolations(admin);
 
     const member = await as(beam);
     await member.emulateMedia({ colorScheme: theme });
@@ -251,6 +251,6 @@ for (const theme of THEMES) {
     ).toBeVisible();
     await expect(member.getByRole('button', { name: 'Save Platform template' })).toHaveCount(0);
     await expect(member.getByRole('list', { name: 'Platforms' })).toContainText('Back-End');
-    await expectNoViolations(member, '.settings-pane');
+    await expectNoViolations(member);
   });
 }

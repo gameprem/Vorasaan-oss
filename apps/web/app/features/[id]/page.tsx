@@ -440,7 +440,7 @@ export default async function FeaturePage({
                     {entry.specVersion ? (
                       <Link
                         href={`/features/${id}?tab=history&diff=${entry.specVersion}`}
-                        className="text-jade underline-offset-2 hover:underline"
+                        className="text-jade underline underline-offset-2"
                       >
                         Became Spec v{entry.specVersion}
                       </Link>
