@@ -370,14 +370,17 @@ ${sections.join('\n\n')}`,
     const scope = { organizationId: SEED.organizationId, projectId: SEED.projectId };
     const q = query('how do support agents issue a refund');
     const vector = `[${q.embedding.join(',')}]`;
-    // The exact answer: every chunk in scope, by distance, without any index.
+    // The exact answer: every chunk in scope, by distance, without any index; ties broken as
+    // the repository breaks them (newest source, reading order, text, then id).
     const exact = await db.$transaction(async (tx) => {
       await tx.$executeRaw`SET LOCAL enable_indexscan = off`;
       return tx.$queryRaw<{ id: string }[]>`
         SELECT id FROM "ContentChunk"
         WHERE "organizationId" = ${SEED.organizationId} AND "projectId" = ${SEED.projectId}
           AND "embeddingModel" = ${PROVIDER.model} AND "embeddingDims" = 256
-        ORDER BY embedding::vector(256) <=> ${vector}::vector(256), id LIMIT 3`;
+        ORDER BY embedding::vector(256) <=> ${vector}::vector(256), "createdAt" DESC, position,
+          text COLLATE "C", id
+        LIMIT 3`;
     });
     expect(exact.length).toBe(3);
 
