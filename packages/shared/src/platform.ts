@@ -1,10 +1,8 @@
 import { z } from 'zod';
 import { TeamRole } from './enums.ts';
+import { MAX_PLATFORMS, PLATFORM_DESIGN_TEMPLATES } from './platform-values.ts';
 
 const Id = z.uuid();
-
-/** At most this many Platforms in a Project, or in the Organization's default list. */
-export const MAX_PLATFORMS = 20;
 
 /**
  * A Platform's name, used as its Spec section's `##` heading (ADR 0009): one line, and
@@ -21,7 +19,7 @@ export const PlatformName = z
  * The Design Doc templates a Platform can start from (ticket 0069). QA is not a Platform
  * (ADR 0009): its Design Doc has a template of its own.
  */
-export const PlatformDesignTemplate = z.enum(['BACK_END', 'FRONT_END', 'MOBILE']);
+export const PlatformDesignTemplate = z.enum(PLATFORM_DESIGN_TEMPLATES);
 export type PlatformDesignTemplate = z.infer<typeof PlatformDesignTemplate>;
 
 /**
@@ -167,40 +165,3 @@ export type SetFeaturePlatformsInput = z.infer<typeof SetFeaturePlatformsInput>;
 /** `GET /features/:id/spec-template`: what a Feature's first Spec starts from. */
 export const SpecTemplateView = z.object({ markdown: z.string() });
 export type SpecTemplateView = z.infer<typeof SpecTemplateView>;
-
-/**
- * A new Spec's starting Markdown: the usual sections, plus one `## <Platform>` section per
- * target Platform (ADR 0009), each with an empty `### Acceptance criteria` subsection for
- * QA to fill.
- */
-export function specTemplate({
-  title = 'Feature title',
-  platforms = [],
-}: {
-  title?: string;
-  platforms?: readonly string[];
-} = {}): string {
-  const sections = platforms.map((name) => `## ${name}\n\n### Acceptance criteria\n\n`).join('');
-  return `# ${title}
-
-## Goal
-
-What problem this solves, for whom.
-
-## User flow
-
-1. …
-
-## Acceptance criteria
-
-- [ ] …
-
-${sections}## Out of scope
-
-- …
-
-## Open questions
-
-- …
-`;
-}

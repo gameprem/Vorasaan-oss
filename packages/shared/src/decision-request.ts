@@ -160,12 +160,3 @@ export const DecisionRequestView = z.object({
   createdAt: Timestamp,
 });
 export type DecisionRequestView = z.infer<typeof DecisionRequestView>;
-
-/** "decided in Slack": where a Decision was made, for the Decision Log (ticket 0058). */
-export const DECISION_SOURCE_LABEL: Record<DecisionSource, string> = {
-  WEB: 'the web app',
-  CLI: 'the CLI',
-  LINE: 'LINE',
-  SLACK: 'Slack',
-  TEAMS: 'Microsoft Teams',
-};

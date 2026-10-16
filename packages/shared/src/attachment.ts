@@ -6,22 +6,6 @@ const Id = z.uuid();
 const Timestamp = z.iso.datetime();
 const Title = z.string().trim().min(1).max(200);
 
-/**
- * File types an Attachment upload accepts, by extension, with the media type
- * the server stores and serves. Anything else is rejected with 415.
- */
-export const ATTACHMENT_FILE_TYPES = {
-  md: 'text/markdown',
-  markdown: 'text/markdown',
-  txt: 'text/plain',
-  pdf: 'application/pdf',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-} as const;
-
 const Ref = z.string().trim().min(1).max(2048);
 
 /**

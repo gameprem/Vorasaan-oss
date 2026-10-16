@@ -1,6 +1,6 @@
 'use client';
 
-import { type OrgMemberView, TeamRole, type TeamView } from '@vorasaan/shared';
+import { type OrgMemberView, TEAM_ROLES, type TeamRole, type TeamView } from '@vorasaan/shared';
 import { useState, useTransition } from 'react';
 import { setTeamRoles } from '@/lib/org-actions';
 import { ROLE_LABEL, secondaryButton } from './ui';
@@ -35,7 +35,7 @@ export function TeamRolesEditor({
           <thead>
             <tr className="border-b-2 border-bg text-left text-fg-soft">
               <th className="px-4 py-2 font-normal">Member</th>
-              {TeamRole.options.map((role) => (
+              {TEAM_ROLES.map((role) => (
                 <th key={role} className="px-2 py-2 text-center font-normal">
                   {ROLE_LABEL[role]}
                 </th>
@@ -49,7 +49,7 @@ export function TeamRolesEditor({
                   <span className="block font-medium">{m.name}</span>
                   <span className="block text-fg-soft">{m.email}</span>
                 </td>
-                {TeamRole.options.map((role) => {
+                {TEAM_ROLES.map((role) => {
                   const has = m.roles.includes(role);
                   return (
                     <td key={role} className="px-2 py-2 text-center">

@@ -1,10 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  type GrillingNote,
-  grillingNotesText,
-  grillingNoteText,
-  isGrillingNotice,
-} from './grilling-notes.ts';
+import type { GrillingNote } from './grilling-notes.ts';
+import { grillingNotesText, grillingNoteText, isGrillingNotice } from './grilling-notes-values.ts';
 
 const EVERY: GrillingNote[] = [
   { kind: 'INTRO', round: 'BUSINESS', role: 'PO', total: 4, answered: 1, maxFollowUps: 2 },

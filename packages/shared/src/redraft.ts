@@ -3,6 +3,7 @@ import { RecordedModel } from './ai-settings.ts';
 import { ChoiceDraft, PersonRef } from './decision-request.ts';
 import { diffLines } from './diff.ts';
 import { ProposalKind, RedraftStatus, SuggestionLevel } from './enums.ts';
+import { MAX_FEEDBACK_CHARS } from './redraft-values.ts';
 import { SpecDiffLine } from './spec.ts';
 
 const Timestamp = z.iso.datetime();
@@ -14,8 +15,6 @@ const Timestamp = z.iso.datetime();
 
 /** How many times a proposal can be redrafted, unless VORASAAN_MAX_REDRAFTS says otherwise. */
 export const DEFAULT_MAX_REDRAFTS = 10;
-/** The longest feedback one Request changes takes. */
-export const MAX_FEEDBACK_CHARS = 4_000;
 
 /**
  * The part of the proposal the feedback is about, when the person pointed at one:

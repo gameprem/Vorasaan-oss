@@ -9,7 +9,8 @@ import {
   type ResponseWindowUnit,
   responseWindowText,
   type SubmitDecisionRequestInput,
-  TeamRole,
+  TEAM_ROLES,
+  type TeamRole,
 } from '@vorasaan/shared';
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { type RequestActionState, submitDraft } from '@/lib/request-actions';
@@ -131,7 +132,7 @@ export function DraftReview({
         <Select
           label="Decider role"
           className="mt-4 max-w-xs"
-          options={TeamRole.options.map((r) => ({
+          options={TEAM_ROLES.map((r) => ({
             id: r,
             label: `${ROLE_LABEL[r]}${r === request.suggestedRole ? ' (suggested)' : ''}`,
           }))}

@@ -3,8 +3,8 @@
 import {
   DESIGN_TEMPLATE_LABEL,
   MAX_PLATFORMS,
+  PLATFORM_DESIGN_TEMPLATES,
   type PlatformDefinition,
-  PlatformDesignTemplate,
   type PlatformView,
   platformDesignTemplate,
   type TeamRole,
@@ -22,7 +22,7 @@ import { LazySelect as Select } from './ui/lazy';
 /** The Design Doc template a Platform starts from (ticket 0069); '' chooses it from its roles. */
 const TEMPLATE_OPTIONS = [
   { id: '', label: 'From its Team Roles' },
-  ...PlatformDesignTemplate.options.map((t) => ({ id: t, label: DESIGN_TEMPLATE_LABEL[t] })),
+  ...PLATFORM_DESIGN_TEMPLATES.map((t) => ({ id: t, label: DESIGN_TEMPLATE_LABEL[t] })),
 ];
 
 // Editors for Platforms (ADR 0009, ticket 0052): the Organization's Platform template
@@ -134,8 +134,8 @@ function PlatformFields({
         options={TEMPLATE_OPTIONS}
         value={row.designTemplate ?? ''}
         onChange={(value) => {
-          const parsed = PlatformDesignTemplate.safeParse(value);
-          onChange({ ...row, designTemplate: parsed.success ? parsed.data : null });
+          const template = PLATFORM_DESIGN_TEMPLATES.find((t) => t === value) ?? null;
+          onChange({ ...row, designTemplate: template });
         }}
       />
       <fieldset>

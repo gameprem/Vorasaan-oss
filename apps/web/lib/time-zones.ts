@@ -1,4 +1,4 @@
-import { TimeZone } from '@vorasaan/shared';
+import { isKnownTimeZone } from '@vorasaan/shared';
 
 /** Every IANA time zone the browser knows, with `current` first if it isn't among them. */
 export function timeZones(current: string): string[] {
@@ -17,7 +17,8 @@ export function timeZones(current: string): string[] {
 export function browserTimeZone(intl: Pick<typeof Intl, 'DateTimeFormat'> = Intl): string {
   try {
     const zone = intl.DateTimeFormat().resolvedOptions().timeZone;
-    return TimeZone.safeParse(zone).success ? zone : 'UTC';
+    // What the TimeZone schema accepts, checked without loading Zod on the page.
+    return typeof zone === 'string' && zone.trim() && isKnownTimeZone(zone.trim()) ? zone : 'UTC';
   } catch {
     return 'UTC';
   }

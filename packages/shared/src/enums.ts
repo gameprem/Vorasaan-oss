@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CHAT_EVENT_KINDS, TEAM_ROLES } from './enums-values.ts';
 
 // Mirrors of the Prisma enums (packages/db/prisma/schema.prisma).
 // enums.test.ts fails if the two drift apart.
@@ -6,15 +7,7 @@ import { z } from 'zod';
 export const OrgRole = z.enum(['ADMIN', 'MEMBER']);
 export type OrgRole = z.infer<typeof OrgRole>;
 
-export const TeamRole = z.enum([
-  'PO',
-  'DESIGNER',
-  'TECH_LEAD',
-  'BACKEND',
-  'FRONTEND',
-  'MOBILE',
-  'QA',
-]);
+export const TeamRole = z.enum(TEAM_ROLES);
 export type TeamRole = z.infer<typeof TeamRole>;
 
 export const DecisionRequestKind = z.enum(['BLOCKER', 'QUESTION']);
@@ -113,12 +106,7 @@ export type RequestHistoryKind = z.infer<typeof RequestHistoryKind>;
 export const ChatProvider = z.enum(['LINE', 'SLACK', 'TEAMS']);
 export type ChatProvider = z.infer<typeof ChatProvider>;
 
-export const ChatEventKind = z.enum([
-  'DECISION_REQUEST',
-  'NEEDS_INFO',
-  'SPEC_PROPOSAL',
-  'ESCALATION',
-]);
+export const ChatEventKind = z.enum(CHAT_EVENT_KINDS);
 export type ChatEventKind = z.infer<typeof ChatEventKind>;
 
 export const DecisionSource = z.enum(['WEB', 'CLI', 'LINE', 'SLACK', 'TEAMS']);

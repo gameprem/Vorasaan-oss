@@ -38,13 +38,6 @@ export const DecisionGraphBranchState = z.enum([
 ]);
 export type DecisionGraphBranchState = z.infer<typeof DecisionGraphBranchState>;
 
-/** The states of a branch not yet merged or closed: drawn dashed. */
-export const OPEN_BRANCH_STATES: readonly DecisionGraphBranchState[] = [
-  'WAITING',
-  'NEEDS_INFO',
-  'AWAITING_APPROVAL',
-];
-
 /** A node of the main lane: one Spec Version, including manual edits and reverts. */
 export const DecisionGraphNode = z.object({
   id: Id,

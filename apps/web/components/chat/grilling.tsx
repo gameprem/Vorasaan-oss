@@ -13,7 +13,7 @@ import { Fragment } from 'react';
 import type { Lang } from '@/lib/lang';
 import { Flame } from '../icons';
 import { GRILLING_UI } from './grilling-copy';
-import { Markdown } from './markdown';
+import { Markdown } from './lazy-markdown';
 
 // Grilling in the chat view (ticket 0047): the round header, the questions someone else
 // already answered (collapsed), and the server's Grilling Notes, shown in the reader's

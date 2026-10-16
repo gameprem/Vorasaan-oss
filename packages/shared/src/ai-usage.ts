@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AiTask } from './ai-settings.ts';
+import { AI_USAGE_MAX_DAYS } from './ai-usage-values.ts';
 import { ProposalKind } from './enums.ts';
 
 // The AI usage dashboard (ticket 0075): what the AI costs, where, and what it buys, from
@@ -14,8 +15,6 @@ const DAY = 24 * 60 * 60 * 1000;
 
 /** The range a query covers when it leaves `from` out: the 30 days ending with `to`. */
 export const AI_USAGE_DEFAULT_DAYS = 30;
-/** The longest range one query may cover. */
-export const AI_USAGE_MAX_DAYS = 366;
 /** The shares of the monthly budget at which the Admins get a Notification. */
 export const AI_BUDGET_THRESHOLDS = [80, 100] as const;
 
@@ -189,9 +188,6 @@ export const AiBudgetInput = z.strictObject({
 export type AiBudgetInput = z.infer<typeof AiBudgetInput>;
 
 // ─── Cheaper models (ticket 0076) ────────────────────────────────────────────
-
-/** The days of a task's Receipts a model suggestion prices its calls from. */
-export const MODEL_SUGGESTION_DAYS = 30;
 
 /** One prompt of a task, scored on both models by Eval Runs of its active version. */
 export const ModelSuggestionPrompt = z.object({

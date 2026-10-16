@@ -7,24 +7,6 @@ import { SpecDiff, SpecDiffQuery } from './spec.ts';
 const Id = z.uuid();
 const Timestamp = z.iso.datetime();
 
-/**
- * The empty Project Brief a new Project starts from: section headings only
- * (REQUIREMENT §3.8). It is not stored; `GET /projects/:id/brief` returns it as
- * version 0 until someone saves v1.
- */
-export const BRIEF_TEMPLATE = `# Project Brief
-
-## Business goals
-
-## Target users
-
-## Current capabilities
-
-## Constraints
-
-## Non-goals
-`;
-
 export const BriefVersionView = z.object({
   id: Id,
   projectId: Id,

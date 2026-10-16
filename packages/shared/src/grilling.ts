@@ -26,12 +26,6 @@ export const GRILLING_ROUNDS = [
 export const MAX_GRILLING_QUESTIONS = 7;
 
 /**
- * The most follow-ups the AI may ask on one question in a Grilling Conversation
- * (ticket 0044). The server enforces it, whatever the AI says.
- */
-export const MAX_GRILLING_FOLLOW_UPS = 2;
-
-/**
  * What a person types in a Grilling Conversation to skip the question being
  * asked (or to stop the follow-ups on it), in English or Thai. Matched on the
  * whole message, ignoring case, spaces and a trailing full stop or "!".

@@ -1,0 +1,21 @@
+{
+  "margin": 0.05,
+  "routes": {
+    "/": 167.1,
+    "/login": 167.9,
+    "/inbox": 169.6,
+    "/requests": 167.1,
+    "/requests/[id]": 237.1,
+    "/projects": 167.6,
+    "/projects/[id]": 245.9,
+    "/features/[id]": 241.7,
+    "/features/[id]/raise": 181.4,
+    "/conversations/new": 246.6,
+    "/conversations/[id]": 229.4,
+    "/settings/ai": 233,
+    "/settings/delegations": 262.3,
+    "/settings/members": 219.1,
+    "/teams/[id]": 265.6,
+    "/setup": 364.5
+  }
+}

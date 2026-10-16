@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  coverageGapText,
   hasAcceptanceCriteria,
   hasPlatformSection,
   namesPlatform,
   platformCoverage,
   uncoveredPlatforms,
 } from './coverage.ts';
+import { coverageGapText } from './coverage-values.ts';
 import type { TeamRole } from './enums.ts';
-import { specTemplate } from './platform.ts';
+import { specTemplate } from './platform-values.ts';
 
 const flutter = {
   id: '00000000-0000-4000-8000-0000000000f1',
